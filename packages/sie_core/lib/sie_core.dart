@@ -14,3 +14,4 @@ export 'src/widgets/branch_card.dart';
 export 'src/widgets/section_header.dart';
 export 'src/widgets/achievement_badge.dart';
 export 'src/widgets/habit_card.dart';
+export 'src/widgets/starry_sky_background.dart';

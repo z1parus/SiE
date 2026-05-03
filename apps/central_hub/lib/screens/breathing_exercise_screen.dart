@@ -57,6 +57,7 @@ class BreathingExerciseScreen extends ConsumerStatefulWidget {
 class _BreathingExerciseScreenState
     extends ConsumerState<BreathingExerciseScreen>
     with TickerProviderStateMixin {
+  late final AnimationController _skyCtrl;
   late final AnimationController _circleCtrl;
   late final AnimationController _pulseCtrl;
   late final Animation<double> _pulseAnim;
@@ -81,6 +82,10 @@ class _BreathingExerciseScreenState
   @override
   void initState() {
     super.initState();
+    _skyCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 150),
+    )..repeat();
     _circleCtrl = AnimationController(vsync: this, value: 0.3);
     _pulseCtrl = AnimationController(
       vsync: this,
@@ -94,6 +99,7 @@ class _BreathingExerciseScreenState
   @override
   void dispose() {
     _cancelTimers();
+    _skyCtrl.dispose();
     _circleCtrl.dispose();
     _pulseCtrl.dispose();
     super.dispose();
@@ -374,65 +380,72 @@ class _BreathingExerciseScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Positioned(
-              top: 0, left: 0, right: 0,
-              child: _TopBar(
-                phase: _phase,
-                round: _round,
-                totalRounds: _settings.rounds,
-                onBack: _onBack,
-              ),
-            ),
-            Center(
-              child: GestureDetector(
-                onTap: _onSphereTap,
-                onTapDown: (_) {
-                  if (_phase == _Phase.idle) {
-                    setState(() => _spherePressed = true);
-                  }
-                },
-                onTapUp: (_) => setState(() => _spherePressed = false),
-                onTapCancel: () => setState(() => _spherePressed = false),
-                child: AnimatedScale(
-                  scale: (_phase == _Phase.idle && _spherePressed) ? 0.95 : 1.0,
-                  duration: const Duration(milliseconds: 80),
-                  child: _buildCircle(),
-                ),
-              ),
-            ),
-            // Countdown number overlaid on circle
-            if (_phase == _Phase.countdown)
-              Center(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 250),
-                  transitionBuilder: (child, anim) => FadeTransition(
-                    opacity: anim,
-                    child: ScaleTransition(
-                      scale: Tween<double>(begin: 0.7, end: 1.0).animate(anim),
-                      child: child,
-                    ),
+      body: Stack(
+        children: [
+          // Layer 0: Starry sky — full screen, behind SafeArea content.
+          Positioned.fill(
+            child: StarrySkyBackground(animation: _skyCtrl),
+          ),
+          SafeArea(
+            child: Stack(
+              children: [
+                Positioned(
+                  top: 0, left: 0, right: 0,
+                  child: _TopBar(
+                    phase: _phase,
+                    round: _round,
+                    totalRounds: _settings.rounds,
+                    onBack: _onBack,
                   ),
-                  child: Text(
-                    '$_countdownValue',
-                    key: ValueKey(_countdownValue),
-                    style: const TextStyle(
-                      color: SieTheme.accent,
-                      fontSize: 80,
-                      fontWeight: FontWeight.w100,
-                      letterSpacing: 4,
+                ),
+                Center(
+                  child: GestureDetector(
+                    onTap: _onSphereTap,
+                    onTapDown: (_) {
+                      if (_phase == _Phase.idle) {
+                        setState(() => _spherePressed = true);
+                      }
+                    },
+                    onTapUp: (_) => setState(() => _spherePressed = false),
+                    onTapCancel: () => setState(() => _spherePressed = false),
+                    child: AnimatedScale(
+                      scale: (_phase == _Phase.idle && _spherePressed) ? 0.95 : 1.0,
+                      duration: const Duration(milliseconds: 80),
+                      child: _buildCircle(),
                     ),
                   ),
                 ),
-              ),
-            Positioned(
-              bottom: 40, left: 32, right: 32,
-              child: _buildBottomArea(),
+                if (_phase == _Phase.countdown)
+                  Center(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      transitionBuilder: (child, anim) => FadeTransition(
+                        opacity: anim,
+                        child: ScaleTransition(
+                          scale: Tween<double>(begin: 0.7, end: 1.0).animate(anim),
+                          child: child,
+                        ),
+                      ),
+                      child: Text(
+                        '$_countdownValue',
+                        key: ValueKey(_countdownValue),
+                        style: const TextStyle(
+                          color: SieTheme.accent,
+                          fontSize: 80,
+                          fontWeight: FontWeight.w100,
+                          letterSpacing: 4,
+                        ),
+                      ),
+                    ),
+                  ),
+                Positioned(
+                  bottom: 40, left: 32, right: 32,
+                  child: _buildBottomArea(),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
