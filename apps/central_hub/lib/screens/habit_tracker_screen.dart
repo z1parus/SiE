@@ -426,24 +426,126 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
           final trigger = _screenWidth * _triggerFraction;
           final progress = (offset.abs() / trigger).clamp(0.0, 1.0);
           final isLeft = offset < 0;
+          final swiping = progress > 0.01;
 
-          return Transform.translate(
-            offset: Offset(offset, 0),
-            child: Transform.scale(
-              scale: 1.0 - 0.02 * progress,
-              child: HabitCard(
-                habit: widget.habit,
-                completedToday: widget.completedToday,
-                streak: widget.streak,
-                allLogDates: widget.allLogDates,
-                onToggle: widget.onToggle,
-                onLongPress: widget.onLongPress,
-                swipeProgress: progress,
-                swipeIsLeft: progress > 0.01 ? isLeft : null,
+          return Stack(
+            children: [
+              // Pin background — revealed by rightward swipe.
+              if (swiping && !isLeft)
+                Positioned.fill(
+                  child: _SwipePinBg(
+                    progress: progress,
+                    isPinned: widget.habit.isPinned,
+                  ),
+                ),
+              // Delete background — revealed by leftward swipe.
+              if (swiping && isLeft)
+                Positioned.fill(
+                  child: _SwipeDeleteBg(progress: progress),
+                ),
+              // Card — slides over the background.
+              Transform.translate(
+                offset: Offset(offset, 0),
+                child: Transform.scale(
+                  scale: 1.0 - 0.02 * progress,
+                  child: HabitCard(
+                    habit: widget.habit,
+                    completedToday: widget.completedToday,
+                    streak: widget.streak,
+                    allLogDates: widget.allLogDates,
+                    onToggle: widget.onToggle,
+                    onLongPress: widget.onLongPress,
+                    swipeProgress: progress,
+                    swipeIsLeft: swiping ? isLeft : null,
+                  ),
+                ),
               ),
-            ),
+            ],
           );
         },
+      ),
+    );
+  }
+}
+
+// ── Swipe Backgrounds ─────────────────────────────────────────
+
+class _SwipePinBg extends StatelessWidget {
+  final double progress;
+  final bool isPinned;
+
+  const _SwipePinBg({required this.progress, required this.isPinned});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(4),
+        gradient: LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            const Color(0xFFDAA520),
+            SieTheme.background,
+          ],
+        ),
+      ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 20),
+          child: Opacity(
+            opacity: progress.clamp(0.0, 1.0),
+            child: Transform.scale(
+              scale: 0.75 + 0.25 * progress,
+              child: Icon(
+                isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                color: Colors.black,
+                size: 24,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SwipeDeleteBg extends StatelessWidget {
+  final double progress;
+
+  const _SwipeDeleteBg({required this.progress});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(4),
+        gradient: LinearGradient(
+          begin: Alignment.centerRight,
+          end: Alignment.centerLeft,
+          colors: [
+            const Color(0xFF8B0000),
+            SieTheme.background,
+          ],
+        ),
+      ),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Padding(
+          padding: const EdgeInsets.only(right: 20),
+          child: Opacity(
+            opacity: progress.clamp(0.0, 1.0),
+            child: Transform.scale(
+              scale: 0.75 + 0.25 * progress,
+              child: const Icon(
+                Icons.delete_outline,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
