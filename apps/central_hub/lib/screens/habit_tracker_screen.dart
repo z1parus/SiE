@@ -500,7 +500,7 @@ class _SwipePinBg extends StatelessWidget {
               scale: 0.75 + 0.25 * progress,
               child: Icon(
                 isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                color: Colors.black,
+                color: Colors.white,
                 size: 24,
               ),
             ),
