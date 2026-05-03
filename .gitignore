@@ -10,7 +10,12 @@
 
 # Supabase
 supabase/.temp/
+supabase/.branches/
 supabase/functions/.env
+.env
+.env.local
+.env.*.local
+.env.keys
 
 # IDE
 .idea/
@@ -20,3 +25,8 @@ supabase/functions/.env
 # OS
 .DS_Store
 Thumbs.db
+*.log
+
+# Tools
+.claude/
+.obsidian/

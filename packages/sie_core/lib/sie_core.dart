@@ -1,5 +1,12 @@
-/// A Calculator.
-class Calculator {
-  /// Returns [value] plus 1.
-  int addOne(int value) => value + 1;
-}
+export 'src/supabase_service.dart';
+export 'src/theme/sie_theme.dart';
+export 'src/models/branch.dart';
+export 'src/models/profile.dart';
+export 'src/models/achievement.dart';
+export 'src/providers/auth_state_provider.dart';
+export 'src/providers/branches_provider.dart';
+export 'src/providers/user_profile_provider.dart';
+export 'src/providers/achievements_provider.dart';
+export 'src/services/audio_service.dart';
+export 'src/widgets/branch_card.dart';
+export 'src/widgets/section_header.dart';
