@@ -485,9 +485,11 @@ class _SwipePinBg extends StatelessWidget {
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
           colors: [
+            SieTheme.background,
             const Color(0xFFDAA520),
             SieTheme.background,
           ],
+          stops: const [0.0, 0.45, 1.0],
         ),
       ),
       child: Align(
@@ -522,12 +524,14 @@ class _SwipeDeleteBg extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(4),
         gradient: LinearGradient(
-          begin: Alignment.centerRight,
-          end: Alignment.centerLeft,
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
           colors: [
+            SieTheme.background,
             const Color(0xFF8B0000),
             SieTheme.background,
           ],
+          stops: const [0.0, 0.55, 1.0],
         ),
       ),
       child: Align(
