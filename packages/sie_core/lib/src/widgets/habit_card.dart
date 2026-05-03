@@ -10,6 +10,12 @@ class HabitCard extends StatelessWidget {
   final VoidCallback onToggle;
   final VoidCallback? onLongPress;
 
+  /// 0.0 = neutral, 1.0 = fully swiped to threshold.
+  final double swipeProgress;
+
+  /// null = not swiping, true = left (delete), false = right (pin).
+  final bool? swipeIsLeft;
+
   const HabitCard({
     super.key,
     required this.habit,
@@ -18,6 +24,8 @@ class HabitCard extends StatelessWidget {
     required this.allLogDates,
     required this.onToggle,
     this.onLongPress,
+    this.swipeProgress = 0.0,
+    this.swipeIsLeft,
   });
 
   static String _fmt(DateTime dt) =>
@@ -35,22 +43,59 @@ class HabitCard extends StatelessWidget {
     final weekDays =
         List.generate(7, (i) => today.subtract(Duration(days: 6 - i)));
 
+    // ── Swipe color derivation ────────────────────────────────
+    final swiping = swipeProgress > 0.001 && swipeIsLeft != null;
+    final p = swipeProgress.clamp(0.0, 1.0);
+
+    final swipeBg = (swipeIsLeft ?? false)
+        ? const Color(0xFF8B0000)
+        : const Color(0xFFDAA520);
+    final swipeFgStrong =
+        (swipeIsLeft ?? false) ? Colors.white : Colors.black;
+    final swipeFgSoft = (swipeIsLeft ?? false)
+        ? Colors.white.withValues(alpha: 0.75)
+        : Colors.black.withValues(alpha: 0.65);
+
+    Color lerp(Color base, Color target) =>
+        swiping ? Color.lerp(base, target, p)! : base;
+
+    final baseBg = completedToday
+        ? color.withValues(alpha: 0.06)
+        : SieTheme.surface;
+    final cardBg = lerp(baseBg, swipeBg);
+
+    final baseBorder = completedToday
+        ? color.withValues(alpha: 0.40)
+        : SieTheme.borderDefault;
+    final cardBorder = lerp(baseBorder, swipeBg.withValues(alpha: 0.50));
+
+    final titleColor = lerp(
+      completedToday ? color : SieTheme.textPrimary,
+      swipeFgStrong,
+    );
+    final descColor = lerp(SieTheme.textSecondary, swipeFgSoft);
+    final dotDone = lerp(color, swipeFgStrong);
+    final dotIdle = lerp(SieTheme.borderDefault, swipeFgSoft);
+    final accentCol = lerp(color, swipeFgStrong);
+    final accentColSoft = lerp(
+      color.withValues(alpha: 0.50),
+      swipeFgStrong.withValues(alpha: 0.50),
+    );
+    final barColor = lerp(color, swipeFgStrong);
+
+    // ── Widget tree ───────────────────────────────────────────
     return GestureDetector(
       onLongPress: onLongPress,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
+        // Duration.zero during swipe → immediate color response.
+        duration: swiping
+            ? Duration.zero
+            : const Duration(milliseconds: 250),
         decoration: BoxDecoration(
-          color: completedToday
-              ? color.withValues(alpha: 0.06)
-              : SieTheme.surface,
+          color: cardBg,
           borderRadius: BorderRadius.circular(4),
-          // Uniform border — borderRadius requires all sides to share one color.
-          border: Border.all(
-            color: completedToday
-                ? color.withValues(alpha: 0.40)
-                : SieTheme.borderDefault,
-          ),
-          boxShadow: completedToday
+          border: Border.all(color: cardBorder),
+          boxShadow: completedToday && !swiping
               ? [
                   BoxShadow(
                     color: color.withValues(alpha: 0.12),
@@ -60,16 +105,15 @@ class HabitCard extends StatelessWidget {
                 ]
               : null,
         ),
-        // IntrinsicHeight lets the left color bar stretch to match card height.
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Left accent bar — separate child to avoid mixed-color border.
+              // Left accent bar
               Container(
                 width: 3,
                 decoration: BoxDecoration(
-                  color: color,
+                  color: barColor,
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(3),
                     bottomLeft: Radius.circular(3),
@@ -89,9 +133,7 @@ class HabitCard extends StatelessWidget {
                             Text(
                               habit.title.toUpperCase(),
                               style: TextStyle(
-                                color: completedToday
-                                    ? color
-                                    : SieTheme.textPrimary,
+                                color: titleColor,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                                 letterSpacing: 1.2,
@@ -102,8 +144,8 @@ class HabitCard extends StatelessWidget {
                               const SizedBox(height: 3),
                               Text(
                                 habit.description!,
-                                style: const TextStyle(
-                                  color: SieTheme.textSecondary,
+                                style: TextStyle(
+                                  color: descColor,
                                   fontSize: 11,
                                   letterSpacing: 0.3,
                                 ),
@@ -125,9 +167,7 @@ class HabitCard extends StatelessWidget {
                                       height: 6,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
-                                        color: done
-                                            ? color
-                                            : SieTheme.borderDefault,
+                                        color: done ? dotDone : dotIdle,
                                       ),
                                     ),
                                   );
@@ -141,16 +181,14 @@ class HabitCard extends StatelessWidget {
                                     ),
                                     decoration: BoxDecoration(
                                       border: Border.all(
-                                        color:
-                                            color.withValues(alpha: 0.50),
-                                      ),
+                                          color: accentColSoft),
                                       borderRadius:
                                           BorderRadius.circular(2),
                                     ),
                                     child: Text(
                                       '$streak D',
                                       style: TextStyle(
-                                        color: color,
+                                        color: accentCol,
                                         fontSize: 9,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 0.5,
@@ -172,17 +210,19 @@ class HabitCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: completedToday
-                                ? color.withValues(alpha: 0.15)
+                                ? accentCol.withValues(alpha: 0.15)
                                 : Colors.transparent,
                             border: Border.all(
                               color: completedToday
-                                  ? color
-                                  : SieTheme.borderDefault,
+                                  ? accentCol
+                                  : lerp(SieTheme.borderDefault,
+                                      swipeFgSoft),
                               width: completedToday ? 1.5 : 1.0,
                             ),
                           ),
                           child: completedToday
-                              ? Icon(Icons.check, color: color, size: 16)
+                              ? Icon(Icons.check,
+                                  color: accentCol, size: 16)
                               : null,
                         ),
                       ),

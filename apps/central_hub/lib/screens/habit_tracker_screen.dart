@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
@@ -87,39 +88,23 @@ class HabitTrackerScreen extends ConsumerWidget {
                       }
                       final habit = state.habits[i];
                       final logDates = state.logDates[habit.id] ?? {};
-                      return Dismissible(
+                      return _SwipeableHabitCard(
                         key: ValueKey(habit.id),
-                        direction: DismissDirection.horizontal,
-                        background: _SwipePinBackground(
-                            isPinned: habit.isPinned),
-                        secondaryBackground:
-                            const _SwipeDeleteBackground(),
-                        confirmDismiss: (direction) async {
-                          if (direction ==
-                              DismissDirection.startToEnd) {
-                            await ref
-                                .read(habitsProvider.notifier)
-                                .togglePin(habit.id);
-                            return false;
-                          }
-                          // Delete — await so rollback can happen
-                          // before Dismissible finalises removal.
-                          await ref
-                              .read(habitsProvider.notifier)
-                              .deleteHabit(habit.id);
-                          return true;
-                        },
-                        child: HabitCard(
-                          habit: habit,
-                          completedToday: logDates.contains(today),
-                          streak: state.streaks[habit.id] ?? 0,
-                          allLogDates: logDates,
-                          onToggle: () => ref
-                              .read(habitsProvider.notifier)
-                              .toggleHabit(habit.id, DateTime.now()),
-                          onLongPress: () =>
-                              _showHabitOptions(context, ref, habit),
-                        ),
+                        habit: habit,
+                        completedToday: logDates.contains(today),
+                        streak: state.streaks[habit.id] ?? 0,
+                        allLogDates: logDates,
+                        onToggle: () => ref
+                            .read(habitsProvider.notifier)
+                            .toggleHabit(habit.id, DateTime.now()),
+                        onLongPress: () =>
+                            _showHabitOptions(context, ref, habit),
+                        onDelete: () => ref
+                            .read(habitsProvider.notifier)
+                            .deleteHabit(habit.id),
+                        onTogglePin: () => ref
+                            .read(habitsProvider.notifier)
+                            .togglePin(habit.id),
                       );
                     },
                   );
@@ -315,60 +300,150 @@ class HabitTrackerScreen extends ConsumerWidget {
   }
 }
 
-// ── Swipe Backgrounds ─────────────────────────────────────────
+// ── Swipeable Card ────────────────────────────────────────────
 
-class _SwipePinBackground extends StatelessWidget {
-  final bool isPinned;
-  const _SwipePinBackground({required this.isPinned});
+class _SwipeableHabitCard extends StatefulWidget {
+  final Habit habit;
+  final bool completedToday;
+  final int streak;
+  final Set<String> allLogDates;
+  final VoidCallback onToggle;
+  final VoidCallback? onLongPress;
+  final Future<void> Function() onDelete;
+  final VoidCallback onTogglePin;
+
+  const _SwipeableHabitCard({
+    super.key,
+    required this.habit,
+    required this.completedToday,
+    required this.streak,
+    required this.allLogDates,
+    required this.onToggle,
+    this.onLongPress,
+    required this.onDelete,
+    required this.onTogglePin,
+  });
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.only(left: 24),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(4),
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            const Color(0xFFDAA520).withValues(alpha: 0.80),
-            SieTheme.background,
-          ],
-        ),
-      ),
-      child: Icon(
-        isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-        color: const Color(0xFFDAA520),
-        size: 22,
-      ),
-    );
-  }
+  State<_SwipeableHabitCard> createState() => _SwipeableHabitCardState();
 }
 
-class _SwipeDeleteBackground extends StatelessWidget {
-  const _SwipeDeleteBackground();
+class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _snapCtrl;
+  Animation<double>? _snapAnim;
+  double _dragOffset = 0.0;
+  bool _isSnapping = false;
+
+  // Action fires when swipe reaches this fraction of screen width.
+  static const _triggerFraction = 0.38;
+
+  double get _triggerDist =>
+      MediaQuery.of(context).size.width * _triggerFraction;
+  double get _screenWidth => MediaQuery.of(context).size.width;
+
+  @override
+  void initState() {
+    super.initState();
+    _snapCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
+  }
+
+  @override
+  void dispose() {
+    _snapCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    if (_isSnapping) return;
+    setState(() {
+      _dragOffset = (_dragOffset + d.delta.dx)
+          .clamp(-_screenWidth * 0.65, _screenWidth * 0.65);
+    });
+  }
+
+  Future<void> _onDragEnd(DragEndDetails d) async {
+    if (_isSnapping) return;
+    final trigger = _triggerDist;
+
+    if (_dragOffset.abs() >= trigger) {
+      if (_dragOffset < 0) {
+        // Delete: fly card off-screen, then call onDelete.
+        _isSnapping = true;
+        _snapAnim = Tween<double>(begin: _dragOffset, end: -_screenWidth * 1.2)
+            .animate(
+                CurvedAnimation(parent: _snapCtrl, curve: Curves.easeIn));
+        await _snapCtrl.forward(from: 0);
+        if (!mounted) return;
+        await widget.onDelete();
+      } else {
+        // Pin: trigger action then snap back with elastic bounce.
+        widget.onTogglePin();
+        _isSnapping = true;
+        _snapAnim = Tween<double>(begin: _dragOffset, end: 0).animate(
+            CurvedAnimation(
+                parent: _snapCtrl, curve: Curves.elasticOut));
+        unawaited(_snapCtrl.forward(from: 0));
+        _snapCtrl.addStatusListener(_onSnapComplete);
+      }
+    } else {
+      // Below threshold: snap back.
+      _isSnapping = true;
+      _snapAnim = Tween<double>(begin: _dragOffset, end: 0).animate(
+          CurvedAnimation(parent: _snapCtrl, curve: Curves.easeOut));
+      unawaited(_snapCtrl.forward(from: 0));
+      _snapCtrl.addStatusListener(_onSnapComplete);
+    }
+  }
+
+  void _onSnapComplete(AnimationStatus status) {
+    if (status == AnimationStatus.completed) {
+      _snapCtrl.removeStatusListener(_onSnapComplete);
+      if (mounted) {
+        setState(() {
+          _dragOffset = 0;
+          _isSnapping = false;
+        });
+        _snapCtrl.reset();
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      alignment: Alignment.centerRight,
-      padding: const EdgeInsets.only(right: 24),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(4),
-        gradient: LinearGradient(
-          begin: Alignment.centerRight,
-          end: Alignment.centerLeft,
-          colors: [
-            const Color(0xFF8B0000).withValues(alpha: 0.85),
-            SieTheme.background,
-          ],
-        ),
-      ),
-      child: const Icon(
-        Icons.delete_outline,
-        color: Colors.redAccent,
-        size: 22,
+    return GestureDetector(
+      onHorizontalDragUpdate: _onDragUpdate,
+      onHorizontalDragEnd: _onDragEnd,
+      child: AnimatedBuilder(
+        animation: _snapCtrl,
+        builder: (context2, snap) {
+          final offset = (_isSnapping && _snapAnim != null)
+              ? _snapAnim!.value
+              : _dragOffset;
+          final trigger = _screenWidth * _triggerFraction;
+          final progress = (offset.abs() / trigger).clamp(0.0, 1.0);
+          final isLeft = offset < 0;
+
+          return Transform.translate(
+            offset: Offset(offset, 0),
+            child: Transform.scale(
+              scale: 1.0 - 0.02 * progress,
+              child: HabitCard(
+                habit: widget.habit,
+                completedToday: widget.completedToday,
+                streak: widget.streak,
+                allLogDates: widget.allLogDates,
+                onToggle: widget.onToggle,
+                onLongPress: widget.onLongPress,
+                swipeProgress: progress,
+                swipeIsLeft: progress > 0.01 ? isLeft : null,
+              ),
+            ),
+          );
+        },
       ),
     );
   }
