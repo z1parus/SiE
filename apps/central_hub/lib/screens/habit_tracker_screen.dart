@@ -87,16 +87,39 @@ class HabitTrackerScreen extends ConsumerWidget {
                       }
                       final habit = state.habits[i];
                       final logDates = state.logDates[habit.id] ?? {};
-                      return HabitCard(
-                        habit: habit,
-                        completedToday: logDates.contains(today),
-                        streak: state.streaks[habit.id] ?? 0,
-                        allLogDates: logDates,
-                        onToggle: () => ref
-                            .read(habitsProvider.notifier)
-                            .toggleHabit(habit.id, DateTime.now()),
-                        onLongPress: () =>
-                            _showHabitOptions(context, ref, habit),
+                      return Dismissible(
+                        key: ValueKey(habit.id),
+                        direction: DismissDirection.horizontal,
+                        background: _SwipePinBackground(
+                            isPinned: habit.isPinned),
+                        secondaryBackground:
+                            const _SwipeDeleteBackground(),
+                        confirmDismiss: (direction) async {
+                          if (direction ==
+                              DismissDirection.startToEnd) {
+                            await ref
+                                .read(habitsProvider.notifier)
+                                .togglePin(habit.id);
+                            return false;
+                          }
+                          // Delete — await so rollback can happen
+                          // before Dismissible finalises removal.
+                          await ref
+                              .read(habitsProvider.notifier)
+                              .deleteHabit(habit.id);
+                          return true;
+                        },
+                        child: HabitCard(
+                          habit: habit,
+                          completedToday: logDates.contains(today),
+                          streak: state.streaks[habit.id] ?? 0,
+                          allLogDates: logDates,
+                          onToggle: () => ref
+                              .read(habitsProvider.notifier)
+                              .toggleHabit(habit.id, DateTime.now()),
+                          onLongPress: () =>
+                              _showHabitOptions(context, ref, habit),
+                        ),
                       );
                     },
                   );
@@ -287,6 +310,65 @@ class HabitTrackerScreen extends ConsumerWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Swipe Backgrounds ─────────────────────────────────────────
+
+class _SwipePinBackground extends StatelessWidget {
+  final bool isPinned;
+  const _SwipePinBackground({required this.isPinned});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.only(left: 24),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(4),
+        gradient: LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            const Color(0xFFDAA520).withValues(alpha: 0.80),
+            SieTheme.background,
+          ],
+        ),
+      ),
+      child: Icon(
+        isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+        color: const Color(0xFFDAA520),
+        size: 22,
+      ),
+    );
+  }
+}
+
+class _SwipeDeleteBackground extends StatelessWidget {
+  const _SwipeDeleteBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.only(right: 24),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(4),
+        gradient: LinearGradient(
+          begin: Alignment.centerRight,
+          end: Alignment.centerLeft,
+          colors: [
+            const Color(0xFF8B0000).withValues(alpha: 0.85),
+            SieTheme.background,
+          ],
+        ),
+      ),
+      child: const Icon(
+        Icons.delete_outline,
+        color: Colors.redAccent,
+        size: 22,
       ),
     );
   }

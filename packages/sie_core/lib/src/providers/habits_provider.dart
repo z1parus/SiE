@@ -33,7 +33,13 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         .eq('user_id', userId)
         .gte('completed_at', cutoff);
 
-    final habits = habitsRaw.map((r) => Habit.fromMap(r)).toList();
+    final habits = habitsRaw.map((r) => Habit.fromMap(r)).toList()
+      // Pinned habits always appear first; relative order within each group
+      // is preserved (habitsRaw is already ordered by created_at).
+      ..sort((a, b) {
+        if (a.isPinned == b.isPinned) return 0;
+        return a.isPinned ? -1 : 1;
+      });
 
     final logDates = <String, Set<String>>{};
     for (final row in logsRaw) {
@@ -171,6 +177,44 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       await client
           .from('habits')
           .delete()
+          .eq('id', habitId)
+          .eq('user_id', userId);
+    } catch (e, st) {
+      state = AsyncData(prev);
+      Error.throwWithStackTrace(e, st);
+    }
+  }
+
+  Future<void> togglePin(String habitId) async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final prev = state.valueOrNull;
+    if (prev == null) return;
+
+    final idx = prev.habits.indexWhere((h) => h.id == habitId);
+    if (idx == -1) return;
+
+    final newPinned = !prev.habits[idx].isPinned;
+    final updated = prev.habits[idx].copyWith(isPinned: newPinned);
+
+    final newHabits = ([...prev.habits]..[idx] = updated)
+      ..sort((a, b) {
+        if (a.isPinned == b.isPinned) return 0;
+        return a.isPinned ? -1 : 1;
+      });
+
+    state = AsyncData(HabitsState(
+      habits: newHabits,
+      logDates: prev.logDates,
+      streaks: prev.streaks,
+    ));
+
+    try {
+      await client
+          .from('habits')
+          .update({'is_pinned': newPinned})
           .eq('id', habitId)
           .eq('user_id', userId);
     } catch (e, st) {
