@@ -19,9 +19,25 @@ const double _cueVolume = 0.6;
 class AudioService {
   final _ambient = AudioPlayer();
 
-  // Single player for all breath cues — stop() before each play() guarantees
-  // the previous cue is dead before the next one starts. No overlap possible.
+  // Separate player for cues with AudioFocus.none — prevents Android from
+  // ducking/pausing the ambient track when a cue starts playing.
   final _breathCue = AudioPlayer();
+
+  // Configured once before the first cue play; cached as a Future so the
+  // await is a no-op on every subsequent call.
+  late final Future<void> _cueReady = _breathCue.setAudioContext(
+    AudioContext(
+      android: AudioContextAndroid(
+        audioFocus: AndroidAudioFocus.none,
+        contentType: AndroidContentType.music,
+        usageType: AndroidUsageType.media,
+      ),
+      iOS: AudioContextIOS(
+        category: AVAudioSessionCategory.ambient,
+        options: const {AVAudioSessionOptions.mixWithOthers},
+      ),
+    ),
+  );
 
   // Fixed asset durations. Rate = assetDuration / targetSeconds → the sound
   // ends precisely when the breathing circle reaches its target position.
@@ -116,6 +132,7 @@ class AudioService {
   Future<void> playInhale({required int targetSecs}) async {
     _cueFadeTimer?.cancel();
     try {
+      await _cueReady;
       await _breathCue.stop();
       await setRateForPhase(targetSecs.toDouble(), true);
       await _breathCue.play(AssetSource('audio/inhale.mp3'), volume: _cueVolume);
@@ -128,6 +145,7 @@ class AudioService {
   Future<void> playExhale({required int targetSecs}) async {
     _cueFadeTimer?.cancel();
     try {
+      await _cueReady;
       await _breathCue.stop();
       await setRateForPhase(targetSecs.toDouble(), false);
       await _breathCue.play(AssetSource('audio/exhale.mp3'), volume: _cueVolume);

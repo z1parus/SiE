@@ -14,6 +14,17 @@ class AchievementBadge extends StatelessWidget {
     0,      0,      0,      0.4, 0,
   ]);
 
+  // Slug → Material Icon mapping. Guarantees rendering on all Android versions
+  // without relying on NotoColorEmoji font availability.
+  static IconData _iconForSlug(String slug) => switch (slug) {
+        'first_breath' => Icons.air,
+        'streak_7'     => Icons.local_fire_department,
+        'streak_30'    => Icons.whatshot,
+        'habits_10'    => Icons.checklist,
+        'xp_1000'      => Icons.bolt,
+        _              => Icons.emoji_events,
+      };
+
   @override
   Widget build(BuildContext context) {
     final earned = userAchievement.earned;
@@ -43,9 +54,10 @@ class AchievementBadge extends StatelessWidget {
             : null,
       ),
       child: Center(
-        child: Text(
-          ach.iconEmoji,
-          style: const TextStyle(fontSize: 16),
+        child: Icon(
+          _iconForSlug(ach.slug),
+          color: earned ? SieTheme.accent : SieTheme.textSecondary,
+          size: 16,
         ),
       ),
     );
