@@ -3,6 +3,7 @@ class Achievement {
   final String slug;
   final String name;
   final String? description;
+  final String iconEmoji;
   final int xpReward;
 
   const Achievement({
@@ -10,14 +11,29 @@ class Achievement {
     required this.slug,
     required this.name,
     this.description,
+    this.iconEmoji = '🏆',
     required this.xpReward,
   });
 
-  factory Achievement.fromJson(Map<String, dynamic> json) => Achievement(
-        id: json['id'] as String,
-        slug: json['slug'] as String,
-        name: json['name'] as String,
-        description: json['description'] as String?,
-        xpReward: json['xp_reward'] as int? ?? 0,
+  factory Achievement.fromMap(Map<dynamic, dynamic> map) => Achievement(
+        id: map['id']?.toString() ?? '',
+        slug: map['slug']?.toString() ?? '',
+        name: map['name']?.toString() ?? '',
+        description: map['description']?.toString(),
+        iconEmoji: map['icon_emoji']?.toString() ?? '🏆',
+        xpReward: int.tryParse('${map['xp_reward'] ?? 0}') ?? 0,
       );
+}
+
+/// Achievement enriched with per-user earn status.
+class UserAchievement {
+  final Achievement achievement;
+  final bool earned;
+  final DateTime? earnedAt;
+
+  const UserAchievement({
+    required this.achievement,
+    required this.earned,
+    this.earnedAt,
+  });
 }

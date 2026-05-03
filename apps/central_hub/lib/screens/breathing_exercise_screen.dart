@@ -11,7 +11,6 @@ class BreathingSettings {
   final int cyclesPerRound;
   final int inhaleSecs;
   final int exhaleSecs;
-  final int recoverySecs;
   final int exhaustRetentionSecs;
 
   const BreathingSettings({
@@ -19,7 +18,6 @@ class BreathingSettings {
     this.cyclesPerRound = 30,
     this.inhaleSecs = 2,
     this.exhaleSecs = 2,
-    this.recoverySecs = 15,
     this.exhaustRetentionSecs = 90,
   });
 
@@ -28,7 +26,6 @@ class BreathingSettings {
     int? cyclesPerRound,
     int? inhaleSecs,
     int? exhaleSecs,
-    int? recoverySecs,
     int? exhaustRetentionSecs,
   }) =>
       BreathingSettings(
@@ -36,7 +33,6 @@ class BreathingSettings {
         cyclesPerRound: cyclesPerRound ?? this.cyclesPerRound,
         inhaleSecs: inhaleSecs ?? this.inhaleSecs,
         exhaleSecs: exhaleSecs ?? this.exhaleSecs,
-        recoverySecs: recoverySecs ?? this.recoverySecs,
         exhaustRetentionSecs:
             exhaustRetentionSecs ?? this.exhaustRetentionSecs,
       );
@@ -44,7 +40,9 @@ class BreathingSettings {
 
 // ── Phase ─────────────────────────────────────────────────────
 
-enum _Phase { idle, active, retention, recovery, complete }
+enum _Phase { idle, countdown, active, retention, recovery, roundTransition, complete }
+
+const _recoveryHoldSecs = 15;
 
 // ── Screen ───────────────────────────────────────────────────
 
@@ -70,12 +68,14 @@ class _BreathingExerciseScreenState
   int _cycle = 0;
   bool _isInhaling = true;
   int _retentionElapsed = 0;
-  bool _recoveryInhaling = true;
-  int _recoverySecsLeft = 0;
+  int _recoveryElapsed = 0;
+  int _transitionElapsed = 0;
+  int _countdownValue = 5;
+  bool _spherePressed = false;
 
   Timer? _breathTimer;
   Timer? _retentionTimer;
-  Timer? _recoveryTimer;
+  Timer? _transitionTimer;
   DateTime? _sessionStart;
 
   @override
@@ -102,21 +102,30 @@ class _BreathingExerciseScreenState
   void _cancelTimers() {
     _breathTimer?.cancel();
     _retentionTimer?.cancel();
-    _recoveryTimer?.cancel();
+    _transitionTimer?.cancel();
   }
 
   // ── Back / Partial XP ────────────────────────────────────────
 
   void _onBack() {
     _cancelTimers();
-    ref.read(audioServiceProvider).stopAll();
-    _awardPartialXpIfEligible(); // fire-and-forget
+    ref.read(audioServiceProvider).stopAll(); // fade-out, fire-and-forget
+    _awardPartialXpIfEligible();
     Navigator.of(context).pop();
+  }
+
+  void _onSphereTap() {
+    if (_phase == _Phase.idle) _startSession();
+    // When a session is in progress, tapping the sphere is a no-op.
   }
 
   Future<void> _awardPartialXpIfEligible() async {
     if (_sessionStart == null) return;
-    if (_phase == _Phase.idle || _phase == _Phase.complete) return;
+    if (_phase == _Phase.idle ||
+        _phase == _Phase.countdown ||
+        _phase == _Phase.complete) {
+      return;
+    }
     final elapsed = DateTime.now().difference(_sessionStart!).inSeconds;
     if (elapsed < 30) return;
     try {
@@ -127,13 +136,38 @@ class _BreathingExerciseScreenState
     } catch (_) {}
   }
 
-  // ── Phase: Active ─────────────────────────────────────────
+  // ── Phase: Countdown ──────────────────────────────────────
 
   void _startSession() {
-    _sessionStart = DateTime.now();
     _round = 1;
-    _startActivePhase();
+    _startCountdown();
   }
+
+  void _startCountdown() {
+    if (!mounted) return;
+    setState(() {
+      _phase = _Phase.countdown;
+      _countdownValue = 5;
+    });
+    ref.read(audioServiceProvider).startAmbient(); // fade-in begins now
+    _breathTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      final next = _countdownValue - 1;
+      if (next <= 0) {
+        t.cancel();
+        setState(() => _countdownValue = 0);
+        _sessionStart = DateTime.now();
+        _startActivePhase();
+      } else {
+        setState(() => _countdownValue = next);
+      }
+    });
+  }
+
+  // ── Phase: Active ─────────────────────────────────────────
 
   void _startActivePhase() {
     if (!mounted) return;
@@ -208,42 +242,71 @@ class _BreathingExerciseScreenState
     _startRecoveryPhase();
   }
 
-  // ── Phase: Recovery ───────────────────────────────────────
+  // ── Phase: Recovery (Phase 3 — Hold on Inhale) ────────────
 
   void _startRecoveryPhase() {
     if (!mounted) return;
     setState(() {
       _phase = _Phase.recovery;
-      _recoveryInhaling = true;
-      _recoverySecsLeft = _settings.recoverySecs;
+      _recoveryElapsed = 0;
     });
+    // Deep inhale: circle expands to maximum over 3 s with matching audio.
     ref.read(audioServiceProvider).playInhale(targetSecs: 3);
     _circleCtrl.animateTo(
       1.0,
       duration: const Duration(seconds: 3),
       curve: Curves.easeIn,
     );
-    _breathTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted || _phase != _Phase.recovery) return;
-      setState(() => _recoveryInhaling = false);
-      _recoveryTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-        if (!mounted) {
-          t.cancel();
-          return;
-        }
-        final next = _recoverySecsLeft - 1;
-        if (next <= 0) {
-          t.cancel();
-          _endRecovery();
-        } else {
-          setState(() => _recoverySecsLeft = next);
-        }
-      });
+    _breathTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      final next = _recoveryElapsed + 1;
+      setState(() => _recoveryElapsed = next);
+      if (next >= _recoveryHoldSecs) {
+        t.cancel();
+        _startRoundTransitionPhase();
+      }
     });
   }
 
-  void _endRecovery() {
-    _recoveryTimer?.cancel();
+  // ── Phase: Round Transition ───────────────────────────────
+
+  void _startRoundTransitionPhase() {
+    if (!mounted) return;
+    // Establish max size at phase entry so the exhale animation has full
+    // visual range. Retention ended with the circle at its minimum.
+    _circleCtrl.value = 1.0;
+    setState(() {
+      _phase = _Phase.roundTransition;
+      _transitionElapsed = 0;
+    });
+    // First 5 s: exhale — circle shrinks to minimum with matching audio.
+    // AudioService fade-out timer ensures the cue naturally ends at T+5 s.
+    ref.read(audioServiceProvider).playExhale(targetSecs: 5);
+    _circleCtrl.animateTo(
+      0.3,
+      duration: const Duration(seconds: 5),
+      curve: Curves.easeOut,
+    );
+    // Second 5 s: circle is static at minimum, no breathing sound.
+    _transitionTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      final next = _transitionElapsed + 1;
+      setState(() => _transitionElapsed = next);
+      if (next >= 10) {
+        t.cancel();
+        _endTransition();
+      }
+    });
+  }
+
+  void _endTransition() {
+    _transitionTimer?.cancel();
     if (!mounted) return;
     if (_round < _settings.rounds) {
       setState(() => _round++);
@@ -258,16 +321,20 @@ class _BreathingExerciseScreenState
   Future<void> _completeSession() async {
     if (!mounted) return;
     _cancelTimers();
-    ref.read(audioServiceProvider).stopAll();
     setState(() => _phase = _Phase.complete);
 
     final elapsed = _sessionStart == null
         ? 60
         : DateTime.now().difference(_sessionStart!).inSeconds;
 
-    final result = await ref
+    // Fade-out and DB write run in parallel; UI shows spinner during both.
+    final stopFuture = ref.read(audioServiceProvider).stopAll();
+    final dbFuture = ref
         .read(sessionCompletionProvider.notifier)
         .completeSession(durationSeconds: elapsed);
+
+    await stopFuture;
+    final result = await dbFuture;
 
     ref.invalidate(userProfileProvider);
 
@@ -319,7 +386,47 @@ class _BreathingExerciseScreenState
                 onBack: _onBack,
               ),
             ),
-            Center(child: _buildCircle()),
+            Center(
+              child: GestureDetector(
+                onTap: _onSphereTap,
+                onTapDown: (_) {
+                  if (_phase == _Phase.idle) {
+                    setState(() => _spherePressed = true);
+                  }
+                },
+                onTapUp: (_) => setState(() => _spherePressed = false),
+                onTapCancel: () => setState(() => _spherePressed = false),
+                child: AnimatedScale(
+                  scale: (_phase == _Phase.idle && _spherePressed) ? 0.95 : 1.0,
+                  duration: const Duration(milliseconds: 80),
+                  child: _buildCircle(),
+                ),
+              ),
+            ),
+            // Countdown number overlaid on circle
+            if (_phase == _Phase.countdown)
+              Center(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  transitionBuilder: (child, anim) => FadeTransition(
+                    opacity: anim,
+                    child: ScaleTransition(
+                      scale: Tween<double>(begin: 0.7, end: 1.0).animate(anim),
+                      child: child,
+                    ),
+                  ),
+                  child: Text(
+                    '$_countdownValue',
+                    key: ValueKey(_countdownValue),
+                    style: const TextStyle(
+                      color: SieTheme.accent,
+                      fontSize: 80,
+                      fontWeight: FontWeight.w100,
+                      letterSpacing: 4,
+                    ),
+                  ),
+                ),
+              ),
             Positioned(
               bottom: 40, left: 32, right: 32,
               child: _buildBottomArea(),
@@ -385,15 +492,40 @@ class _BreathingExerciseScreenState
               style: Theme.of(context).textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 16),
+            Text(
+              'TAP SPHERE TO START',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: SieTheme.accent.withValues(alpha: 0.45),
+                    fontSize: 11,
+                    letterSpacing: 2.5,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
             _SettingsButton(onTap: _showSettings),
             const SizedBox(height: 16),
             _SieButton(
               label: 'INITIATE PROTOCOL',
-              onPressed: () {
-                ref.read(audioServiceProvider).startAmbient();
-                _startSession();
-              },
+              onPressed: _startSession,
+            ),
+          ],
+        );
+
+      case _Phase.countdown:
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'ПРИГОТОВЬТЕСЬ',
+              style: Theme.of(context).textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'К ПРАКТИКЕ',
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
             ),
           ],
         );
@@ -449,7 +581,10 @@ class _BreathingExerciseScreenState
             const SizedBox(height: 6),
             Text(
               'MAX ${_settings.exhaustRetentionSecs ~/ 60}:${(_settings.exhaustRetentionSecs % 60).toString().padLeft(2, '0')}',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 11),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(fontSize: 11),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 22),
@@ -458,11 +593,13 @@ class _BreathingExerciseScreenState
         );
 
       case _Phase.recovery:
+        final recovSecsLeft = _recoveryHoldSecs - _recoveryElapsed;
         return Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              _recoveryInhaling ? 'INHALE DEEPLY' : 'HOLD',
-              style: const TextStyle(
+            const Text(
+              'HOLD YOUR BREATH',
+              style: TextStyle(
                 color: SieTheme.accent,
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
@@ -470,19 +607,76 @@ class _BreathingExerciseScreenState
               ),
               textAlign: TextAlign.center,
             ),
-            if (!_recoveryInhaling) ...[
-              const SizedBox(height: 10),
+            const SizedBox(height: 2),
+            Text(
+              '(INHALE)',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    letterSpacing: 2,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '${recovSecsLeft}s',
+              style: const TextStyle(
+                color: SieTheme.textPrimary,
+                fontSize: 42,
+                fontWeight: FontWeight.w200,
+                letterSpacing: 4,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        );
+
+      case _Phase.roundTransition:
+        final secsLeft = 10 - _transitionElapsed;
+        final isFinalRound = _round == _settings.rounds;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isFinalRound) ...[
+              const Text(
+                'EXHALE',
+                style: TextStyle(
+                  color: SieTheme.accent,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ] else ...[
               Text(
-                '${_recoverySecsLeft}s',
-                style: const TextStyle(
-                  color: SieTheme.textPrimary,
-                  fontSize: 42,
-                  fontWeight: FontWeight.w200,
-                  letterSpacing: 4,
+                'PREPARE FOR THE',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      letterSpacing: 2,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                'NEXT ROUND',
+                style: TextStyle(
+                  color: SieTheme.accent,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 3,
                 ),
                 textAlign: TextAlign.center,
               ),
             ],
+            const SizedBox(height: 10),
+            Text(
+              '${secsLeft}s',
+              style: const TextStyle(
+                color: SieTheme.textPrimary,
+                fontSize: 42,
+                fontWeight: FontWeight.w200,
+                letterSpacing: 4,
+              ),
+              textAlign: TextAlign.center,
+            ),
           ],
         );
 
@@ -514,6 +708,8 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final showRound =
+        phase != _Phase.idle && phase != _Phase.countdown && phase != _Phase.complete;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Row(
@@ -527,7 +723,7 @@ class _TopBar extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          if (phase != _Phase.idle)
+          if (showRound)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
@@ -540,7 +736,6 @@ class _TopBar extends StatelessWidget {
               ),
             ),
           const Spacer(),
-          // Placeholder to keep round badge visually centered
           const SizedBox(width: 48),
         ],
       ),
@@ -650,15 +845,8 @@ class _SettingsSheetState extends State<_SettingsSheet> {
             label: 'EXHALE  (SEC)',
             value: _s.exhaleSecs,
             min: 1,
-            max: 5,
+            max: 7,
             onChanged: (v) => _update(_s.copyWith(exhaleSecs: v)),
-          ),
-          _SettingRow(
-            label: 'RECOVERY (SEC)',
-            value: _s.recoverySecs,
-            min: 10,
-            max: 30,
-            onChanged: (v) => _update(_s.copyWith(recoverySecs: v)),
           ),
           _SettingRow(
             label: 'EXHALE RETENTION (SEC)',
@@ -703,7 +891,9 @@ class _SettingRow extends StatelessWidget {
           _StepBtn(
             icon: Icons.remove,
             active: value > min,
-            onTap: value > min ? () => onChanged((value - step).clamp(min, max)) : null,
+            onTap: value > min
+                ? () => onChanged((value - step).clamp(min, max))
+                : null,
           ),
           const SizedBox(width: 20),
           SizedBox(
@@ -723,7 +913,9 @@ class _SettingRow extends StatelessWidget {
           _StepBtn(
             icon: Icons.add,
             active: value < max,
-            onTap: value < max ? () => onChanged((value + step).clamp(min, max)) : null,
+            onTap: value < max
+                ? () => onChanged((value + step).clamp(min, max))
+                : null,
           ),
         ],
       ),

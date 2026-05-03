@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 import 'breathing_exercise_screen.dart';
+import 'habit_tracker_screen.dart';
+import 'profile_screen.dart';
 
 class OperationsControlScreen extends ConsumerWidget {
   const OperationsControlScreen({super.key});
@@ -72,19 +74,26 @@ class OperationsControlScreen extends ConsumerWidget {
 }
 
 void _onBranchTap(BuildContext context, Branch branch) {
+  Widget? screen;
+
   if (branch.slug == 'breathing_practices') {
+    screen = const BreathingExerciseScreen();
+  } else if (branch.slug == 'habit_archive') {
+    screen = const HabitTrackerScreen();
+  }
+
+  if (screen != null) {
     Navigator.of(context).push(
       PageRouteBuilder(
-        pageBuilder: (_, _, _) => const BreathingExerciseScreen(),
-        transitionsBuilder: (_, anim, _, child) => FadeTransition(
-          opacity: anim,
-          child: child,
-        ),
+        pageBuilder: (_, _, _) => screen!,
+        transitionsBuilder: (_, anim, _, child) =>
+            FadeTransition(opacity: anim, child: child),
         transitionDuration: const Duration(milliseconds: 400),
       ),
     );
     return;
   }
+
   ScaffoldMessenger.of(context).showSnackBar(
     const SnackBar(
       content: Text('Department initialising...'),
@@ -122,25 +131,41 @@ class _ScreenHeader extends StatelessWidget {
                 style: theme.textTheme.headlineMedium,
               ),
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  Text(
-                    'OPERATIVE: $operative',
-                    style: theme.textTheme.bodyMedium,
+              GestureDetector(
+                onTap: () => Navigator.of(context).push(
+                  PageRouteBuilder(
+                    pageBuilder: (_, _, _) => const ProfileScreen(),
+                    transitionsBuilder: (_, anim, _, child) =>
+                        FadeTransition(opacity: anim, child: child),
+                    transitionDuration: const Duration(milliseconds: 350),
                   ),
-                  const SizedBox(width: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      'OPERATIVE: $operative',
+                      style: theme.textTheme.bodyMedium,
                     ),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: SieTheme.borderAccent),
-                      borderRadius: BorderRadius.circular(2),
+                    const SizedBox(width: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: SieTheme.borderAccent),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                      child: Text('$xp XP', style: theme.textTheme.labelSmall),
                     ),
-                    child: Text('$xp XP', style: theme.textTheme.labelSmall),
-                  ),
-                ],
+                    const SizedBox(width: 6),
+                    const Icon(
+                      Icons.chevron_right,
+                      color: SieTheme.borderAccent,
+                      size: 14,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
