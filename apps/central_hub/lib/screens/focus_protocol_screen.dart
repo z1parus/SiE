@@ -919,21 +919,56 @@ class _ResultOverlayState extends State<_ResultOverlay>
                       border: Border.all(color: SieTheme.borderAccent),
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: Column(
                       children: [
-                        Text(
-                          'XP GAINED',
-                          style: Theme.of(context).textTheme.bodyMedium,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'XP GAINED',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                            Text(
+                              '+${widget.result.xpGained} XP',
+                              style: const TextStyle(
+                                color: SieTheme.accent,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 2,
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          '+${widget.result.xpGained} XP',
-                          style: const TextStyle(
-                            color: SieTheme.accent,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 2,
-                          ),
+                        const SizedBox(height: 10),
+                        Container(
+                            height: 1,
+                            color: SieTheme.borderDefault),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.palette_outlined,
+                                    size: 14,
+                                    color: SieTheme.dp.withValues(alpha: 0.85)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'DP GAINED',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
+                            ),
+                            Text(
+                              '+${widget.result.dpGained} DP',
+                              style: const TextStyle(
+                                color: SieTheme.dp,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 2,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),

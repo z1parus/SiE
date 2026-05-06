@@ -7,9 +7,10 @@ import '../services/audio_service.dart';
 import 'user_profile_provider.dart';
 
 const _focusXp = 100;
+const _focusDp = 50;
 const _omit = Object();
 
-typedef FocusSessionResult = ({int xpGained, Achievement? newAchievement});
+typedef FocusSessionResult = ({int xpGained, int dpGained, Achievement? newAchievement});
 
 enum FocusPhase { idle, work, breakTime }
 
@@ -296,10 +297,13 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
         'xp_gained': _focusXp,
       });
 
-      await client.rpc('increment_xp', params: {
-        'p_user_id': userId,
-        'p_amount': _focusXp,
-      });
+      await Future.wait([
+        client.rpc('increment_xp', params: {
+          'p_user_id': userId,
+          'p_amount': _focusXp,
+        }),
+        addDesignPoints(_focusDp),
+      ]);
 
       Achievement? earned;
       final achRow = await client
@@ -325,10 +329,10 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
         }
       }
 
-      return (xpGained: _focusXp, newAchievement: earned);
+      return (xpGained: _focusXp, dpGained: _focusDp, newAchievement: earned);
     } catch (e) {
       debugPrint('SiE FocusTimer: save error — $e');
-      return (xpGained: 0, newAchievement: null);
+      return (xpGained: 0, dpGained: 0, newAchievement: null);
     }
   }
 }

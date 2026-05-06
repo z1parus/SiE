@@ -6,6 +6,7 @@ class PublicProfile {
   final String? equippedBackgroundId;
   final String? equippedStatStyleId;
   final int totalXp;
+  final int designPoints;
 
   int get level => (totalXp ~/ 1000) + 1;
   int get xpInLevel => totalXp % 1000;
@@ -18,6 +19,7 @@ class PublicProfile {
     this.equippedBackgroundId,
     this.equippedStatStyleId,
     required this.totalXp,
+    this.designPoints = 0,
   });
 
   factory PublicProfile.fromJson(Map<String, dynamic> json) => PublicProfile(
@@ -28,6 +30,7 @@ class PublicProfile {
         equippedBackgroundId: json['equipped_background_id'] as String?,
         equippedStatStyleId: json['equipped_stat_style_id'] as String?,
         totalXp: json['total_xp'] as int? ?? 0,
+        designPoints: json['design_points'] as int? ?? 0,
       );
 }
 

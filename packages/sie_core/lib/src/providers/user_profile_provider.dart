@@ -71,3 +71,8 @@ Future<void> changePassword(String newPassword) async {
   await SupabaseService.client.auth
       .updateUser(UserAttributes(password: newPassword));
 }
+
+Future<void> addDesignPoints(int amount) async {
+  await SupabaseService.client
+      .rpc('add_design_points', params: {'p_amount': amount});
+}

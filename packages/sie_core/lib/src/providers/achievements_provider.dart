@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/achievement.dart';
 import 'auth_state_provider.dart';
+import 'user_profile_provider.dart';
 
-typedef SessionResult = ({int xpGained, Achievement? newAchievement});
+const _breathingDp = 20;
+
+typedef SessionResult = ({int xpGained, int dpGained, Achievement? newAchievement});
 
 class SessionCompletionNotifier extends Notifier<void> {
   @override
@@ -17,10 +20,13 @@ class SessionCompletionNotifier extends Notifier<void> {
 
     final xp = ((durationSeconds / 60.0) * 10).round().clamp(10, 9999);
 
-    await client.rpc('increment_xp', params: {
-      'p_user_id': userId,
-      'p_amount': xp,
-    });
+    await Future.wait([
+      client.rpc('increment_xp', params: {
+        'p_user_id': userId,
+        'p_amount': xp,
+      }),
+      addDesignPoints(_breathingDp),
+    ]);
 
     // Award 'first_breath' only if the user has no achievements yet.
     Achievement? earned;
@@ -45,7 +51,7 @@ class SessionCompletionNotifier extends Notifier<void> {
       }
     }
 
-    return (xpGained: xp, newAchievement: earned);
+    return (xpGained: xp, dpGained: _breathingDp, newAchievement: earned);
   }
 }
 

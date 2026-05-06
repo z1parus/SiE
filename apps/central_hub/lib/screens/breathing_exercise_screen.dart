@@ -356,6 +356,7 @@ class _BreathingExerciseScreenState
       PageRouteBuilder(
         pageBuilder: (_, _, _) => MissionAccomplishedScreen(
           xpGained: result.xpGained,
+          dpGained: result.dpGained,
           achievement: result.newAchievement,
         ),
         transitionsBuilder: (_, anim, _, child) =>

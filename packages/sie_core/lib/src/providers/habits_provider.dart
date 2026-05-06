@@ -278,10 +278,13 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           'completed_at': dateStr,
           'xp_awarded': 50,
         });
-        await client.rpc('increment_xp', params: {
-          'p_user_id': userId,
-          'p_amount': 50,
-        });
+        await Future.wait([
+          client.rpc('increment_xp', params: {
+            'p_user_id': userId,
+            'p_amount': 50,
+          }),
+          addDesignPoints(10),
+        ]);
       }
     } catch (e, st) {
       state = AsyncData(prev);

@@ -268,6 +268,24 @@ class _NameSection extends StatelessWidget {
                 ),
           ),
         ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.palette_outlined,
+                size: 11, color: SieTheme.dp.withValues(alpha: 0.85)),
+            const SizedBox(width: 4),
+            Text(
+              '${profile.designPoints} DP',
+              style: const TextStyle(
+                color: SieTheme.dp,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

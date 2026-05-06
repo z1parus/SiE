@@ -12,6 +12,7 @@ class Profile {
   final String? equippedFrameId;
   final String? equippedBackgroundId;
   final String? equippedStatStyleId;
+  final int designPoints;
 
   const Profile({
     required this.id,
@@ -27,6 +28,7 @@ class Profile {
     this.equippedFrameId,
     this.equippedBackgroundId,
     this.equippedStatStyleId,
+    this.designPoints = 0,
   });
 
   factory Profile.fromJson(Map<String, dynamic> json) => Profile(
@@ -46,5 +48,6 @@ class Profile {
         equippedFrameId: json['equipped_frame_id'] as String?,
         equippedBackgroundId: json['equipped_background_id'] as String?,
         equippedStatStyleId: json['equipped_stat_style_id'] as String?,
+        designPoints: json['design_points'] as int? ?? 0,
       );
 }

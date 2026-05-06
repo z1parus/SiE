@@ -4,11 +4,13 @@ import 'package:sie_core/sie_core.dart';
 
 class MissionAccomplishedScreen extends ConsumerStatefulWidget {
   final int xpGained;
+  final int dpGained;
   final Achievement? achievement;
 
   const MissionAccomplishedScreen({
     super.key,
     required this.xpGained,
+    this.dpGained = 0,
     this.achievement,
   });
 
@@ -109,6 +111,10 @@ class _MissionAccomplishedScreenState
                       ),
                       const SizedBox(height: 36),
                       _XpPanel(xpGained: widget.xpGained, totalXp: totalXp),
+                      if (widget.dpGained > 0) ...[
+                        const SizedBox(height: 10),
+                        _DpPanel(dpGained: widget.dpGained),
+                      ],
                       if (widget.achievement != null) ...[
                         const SizedBox(height: 16),
                         _AchievementPanel(achievement: widget.achievement!),
@@ -198,6 +204,47 @@ class _XpPanel extends StatelessWidget {
             style: const TextStyle(
               color: SieTheme.accent,
               fontSize: 22,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── DP Panel ──────────────────────────────────────────────────
+
+class _DpPanel extends StatelessWidget {
+  final int dpGained;
+  const _DpPanel({required this.dpGained});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        color: SieTheme.surface,
+        border: Border.all(color: SieTheme.dp.withValues(alpha: 0.4)),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.palette_outlined,
+                  size: 14, color: SieTheme.dp.withValues(alpha: 0.85)),
+              const SizedBox(width: 8),
+              Text('DP GAINED', style: Theme.of(context).textTheme.bodyMedium),
+            ],
+          ),
+          Text(
+            '+$dpGained DP',
+            style: const TextStyle(
+              color: SieTheme.dp,
+              fontSize: 20,
               fontWeight: FontWeight.w700,
               letterSpacing: 2,
             ),

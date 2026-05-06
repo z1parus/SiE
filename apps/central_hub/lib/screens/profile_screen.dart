@@ -163,19 +163,54 @@ class _HeaderSection extends ConsumerWidget {
                     ?.copyWith(fontSize: 18),
               ),
               const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  border: Border.all(color: SieTheme.borderAccent),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-                child: Text(
-                  'LEVEL $level',
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: SieTheme.borderAccent),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                    child: Text(
+                      'LEVEL $level',
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                          color: SieTheme.dp.withValues(alpha: 0.5)),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.palette_outlined,
+                            size: 10,
+                            color: SieTheme.dp.withValues(alpha: 0.9)),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${profile?.designPoints ?? 0} DP',
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelSmall
+                              ?.copyWith(
+                                color: SieTheme.dp,
+                                letterSpacing: 1,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

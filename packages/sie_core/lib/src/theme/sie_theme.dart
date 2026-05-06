@@ -10,6 +10,7 @@ class SieTheme {
   static const textSecondary = Color(0xFF6A90B0);
   static const borderDefault = Color(0xFF1A3A5C);
   static const borderAccent = Color(0xFF005F80);
+  static const dp = Color(0xFF9D50BB);
 
   static ThemeData get dark => ThemeData(
         brightness: Brightness.dark,
