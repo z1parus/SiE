@@ -5,6 +5,7 @@ import 'breathing_exercise_screen.dart';
 import 'focus_protocol_screen.dart';
 import 'habit_tracker_screen.dart';
 import 'profile_screen.dart';
+import 'user_search_screen.dart';
 
 class OperationsControlScreen extends ConsumerStatefulWidget {
   const OperationsControlScreen({super.key});
@@ -349,6 +350,22 @@ class _ScreenHeader extends StatelessWidget {
               ),
             ],
           ),
+        ),
+        IconButton(
+          onPressed: () => Navigator.of(context).push(
+            PageRouteBuilder(
+              pageBuilder: (_, _, _) => const UserSearchScreen(),
+              transitionsBuilder: (_, anim, _, child) =>
+                  FadeTransition(opacity: anim, child: child),
+              transitionDuration: const Duration(milliseconds: 300),
+            ),
+          ),
+          icon: const Icon(
+            Icons.search,
+            color: SieTheme.textSecondary,
+            size: 20,
+          ),
+          tooltip: 'NETWORK SCAN',
         ),
         IconButton(
           onPressed: () async => await SupabaseService.signOut(),
