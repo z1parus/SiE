@@ -87,7 +87,7 @@ class _BreathingExerciseScreenState
   void initState() {
     super.initState();
     // Capture before dispose() where ref is no longer valid.
-    _audio = _audio;
+    _audio = ref.read(audioServiceProvider);
     _skyCtrl = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 150),
