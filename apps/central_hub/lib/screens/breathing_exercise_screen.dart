@@ -61,6 +61,7 @@ class _BreathingExerciseScreenState
   late final AnimationController _circleCtrl;
   late final AnimationController _pulseCtrl;
   late final Animation<double> _pulseAnim;
+  late final AudioService _audio;
 
   _Phase _phase = _Phase.idle;
   BreathingSettings _settings = const BreathingSettings();
@@ -84,6 +85,8 @@ class _BreathingExerciseScreenState
   @override
   void initState() {
     super.initState();
+    // Capture before dispose() where ref is no longer valid.
+    _audio = _audio;
     _skyCtrl = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 150),
@@ -101,8 +104,7 @@ class _BreathingExerciseScreenState
   @override
   void dispose() {
     _cancelTimers();
-    // Guard against audio continuing after system back / swipe-back on Android.
-    ref.read(audioServiceProvider).stopAll();
+    _audio.stopAll();
     _skyCtrl.dispose();
     _circleCtrl.dispose();
     _pulseCtrl.dispose();
@@ -119,7 +121,7 @@ class _BreathingExerciseScreenState
 
   void _onBack() {
     _cancelTimers();
-    ref.read(audioServiceProvider).stopAll(); // fade-out, fire-and-forget
+    _audio.stopAll(); // fade-out, fire-and-forget
     _awardPartialXpIfEligible();
     Navigator.of(context).pop();
   }
@@ -159,7 +161,7 @@ class _BreathingExerciseScreenState
       _phase = _Phase.countdown;
       _countdownValue = 5;
     });
-    ref.read(audioServiceProvider).startAmbient(); // fade-in begins now
+    _audio.startAmbient(); // fade-in begins now
     _breathTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) {
         t.cancel();
@@ -197,7 +199,7 @@ class _BreathingExerciseScreenState
       return;
     }
     setState(() => _isInhaling = true);
-    ref.read(audioServiceProvider).playInhale(targetSecs: _settings.inhaleSecs);
+    _audio.playInhale(targetSecs: _settings.inhaleSecs);
     _circleCtrl.animateTo(
       1.0,
       duration: Duration(seconds: _settings.inhaleSecs),
@@ -206,7 +208,7 @@ class _BreathingExerciseScreenState
     _breathTimer = Timer(Duration(seconds: _settings.inhaleSecs), () {
       if (!mounted || _phase != _Phase.active) return;
       setState(() => _isInhaling = false);
-      ref.read(audioServiceProvider).playExhale(targetSecs: _settings.exhaleSecs);
+      _audio.playExhale(targetSecs: _settings.exhaleSecs);
       _circleCtrl.animateTo(
         0.3,
         duration: Duration(seconds: _settings.exhaleSecs),
@@ -261,7 +263,7 @@ class _BreathingExerciseScreenState
       _recoveryElapsed = 0;
     });
     // Deep inhale: circle expands to maximum over 3 s with matching audio.
-    ref.read(audioServiceProvider).playInhale(targetSecs: 3);
+    _audio.playInhale(targetSecs: 3);
     _circleCtrl.animateTo(
       1.0,
       duration: const Duration(seconds: 3),
@@ -294,7 +296,7 @@ class _BreathingExerciseScreenState
     });
     // First 5 s: exhale — circle shrinks to minimum with matching audio.
     // AudioService fade-out timer ensures the cue naturally ends at T+5 s.
-    ref.read(audioServiceProvider).playExhale(targetSecs: 5);
+    _audio.playExhale(targetSecs: 5);
     _circleCtrl.animateTo(
       0.3,
       duration: const Duration(seconds: 5),
@@ -338,7 +340,7 @@ class _BreathingExerciseScreenState
         : DateTime.now().difference(_sessionStart!).inSeconds;
 
     // Fade-out and DB write run in parallel; UI shows spinner during both.
-    final stopFuture = ref.read(audioServiceProvider).stopAll();
+    final stopFuture = _audio.stopAll();
     final dbFuture = ref
         .read(sessionCompletionProvider.notifier)
         .completeSession(durationSeconds: elapsed);
