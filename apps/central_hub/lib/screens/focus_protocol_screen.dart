@@ -18,6 +18,7 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
   late final Animation<double> _pulseAnim;
 
   bool _onboardingDismissed = false;
+  bool _showOnboardingManual = false;
 
   @override
   void initState() {
@@ -96,9 +97,10 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
         : SieTheme.accent;
 
     final onboardingProfile = ref.watch(userProfileProvider).valueOrNull;
-    final showOnboarding = !_onboardingDismissed &&
-        onboardingProfile != null &&
-        !onboardingProfile.hasSeenOnboardingFocus;
+    final showOnboarding = _showOnboardingManual ||
+        (!_onboardingDismissed &&
+            onboardingProfile != null &&
+            !onboardingProfile.hasSeenOnboardingFocus);
 
     return Stack(
       children: [
@@ -118,6 +120,7 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
                   child: _TopBar(
                     completedSessions: timerState.completedSessions,
                     onBack: _onBack,
+                    onInfo: () => setState(() => _showOnboardingManual = true),
                   ),
                 ),
                 Center(
@@ -172,8 +175,12 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
                 'Тренировка концентрации и защита от выгорания. Временны́е блоки '
                 'защищают состояние потока и консолидируют рабочую память.',
             onAccept: () {
-              setState(() => _onboardingDismissed = true);
-              markOnboardingSeen('focus');
+              if (_showOnboardingManual) {
+                setState(() => _showOnboardingManual = false);
+              } else {
+                setState(() => _onboardingDismissed = true);
+                markOnboardingSeen('focus');
+              }
             },
           ),
         ),
@@ -327,8 +334,13 @@ class _FocusRingPainter extends CustomPainter {
 class _TopBar extends StatelessWidget {
   final int completedSessions;
   final VoidCallback onBack;
+  final VoidCallback onInfo;
 
-  const _TopBar({required this.completedSessions, required this.onBack});
+  const _TopBar({
+    required this.completedSessions,
+    required this.onBack,
+    required this.onInfo,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -359,7 +371,15 @@ class _TopBar extends StatelessWidget {
               ),
             ),
           const Spacer(),
-          const SizedBox(width: 48),
+          IconButton(
+            onPressed: onInfo,
+            icon: Icon(
+              Icons.help_outline,
+              color: SieTheme.textSecondary.withValues(alpha: 0.7),
+              size: 20,
+            ),
+            tooltip: 'INFO',
+          ),
         ],
       ),
     );

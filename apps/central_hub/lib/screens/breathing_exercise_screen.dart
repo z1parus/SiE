@@ -67,6 +67,7 @@ class _BreathingExerciseScreenState
   BreathingSettings _settings = const BreathingSettings();
 
   bool _onboardingDismissed = false;
+  bool _showOnboardingManual = false;
 
   int _round = 1;
   int _cycle = 0;
@@ -386,9 +387,10 @@ class _BreathingExerciseScreenState
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(userProfileProvider).valueOrNull;
-    final showOnboarding = !_onboardingDismissed &&
-        profile != null &&
-        !profile.hasSeenOnboardingBreathing;
+    final showOnboarding = _showOnboardingManual ||
+        (!_onboardingDismissed &&
+            profile != null &&
+            !profile.hasSeenOnboardingBreathing);
 
     return Stack(
       children: [
@@ -409,6 +411,7 @@ class _BreathingExerciseScreenState
                         round: _round,
                         totalRounds: _settings.rounds,
                         onBack: _onBack,
+                        onInfo: () => setState(() => _showOnboardingManual = true),
                       ),
                     ),
                     Center(
@@ -470,8 +473,12 @@ class _BreathingExerciseScreenState
                 'Моментальное снижение стресса, управляемый выброс адреналина '
                 'и ясность ума через гипервентиляцию с задержкой дыхания.',
             onAccept: () {
-              setState(() => _onboardingDismissed = true);
-              markOnboardingSeen('breathing');
+              if (_showOnboardingManual) {
+                setState(() => _showOnboardingManual = false);
+              } else {
+                setState(() => _onboardingDismissed = true);
+                markOnboardingSeen('breathing');
+              }
             },
           ),
         ),
@@ -740,12 +747,14 @@ class _TopBar extends StatelessWidget {
   final int round;
   final int totalRounds;
   final VoidCallback onBack;
+  final VoidCallback onInfo;
 
   const _TopBar({
     required this.phase,
     required this.round,
     required this.totalRounds,
     required this.onBack,
+    required this.onInfo,
   });
 
   @override
@@ -778,7 +787,15 @@ class _TopBar extends StatelessWidget {
               ),
             ),
           const Spacer(),
-          const SizedBox(width: 48),
+          IconButton(
+            onPressed: onInfo,
+            icon: Icon(
+              Icons.help_outline,
+              color: SieTheme.textSecondary.withValues(alpha: 0.7),
+              size: 20,
+            ),
+            tooltip: 'INFO',
+          ),
         ],
       ),
     );

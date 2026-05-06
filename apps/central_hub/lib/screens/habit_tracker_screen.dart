@@ -14,6 +14,7 @@ class HabitTrackerScreen extends ConsumerStatefulWidget {
 
 class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
   bool _onboardingDismissed = false;
+  bool _showOnboardingManual = false;
 
   static String _fmt(DateTime dt) =>
       '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
@@ -23,9 +24,10 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
     final habitsAsync = ref.watch(habitsProvider);
     final today = _fmt(DateTime.now());
     final profile = ref.watch(userProfileProvider).valueOrNull;
-    final showOnboarding = !_onboardingDismissed &&
-        profile != null &&
-        !profile.hasSeenOnboardingHabits;
+    final showOnboarding = _showOnboardingManual ||
+        (!_onboardingDismissed &&
+            profile != null &&
+            !profile.hasSeenOnboardingHabits);
 
     return Stack(
       children: [
@@ -35,7 +37,10 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _TopBar(onAdd: () => _showHabitDialog(null)),
+            _TopBar(
+              onAdd: () => _showHabitDialog(null),
+              onInfo: () => setState(() => _showOnboardingManual = true),
+            ),
             Expanded(
               child: habitsAsync.when(
                 loading: () => const Center(
@@ -138,8 +143,12 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                 'дисциплину. Формирование нейронных паттернов, не требующих '
                 'волевых ресурсов.',
             onAccept: () {
-              setState(() => _onboardingDismissed = true);
-              markOnboardingSeen('habits');
+              if (_showOnboardingManual) {
+                setState(() => _showOnboardingManual = false);
+              } else {
+                setState(() => _onboardingDismissed = true);
+                markOnboardingSeen('habits');
+              }
             },
           ),
         ),
@@ -627,7 +636,8 @@ class _SwipeDeleteBg extends StatelessWidget {
 
 class _TopBar extends StatelessWidget {
   final VoidCallback onAdd;
-  const _TopBar({required this.onAdd});
+  final VoidCallback onInfo;
+  const _TopBar({required this.onAdd, required this.onInfo});
 
   @override
   Widget build(BuildContext context) {
@@ -649,6 +659,15 @@ class _TopBar extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium,
               textAlign: TextAlign.center,
             ),
+          ),
+          IconButton(
+            onPressed: onInfo,
+            icon: Icon(
+              Icons.help_outline,
+              color: SieTheme.textSecondary.withValues(alpha: 0.7),
+              size: 20,
+            ),
+            tooltip: 'INFO',
           ),
           IconButton(
             onPressed: onAdd,
