@@ -154,11 +154,57 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
         existing: existing,
         onSave: (title, description, color) {
           if (existing == null) {
-            ref.read(habitsProvider.notifier).addHabit(
+            ref
+                .read(habitsProvider.notifier)
+                .addHabit(
                   title: title,
                   description: description,
                   color: color,
+                )
+                .then((awarded) {
+              if (awarded && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    backgroundColor: SieTheme.surface,
+                    duration: const Duration(seconds: 3),
+                    content: Row(
+                      children: [
+                        const Text(
+                          '🌱',
+                          style: TextStyle(fontSize: 18),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                'ПЕРВЫЙ ПРОТОКОЛ ДИСЦИПЛИНЫ',
+                                style: TextStyle(
+                                  color: SieTheme.accent,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '+25 XP получено',
+                                style: TextStyle(
+                                  color: SieTheme.textSecondary,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 );
+              }
+            });
           } else {
             ref.read(habitsProvider.notifier).updateHabit(
                   habitId: existing.id,

@@ -101,6 +101,8 @@ class _BreathingExerciseScreenState
   @override
   void dispose() {
     _cancelTimers();
+    // Guard against audio continuing after system back / swipe-back on Android.
+    ref.read(audioServiceProvider).stopAll();
     _skyCtrl.dispose();
     _circleCtrl.dispose();
     _pulseCtrl.dispose();

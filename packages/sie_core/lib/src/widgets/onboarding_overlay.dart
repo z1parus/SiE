@@ -77,7 +77,9 @@ class _OnboardingOverlayState extends State<OnboardingOverlay>
   }
 
   Widget _buildOverlayContent(BuildContext context) {
-    return BackdropFilter(
+    return Material(
+      color: Colors.transparent,
+      child: BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
       child: Container(
         color: Colors.black.withValues(alpha: 0.72),
@@ -196,6 +198,7 @@ class _OnboardingOverlayState extends State<OnboardingOverlay>
             ),
           ),
         ),
+      ),
       ),
     );
   }

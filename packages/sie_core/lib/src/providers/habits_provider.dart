@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/habit.dart';
 import 'auth_state_provider.dart';
+import 'user_profile_provider.dart';
 
 String _fmt(DateTime dt) =>
     '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
@@ -68,14 +69,15 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     return n;
   }
 
-  Future<void> addHabit({
+  // Returns true if the first-habit achievement was just awarded.
+  Future<bool> addHabit({
     required String title,
     String? description,
     String color = '#00C8FF',
   }) async {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
-    if (userId == null) return;
+    if (userId == null) return false;
 
     final prev = state.valueOrNull;
 
@@ -108,12 +110,16 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       });
       state = AsyncData(await _load());
       if (isFirstHabit) {
-        _tryAwardFirstHabit(client, userId);
+        final awarded = await _tryAwardFirstHabit(client, userId);
+        if (awarded) ref.invalidate(userProfileProvider);
+        return awarded;
       }
+      return false;
     } catch (e, st) {
       if (prev != null) state = AsyncData(prev);
       Error.throwWithStackTrace(e, st);
     }
+    return false;
   }
 
   Future<void> updateHabit({
@@ -289,7 +295,7 @@ final habitsProvider =
   HabitsNotifier.new,
 );
 
-Future<void> _tryAwardFirstHabit(
+Future<bool> _tryAwardFirstHabit(
     SupabaseClient client, String userId) async {
   try {
     final achRow = await client
@@ -297,7 +303,7 @@ Future<void> _tryAwardFirstHabit(
         .select()
         .eq('slug', 'first_habit_created')
         .maybeSingle();
-    if (achRow == null) return;
+    if (achRow == null) return false;
 
     final already = await client
         .from('user_achievements')
@@ -305,13 +311,22 @@ Future<void> _tryAwardFirstHabit(
         .eq('user_id', userId)
         .eq('achievement_id', achRow['id'] as String)
         .maybeSingle();
-    if (already != null) return;
+    if (already != null) return false;
 
-    await client.from('user_achievements').insert({
-      'user_id': userId,
-      'achievement_id': achRow['id'],
-    });
+    final xpReward = achRow['xp_reward'] as int? ?? 25;
+    await Future.wait([
+      client.from('user_achievements').insert({
+        'user_id': userId,
+        'achievement_id': achRow['id'],
+      }),
+      client.rpc('increment_xp', params: {
+        'p_user_id': userId,
+        'p_amount': xpReward,
+      }),
+    ]);
+    return true;
   } catch (e) {
     debugPrint('SiE Habits: first_habit achievement error — $e');
+    return false;
   }
 }
