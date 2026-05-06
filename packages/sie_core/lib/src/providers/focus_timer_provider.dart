@@ -287,7 +287,7 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
   }) async {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
-    if (userId == null) return (xpGained: 0, newAchievement: null);
+    if (userId == null) return (xpGained: 0, dpGained: 0, newAchievement: null);
 
     try {
       await client.from('focus_sessions').insert({
