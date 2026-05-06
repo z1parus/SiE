@@ -10,7 +10,8 @@ final userSearchProvider = FutureProvider.autoDispose
 
   final data = await SupabaseService.client
       .from('profiles')
-      .select('id, username, avatar_url, total_xp')
+      .select(
+          'id, username, avatar_url, avatar_frame_id, profile_background_url, total_xp')
       .ilike('username', '%$q%')
       .order('total_xp', ascending: false)
       .limit(30);
@@ -18,9 +19,21 @@ final userSearchProvider = FutureProvider.autoDispose
   return data.map((r) => PublicProfile.fromJson(r)).toList();
 });
 
-// Fetches all achievements with earned status for any given user ID.
-// Mirrors the logic in userAchievementsProvider but parametrised.
-// Requires the 'authenticated can read user_achievements' policy.
+// Aggregate stats for any operative via SECURITY DEFINER RPC.
+final publicStatsProvider = FutureProvider.autoDispose
+    .family<PublicProfileStats, String>((ref, userId) async {
+  try {
+    final result = await SupabaseService.client
+        .rpc('get_operative_stats', params: {'p_user_id': userId});
+    if (result == null) return PublicProfileStats.zero();
+    return PublicProfileStats.fromJson(result as Map<String, dynamic>);
+  } catch (_) {
+    return PublicProfileStats.zero();
+  }
+});
+
+// All achievements with per-user earned status — used on the public dossier.
+// Requires the 'authenticated can read user_achievements' policy (migration 20260507000002).
 final publicAchievementsProvider = FutureProvider.autoDispose
     .family<List<UserAchievement>, String>((ref, userId) async {
   final data = await SupabaseService.client
