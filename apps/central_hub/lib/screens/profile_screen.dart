@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
+import 'knowledge_base_screen.dart';
+import 'progress_analytics_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -38,6 +40,10 @@ class ProfileScreen extends ConsumerWidget {
                       _HeaderSection(profile: profile),
                       const SizedBox(height: 32),
                       _XpSection(profile: profile),
+                      const SizedBox(height: 24),
+                      const _ProgressHubButton(),
+                      const SizedBox(height: 10),
+                      const _KnowledgeBaseButton(),
                       const SizedBox(height: 32),
                       const SectionHeader(title: 'AWARDS'),
                       const SizedBox(height: 16),
@@ -214,6 +220,146 @@ class _XpSection extends StatelessWidget {
               ?.copyWith(fontSize: 10, letterSpacing: 1),
         ),
       ],
+    );
+  }
+}
+
+// ── Progress Hub Button ───────────────────────────────────────
+
+class _ProgressHubButton extends StatelessWidget {
+  const _ProgressHubButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        PageRouteBuilder(
+          pageBuilder: (_, _, _) => const ProgressAnalyticsScreen(),
+          transitionsBuilder: (_, anim, _, child) =>
+              FadeTransition(opacity: anim, child: child),
+          transitionDuration: const Duration(milliseconds: 400),
+        ),
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          color: SieTheme.surface,
+          border: Border.all(color: SieTheme.borderAccent),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: SieTheme.accent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Icon(
+                Icons.analytics_outlined,
+                color: SieTheme.accent,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'PROGRESS HUB',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Activity matrix, XP growth & focus stats',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontSize: 11,
+                          color: SieTheme.textSecondary,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              color: SieTheme.borderAccent,
+              size: 16,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Knowledge Base Button ─────────────────────────────────────
+
+class _KnowledgeBaseButton extends StatelessWidget {
+  const _KnowledgeBaseButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        PageRouteBuilder(
+          pageBuilder: (_, _, _) => const KnowledgeBaseScreen(),
+          transitionsBuilder: (_, anim, _, child) =>
+              FadeTransition(opacity: anim, child: child),
+          transitionDuration: const Duration(milliseconds: 400),
+        ),
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          color: SieTheme.surface,
+          border: Border.all(color: SieTheme.borderDefault),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: SieTheme.accent.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Icon(
+                Icons.menu_book_rounded,
+                color: SieTheme.accent,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'БАЗА ЗНАНИЙ',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Физиология, психология, XP-таблица и этика SiE',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontSize: 11,
+                          color: SieTheme.textSecondary,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              color: SieTheme.borderAccent,
+              size: 16,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

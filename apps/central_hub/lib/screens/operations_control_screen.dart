@@ -2,16 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 import 'breathing_exercise_screen.dart';
+import 'focus_protocol_screen.dart';
 import 'habit_tracker_screen.dart';
 import 'profile_screen.dart';
 
-class OperationsControlScreen extends ConsumerWidget {
+class OperationsControlScreen extends ConsumerStatefulWidget {
   const OperationsControlScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OperationsControlScreen> createState() =>
+      _OperationsControlScreenState();
+}
+
+class _OperationsControlScreenState
+    extends ConsumerState<OperationsControlScreen> {
+  bool _welcomeShown = false;
+
+  @override
+  Widget build(BuildContext context) {
     final branchesAsync = ref.watch(branchesProvider);
     final profileAsync = ref.watch(userProfileProvider);
+
+    ref.listen<AsyncValue<Profile?>>(userProfileProvider, (_, next) {
+      if (_welcomeShown) return;
+      final profile = next.valueOrNull;
+      if (profile == null) return;
+      _welcomeShown = true;
+      if (!profile.hasSeenWelcome) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _showWelcomeModal(profile);
+        });
+      }
+    });
 
     return Scaffold(
       body: SafeArea(
@@ -39,11 +61,16 @@ class OperationsControlScreen extends ConsumerWidget {
                           ),
                         )
                       : ListView.separated(
-                          itemCount: branches.length,
+                          itemCount: branches
+                              .where((b) => b.slug != 'progress_hub')
+                              .length,
                           separatorBuilder: (_, _) =>
                               const SizedBox(height: 12),
                           itemBuilder: (context, index) {
-                            final branch = branches[index];
+                            final filtered = branches
+                                .where((b) => b.slug != 'progress_hub')
+                                .toList();
+                            final branch = filtered[index];
                             return BranchCard(
                               name: branch.name,
                               description: branch.description,
@@ -71,7 +98,156 @@ class OperationsControlScreen extends ConsumerWidget {
       ),
     );
   }
+
+  void _showWelcomeModal(Profile profile) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.75),
+      builder: (_) => _WelcomeDialog(
+        profile: profile,
+        onAccept: () => markWelcomeSeen(profile.id),
+      ),
+    );
+  }
 }
+
+// ── Welcome Dialog ────────────────────────────────────────────
+
+class _WelcomeDialog extends StatefulWidget {
+  final Profile profile;
+  final VoidCallback onAccept;
+
+  const _WelcomeDialog({required this.profile, required this.onAccept});
+
+  @override
+  State<_WelcomeDialog> createState() => _WelcomeDialogState();
+}
+
+class _WelcomeDialogState extends State<_WelcomeDialog>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _fade;
+  late final Animation<double> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..forward();
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _slide = Tween<double>(begin: 24, end: 0).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name =
+        widget.profile.username?.toUpperCase() ?? 'OPERATIVE';
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (_, child) => FadeTransition(
+          opacity: _fade,
+          child: Transform.translate(
+            offset: Offset(0, _slide.value),
+            child: child,
+          ),
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: SieTheme.surface,
+            border: Border.all(color: SieTheme.borderAccent),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header bar
+              Row(
+                children: [
+                  Container(
+                    width: 3,
+                    height: 16,
+                    color: SieTheme.accent,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'ВХОДЯЩЕЕ СООБЩЕНИЕ',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          letterSpacing: 2.5,
+                          color: SieTheme.accent,
+                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'ДОБРО ПОЖАЛОВАТЬ,\nОПЕРАТИВНИК $name',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontSize: 19,
+                      height: 1.35,
+                    ),
+              ),
+              const SizedBox(height: 16),
+              const Divider(color: SieTheme.borderDefault, height: 1),
+              const SizedBox(height: 16),
+              Text(
+                'Вы успешно вошли в систему Корпорации SiE. Все протоколы активированы. Выполняйте задания, фиксируйте прогресс и получайте опыт.\n\nМиссия начинается сейчас.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      height: 1.6,
+                    ),
+              ),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                child: GestureDetector(
+                  onTap: () {
+                    widget.onAccept();
+                    Navigator.of(context).pop();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: SieTheme.accent.withValues(alpha: 0.1),
+                      border: Border.all(color: SieTheme.accent),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                    child: Text(
+                      'ПРИНЯТЬ ЗАДАНИЕ',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: SieTheme.accent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 2.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Branch navigation ─────────────────────────────────────────
 
 void _onBranchTap(BuildContext context, Branch branch) {
   Widget? screen;
@@ -80,6 +256,8 @@ void _onBranchTap(BuildContext context, Branch branch) {
     screen = const BreathingExerciseScreen();
   } else if (branch.slug == 'habit_archive') {
     screen = const HabitTrackerScreen();
+  } else if (branch.slug == 'focus_protocol') {
+    screen = const FocusProtocolScreen();
   }
 
   if (screen != null) {
@@ -101,6 +279,8 @@ void _onBranchTap(BuildContext context, Branch branch) {
     ),
   );
 }
+
+// ── Screen Header ─────────────────────────────────────────────
 
 class _ScreenHeader extends StatelessWidget {
   final AsyncValue<Profile?> profileAsync;

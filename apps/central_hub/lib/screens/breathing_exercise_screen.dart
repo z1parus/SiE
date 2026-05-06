@@ -65,6 +65,8 @@ class _BreathingExerciseScreenState
   _Phase _phase = _Phase.idle;
   BreathingSettings _settings = const BreathingSettings();
 
+  bool _onboardingDismissed = false;
+
   int _round = 1;
   int _cycle = 0;
   bool _isInhaling = true;
@@ -379,74 +381,97 @@ class _BreathingExerciseScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          // Layer 0: Starry sky — full screen, behind SafeArea content.
-          Positioned.fill(
-            child: StarrySkyBackground(animation: _skyCtrl),
-          ),
-          SafeArea(
-            child: Stack(
-              children: [
-                Positioned(
-                  top: 0, left: 0, right: 0,
-                  child: _TopBar(
-                    phase: _phase,
-                    round: _round,
-                    totalRounds: _settings.rounds,
-                    onBack: _onBack,
-                  ),
-                ),
-                Center(
-                  child: GestureDetector(
-                    onTap: _onSphereTap,
-                    onTapDown: (_) {
-                      if (_phase == _Phase.idle) {
-                        setState(() => _spherePressed = true);
-                      }
-                    },
-                    onTapUp: (_) => setState(() => _spherePressed = false),
-                    onTapCancel: () => setState(() => _spherePressed = false),
-                    child: AnimatedScale(
-                      scale: (_phase == _Phase.idle && _spherePressed) ? 0.95 : 1.0,
-                      duration: const Duration(milliseconds: 80),
-                      child: _buildCircle(),
-                    ),
-                  ),
-                ),
-                if (_phase == _Phase.countdown)
-                  Center(
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      transitionBuilder: (child, anim) => FadeTransition(
-                        opacity: anim,
-                        child: ScaleTransition(
-                          scale: Tween<double>(begin: 0.7, end: 1.0).animate(anim),
-                          child: child,
-                        ),
+    final profile = ref.watch(userProfileProvider).valueOrNull;
+    final showOnboarding = !_onboardingDismissed &&
+        profile != null &&
+        !profile.hasSeenOnboardingBreathing;
+
+    return Stack(
+      children: [
+        Scaffold(
+          body: Stack(
+            children: [
+              // Layer 0: Starry sky — full screen, behind SafeArea content.
+              Positioned.fill(
+                child: StarrySkyBackground(animation: _skyCtrl),
+              ),
+              SafeArea(
+                child: Stack(
+                  children: [
+                    Positioned(
+                      top: 0, left: 0, right: 0,
+                      child: _TopBar(
+                        phase: _phase,
+                        round: _round,
+                        totalRounds: _settings.rounds,
+                        onBack: _onBack,
                       ),
-                      child: Text(
-                        '$_countdownValue',
-                        key: ValueKey(_countdownValue),
-                        style: const TextStyle(
-                          color: SieTheme.accent,
-                          fontSize: 80,
-                          fontWeight: FontWeight.w100,
-                          letterSpacing: 4,
+                    ),
+                    Center(
+                      child: GestureDetector(
+                        onTap: _onSphereTap,
+                        onTapDown: (_) {
+                          if (_phase == _Phase.idle) {
+                            setState(() => _spherePressed = true);
+                          }
+                        },
+                        onTapUp: (_) => setState(() => _spherePressed = false),
+                        onTapCancel: () => setState(() => _spherePressed = false),
+                        child: AnimatedScale(
+                          scale: (_phase == _Phase.idle && _spherePressed) ? 0.95 : 1.0,
+                          duration: const Duration(milliseconds: 80),
+                          child: _buildCircle(),
                         ),
                       ),
                     ),
-                  ),
-                Positioned(
-                  bottom: 40, left: 32, right: 32,
-                  child: _buildBottomArea(),
+                    if (_phase == _Phase.countdown)
+                      Center(
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 250),
+                          transitionBuilder: (child, anim) => FadeTransition(
+                            opacity: anim,
+                            child: ScaleTransition(
+                              scale: Tween<double>(begin: 0.7, end: 1.0).animate(anim),
+                              child: child,
+                            ),
+                          ),
+                          child: Text(
+                            '$_countdownValue',
+                            key: ValueKey(_countdownValue),
+                            style: const TextStyle(
+                              color: SieTheme.accent,
+                              fontSize: 80,
+                              fontWeight: FontWeight.w100,
+                              letterSpacing: 4,
+                            ),
+                          ),
+                        ),
+                      ),
+                    Positioned(
+                      bottom: 40, left: 32, right: 32,
+                      child: _buildBottomArea(),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        Positioned.fill(
+          child: OnboardingOverlay(
+            visible: showOnboarding,
+            moduleLabel: 'ДЫХАНИЕ',
+            description: 'Сброс нервной системы и насыщение кислородом.',
+            benefit:
+                'Моментальное снижение стресса, управляемый выброс адреналина '
+                'и ясность ума через гипервентиляцию с задержкой дыхания.',
+            onAccept: () {
+              setState(() => _onboardingDismissed = true);
+              markOnboardingSeen('breathing');
+            },
+          ),
+        ),
+      ],
     );
   }
 

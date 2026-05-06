@@ -35,6 +35,7 @@ dependencies:
   flutter_riverpod: ^2.6.1
   supabase_flutter: ^2.9.0
   animations: ^2.0.0
+  fl_chart: ^0.70.2
   sie_core:
     path: ../../packages/sie_core
 

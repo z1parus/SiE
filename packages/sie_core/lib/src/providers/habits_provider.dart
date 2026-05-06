@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/habit.dart';
@@ -95,6 +96,8 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       ));
     }
 
+    final isFirstHabit = prev?.habits.isEmpty ?? true;
+
     try {
       await client.from('habits').insert({
         'user_id': userId,
@@ -104,6 +107,9 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         'color': color,
       });
       state = AsyncData(await _load());
+      if (isFirstHabit) {
+        _tryAwardFirstHabit(client, userId);
+      }
     } catch (e, st) {
       if (prev != null) state = AsyncData(prev);
       Error.throwWithStackTrace(e, st);
@@ -282,3 +288,30 @@ final habitsProvider =
     AsyncNotifierProvider.autoDispose<HabitsNotifier, HabitsState>(
   HabitsNotifier.new,
 );
+
+Future<void> _tryAwardFirstHabit(
+    SupabaseClient client, String userId) async {
+  try {
+    final achRow = await client
+        .from('achievements')
+        .select()
+        .eq('slug', 'first_habit_created')
+        .maybeSingle();
+    if (achRow == null) return;
+
+    final already = await client
+        .from('user_achievements')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('achievement_id', achRow['id'] as String)
+        .maybeSingle();
+    if (already != null) return;
+
+    await client.from('user_achievements').insert({
+      'user_id': userId,
+      'achievement_id': achRow['id'],
+    });
+  } catch (e) {
+    debugPrint('SiE Habits: first_habit achievement error — $e');
+  }
+}

@@ -34,7 +34,8 @@ class AudioService {
       ),
       iOS: AudioContextIOS(
         category: AVAudioSessionCategory.ambient,
-        options: const {AVAudioSessionOptions.mixWithOthers},
+        // mixWithOthers is implicit for .ambient; setting it explicitly
+        // triggers an assertion in audioplayers >= 7.x.
       ),
     ),
   );
@@ -182,13 +183,59 @@ class AudioService {
     });
   }
 
+  // ── Ambient stop (focus ambient toggle) ───────────────────
+  // Fades out the ambient track only; does not touch cue or chime players.
+  Future<void> stopAmbient() => _fadeOutAndStop();
+
+  // ── Phase Transition Chime ─────────────────────────────────
+  // Dedicated player so transitions never interrupt breathing cue timers.
+  // AudioFocus.none prevents Android from ducking the ambient track.
+
+  final _chime = AudioPlayer();
+
+  late final Future<void> _chimeReady = _chime.setAudioContext(
+    AudioContext(
+      android: AudioContextAndroid(
+        audioFocus: AndroidAudioFocus.none,
+        contentType: AndroidContentType.music,
+        usageType: AndroidUsageType.media,
+      ),
+      iOS: AudioContextIOS(
+        category: AVAudioSessionCategory.ambient,
+      ),
+    ),
+  );
+
+  // notification_end.mp3 works on Android/iOS but some browser builds reject
+  // it (MEDIA_ERR_SRC_NOT_SUPPORTED). On failure we fall back to inhale.mp3
+  // pitched up 2.5× which produces a short ascending chime on any platform.
+  Future<void> playPhaseTransition() async {
+    try {
+      await _chimeReady;
+      await _chime.stop();
+      await _chime.setPlaybackRate(1.0);
+      await _chime.play(
+        AssetSource('audio/notification_end.mp3'),
+        volume: 0.85,
+      );
+    } catch (_) {
+      try {
+        await _chime.stop();
+        await _chime.setPlaybackRate(2.5);
+        await _chime.play(AssetSource('audio/inhale.mp3'), volume: 0.85);
+      } catch (e) {
+        debugPrint('SiE Audio: phase transition error — $e');
+      }
+    }
+  }
+
   // ── Cleanup ────────────────────────────────────────────────
 
-  /// Cancels the cue fade, fades out ambient over 3 s, stops both players.
+  /// Cancels the cue fade, fades out ambient over 3 s, stops all players.
   Future<void> stopAll() async {
     _cueFadeTimer?.cancel();
     try {
-      await Future.wait([_fadeOutAndStop(), _breathCue.stop()]);
+      await Future.wait([_fadeOutAndStop(), _breathCue.stop(), _chime.stop()]);
     } catch (_) {}
   }
 
@@ -196,8 +243,9 @@ class AudioService {
     _cueFadeTimer?.cancel();
     _ambientFadeTimer?.cancel();
     try {
-      await Future.wait([_ambient.stop(), _breathCue.stop()]);
-      await Future.wait([_ambient.dispose(), _breathCue.dispose()]);
+      await Future.wait([_ambient.stop(), _breathCue.stop(), _chime.stop()]);
+      await Future.wait(
+          [_ambient.dispose(), _breathCue.dispose(), _chime.dispose()]);
     } catch (_) {}
   }
 }

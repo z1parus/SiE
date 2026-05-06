@@ -1,26 +1,41 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 
-class HabitTrackerScreen extends ConsumerWidget {
+class HabitTrackerScreen extends ConsumerStatefulWidget {
   const HabitTrackerScreen({super.key});
+
+  @override
+  ConsumerState<HabitTrackerScreen> createState() =>
+      _HabitTrackerScreenState();
+}
+
+class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
+  bool _onboardingDismissed = false;
 
   static String _fmt(DateTime dt) =>
       '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final habitsAsync = ref.watch(habitsProvider);
     final today = _fmt(DateTime.now());
+    final profile = ref.watch(userProfileProvider).valueOrNull;
+    final showOnboarding = !_onboardingDismissed &&
+        profile != null &&
+        !profile.hasSeenOnboardingHabits;
 
-    return Scaffold(
+    return Stack(
+      children: [
+        Scaffold(
       backgroundColor: SieTheme.background,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _TopBar(onAdd: () => _showHabitDialog(context, ref, null)),
+            _TopBar(onAdd: () => _showHabitDialog(null)),
             Expanded(
               child: habitsAsync.when(
                 loading: () => const Center(
@@ -64,7 +79,7 @@ class HabitTrackerScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 32),
                           _AddButton(
-                            onTap: () => _showHabitDialog(context, ref, null),
+                            onTap: () => _showHabitDialog(null),
                           ),
                         ],
                       ),
@@ -80,8 +95,7 @@ class HabitTrackerScreen extends ConsumerWidget {
                           child: Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: _AddButton(
-                              onTap: () =>
-                                  _showHabitDialog(context, ref, null),
+                              onTap: () => _showHabitDialog(null),
                             ),
                           ),
                         );
@@ -97,8 +111,7 @@ class HabitTrackerScreen extends ConsumerWidget {
                         onToggle: () => ref
                             .read(habitsProvider.notifier)
                             .toggleHabit(habit.id, DateTime.now()),
-                        onLongPress: () =>
-                            _showHabitOptions(context, ref, habit),
+                        onLongPress: () => _showHabitOptions(habit),
                         onDelete: () => ref
                             .read(habitsProvider.notifier)
                             .deleteHabit(habit.id),
@@ -114,14 +127,27 @@ class HabitTrackerScreen extends ConsumerWidget {
           ],
         ),
       ),
+    ),
+        Positioned.fill(
+          child: OnboardingOverlay(
+            visible: showOnboarding,
+            moduleLabel: 'ПРИВЫЧКИ',
+            description: 'Архив нейронных связей.',
+            benefit:
+                'Автоматизация успеха через микро-действия и систематическую '
+                'дисциплину. Формирование нейронных паттернов, не требующих '
+                'волевых ресурсов.',
+            onAccept: () {
+              setState(() => _onboardingDismissed = true);
+              markOnboardingSeen('habits');
+            },
+          ),
+        ),
+      ],
     );
   }
 
-  void _showHabitDialog(
-    BuildContext context,
-    WidgetRef ref,
-    Habit? existing,
-  ) {
+  void _showHabitDialog(Habit? existing) {
     showDialog<void>(
       context: context,
       builder: (_) => _HabitDialog(
@@ -146,11 +172,7 @@ class HabitTrackerScreen extends ConsumerWidget {
     );
   }
 
-  void _showHabitOptions(
-    BuildContext context,
-    WidgetRef ref,
-    Habit habit,
-  ) {
+  void _showHabitOptions(Habit habit) {
     showDialog<void>(
       context: context,
       builder: (ctx) => Dialog(
@@ -194,7 +216,7 @@ class HabitTrackerScreen extends ConsumerWidget {
                 ),
                 onTap: () {
                   Navigator.of(ctx).pop();
-                  _showHabitDialog(context, ref, habit);
+                  _showHabitDialog(habit);
                 },
               ),
               ListTile(
@@ -214,7 +236,7 @@ class HabitTrackerScreen extends ConsumerWidget {
                 ),
                 onTap: () {
                   Navigator.of(ctx).pop();
-                  _confirmDelete(context, ref, habit);
+                  _confirmDelete(habit);
                 },
               ),
             ],
@@ -224,7 +246,7 @@ class HabitTrackerScreen extends ConsumerWidget {
     );
   }
 
-  void _confirmDelete(BuildContext context, WidgetRef ref, Habit habit) {
+  void _confirmDelete(Habit habit) {
     showDialog<void>(
       context: context,
       builder: (ctx) => Dialog(
@@ -611,6 +633,7 @@ class _AddButtonState extends State<_AddButton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _scale;
+  bool _pressed = false;
 
   @override
   void initState() {
@@ -632,7 +655,13 @@ class _AddButtonState extends State<_AddButton>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
+    return AnimatedScale(
+      scale: _pressed ? 0.88 : 1.0,
+      duration: _pressed
+          ? const Duration(milliseconds: 80)
+          : const Duration(milliseconds: 500),
+      curve: _pressed ? Curves.easeIn : Curves.elasticOut,
+      child: AnimatedBuilder(
       animation: _scale,
       builder: (_, child) => Transform.scale(
         scale: _scale.value,
@@ -640,6 +669,9 @@ class _AddButtonState extends State<_AddButton>
       ),
       child: GestureDetector(
         onTap: widget.onTap,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
         child: AnimatedBuilder(
           animation: _ctrl,
           builder: (context2, anim) => Container(
@@ -669,6 +701,7 @@ class _AddButtonState extends State<_AddButton>
           ),
         ),
       ),
+    ),
     );
   }
 }
@@ -733,20 +766,26 @@ class _HabitDialogState extends State<_HabitDialog> {
         curve: Curves.easeInOut,
         builder: (_, animColor, child) {
           final c = animColor ?? _toColor(_selectedColor);
-          return Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: SieTheme.borderDefault),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  c.withValues(alpha: 0.08),
-                  SieTheme.surface,
-                ],
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: SieTheme.borderDefault),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      c.withValues(alpha: 0.10),
+                      SieTheme.surface.withValues(alpha: 0.88),
+                    ],
+                  ),
+                ),
+                child: child,
               ),
             ),
-            child: child,
           );
         },
         child: Padding(
