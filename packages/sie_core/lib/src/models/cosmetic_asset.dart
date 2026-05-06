@@ -3,6 +3,14 @@ import '../theme/sie_theme.dart';
 
 enum AssetType { avatarFrame, profileBackground, statStyle }
 
+extension AssetTypeX on AssetType {
+  String get dbValue => switch (this) {
+        AssetType.avatarFrame       => 'avatar_frame',
+        AssetType.profileBackground => 'profile_background',
+        AssetType.statStyle         => 'stat_style',
+      };
+}
+
 enum CosmeticRarity { common, rare, epic, legendary }
 
 class CosmeticAsset {
@@ -13,6 +21,7 @@ class CosmeticAsset {
   final AssetType type;
   final CosmeticRarity rarity;
   final Map<String, dynamic> styleConfig;
+  final int priceDP;
 
   const CosmeticAsset({
     required this.id,
@@ -22,6 +31,7 @@ class CosmeticAsset {
     required this.type,
     required this.rarity,
     this.styleConfig = const {},
+    this.priceDP = 0,
   });
 
   factory CosmeticAsset.fromJson(Map<String, dynamic> json, AssetType type) {
@@ -37,6 +47,7 @@ class CosmeticAsset {
       type: type,
       rarity: _parseRarity(json['rarity'] as String?),
       styleConfig: config,
+      priceDP: json['price_dp'] as int? ?? 0,
     );
   }
 

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 import 'edit_profile_screen.dart';
 import 'customization_screen.dart';
+import 'interface_hub_screen.dart';
 import 'knowledge_base_screen.dart';
 import 'progress_analytics_screen.dart';
 
@@ -49,6 +50,8 @@ class ProfileScreen extends ConsumerWidget {
                       const SizedBox(height: 10),
                       if (profile != null)
                         _CustomizationButton(profile: profile),
+                      const SizedBox(height: 10),
+                      const _InterfaceHubButton(),
                       const SizedBox(height: 32),
                       const SectionHeader(title: 'AWARDS'),
                       const SizedBox(height: 16),
@@ -505,6 +508,78 @@ class _CustomizationButton extends StatelessWidget {
             const Icon(
               Icons.chevron_right,
               color: SieTheme.borderAccent,
+              size: 16,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Interface Hub Button ──────────────────────────────────────
+
+class _InterfaceHubButton extends StatelessWidget {
+  const _InterfaceHubButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        PageRouteBuilder(
+          pageBuilder: (_, _, _) => const InterfaceHubScreen(),
+          transitionsBuilder: (_, anim, _, child) =>
+              FadeTransition(opacity: anim, child: child),
+          transitionDuration: const Duration(milliseconds: 400),
+        ),
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          color: SieTheme.surface,
+          border: Border.all(color: SieTheme.dp.withValues(alpha: 0.35)),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: SieTheme.dp.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Icon(
+                Icons.storefront_outlined,
+                color: SieTheme.dp,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'ИНТЕРФЕЙС-ХАБ',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: SieTheme.dp,
+                        ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Рамки, фоны и стили за Design Points',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontSize: 11,
+                          color: SieTheme.textSecondary,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: SieTheme.dp.withValues(alpha: 0.5),
               size: 16,
             ),
           ],

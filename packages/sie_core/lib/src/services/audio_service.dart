@@ -209,6 +209,20 @@ class AudioService {
   // notification_end.mp3 works on Android/iOS but some browser builds reject
   // it (MEDIA_ERR_SRC_NOT_SUPPORTED). On failure we fall back to inhale.mp3
   // pitched up 2.5× which produces a short ascending chime on any platform.
+  Future<void> playPurchase() async {
+    try {
+      await _chimeReady;
+      await _chime.stop();
+      await _chime.setPlaybackRate(1.3);
+      await _chime.play(
+        AssetSource('audio/notification_end.mp3'),
+        volume: 0.9,
+      );
+    } catch (e) {
+      debugPrint('SiE Audio: purchase sound error — $e');
+    }
+  }
+
   Future<void> playPhaseTransition() async {
     try {
       await _chimeReady;

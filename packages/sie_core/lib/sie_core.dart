@@ -13,6 +13,7 @@ export 'src/providers/focus_timer_provider.dart';
 export 'src/providers/analytics_provider.dart';
 export 'src/providers/user_search_provider.dart';
 export 'src/providers/customization_provider.dart';
+export 'src/providers/inventory_provider.dart';
 export 'src/models/analytics_data.dart';
 export 'src/models/public_profile.dart';
 export 'src/models/cosmetic_asset.dart';
