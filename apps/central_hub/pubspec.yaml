@@ -37,6 +37,7 @@ dependencies:
   animations: ^2.0.0
   fl_chart: ^0.70.2
   image_picker: ^1.1.2
+  cached_network_image: ^3.4.1
   sie_core:
     path: ../../packages/sie_core
 

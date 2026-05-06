@@ -8,6 +8,19 @@ class PublicProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final frames = ref.watch(avatarFramesProvider).valueOrNull ?? [];
+    final backgrounds = ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
+    final styles = ref.watch(statStylesProvider).valueOrNull ?? [];
+
+    final equipped = EquippedAssets.resolve(
+      frames: frames,
+      backgrounds: backgrounds,
+      styles: styles,
+      frameId: profile.equippedFrameId,
+      backgroundId: profile.equippedBackgroundId,
+      styleId: profile.equippedStatStyleId,
+    );
+
     return Scaffold(
       backgroundColor: SieTheme.background,
       body: Stack(
@@ -15,7 +28,7 @@ class PublicProfileScreen extends ConsumerWidget {
           CustomScrollView(
             slivers: [
               SliverToBoxAdapter(
-                child: _HeroSection(profile: profile),
+                child: _HeroSection(profile: profile, equipped: equipped),
               ),
               SliverToBoxAdapter(
                 child: Padding(
@@ -25,7 +38,7 @@ class PublicProfileScreen extends ConsumerWidget {
                     children: [
                       _NameSection(profile: profile),
                       const SizedBox(height: 24),
-                      _StatsRow(profile: profile),
+                      _StatsRow(profile: profile, statStyle: equipped.statStyle),
                       const SizedBox(height: 24),
                       _XpBar(profile: profile),
                       const SizedBox(height: 28),
@@ -64,24 +77,34 @@ class PublicProfileScreen extends ConsumerWidget {
 
 class _HeroSection extends StatelessWidget {
   final PublicProfile profile;
-  const _HeroSection({required this.profile});
+  final EquippedAssets equipped;
+  const _HeroSection({required this.profile, required this.equipped});
 
   @override
   Widget build(BuildContext context) {
+    final bg = equipped.background;
+    Widget bgWidget;
+    if (bg != null && bg.imageUrl != null) {
+      bgWidget = Image.network(
+        bg.imageUrl!,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const _DefaultHeroBg(),
+      );
+    } else if (bg != null && bg.backgroundGradient != null) {
+      bgWidget = Container(
+        decoration: BoxDecoration(gradient: bg.backgroundGradient),
+        child: CustomPaint(painter: _GridPainter()),
+      );
+    } else {
+      bgWidget = const _DefaultHeroBg();
+    }
+
     return SizedBox(
       height: 230,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Background image or gradient fallback
-          if (profile.profileBackgroundUrl != null)
-            Image.network(
-              profile.profileBackgroundUrl!,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => const _DefaultHeroBg(),
-            )
-          else
-            const _DefaultHeroBg(),
+          bgWidget,
 
           // Gradient fade to background at the bottom
           Container(
@@ -105,7 +128,7 @@ class _HeroSection extends StatelessWidget {
             left: 0,
             right: 0,
             child: Center(
-              child: _AvatarWithFrame(profile: profile),
+              child: _AvatarWithFrame(profile: profile, frame: equipped.frame),
             ),
           ),
         ],
@@ -156,19 +179,25 @@ class _GridPainter extends CustomPainter {
 
 class _AvatarWithFrame extends StatelessWidget {
   final PublicProfile profile;
-  const _AvatarWithFrame({required this.profile});
+  final CosmeticAsset? frame;
+  const _AvatarWithFrame({required this.profile, this.frame});
 
   @override
   Widget build(BuildContext context) {
     final letter = (profile.username?.isNotEmpty == true)
         ? profile.username![0].toUpperCase()
         : '?';
-    final frame = _frameDecoration(profile.avatarFrameId);
+    final decoration = frame?.buildFrameDecoration() ??
+        BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: SieTheme.borderAccent, width: 1.5),
+          color: SieTheme.surface,
+        );
 
     return Container(
       width: 88,
       height: 88,
-      decoration: frame,
+      decoration: decoration,
       child: ClipOval(
         child: profile.avatarUrl != null
             ? Image.network(
@@ -179,52 +208,6 @@ class _AvatarWithFrame extends StatelessWidget {
             : _Initials(letter: letter),
       ),
     );
-  }
-
-  static BoxDecoration _frameDecoration(String? frameId) {
-    switch (frameId) {
-      case 'gold':
-        return BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: const Color(0xFFFFD700), width: 2.5),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFFFD700).withValues(alpha: 0.35),
-              blurRadius: 14,
-              spreadRadius: 2,
-            )
-          ],
-        );
-      case 'silver':
-        return BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: const Color(0xFFC0C0C0), width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFC0C0C0).withValues(alpha: 0.2),
-              blurRadius: 8,
-            )
-          ],
-        );
-      case 'neon':
-        return BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: SieTheme.accent, width: 3),
-          boxShadow: [
-            BoxShadow(
-              color: SieTheme.accent.withValues(alpha: 0.45),
-              blurRadius: 18,
-              spreadRadius: 2,
-            )
-          ],
-        );
-      default:
-        return BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: SieTheme.borderAccent, width: 1.5),
-          color: SieTheme.surface,
-        );
-    }
   }
 }
 
@@ -272,8 +255,7 @@ class _NameSection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
             border: Border.all(color: SieTheme.borderAccent),
             borderRadius: BorderRadius.circular(2),
@@ -295,7 +277,8 @@ class _NameSection extends StatelessWidget {
 
 class _StatsRow extends ConsumerWidget {
   final PublicProfile profile;
-  const _StatsRow({required this.profile});
+  final CosmeticAsset? statStyle;
+  const _StatsRow({required this.profile, this.statStyle});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -309,6 +292,7 @@ class _StatsRow extends ConsumerWidget {
             icon: Icons.timer_outlined,
             value: stats.focusTime,
             label: 'КОНЦЕНТРАЦИЯ',
+            statStyle: statStyle,
           ),
         ),
         const SizedBox(width: 8),
@@ -317,6 +301,7 @@ class _StatsRow extends ConsumerWidget {
             icon: Icons.checklist_outlined,
             value: stats.habitCompletions.toString(),
             label: 'ЦИКЛОВ',
+            statStyle: statStyle,
           ),
         ),
         const SizedBox(width: 8),
@@ -325,6 +310,7 @@ class _StatsRow extends ConsumerWidget {
             icon: Icons.military_tech_outlined,
             value: 'LVL ${profile.level}',
             label: 'РАНГ',
+            statStyle: statStyle,
           ),
         ),
       ],
@@ -336,18 +322,27 @@ class _StatCard extends StatelessWidget {
   final IconData icon;
   final String value;
   final String label;
-  const _StatCard(
-      {required this.icon, required this.value, required this.label});
+  final CosmeticAsset? statStyle;
+  const _StatCard({
+    required this.icon,
+    required this.value,
+    required this.label,
+    this.statStyle,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final decoration = statStyle?.buildStatCardDecoration() ??
+        BoxDecoration(
+          color: SieTheme.surface,
+          border: Border.all(color: SieTheme.borderDefault),
+          borderRadius: BorderRadius.circular(4),
+        );
+    final valueColor = statStyle?.accentColor ?? SieTheme.accent;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-      decoration: BoxDecoration(
-        color: SieTheme.surface,
-        border: Border.all(color: SieTheme.borderDefault),
-        borderRadius: BorderRadius.circular(4),
-      ),
+      decoration: decoration,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -355,8 +350,8 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             value,
-            style: const TextStyle(
-              color: SieTheme.accent,
+            style: TextStyle(
+              color: valueColor,
               fontSize: 15,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.5,

@@ -2,8 +2,9 @@ class PublicProfile {
   final String id;
   final String? username;
   final String? avatarUrl;
-  final String? avatarFrameId;
-  final String? profileBackgroundUrl;
+  final String? equippedFrameId;
+  final String? equippedBackgroundId;
+  final String? equippedStatStyleId;
   final int totalXp;
 
   int get level => (totalXp ~/ 1000) + 1;
@@ -13,8 +14,9 @@ class PublicProfile {
     required this.id,
     this.username,
     this.avatarUrl,
-    this.avatarFrameId,
-    this.profileBackgroundUrl,
+    this.equippedFrameId,
+    this.equippedBackgroundId,
+    this.equippedStatStyleId,
     required this.totalXp,
   });
 
@@ -22,8 +24,9 @@ class PublicProfile {
         id: json['id'] as String,
         username: json['username'] as String?,
         avatarUrl: json['avatar_url'] as String?,
-        avatarFrameId: json['avatar_frame_id'] as String?,
-        profileBackgroundUrl: json['profile_background_url'] as String?,
+        equippedFrameId: json['equipped_frame_id'] as String?,
+        equippedBackgroundId: json['equipped_background_id'] as String?,
+        equippedStatStyleId: json['equipped_stat_style_id'] as String?,
         totalXp: json['total_xp'] as int? ?? 0,
       );
 }

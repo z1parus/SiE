@@ -9,6 +9,9 @@ class Profile {
   final bool hasSeenOnboardingBreathing;
   final bool hasSeenOnboardingHabits;
   final bool hasSeenOnboardingFocus;
+  final String? equippedFrameId;
+  final String? equippedBackgroundId;
+  final String? equippedStatStyleId;
 
   const Profile({
     required this.id,
@@ -21,6 +24,9 @@ class Profile {
     this.hasSeenOnboardingBreathing = false,
     this.hasSeenOnboardingHabits = false,
     this.hasSeenOnboardingFocus = false,
+    this.equippedFrameId,
+    this.equippedBackgroundId,
+    this.equippedStatStyleId,
   });
 
   factory Profile.fromJson(Map<String, dynamic> json) => Profile(
@@ -37,5 +43,8 @@ class Profile {
             json['has_seen_onboarding_habits'] as bool? ?? false,
         hasSeenOnboardingFocus:
             json['has_seen_onboarding_focus'] as bool? ?? false,
+        equippedFrameId: json['equipped_frame_id'] as String?,
+        equippedBackgroundId: json['equipped_background_id'] as String?,
+        equippedStatStyleId: json['equipped_stat_style_id'] as String?,
       );
 }
