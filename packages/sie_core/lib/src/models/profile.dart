@@ -2,6 +2,7 @@ class Profile {
   final String id;
   final String? username;
   final String? fullName;
+  final String? avatarUrl;
   final int totalXp;
   final bool isLabMember;
   final bool hasSeenWelcome;
@@ -13,6 +14,7 @@ class Profile {
     required this.id,
     this.username,
     this.fullName,
+    this.avatarUrl,
     required this.totalXp,
     required this.isLabMember,
     this.hasSeenWelcome = false,
@@ -25,6 +27,7 @@ class Profile {
         id: json['id'] as String,
         username: json['username'] as String?,
         fullName: json['full_name'] as String?,
+        avatarUrl: json['avatar_url'] as String?,
         totalXp: json['total_xp'] as int? ?? 0,
         isLabMember: json['is_lab_member'] as bool? ?? false,
         hasSeenWelcome: json['has_seen_welcome'] as bool? ?? false,

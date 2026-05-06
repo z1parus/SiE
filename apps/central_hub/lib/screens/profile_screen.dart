@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
+import 'edit_profile_screen.dart';
 import 'knowledge_base_screen.dart';
 import 'progress_analytics_screen.dart';
 
@@ -84,7 +85,21 @@ class _TopBar extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
           ),
-          const SizedBox(width: 48),
+          IconButton(
+            onPressed: () => Navigator.of(context).push(
+              PageRouteBuilder(
+                pageBuilder: (_, _, _) => const EditProfileScreen(),
+                transitionsBuilder: (_, anim, _, child) =>
+                    FadeTransition(opacity: anim, child: child),
+                transitionDuration: const Duration(milliseconds: 300),
+              ),
+            ),
+            icon: const Icon(
+              Icons.edit_outlined,
+              color: SieTheme.textSecondary,
+              size: 18,
+            ),
+          ),
         ],
       ),
     );
@@ -114,16 +129,14 @@ class _HeaderSection extends StatelessWidget {
             border: Border.all(color: SieTheme.borderAccent, width: 1.5),
             color: SieTheme.surface,
           ),
-          child: Center(
-            child: Text(
-              letter,
-              style: const TextStyle(
-                color: SieTheme.accent,
-                fontSize: 28,
-                fontWeight: FontWeight.w200,
-                letterSpacing: 1,
-              ),
-            ),
+          child: ClipOval(
+            child: profile?.avatarUrl != null
+                ? Image.network(
+                    profile!.avatarUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _AvatarLetter(letter: letter),
+                  )
+                : _AvatarLetter(letter: letter),
           ),
         ),
         const SizedBox(width: 20),
@@ -157,6 +170,26 @@ class _HeaderSection extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AvatarLetter extends StatelessWidget {
+  final String letter;
+  const _AvatarLetter({required this.letter});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        letter,
+        style: const TextStyle(
+          color: SieTheme.accent,
+          fontSize: 28,
+          fontWeight: FontWeight.w200,
+          letterSpacing: 1,
+        ),
+      ),
     );
   }
 }
