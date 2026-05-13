@@ -119,7 +119,6 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       if (prev != null) state = AsyncData(prev);
       Error.throwWithStackTrace(e, st);
     }
-    return false;
   }
 
   Future<void> updateHabit({

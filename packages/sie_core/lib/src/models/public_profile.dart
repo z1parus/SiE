@@ -55,8 +55,8 @@ class PublicProfileStats {
   String get focusTime {
     final h = focusTotalSeconds ~/ 3600;
     final m = (focusTotalSeconds % 3600) ~/ 60;
-    if (h > 0) return '${h}ч ${m.toString().padLeft(2, '0')}м';
-    if (m > 0) return '${m}м';
+    if (h > 0) return '$hч ${m.toString().padLeft(2, '0')}м';
+    if (m > 0) return '$mм';
     return '0м';
   }
 }
