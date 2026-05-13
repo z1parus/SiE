@@ -465,6 +465,7 @@ class _BreathingExerciseScreenState
             ],
           ),
         ),
+        const Positioned.fill(child: AudioInitOverlay()),
         Positioned.fill(
           child: OnboardingOverlay(
             visible: showOnboarding,

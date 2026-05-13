@@ -40,6 +40,14 @@ class SieTheme {
           ),
           behavior: SnackBarBehavior.floating,
         ),
+        scrollbarTheme: ScrollbarThemeData(
+          thumbColor: const WidgetStatePropertyAll(borderAccent),
+          trackColor: WidgetStatePropertyAll(borderDefault.withValues(alpha: 0.4)),
+          thickness: const WidgetStatePropertyAll(4),
+          radius: const Radius.circular(2),
+          thumbVisibility: const WidgetStatePropertyAll(false),
+          trackVisibility: const WidgetStatePropertyAll(false),
+        ),
         textTheme: const TextTheme(
           headlineMedium: TextStyle(
             color: textPrimary,

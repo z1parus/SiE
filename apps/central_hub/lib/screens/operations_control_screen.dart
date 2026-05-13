@@ -4,6 +4,7 @@ import 'package:sie_core/sie_core.dart';
 import 'breathing_exercise_screen.dart';
 import 'focus_protocol_screen.dart';
 import 'habit_tracker_screen.dart';
+import 'leaderboard_screen.dart';
 import 'profile_screen.dart';
 import 'user_search_screen.dart';
 
@@ -48,6 +49,8 @@ class _OperationsControlScreenState
               const SizedBox(height: 32),
               const SectionHeader(title: 'DEPARTMENTS'),
               const SizedBox(height: 16),
+              _LeaderboardTile(),
+              const SizedBox(height: 12),
               Expanded(
                 child: branchesAsync.when(
                   data: (branches) => branches.isEmpty
@@ -279,6 +282,75 @@ void _onBranchTap(BuildContext context, Branch branch) {
       duration: Duration(seconds: 2),
     ),
   );
+}
+
+// ── Leaderboard Tile ──────────────────────────────────────────
+
+class _LeaderboardTile extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        PageRouteBuilder(
+          pageBuilder: (_, _, _) => const LeaderboardScreen(),
+          transitionsBuilder: (_, anim, _, child) =>
+              FadeTransition(opacity: anim, child: child),
+          transitionDuration: const Duration(milliseconds: 350),
+        ),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        decoration: BoxDecoration(
+          color: SieTheme.surface,
+          border: Border.all(color: const Color(0xFFFF8C42).withValues(alpha: 0.45)),
+          borderRadius: BorderRadius.circular(4),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFF8C42).withValues(alpha: 0.07),
+              blurRadius: 10,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Text('🏆', style: TextStyle(fontSize: 20)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'СУТОЧНЫЙ АВАНГАРД',
+                    style: TextStyle(
+                      color: Color(0xFFFF8C42),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.8,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Рейтинг активности за текущий цикл',
+                    style: TextStyle(
+                      color: SieTheme.textSecondary,
+                      fontSize: 11,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              color: Color(0xFFFF8C42),
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ── Screen Header ─────────────────────────────────────────────

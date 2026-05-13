@@ -58,8 +58,11 @@ Future<String?> uploadAvatar(Uint8List bytes) async {
         bytes,
         fileOptions: const FileOptions(upsert: true, contentType: 'image/jpeg'),
       );
-  final url =
+  final baseUrl =
       SupabaseService.client.storage.from('avatars').getPublicUrl(path);
+  // Cache-bust so Flutter's Image.network doesn't serve the old file
+  // from memory/disk cache when the path (and thus base URL) stays the same.
+  final url = '$baseUrl?t=${DateTime.now().millisecondsSinceEpoch}';
   await SupabaseService.client
       .from('profiles')
       .update({'avatar_url': url})

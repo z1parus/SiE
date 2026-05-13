@@ -24,3 +24,6 @@ export 'src/widgets/achievement_badge.dart';
 export 'src/widgets/habit_card.dart';
 export 'src/widgets/starry_sky_background.dart';
 export 'src/widgets/onboarding_overlay.dart';
+export 'src/widgets/audio_init_overlay.dart';
+export 'src/models/leaderboard_entry.dart';
+export 'src/providers/leaderboard_provider.dart';

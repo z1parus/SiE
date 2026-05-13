@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,13 +8,16 @@ import 'screens/operations_control_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  // Portrait lock is a mobile-only API; browsers silently ignore or crash on it.
+  if (!kIsWeb) {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+  }
   await SupabaseService.initialize(
-    url: 'http://127.0.0.1:54321',
-    anonKey: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
+    url: 'https://bvqlqvzcqfgojzxztvrm.supabase.co',
+    anonKey: 'sb_publishable_x54jsqL5s9ohcOJoyOTklw_5G8lbd9l',
   );
   runApp(const ProviderScope(child: SieApp()));
 }
@@ -29,6 +33,10 @@ class SieApp extends ConsumerWidget {
       title: 'SiE',
       debugShowCheckedModeBanner: false,
       theme: SieTheme.dark,
+      // On wide screens constrain the app to a phone-like column so the
+      // terminal aesthetic stays intact.  Dialogs and overlays live inside
+      // the Navigator, so they are constrained too — intentional.
+      builder: kIsWeb ? _webConstraint : null,
       home: authAsync.when(
         data: (isAuthenticated) => isAuthenticated
             ? const OperationsControlScreen()
@@ -38,6 +46,14 @@ class SieApp extends ConsumerWidget {
       ),
     );
   }
+
+  static Widget _webConstraint(BuildContext context, Widget? child) =>
+      Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: child!,
+        ),
+      );
 }
 
 class _SplashScreen extends StatelessWidget {
