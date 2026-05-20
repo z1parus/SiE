@@ -1,11 +1,11 @@
 {
-    "name": "central_hub",
-    "short_name": "central_hub",
+    "name": "SiE — System of Impact & Evolution",
+    "short_name": "SiE",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#07111D",
+    "theme_color": "#07111D",
+    "description": "SiE — система продуктивности и роста оперативника.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
