@@ -154,6 +154,11 @@ create policy "anyone can read profiles"
 create policy "owner can update own profile"
   on public.profiles for update using (auth.uid() = id);
 
+create policy "postgres role can insert profiles"
+  on public.profiles for insert
+  to postgres
+  with check (true);
+
 
 /* ══════════════════════════════════════════════════════════════
    5. ТРИГГЕР: АВТОСОЗДАНИЕ ПРОФИЛЯ ПРИ РЕГИСТРАЦИИ
