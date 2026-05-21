@@ -32,7 +32,7 @@ class SieApp extends ConsumerWidget {
     return MaterialApp(
       title: 'SiE',
       debugShowCheckedModeBanner: false,
-      theme: SieTheme.dark,
+      theme: SieTheme.cyberpunkDarkTheme,
       // On wide screens constrain the app to a phone-like column so the
       // terminal aesthetic stays intact.  Dialogs and overlays live inside
       // the Navigator, so they are constrained too — intentional.

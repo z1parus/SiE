@@ -1,6 +1,10 @@
+import 'dart:math' as math;
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
+
 import 'breathing_exercise_screen.dart';
 import 'focus_protocol_screen.dart';
 import 'habit_tracker_screen.dart';
@@ -8,6 +12,17 @@ import 'leaderboard_screen.dart';
 import 'profile_screen.dart';
 import 'user_search_screen.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Design tokens (local to this file)
+// ─────────────────────────────────────────────────────────────────────────────
+const _kCyan   = Color(0xFF00E5FF);
+const _kPurple = Color(0xFF7000FF);
+const _kMuted  = Color(0xFF90A4AE);
+const _kOrange = Color(0xFFFF8C42);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OperationsControlScreen
+// ─────────────────────────────────────────────────────────────────────────────
 class OperationsControlScreen extends ConsumerStatefulWidget {
   const OperationsControlScreen({super.key});
 
@@ -23,7 +38,7 @@ class _OperationsControlScreenState
   @override
   Widget build(BuildContext context) {
     final branchesAsync = ref.watch(branchesProvider);
-    final profileAsync = ref.watch(userProfileProvider);
+    final profileAsync  = ref.watch(userProfileProvider);
 
     ref.listen<AsyncValue<Profile?>>(userProfileProvider, (_, next) {
       if (_welcomeShown) return;
@@ -38,67 +53,85 @@ class _OperationsControlScreenState
     });
 
     return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 28),
-              _ScreenHeader(profileAsync: profileAsync, ref: ref),
-              const SizedBox(height: 32),
-              const SectionHeader(title: 'DEPARTMENTS'),
-              const SizedBox(height: 16),
-              _LeaderboardTile(),
-              const SizedBox(height: 12),
-              Expanded(
-                child: branchesAsync.when(
-                  data: (branches) => branches.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'NO DEPARTMENTS AVAILABLE',
-                            style: TextStyle(
-                              color: SieTheme.textSecondary,
-                              letterSpacing: 1.5,
-                              fontSize: 12,
-                            ),
-                          ),
-                        )
-                      : ListView.separated(
-                          itemCount: branches
-                              .where((b) => b.slug != 'progress_hub')
-                              .length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (context, index) {
-                            final filtered = branches
-                                .where((b) => b.slug != 'progress_hub')
-                                .toList();
-                            final branch = filtered[index];
-                            return BranchCard(
-                              name: branch.name,
-                              description: branch.description,
-                              onTap: () => _onBranchTap(context, branch),
-                            );
-                          },
-                        ),
-                  loading: () => const Center(
-                    child: CircularProgressIndicator(
-                      color: SieTheme.accent,
-                      strokeWidth: 1.5,
-                    ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: Stack(
+        children: [
+          // ── Main scrollable content ─────────────────────────
+          SafeArea(
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
+                  child: _ScreenHeader(profileAsync: profileAsync),
+                ),
+                const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SectionHeader(title: 'DEPARTMENTS'),
+                      const SizedBox(height: 12),
+                      _LeaderboardTile(),
+                      const SizedBox(height: 16),
+                    ],
                   ),
-                  error: (e, _) => Center(
-                    child: Text(
-                      'ERROR: $e',
-                      style: const TextStyle(color: Colors.redAccent),
+                ),
+                // ── Branch carousel (edge-to-edge) ──────────
+                Expanded(
+                  child: branchesAsync.when(
+                    data: (branches) {
+                      final filtered = branches
+                          .where((b) => b.slug != 'progress_hub')
+                          .toList();
+                      return filtered.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'NO DEPARTMENTS AVAILABLE',
+                                style: TextStyle(
+                                  color: SieTheme.textSecondary,
+                                  letterSpacing: 1.5,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            )
+                          : _BranchCarousel(
+                              branches: filtered,
+                              onBranchTap: (b) =>
+                                  _onBranchTap(context, b),
+                            );
+                    },
+                    loading: () => const Center(
+                      child: CircularProgressIndicator(
+                        color: SieTheme.accent,
+                        strokeWidth: 1.5,
+                      ),
+                    ),
+                    error: (e, _) => Center(
+                      child: Text(
+                        'ERROR: $e',
+                        style: const TextStyle(color: Colors.redAccent),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+                // Reserve space so last carousel card isn't hidden
+                // behind the floating nav bar.
+                const SizedBox(height: 96),
+              ],
+            ),
           ),
-        ),
+
+          // ── Floating Bottom Navigation ──────────────────────
+          const Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: _FloatingNavBar(),
+          ),
+        ],
       ),
     );
   }
@@ -116,8 +149,9 @@ class _OperationsControlScreenState
   }
 }
 
-// ── Welcome Dialog ────────────────────────────────────────────
-
+// ─────────────────────────────────────────────────────────────────────────────
+// Welcome Dialog  (business logic unchanged)
+// ─────────────────────────────────────────────────────────────────────────────
 class _WelcomeDialog extends StatefulWidget {
   final Profile profile;
   final VoidCallback onAccept;
@@ -141,7 +175,7 @@ class _WelcomeDialogState extends State<_WelcomeDialog>
       vsync: this,
       duration: const Duration(milliseconds: 600),
     )..forward();
-    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _fade  = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
     _slide = Tween<double>(begin: 24, end: 0).animate(
       CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
     );
@@ -155,8 +189,7 @@ class _WelcomeDialogState extends State<_WelcomeDialog>
 
   @override
   Widget build(BuildContext context) {
-    final name =
-        widget.profile.username?.toUpperCase() ?? 'OPERATIVE';
+    final name = widget.profile.username?.toUpperCase() ?? 'OPERATIVE';
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -180,14 +213,9 @@ class _WelcomeDialogState extends State<_WelcomeDialog>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header bar
               Row(
                 children: [
-                  Container(
-                    width: 3,
-                    height: 16,
-                    color: SieTheme.accent,
-                  ),
+                  Container(width: 3, height: 16, color: SieTheme.accent),
                   const SizedBox(width: 10),
                   Text(
                     'ВХОДЯЩЕЕ СООБЩЕНИЕ',
@@ -210,10 +238,13 @@ class _WelcomeDialogState extends State<_WelcomeDialog>
               const Divider(color: SieTheme.borderDefault, height: 1),
               const SizedBox(height: 16),
               Text(
-                'Вы успешно вошли в систему Корпорации SiE. Все протоколы активированы. Выполняйте задания, фиксируйте прогресс и получайте опыт.\n\nМиссия начинается сейчас.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      height: 1.6,
-                    ),
+                'Вы успешно вошли в систему Корпорации SiE. Все протоколы '
+                'активированы. Выполняйте задания, фиксируйте прогресс '
+                'и получайте опыт.\n\nМиссия начинается сейчас.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(height: 1.6),
               ),
               const SizedBox(height: 28),
               SizedBox(
@@ -230,7 +261,7 @@ class _WelcomeDialogState extends State<_WelcomeDialog>
                       border: Border.all(color: SieTheme.accent),
                       borderRadius: BorderRadius.circular(2),
                     ),
-                    child: Text(
+                    child: const Text(
                       'ПРИНЯТЬ ЗАДАНИЕ',
                       textAlign: TextAlign.center,
                       style: TextStyle(
@@ -251,8 +282,9 @@ class _WelcomeDialogState extends State<_WelcomeDialog>
   }
 }
 
-// ── Branch navigation ─────────────────────────────────────────
-
+// ─────────────────────────────────────────────────────────────────────────────
+// Branch navigation  (business logic unchanged)
+// ─────────────────────────────────────────────────────────────────────────────
 void _onBranchTap(BuildContext context, Branch branch) {
   Widget? screen;
 
@@ -284,67 +316,147 @@ void _onBranchTap(BuildContext context, Branch branch) {
   );
 }
 
-// ── Leaderboard Tile ──────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Floating Bottom Navigation Bar
+// ─────────────────────────────────────────────────────────────────────────────
+class _FloatingNavBar extends StatelessWidget {
+  const _FloatingNavBar();
 
-class _LeaderboardTile extends StatelessWidget {
+  static const _items = [
+    (icon: Icons.language_outlined,   label: 'Hub'),
+    (icon: Icons.my_location_outlined, label: 'Operations'),
+    (icon: Icons.shield_outlined,     label: 'Garage'),
+    (icon: Icons.star_outline,        label: 'Hall of Fame'),
+  ];
+
+  // "Operations" is always the active tab on this screen.
+  static const _activeIndex = 1;
+
+  void _onItemTap(BuildContext context, int index) {
+    switch (index) {
+      case 0:
+        Navigator.of(context).push(PageRouteBuilder(
+          pageBuilder: (_, _, _) => const ProfileScreen(),
+          transitionsBuilder: (_, a, _, c) =>
+              FadeTransition(opacity: a, child: c),
+          transitionDuration: const Duration(milliseconds: 350),
+        ));
+      case 3:
+        Navigator.of(context).push(PageRouteBuilder(
+          pageBuilder: (_, _, _) => const LeaderboardScreen(),
+          transitionsBuilder: (_, a, _, c) =>
+              FadeTransition(opacity: a, child: c),
+          transitionDuration: const Duration(milliseconds: 350),
+        ));
+      default:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Module initialising...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => Navigator.of(context).push(
-        PageRouteBuilder(
-          pageBuilder: (_, _, _) => const LeaderboardScreen(),
-          transitionsBuilder: (_, anim, _, child) =>
-              FadeTransition(opacity: anim, child: child),
-          transitionDuration: const Duration(milliseconds: 350),
-        ),
-      ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        decoration: BoxDecoration(
-          color: SieTheme.surface,
-          border: Border.all(color: const Color(0xFFFF8C42).withValues(alpha: 0.45)),
-          borderRadius: BorderRadius.circular(4),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFFF8C42).withValues(alpha: 0.07),
-              blurRadius: 10,
-              spreadRadius: 1,
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            const Text('🏆', style: TextStyle(fontSize: 20)),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'СУТОЧНЫЙ АВАНГАРД',
-                    style: TextStyle(
-                      color: Color(0xFFFF8C42),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.8,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    'Рейтинг активности за текущий цикл',
-                    style: TextStyle(
-                      color: SieTheme.textSecondary,
-                      fontSize: 11,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, math.max(bottomInset, 16)),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            height: 68,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.12),
               ),
             ),
-            const Icon(
-              Icons.chevron_right,
-              color: Color(0xFFFF8C42),
-              size: 18,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: List.generate(_items.length, (i) {
+                final item = _items[i];
+                return _NavItem(
+                  icon: item.icon,
+                  label: item.label,
+                  isActive: i == _activeIndex,
+                  onTap: () => _onItemTap(context, i),
+                );
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isActive ? _kCyan : _kMuted;
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 72,
+        height: 68,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Active indicator — gradient line at the top of the item.
+            if (isActive)
+              Container(
+                width: 28,
+                height: 2,
+                margin: const EdgeInsets.only(bottom: 4),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [_kCyan, _kPurple],
+                  ),
+                  borderRadius: BorderRadius.circular(1),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _kCyan.withValues(alpha: 0.7),
+                      blurRadius: 8,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+              )
+            else
+              const SizedBox(height: 6),
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 9,
+                fontWeight:
+                    isActive ? FontWeight.w700 : FontWeight.w400,
+                letterSpacing: 0.5,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -353,17 +465,481 @@ class _LeaderboardTile extends StatelessWidget {
   }
 }
 
-// ── Screen Header ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Leaderboard Tile
+// ─────────────────────────────────────────────────────────────────────────────
+class _LeaderboardTile extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return SieGlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      onTap: () => Navigator.of(context).push(
+        PageRouteBuilder(
+          pageBuilder: (_, _, _) => const LeaderboardScreen(),
+          transitionsBuilder: (_, anim, _, child) =>
+              FadeTransition(opacity: anim, child: child),
+          transitionDuration: const Duration(milliseconds: 350),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Text('🏆', style: TextStyle(fontSize: 20)),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'СУТОЧНЫЙ АВАНГАРД',
+                  style: TextStyle(
+                    color: _kOrange,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.8,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Рейтинг активности за текущий цикл',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right, color: _kOrange, size: 18),
+        ],
+      ),
+    );
+  }
+}
 
-class _ScreenHeader extends StatelessWidget {
-  final AsyncValue<Profile?> profileAsync;
-  final WidgetRef ref;
+// ─────────────────────────────────────────────────────────────────────────────
+// Branch Horizontal Carousel
+// ─────────────────────────────────────────────────────────────────────────────
+class _BranchCarousel extends StatelessWidget {
+  final List<Branch> branches;
+  final void Function(Branch) onBranchTap;
 
-  const _ScreenHeader({required this.profileAsync, required this.ref});
+  const _BranchCarousel({
+    required this.branches,
+    required this.onBranchTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PageView.builder(
+      controller: PageController(viewportFraction: 0.78),
+      itemCount: branches.length,
+      itemBuilder: (context, index) {
+        final branch = branches[index];
+        return _BranchCarouselCard(
+          branch: branch,
+          onTap: () => onBranchTap(branch),
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Branch Carousel Card
+// ─────────────────────────────────────────────────────────────────────────────
+class _BranchCarouselCard extends StatelessWidget {
+  final Branch branch;
+  final VoidCallback onTap;
+
+  const _BranchCarouselCard({
+    required this.branch,
+    required this.onTap,
+  });
+
+  Widget _preview() {
+    return switch (branch.slug) {
+      'breathing_practices' => const _BreathSpherePreview(),
+      'habit_archive'       => const _HabitMatrixPreview(),
+      'focus_protocol'      => const _FocusRingPreview(),
+      _                     => const SizedBox.shrink(),
+    };
+  }
+
+  String _statusLabel() {
+    return switch (branch.slug) {
+      'breathing_practices' => 'Session: 3/5',
+      'habit_archive'       => 'Habits: 4 Active',
+      'focus_protocol'      => 'Focus: 15 min',
+      _                     => 'ACTIVE',
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: SieGlassCard(
+        padding: EdgeInsets.zero,
+        onTap: onTap,
+        child: Column(
+          children: [
+            // ── Visual preview  (≈60 % of card height) ──────
+            Expanded(
+              flex: 5,
+              child: Container(
+                width: double.infinity,
+                decoration: const BoxDecoration(
+                  gradient: RadialGradient(
+                    center: Alignment.center,
+                    radius: 0.85,
+                    colors: [
+                      Color(0x0F00E5FF),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+                child: _preview(),
+              ),
+            ),
+
+            // ── Divider ──────────────────────────────────────
+            Container(
+              height: 1,
+              color: Colors.white.withValues(alpha: 0.08),
+            ),
+
+            // ── Info section (≈40 % of card height) ─────────
+            Expanded(
+              flex: 3,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          branch.name.toUpperCase(),
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontSize: 14,
+                            letterSpacing: 1.8,
+                          ),
+                        ),
+                        if (branch.description != null) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            branch.description!,
+                            style: theme.textTheme.bodyMedium,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _kCyan,
+                            boxShadow: [
+                              BoxShadow(
+                                color: _kCyan.withValues(alpha: 0.8),
+                                blurRadius: 6,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _statusLabel(),
+                          style: const TextStyle(
+                            color: _kCyan,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const Spacer(),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: _kCyan,
+                          size: 16,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Branch preview widgets
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Breathing — radial gradient sphere with infinite scale "breath" animation.
+class _BreathSpherePreview extends StatefulWidget {
+  const _BreathSpherePreview();
+
+  @override
+  State<_BreathSpherePreview> createState() => _BreathSpherePreviewState();
+}
+
+class _BreathSpherePreviewState extends State<_BreathSpherePreview>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3600),
+    )..repeat(reverse: true);
+    _scale = Tween<double>(begin: 0.82, end: 1.0).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: AnimatedBuilder(
+        animation: _scale,
+        builder: (_, _) => Transform.scale(
+          scale: _scale.value,
+          child: Container(
+            width: 130,
+            height: 130,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const RadialGradient(
+                colors: [
+                  Color(0xFFCCF8FF), // bright core
+                  Color(0xFF00E5FF), // neon cyan
+                  Color(0xFF7000FF), // purple rim
+                  Color(0x007000FF), // fade to transparent
+                ],
+                stops: [0.0, 0.28, 0.68, 1.0],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _kCyan.withValues(alpha: 0.35),
+                  blurRadius: 40,
+                  spreadRadius: 12,
+                ),
+                BoxShadow(
+                  color: _kPurple.withValues(alpha: 0.2),
+                  blurRadius: 70,
+                  spreadRadius: 24,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Habit Matrix — 5×5 dot grid with specific nodes glowing in Neon Cyan.
+class _HabitMatrixPreview extends StatelessWidget {
+  const _HabitMatrixPreview();
+
+  // (row, col) of glowing nodes
+  static const _lit = {
+    (0, 2),
+    (1, 1), (1, 3),
+    (2, 0), (2, 2), (2, 4),
+    (3, 1), (3, 3),
+    (4, 2),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(5, (row) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(5, (col) {
+                final glow = _lit.contains((row, col));
+                return Container(
+                  width: 11,
+                  height: 11,
+                  margin: const EdgeInsets.symmetric(horizontal: 6),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: glow
+                        ? _kCyan
+                        : const Color(0xFF1A3A5C),
+                    boxShadow: glow
+                        ? [
+                            BoxShadow(
+                              color: _kCyan.withValues(alpha: 0.75),
+                              blurRadius: 10,
+                              spreadRadius: 2,
+                            ),
+                          ]
+                        : null,
+                  ),
+                );
+              }),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+/// Focus Forge — thin circular arc ring showing a countdown timer.
+class _FocusRingPreview extends StatelessWidget {
+  const _FocusRingPreview();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SizedBox(
+        width: 140,
+        height: 140,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            CustomPaint(
+              size: const Size(140, 140),
+              painter: _ArcPainter(progress: 0.65),
+            ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  '15:00',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 2,
+                    height: 1,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'FOCUS',
+                  style: TextStyle(
+                    color: _kMuted,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 2.5,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ArcPainter extends CustomPainter {
+  final double progress;
+  const _ArcPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 8;
+    final bounds = Rect.fromCircle(center: center, radius: radius);
+
+    // Track (background ring)
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..color = const Color(0xFF1A3A5C)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 7,
+    );
+
+    // Progress arc with diagonal gradient
+    final sweepAngle = 2 * math.pi * progress.clamp(0.0, 1.0);
+    canvas.drawArc(
+      bounds,
+      -math.pi / 2,
+      sweepAngle,
+      false,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_kCyan, _kPurple],
+        ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 7
+        ..strokeCap = StrokeCap.round,
+    );
+
+    // Glowing tip at arc end
+    if (progress > 0.01) {
+      final tipAngle = -math.pi / 2 + sweepAngle;
+      final tipX = center.dx + radius * math.cos(tipAngle);
+      final tipY = center.dy + radius * math.sin(tipAngle);
+      canvas.drawCircle(
+        Offset(tipX, tipY),
+        5,
+        Paint()
+          ..color = _kCyan
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ArcPainter old) => old.progress != progress;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Screen Header
+// ─────────────────────────────────────────────────────────────────────────────
+class _ScreenHeader extends StatelessWidget {
+  final AsyncValue<Profile?> profileAsync;
+
+  const _ScreenHeader({required this.profileAsync});
+
+  static String _badge(int level) {
+    if (level <= 5)  return 'Recruit';
+    if (level <= 10) return 'Operative';
+    if (level <= 20) return 'Explorer';
+    return 'Commander';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme         = Theme.of(context);
+    final spaceEffects  = theme.extension<SieSpaceEffects>();
+    final gradientColors =
+        spaceEffects?.primaryGradient ?? [SieTheme.accent, SieTheme.dp];
 
     final operative = profileAsync.when(
       data: (p) => p?.username?.toUpperCase() ?? 'UNIDENTIFIED',
@@ -372,81 +948,183 @@ class _ScreenHeader extends StatelessWidget {
     );
     final xp = profileAsync.valueOrNull?.totalXp ?? 0;
 
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'OPERATIONS CONTROL',
+                    style: theme.textTheme.headlineLarge?.copyWith(
+                      fontSize: 20,
+                      letterSpacing: 3.0,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).push(
+                      PageRouteBuilder(
+                        pageBuilder: (_, _, _) => const ProfileScreen(),
+                        transitionsBuilder: (_, anim, _, child) =>
+                            FadeTransition(opacity: anim, child: child),
+                        transitionDuration: const Duration(milliseconds: 350),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          'OPERATIVE: $operative',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontSize: 13,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.chevron_right,
+                          color:
+                              gradientColors.first.withValues(alpha: 0.7),
+                          size: 14,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: () => Navigator.of(context).push(
+                PageRouteBuilder(
+                  pageBuilder: (_, _, _) => const UserSearchScreen(),
+                  transitionsBuilder: (_, anim, _, child) =>
+                      FadeTransition(opacity: anim, child: child),
+                  transitionDuration: const Duration(milliseconds: 300),
+                ),
+              ),
+              icon: const Icon(
+                Icons.search,
+                color: SieTheme.textSecondary,
+                size: 20,
+              ),
+              tooltip: 'NETWORK SCAN',
+            ),
+            IconButton(
+              onPressed: () async => SupabaseService.signOut(),
+              icon: const Icon(
+                Icons.logout,
+                color: SieTheme.textSecondary,
+                size: 20,
+              ),
+              tooltip: 'SIGN OUT',
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        _XpBar(xp: xp, gradientColors: gradientColors, badge: _badge(xp ~/ 1000)),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// XP Progress Bar
+// ─────────────────────────────────────────────────────────────────────────────
+class _XpBar extends StatelessWidget {
+  final int xp;
+  final List<Color> gradientColors;
+  final String badge;
+
+  const _XpBar({
+    required this.xp,
+    required this.gradientColors,
+    required this.badge,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme      = Theme.of(context);
+    final level      = xp ~/ 1000;
+    final xpInLevel  = xp % 1000;
+    final progress   = (xpInLevel / 1000.0).clamp(0.0, 1.0);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Level + badge column
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'XP Level $level',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontSize: 14,
+                letterSpacing: 1.0,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: gradientColors),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                badge.toUpperCase(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(width: 14),
+        // Progress track
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'OPERATIONS CONTROL',
-                style: theme.textTheme.headlineMedium,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('$xpInLevel / 1000 XP',
+                      style: theme.textTheme.bodyMedium),
+                  Text('${(progress * 100).round()}%',
+                      style: theme.textTheme.bodyMedium),
+                ],
               ),
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: () => Navigator.of(context).push(
-                  PageRouteBuilder(
-                    pageBuilder: (_, _, _) => const ProfileScreen(),
-                    transitionsBuilder: (_, anim, _, child) =>
-                        FadeTransition(opacity: anim, child: child),
-                    transitionDuration: const Duration(milliseconds: 350),
-                  ),
-                ),
-                child: Row(
+              const SizedBox(height: 6),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: Stack(
                   children: [
-                    Text(
-                      'OPERATIVE: $operative',
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                    const SizedBox(width: 16),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: SieTheme.borderAccent),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                      child: Text('$xp XP', style: theme.textTheme.labelSmall),
+                      height: 4,
+                      color: SieTheme.borderDefault,
                     ),
-                    const SizedBox(width: 6),
-                    const Icon(
-                      Icons.chevron_right,
-                      color: SieTheme.borderAccent,
-                      size: 14,
+                    FractionallySizedBox(
+                      widthFactor: progress,
+                      child: Container(
+                        height: 4,
+                        decoration: BoxDecoration(
+                          gradient:
+                              LinearGradient(colors: gradientColors),
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
             ],
           ),
-        ),
-        IconButton(
-          onPressed: () => Navigator.of(context).push(
-            PageRouteBuilder(
-              pageBuilder: (_, _, _) => const UserSearchScreen(),
-              transitionsBuilder: (_, anim, _, child) =>
-                  FadeTransition(opacity: anim, child: child),
-              transitionDuration: const Duration(milliseconds: 300),
-            ),
-          ),
-          icon: const Icon(
-            Icons.search,
-            color: SieTheme.textSecondary,
-            size: 20,
-          ),
-          tooltip: 'NETWORK SCAN',
-        ),
-        IconButton(
-          onPressed: () async => await SupabaseService.signOut(),
-          icon: const Icon(
-            Icons.logout,
-            color: SieTheme.textSecondary,
-            size: 20,
-          ),
-          tooltip: 'SIGN OUT',
         ),
       ],
     );
