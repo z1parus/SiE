@@ -594,7 +594,6 @@ class _BranchCarouselCard extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: SieGlassCard(
         padding: EdgeInsets.zero,
-        blurSigma: 10,
         onTap: onTap,
         child: Column(
           children: [
@@ -640,13 +639,20 @@ class _BranchCarouselCard extends ConsumerWidget {
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontSize: 14,
                             letterSpacing: 1.8,
+                            shadows: const [
+                              Shadow(color: Color(0x99000000), blurRadius: 6),
+                            ],
                           ),
                         ),
                         if (branch.description != null) ...[
                           const SizedBox(height: 6),
                           Text(
                             branch.description!,
-                            style: theme.textTheme.bodyMedium,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              shadows: const [
+                                Shadow(color: Color(0x80000000), blurRadius: 4),
+                              ],
+                            ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -678,6 +684,9 @@ class _BranchCarouselCard extends ConsumerWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.2,
+                            shadows: [
+                              Shadow(color: _kCyan, blurRadius: 8),
+                            ],
                           ),
                         ),
                         const Spacer(),

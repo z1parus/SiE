@@ -12,11 +12,11 @@ BorderRadius _deflateRadius(BorderRadius r, double by) => BorderRadius.only(
       bottomRight: Radius.circular(math.max(0, r.bottomRight.x - by)),
     );
 
-/// A premium liquid-glass card: gradient specular border + blurred gradient fill.
+/// Premium liquid-glass card: BackdropFilter blur + translucent gradient fill +
+/// gradient specular border painted via [_LiquidGlassPainter].
 ///
 /// Reads the border radius from [SieSpaceEffects] in the current theme.
-/// Degrades gracefully to a plain transparent container when the extension
-/// is absent (e.g., during tests or under the legacy [SieTheme.dark] theme).
+/// Degrades gracefully when the extension is absent (tests / legacy theme).
 class SieGlassCard extends StatelessWidget {
   const SieGlassCard({
     super.key,
@@ -36,8 +36,8 @@ class SieGlassCard extends StatelessWidget {
   final double? height;
   final double blurSigma;
 
-  /// When non-null, wraps the card in an [InkWell] whose ripple conforms
-  /// to the card's inner border radius.
+  /// When non-null, wraps content in an [InkWell] whose ripple respects
+  /// the card's inner border radius.
   final VoidCallback? onTap;
 
   @override
@@ -47,62 +47,94 @@ class SieGlassCard extends StatelessWidget {
         BoxDecoration(borderRadius: BorderRadius.circular(24));
     final outerRadius =
         (decoration.borderRadius as BorderRadius?) ?? BorderRadius.circular(24);
+    // 1 px inset so InkWell ripple doesn't overflow the specular border.
     final innerRadius = _deflateRadius(outerRadius, 1);
 
-    Widget content = Container(
+    Widget innerContent = Container(
+      width: width,
+      height: height,
       padding: padding ?? const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: innerRadius,
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0x2EFFFFFF), // 18 % white at top-left
-            Color(0x07050514), // 3 % dark indigo at bottom-right
-          ],
-        ),
-      ),
       child: child,
     );
 
     if (onTap != null) {
-      content = Material(
+      innerContent = Material(
         type: MaterialType.transparency,
         child: InkWell(
           onTap: onTap,
           borderRadius: innerRadius,
-          child: content,
+          child: innerContent,
         ),
       );
     }
 
     return Padding(
       padding: margin ?? EdgeInsets.zero,
-      child: Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          borderRadius: outerRadius,
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0x59FFFFFF), // 35 % white specular at top-left
-              Color(0x0AFFFFFF), // 4 % white at bottom-right
-            ],
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(1),
-          child: ClipRRect(
-            borderRadius: innerRadius,
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
-              child: content,
-            ),
+      child: ClipRRect(
+        // Must clip BEFORE BackdropFilter so blur is bounded to the card shape.
+        borderRadius: outerRadius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+          child: CustomPaint(
+            // Painter draws fill + specular border behind all children.
+            painter: _LiquidGlassPainter(outerRadius),
+            child: innerContent,
           ),
         ),
       ),
     );
   }
+}
+
+// ── Liquid-glass fill + specular border ──────────────────────────────────────
+
+class _LiquidGlassPainter extends CustomPainter {
+  final BorderRadius borderRadius;
+
+  const _LiquidGlassPainter(this.borderRadius);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rrect = borderRadius.toRRect(rect);
+
+    // Translucent gradient fill: 12 % white catches top-left light;
+    // 2 % white at bottom-right lets the blurred star field show through fully.
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0x1EFFFFFF), // 12 % white — specular light catch
+            Color(0x05FFFFFF), // 2 %  white — near-transparent
+          ],
+        ).createShader(rect),
+    );
+
+    // Specular glow border: bright white + cyan at top-left (the "light source"
+    // edge) fading to near-invisible at bottom-right. Deflated by 0.5 px so the
+    // 1 px stroke sits entirely within the card bounds rather than bleeding out.
+    canvas.drawRRect(
+      rrect.deflate(0.5),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0x59FFFFFF), // 35 % white   — sharp top-left specular
+            Color(0x4D00E5FF), // 30 % neon cyan — mid refraction glint
+            Color(0x0DFFFFFF), // 5 %  white   — bottom-right fade-out
+          ],
+          stops: [0.0, 0.45, 1.0],
+        ).createShader(rect),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_LiquidGlassPainter old) =>
+      old.borderRadius != borderRadius;
 }
