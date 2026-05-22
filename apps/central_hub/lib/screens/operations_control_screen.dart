@@ -56,6 +56,9 @@ class _OperationsControlScreenState
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Stack(
         children: [
+          // ── Space background (bottom-most layer) ───────────
+          const Positioned.fill(child: SieSpaceBackground()),
+
           // ── Main scrollable content ─────────────────────────
           SafeArea(
             bottom: false,
@@ -933,6 +936,42 @@ class _ArcPainter extends CustomPainter {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Glass Bell Badge
+// ─────────────────────────────────────────────────────────────────────────────
+class _GlassBell extends StatelessWidget {
+  const _GlassBell();
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipOval(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0x59FFFFFF),
+                Color(0x0AFFFFFF),
+              ],
+            ),
+          ),
+          child: const Icon(
+            Icons.notifications_outlined,
+            color: SieTheme.textSecondary,
+            size: 18,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Screen Header
 // ─────────────────────────────────────────────────────────────────────────────
 class _ScreenHeader extends StatelessWidget {
@@ -971,11 +1010,31 @@ class _ScreenHeader extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'OPERATIONS CONTROL',
-                    style: theme.textTheme.headlineLarge?.copyWith(
-                      fontSize: 20,
-                      letterSpacing: 3.0,
+                  RichText(
+                    text: TextSpan(
+                      children: [
+                        const TextSpan(
+                          text: 'SiE ',
+                          style: TextStyle(
+                            color: _kCyan,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.5,
+                            shadows: [
+                              Shadow(color: _kCyan, blurRadius: 8),
+                              Shadow(color: _kCyan, blurRadius: 20),
+                            ],
+                          ),
+                        ),
+                        TextSpan(
+                          text: 'OPERATIONS CONTROL',
+                          style: theme.textTheme.headlineLarge?.copyWith(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 3.0,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -1010,6 +1069,8 @@ class _ScreenHeader extends StatelessWidget {
                 ],
               ),
             ),
+            const _GlassBell(),
+            const SizedBox(width: 4),
             IconButton(
               onPressed: () => Navigator.of(context).push(
                 PageRouteBuilder(
