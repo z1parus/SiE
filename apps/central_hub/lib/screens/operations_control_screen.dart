@@ -527,16 +527,21 @@ class _BranchCarousel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PageView.builder(
-      controller: PageController(viewportFraction: 0.78),
-      itemCount: branches.length,
-      itemBuilder: (context, index) {
-        final branch = branches[index];
-        return _BranchCarouselCard(
-          branch: branch,
-          onTap: () => onBranchTap(branch),
-        );
-      },
+    return RepaintBoundary(
+      child: PageView.builder(
+        controller: PageController(viewportFraction: 0.78),
+        physics: const PageScrollPhysics(parent: BouncingScrollPhysics()),
+        itemCount: branches.length,
+        itemBuilder: (context, index) {
+          final branch = branches[index];
+          return RepaintBoundary(
+            child: _BranchCarouselCard(
+              branch: branch,
+              onTap: () => onBranchTap(branch),
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -544,7 +549,7 @@ class _BranchCarousel extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Branch Carousel Card
 // ─────────────────────────────────────────────────────────────────────────────
-class _BranchCarouselCard extends StatelessWidget {
+class _BranchCarouselCard extends ConsumerWidget {
   final Branch branch;
   final VoidCallback onTap;
 
@@ -562,23 +567,31 @@ class _BranchCarouselCard extends StatelessWidget {
     };
   }
 
-  String _statusLabel() {
-    return switch (branch.slug) {
-      'breathing_practices' => 'Session: 3/5',
-      'habit_archive'       => 'Habits: 4 Active',
-      'focus_protocol'      => 'Focus: 15 min',
-      _                     => 'ACTIVE',
-    };
+  String _statusLabel(WidgetRef ref) {
+    switch (branch.slug) {
+      case 'habit_archive':
+        final habitsState = ref.watch(habitsProvider).valueOrNull;
+        final count = habitsState?.habits.length ?? 0;
+        return '$count Active';
+      case 'focus_protocol':
+        final focus = ref.watch(focusTimerProvider);
+        return '${focus.settings.workMinutes} min';
+      case 'breathing_practices':
+        return 'PROTOCOL READY';
+      default:
+        return 'ACTIVE';
+    }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: SieGlassCard(
         padding: EdgeInsets.zero,
+        blurSigma: 10,
         onTap: onTap,
         child: Column(
           children: [
@@ -656,7 +669,7 @@ class _BranchCarouselCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          _statusLabel(),
+                          _statusLabel(ref),
                           style: const TextStyle(
                             color: _kCyan,
                             fontSize: 11,

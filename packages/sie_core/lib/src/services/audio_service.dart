@@ -32,7 +32,7 @@ class AudioService {
   // soundpool.play() has no volume parameter; call setVolume() after play().
   // Stream IDs are 1-based; 0 means play() failed.
   final _pool = Soundpool.fromOptions(
-    options: const SoundpoolOptions(streamType: StreamType.notification, maxStreams: 4),
+    options: const SoundpoolOptions(streamType: StreamType.music, maxStreams: 4),
   );
   int _inhaleId = -1, _exhaleId = -1, _chimeId = -1;
   int _inhaleStream = 0, _exhaleStream = 0;

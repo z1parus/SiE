@@ -27,6 +27,7 @@ class SieGlassCard extends StatelessWidget {
     this.width,
     this.height,
     this.onTap,
+    this.blurSigma = 20.0,
   });
 
   final Widget child;
@@ -34,6 +35,7 @@ class SieGlassCard extends StatelessWidget {
   final EdgeInsetsGeometry? margin;
   final double? width;
   final double? height;
+  final double blurSigma;
 
   /// When non-null, wraps the card in an [InkWell] whose ripple conforms
   /// to the card's border radius.
@@ -79,7 +81,7 @@ class SieGlassCard extends StatelessWidget {
         // outside the rounded corners into adjacent layers.
         borderRadius: borderRadius,
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
           child: content,
         ),
       ),
