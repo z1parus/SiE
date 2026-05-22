@@ -1,7 +1,7 @@
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 
@@ -374,32 +374,37 @@ class _FloatingNavBar extends StatelessWidget {
 
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 0, 16, math.max(bottomInset, 16)),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            height: 68,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.07),
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.12),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(_items.length, (i) {
-                final item = _items[i];
-                return _NavItem(
-                  icon: item.icon,
-                  label: item.label,
-                  isActive: i == _activeIndex,
-                  onTap: () => _onItemTap(context, i),
-                );
-              }),
-            ),
-          ),
+      child: GlassCard(
+        height: 68,
+        padding: EdgeInsets.zero,
+        shape: LiquidRoundedSuperellipse(borderRadius: 28),
+        useOwnLayer: true,
+        quality: GlassQuality.standard,
+        clipBehavior: Clip.antiAlias,
+        settings: LiquidGlassSettings(
+          blur: 3.5,
+          thickness: 24,
+          refractiveIndex: 1.45,
+          glassColor: const Color(0x0A0A0E1A),
+          lightAngle: GlassDefaults.lightAngle,
+          lightIntensity: 0.72,
+          glowIntensity: 0.92,
+          saturation: 1.4,
+          specularSharpness: GlassSpecularSharpness.sharp,
+          ambientStrength: 0.08,
+          chromaticAberration: 0.015,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: List.generate(_items.length, (i) {
+            final item = _items[i];
+            return _NavItem(
+              icon: item.icon,
+              label: item.label,
+              isActive: i == _activeIndex,
+              onTap: () => _onItemTap(context, i),
+            );
+          }),
         ),
       ),
     );
@@ -429,44 +434,65 @@ class _NavItem extends StatelessWidget {
       child: SizedBox(
         width: 72,
         height: 68,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Stack(
+          alignment: Alignment.center,
           children: [
-            // Active indicator — gradient line at the top of the item.
+            // Ambient glow bloom — diffuses cyan light through the glass
+            // substrate rather than sitting as a flat overlay on top.
             if (isActive)
-              Container(
-                width: 28,
-                height: 2,
-                margin: const EdgeInsets.only(bottom: 4),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [_kCyan, _kPurple],
-                  ),
-                  borderRadius: BorderRadius.circular(1),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _kCyan.withValues(alpha: 0.7),
-                      blurRadius: 8,
-                      spreadRadius: 1,
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: const Alignment(0, -0.3),
+                      radius: 1.1,
+                      colors: [
+                        _kCyan.withValues(alpha: 0.14),
+                        Colors.transparent,
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              )
-            else
-              const SizedBox(height: 6),
-            Icon(icon, color: color, size: 22),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 9,
-                fontWeight:
-                    isActive ? FontWeight.w700 : FontWeight.w400,
-                letterSpacing: 0.5,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Active indicator — gradient line at the top of the item.
+                if (isActive)
+                  Container(
+                    width: 28,
+                    height: 2,
+                    margin: const EdgeInsets.only(bottom: 4),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [_kCyan, _kPurple],
+                      ),
+                      borderRadius: BorderRadius.circular(1),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _kCyan.withValues(alpha: 0.7),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  const SizedBox(height: 6),
+                Icon(icon, color: color, size: 22),
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 9,
+                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
+                    letterSpacing: 0.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           ],
         ),
@@ -959,28 +985,32 @@ class _GlassBell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipOval(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          width: 38,
-          height: 38,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0x59FFFFFF),
-                Color(0x0AFFFFFF),
-              ],
-            ),
-          ),
-          child: const Icon(
-            Icons.notifications_outlined,
-            color: SieTheme.textSecondary,
-            size: 18,
-          ),
+    return GlassCard(
+      width: 38,
+      height: 38,
+      padding: EdgeInsets.zero,
+      shape: LiquidRoundedSuperellipse(borderRadius: 19),
+      useOwnLayer: true,
+      quality: GlassQuality.standard,
+      clipBehavior: Clip.antiAlias,
+      settings: LiquidGlassSettings(
+        blur: 2.0,
+        thickness: 20,
+        refractiveIndex: 1.45,
+        glassColor: const Color(0x0A0A0E1A),
+        lightAngle: GlassDefaults.lightAngle,
+        lightIntensity: 0.72,
+        glowIntensity: 0.85,
+        saturation: 1.4,
+        specularSharpness: GlassSpecularSharpness.sharp,
+        ambientStrength: 0.08,
+        chromaticAberration: 0.015,
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.notifications_outlined,
+          color: SieTheme.textSecondary,
+          size: 18,
         ),
       ),
     );
