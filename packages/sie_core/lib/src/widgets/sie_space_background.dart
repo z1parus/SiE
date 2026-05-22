@@ -46,14 +46,15 @@ class _SieSpaceBackgroundState extends State<SieSpaceBackground>
 // ── Star data ─────────────────────────────────────────────────
 
 class _Star {
-  final double dx;         // normalised offset from centre (×halfSize)
+  final double dx;          // normalised offset from centre (×halfSize)
   final double dy;
-  final double radius;     // 0.5 – 1.5 px
-  final double baseAlpha;  // 0.20 – 0.90
+  final double radius;      // px — varies by layer
+  final double baseAlpha;   // base opacity — varies by layer
   final bool twinkles;
   final double twinkleFreq;
   final double twinklePhase;
-  final bool isCyan;       // false → white
+  final bool isCyan;        // false → white
+  final bool hasGlow;       // foreground highlights get a diffraction halo
 
   const _Star({
     required this.dx,
@@ -64,6 +65,7 @@ class _Star {
     required this.twinkleFreq,
     required this.twinklePhase,
     required this.isCyan,
+    required this.hasGlow,
   });
 }
 
@@ -72,28 +74,73 @@ class _Star {
 class _SpacePainter extends CustomPainter {
   final Animation<double> animation;
 
-  // Seed 43 — distinct from StarrySkyBackground (seed 42) so screens feel
-  // different from each other while remaining deterministic across rebuilds.
+  // Seed 43 — deterministic across rebuilds; distinct from StarrySkyBackground
+  // (seed 42) so screens feel different from each other.
   static final List<_Star> _stars = _generate();
 
   _SpacePainter(this.animation) : super(repaint: animation);
 
+  /// Generates 220 stars split into three depth layers:
+  ///   Background  70 % (154) — dust particles, 0.3–0.7 px,  α 0.10–0.35
+  ///   Midground   20 % ( 44) — standard stars, 0.8–1.2 px,  α 0.40–0.70
+  ///   Foreground  10 % ( 22) — bright entities, 1.3–1.8 px, α 0.85–1.00
   static List<_Star> _generate() {
     final rng = Random(43);
-    return List.generate(220, (i) {
-      final twinkles = rng.nextDouble() < 0.28;
-      return _Star(
-        dx: (rng.nextDouble() - 0.5) * 2.6,
-        dy: (rng.nextDouble() - 0.5) * 2.6,
-        radius: 0.5 + rng.nextDouble(),           // 0.5 – 1.5 px
-        baseAlpha: 0.20 + rng.nextDouble() * 0.70, // 20 % – 90 %
-        twinkles: twinkles,
-        twinkleFreq: 1.0 + rng.nextDouble() * 5.0,
+    final stars = <_Star>[];
+
+    // ── Layer 0: Background dust (154 stars, 70 %) ──────────
+    // Ultra-dim, sub-pixel dots — the illusion of deep cosmic distance.
+    // No twinkle: at this scale atmospheric scintillation is imperceptible.
+    for (var i = 0; i < 154; i++) {
+      stars.add(_Star(
+        dx:           (rng.nextDouble() - 0.5) * 2.6,
+        dy:           (rng.nextDouble() - 0.5) * 2.6,
+        radius:       0.3 + rng.nextDouble() * 0.4,       // 0.30 – 0.70 px
+        baseAlpha:    0.10 + rng.nextDouble() * 0.25,      // 0.10 – 0.35
+        twinkles:     false,
+        twinkleFreq:  0.0,
+        twinklePhase: 0.0,
+        isCyan:       rng.nextDouble() < 0.12,             // mostly white dust
+        hasGlow:      false,
+      ));
+    }
+
+    // ── Layer 1: Midground stars (44 stars, 20 %) ───────────
+    // Medium-brightness stars; ~30 % have a visible twinkle cadence.
+    for (var i = 0; i < 44; i++) {
+      final twinkles = rng.nextDouble() < 0.30;
+      stars.add(_Star(
+        dx:           (rng.nextDouble() - 0.5) * 2.6,
+        dy:           (rng.nextDouble() - 0.5) * 2.6,
+        radius:       0.8 + rng.nextDouble() * 0.4,       // 0.80 – 1.20 px
+        baseAlpha:    0.40 + rng.nextDouble() * 0.30,      // 0.40 – 0.70
+        twinkles:     twinkles,
+        twinkleFreq:  1.0 + rng.nextDouble() * 5.0,
         twinklePhase: rng.nextDouble() * 2 * pi,
-        // ~25 % cyan, 75 % white for variety
-        isCyan: rng.nextDouble() < 0.25,
-      );
-    });
+        isCyan:       rng.nextDouble() < 0.25,
+        hasGlow:      false,
+      ));
+    }
+
+    // ── Layer 2: Foreground highlights (22 stars, 10 %) ─────
+    // Bright celestial entities; all receive a soft diffraction glow halo.
+    // Half twinkle with a slower, more majestic cadence.
+    for (var i = 0; i < 22; i++) {
+      final twinkles = rng.nextDouble() < 0.50;
+      stars.add(_Star(
+        dx:           (rng.nextDouble() - 0.5) * 2.6,
+        dy:           (rng.nextDouble() - 0.5) * 2.6,
+        radius:       1.3 + rng.nextDouble() * 0.5,       // 1.30 – 1.80 px
+        baseAlpha:    0.85 + rng.nextDouble() * 0.15,      // 0.85 – 1.00
+        twinkles:     twinkles,
+        twinkleFreq:  1.0 + rng.nextDouble() * 3.0,       // slower cadence
+        twinklePhase: rng.nextDouble() * 2 * pi,
+        isCyan:       rng.nextDouble() < 0.30,
+        hasGlow:      true,
+      ));
+    }
+
+    return stars;
   }
 
   @override
@@ -148,20 +195,33 @@ class _SpacePainter extends CustomPainter {
     canvas.translate(size.width / 2, size.height / 2);
     canvas.rotate(t * 2 * pi); // 1 revolution per 200 s — imperceptible drift
 
-    final paint = Paint();
+    final solidPaint = Paint();
+    // Glow halo paint: soft Gaussian blur mimics starlight diffraction.
+    // Applied only to foreground highlights (hasGlow == true).
+    final glowPaint = Paint()
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5);
+
     for (final star in _stars) {
       double alpha = star.baseAlpha;
       if (star.twinkles) {
         final wave = sin(t * 2 * pi * star.twinkleFreq + star.twinklePhase);
-        alpha = (alpha + wave * 0.22).clamp(0.05, 1.0);
+        // Reduced amplitude vs original (0.22 → 0.15) so bright foreground
+        // stars never dip below ~0.70 and background changes stay subtle.
+        alpha = (alpha + wave * 0.15).clamp(0.05, 1.0);
       }
-      paint.color = (star.isCyan ? SieTheme.accent : Colors.white)
-          .withValues(alpha: alpha);
-      canvas.drawCircle(
-        Offset(star.dx * halfSize, star.dy * halfSize),
-        star.radius,
-        paint,
-      );
+
+      final baseColor = star.isCyan ? SieTheme.accent : Colors.white;
+      final pos = Offset(star.dx * halfSize, star.dy * halfSize);
+
+      if (star.hasGlow) {
+        // Outer halo: blurred circle at 2.8× the star radius, 40 % of core
+        // alpha — simulates realistic diffraction spikes / airy disk.
+        glowPaint.color = baseColor.withValues(alpha: alpha * 0.40);
+        canvas.drawCircle(pos, star.radius * 2.8, glowPaint);
+      }
+
+      solidPaint.color = baseColor.withValues(alpha: alpha);
+      canvas.drawCircle(pos, star.radius, solidPaint);
     }
 
     canvas.restore();
