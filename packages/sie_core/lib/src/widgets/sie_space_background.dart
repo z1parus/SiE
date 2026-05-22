@@ -199,7 +199,7 @@ class _SpacePainter extends CustomPainter {
     // Glow halo paint: soft Gaussian blur mimics starlight diffraction.
     // Applied only to foreground highlights (hasGlow == true).
     final glowPaint = Paint()
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5);
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
 
     for (final star in _stars) {
       double alpha = star.baseAlpha;
@@ -216,7 +216,7 @@ class _SpacePainter extends CustomPainter {
       if (star.hasGlow) {
         // Outer halo: blurred circle at 2.8× the star radius, 40 % of core
         // alpha — simulates realistic diffraction spikes / airy disk.
-        glowPaint.color = baseColor.withValues(alpha: alpha * 0.40);
+        glowPaint.color = baseColor.withValues(alpha: alpha * 0.52);
         canvas.drawCircle(pos, star.radius * 2.8, glowPaint);
       }
 

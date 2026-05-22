@@ -1,6 +1,6 @@
 {
-    "name": "SiE — System of Impact & Evolution",
-    "short_name": "SiE",
+    "name": "SiE: Hub",
+    "short_name": "SiE: Hub",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#07111D",
