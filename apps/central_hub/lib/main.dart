@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 import 'screens/auth_screen.dart';
 import 'screens/operations_control_screen.dart';
@@ -19,7 +20,17 @@ void main() async {
     url: 'https://bvqlqvzcqfgojzxztvrm.supabase.co',
     anonKey: 'sb_publishable_x54jsqL5s9ohcOJoyOTklw_5G8lbd9l',
   );
-  runApp(const ProviderScope(child: SieApp()));
+  // Pre-warms liquid-glass shaders — eliminates the white flash on first render
+  // and compiles the Impeller pipeline on iOS/Android.
+  await LiquidGlassWidgets.initialize();
+  // GlassBackdropScope at root lets all glass surfaces share one GPU backdrop
+  // capture, roughly halving blit cost when multiple cards are on screen.
+  runApp(
+    LiquidGlassWidgets.wrap(
+      child: const ProviderScope(child: SieApp()),
+      adaptiveQuality: true,
+    ),
+  );
 }
 
 class SieApp extends ConsumerWidget {

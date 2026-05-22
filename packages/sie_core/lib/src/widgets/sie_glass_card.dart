@@ -1,17 +1,21 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import '../theme/sie_theme.dart';
 
-/// Premium liquid-glass card built from four explicit Stack layers:
+/// Premium liquid-glass card backed by the [liquid_glass_widgets] shader engine.
 ///
-///   L1 — BackdropFilter blur (σ30) + dark tint contrast bed
-///   L2 — Specular sheen: angled white gloss that fades before card centre
-///   L3 — Gradient border: bright white+cyan TL → invisible BR (CustomPainter)
-///   L4 — Content, fully isolated above all glass effects
+/// Delegates to [GlassCard] with physics-based settings tuned for the
+/// Cyber-Space dark aesthetic: high refraction, sharp specular from the
+/// iOS-standard top-left light angle, and subtle chromatic aberration.
 ///
-/// An outer [BoxShadow] detaches the card from the star-field background.
+/// [useOwnLayer: true] + [GlassQuality.standard] is safe inside scrollable
+/// lists such as the branch carousel. The root [GlassBackdropScope] installed
+/// by [LiquidGlassWidgets.wrap] is shared across all cards on screen.
+///
+/// The [blurSigma] parameter maps to the shader's frost `blur` value
+/// (divided by 6) so existing call-sites that tuned sigma 25–30 translate
+/// to a shader blur of ~4–5, which matches the library's calibrated range.
 class SieGlassCard extends StatelessWidget {
   const SieGlassCard({
     super.key,
@@ -31,149 +35,65 @@ class SieGlassCard extends StatelessWidget {
   final double? height;
   final double blurSigma;
 
-  /// When non-null, wraps content in an [InkWell] whose ripple respects
-  /// the card's border radius.
+  /// When non-null wraps the card in a [GestureDetector].
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    // Derive corner radius from the theme extension, fall back to 24.
     final spaceEffects = Theme.of(context).extension<SieSpaceEffects>();
-    final decoration = spaceEffects?.glassDecoration ??
-        BoxDecoration(borderRadius: BorderRadius.circular(24));
-    final radius =
-        (decoration.borderRadius as BorderRadius?) ?? BorderRadius.circular(24);
+    final br = (spaceEffects?.glassDecoration.borderRadius as BorderRadius?)
+            ?.topLeft
+            .x ??
+        24.0;
 
-    // L4 — content
-    Widget content = Padding(
+    final card = GlassCard(
+      width: width,
+      height: height,
       padding: padding ?? const EdgeInsets.all(16),
+      margin: margin,
+      // LiquidRoundedSuperellipse is Flutter's squircle (iOS-style corner).
+      shape: LiquidRoundedSuperellipse(borderRadius: br),
+      // useOwnLayer: true — card creates its own rendering context so it
+      // works in PageView/ListView without a parent LiquidGlassLayer.
+      useOwnLayer: true,
+      // GlassQuality.standard uses the lightweight 2D fragment shader.
+      // It works reliably in all contexts including scrollable lists.
+      // GlassQuality.premium (Impeller-only) would give full volumetric
+      // refraction but can jank mid-scroll on mid-range devices.
+      quality: GlassQuality.standard,
+      clipBehavior: Clip.antiAlias,
+      settings: LiquidGlassSettings(
+        // Frost blur: sigma 30 → blur 5; sigma 25 → blur ~4.2
+        blur: (blurSigma / 6).clamp(2.0, 8.0),
+        // Physical thickness drives the strength of the refraction warp.
+        thickness: 28,
+        // 1.45 visibly bends the star field behind the card.
+        refractiveIndex: 1.45,
+        // Near-zero dark tint — keeps card almost fully transparent so the
+        // background stars remain visible through the glass.
+        glassColor: const Color(0x0A0A0E1A),
+        // iOS 26 standard: 135° upper-left light source.
+        lightAngle: GlassDefaults.lightAngle,
+        // Boosted from the default 0.5 for crisper specular highlights.
+        lightIntensity: 0.72,
+        // Edge glow — mimics the fresnel rim on real glass.
+        glowIntensity: 0.85,
+        // Saturation boost makes the absorbed star-field colors more vivid.
+        saturation: 1.4,
+        // Sharp exponent (n=32) → tight mirror-like specular point.
+        specularSharpness: GlassSpecularSharpness.sharp,
+        // Ambient fill prevents the unlit side going fully black.
+        ambientStrength: 0.08,
+        // Subtle rainbow fringing at the curved glass edge.
+        chromaticAberration: 0.015,
+      ),
       child: child,
     );
+
     if (onTap != null) {
-      content = Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: radius,
-          child: content,
-        ),
-      );
+      return GestureDetector(onTap: onTap, child: card);
     }
-
-    return Padding(
-      padding: margin ?? EdgeInsets.zero,
-      // Outer drop-shadow detaches card from the background.
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: radius,
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x33000014), // 20 % deep black-purple
-              blurRadius: 30,
-              spreadRadius: -6,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
-        // ClipRRect MUST wrap BackdropFilter so the blur is bounded to the
-        // card's rounded shape and doesn't bleed into adjacent elements.
-        child: ClipRRect(
-          borderRadius: radius,
-          child: SizedBox(
-            width: width,
-            height: height,
-            // passthrough: parent's tight constraints flow into the content
-            // (critical for Expanded children inside carousel cards).
-            child: Stack(
-              fit: StackFit.passthrough,
-              children: [
-                // ── L1: Blur + dark tint contrast bed ──────────────────────
-                // BackdropFilter samples everything painted before this widget
-                // in the scene (the star field). ColoredBox adds a faint dark
-                // wash so the white specular highlights pop above the stars.
-                Positioned.fill(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(
-                      sigmaX: blurSigma,
-                      sigmaY: blurSigma,
-                    ),
-                    child: const ColoredBox(color: Color(0x220A0E1A)),
-                  ),
-                ),
-
-                // ── L2: Specular sheen ──────────────────────────────────────
-                // A diagonal gloss line (top-left → bottom-right) that fades
-                // out completely before the card centre — simulating the curved
-                // lens reflection of a physical liquid-glass surface.
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color(0x38FFFFFF), // 22 % white — crisp reflection
-                          Color(0x14FFFFFF), // 8 %  white
-                          Colors.transparent, // fully gone by stop 0.6
-                        ],
-                        stops: [0.0, 0.3, 0.6],
-                      ),
-                    ),
-                  ),
-                ),
-
-                // ── L3: Liquid border ───────────────────────────────────────
-                // Top-left edge: bright white + neon-cyan refraction catch.
-                // Bottom-right edge: fades to near-invisible.
-                // Drawn via CustomPainter to avoid Flutter's assertion that
-                // forbids non-uniform Border with borderRadius in BoxDecoration.
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _LiquidBorderPainter(radius),
-                  ),
-                ),
-
-                // ── L4: Content ─────────────────────────────────────────────
-                content,
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    return card;
   }
-}
-
-// ── Gradient specular border ──────────────────────────────────────────────────
-
-class _LiquidBorderPainter extends CustomPainter {
-  final BorderRadius borderRadius;
-
-  const _LiquidBorderPainter(this.borderRadius);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-
-    // Deflate by 0.5 so the 1 px stroke sits entirely inside the card bounds.
-    canvas.drawRRect(
-      borderRadius.toRRect(rect).deflate(0.5),
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.0
-        ..shader = const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0x73FFFFFF), // 45 % white   — sharp TL specular edge
-            Color(0x6600E5FF), // 40 % neon cyan — mid refraction glint
-            Color(0x05FFFFFF), // 2 %  white   — BR fades to near-invisible
-          ],
-          stops: [0.0, 0.4, 1.0],
-        ).createShader(rect),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_LiquidBorderPainter old) =>
-      old.borderRadius != borderRadius;
 }

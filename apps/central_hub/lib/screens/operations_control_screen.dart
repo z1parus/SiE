@@ -52,13 +52,19 @@ class _OperationsControlScreenState
       }
     });
 
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: Stack(
-        children: [
-          // ── Space background (bottom-most layer) ───────────
-          const Positioned.fill(child: SieSpaceBackground()),
-
+    // GlassPage registers SieSpaceBackground as the GPU backdrop source so
+    // GlassCard's shader can physically sample and refract the star field
+    // rather than synthesising a generic frost effect.
+    return GlassPage(
+      background: const SieSpaceBackground(),
+      statusBarStyle: GlassStatusBarStyle.light,
+      child: Scaffold(
+        // GlassPage forces scaffoldBackgroundColor → transparent via Theme
+        // override when a background is provided, so this is redundant but
+        // kept for clarity if GlassPage is ever removed.
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
           // ── Main scrollable content ─────────────────────────
           SafeArea(
             bottom: false,
@@ -135,6 +141,7 @@ class _OperationsControlScreenState
             child: _FloatingNavBar(),
           ),
         ],
+        ),
       ),
     );
   }
