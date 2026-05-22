@@ -1,78 +1,141 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 import 'public_profile_screen.dart';
 
+// ── Design tokens ──────────────────────────────────────────────
+const _kCyan   = Color(0xFF00E5FF);
+const _kPurple = Color(0xFF9D00FF);
+const _kGold   = Color(0xFFFFD700);
+const _kSilver = Color(0xFFC0C0C0);
+const _kBronze = Color(0xFFCD7F32);
+
+// ── Shared GlassCard settings factory ─────────────────────────
+// Matches the main Operations screen's aesthetic so all surfaces
+// share the same physical refraction model.
+LiquidGlassSettings _glassSettings({
+  double blur = 3.0,
+  double glowIntensity = 0.88,
+}) =>
+    LiquidGlassSettings(
+      blur: blur,
+      thickness: 24,
+      refractiveIndex: 1.45,
+      glassColor: const Color(0x0A0A0E1A),
+      lightAngle: GlassDefaults.lightAngle,
+      lightIntensity: 0.72,
+      glowIntensity: glowIntensity,
+      saturation: 1.4,
+      specularSharpness: GlassSpecularSharpness.sharp,
+      ambientStrength: 0.08,
+      chromaticAberration: 0.015,
+    );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LeaderboardScreen
+// ─────────────────────────────────────────────────────────────────────────────
 class LeaderboardScreen extends ConsumerWidget {
   const LeaderboardScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final leaderboardAsync = ref.watch(leaderboardProvider);
-    final profileAsync = ref.watch(userProfileProvider);
-    final currentUserId = profileAsync.valueOrNull?.id;
+    final profileAsync     = ref.watch(userProfileProvider);
+    final currentUserId    = profileAsync.valueOrNull?.id;
 
-    return Scaffold(
-      backgroundColor: SieTheme.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _Header(),
-            const _CountdownPanel(),
-            const SizedBox(height: 4),
-            Expanded(
-              child: leaderboardAsync.when(
-                data: (entries) => _LeaderboardList(
-                  entries: entries,
-                  currentUserId: currentUserId,
-                  onRefresh: () => ref.refresh(leaderboardProvider.future),
-                ),
-                loading: () => const Center(
-                  child: CircularProgressIndicator(
-                    color: SieTheme.accent,
-                    strokeWidth: 1.5,
+    return GlassPage(
+      background: const SieSpaceBackground(),
+      statusBarStyle: GlassStatusBarStyle.light,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              _Header(),
+              const SizedBox(height: 12),
+              const _CountdownPanel(),
+              const SizedBox(height: 8),
+              Expanded(
+                child: leaderboardAsync.when(
+                  data: (entries) => _LeaderboardList(
+                    entries: entries,
+                    currentUserId: currentUserId,
+                    onRefresh: () => ref.refresh(leaderboardProvider.future),
                   ),
-                ),
-                error: (e, _) => Center(
-                  child: Text(
-                    'ОШИБКА СОЕДИНЕНИЯ\n$e',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.redAccent,
-                      fontSize: 12,
-                      letterSpacing: 1,
+                  loading: () => const Center(
+                    child: CircularProgressIndicator(
+                      color: SieTheme.accent,
+                      strokeWidth: 1.5,
+                    ),
+                  ),
+                  error: (e, _) => Center(
+                    child: Text(
+                      'ОШИБКА СОЕДИНЕНИЯ\n$e',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.redAccent,
+                        fontSize: 12,
+                        letterSpacing: 1,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// ── Header ────────────────────────────────────────────────────
-
+// ─────────────────────────────────────────────────────────────────────────────
+// Header
+// ─────────────────────────────────────────────────────────────────────────────
 class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 8, 0),
+      padding: const EdgeInsets.fromLTRB(20, 20, 12, 0),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'СУТОЧНЫЙ АВАНГАРД',
-                  style: Theme.of(context).textTheme.headlineMedium,
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      const TextSpan(
+                        text: 'HALL ',
+                        style: TextStyle(
+                          color: _kCyan,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
+                          shadows: [
+                            Shadow(color: _kCyan, blurRadius: 8),
+                            Shadow(color: _kCyan, blurRadius: 22),
+                          ],
+                        ),
+                      ),
+                      TextSpan(
+                        text: 'OF FAME',
+                        style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 3.0,
+                            ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'РЕЙТИНГ АКТИВНОСТИ ЗА ТЕКУЩИЙ ЦИКЛ',
+                  'СУТОЧНЫЙ АВАНГАРД · РЕЙТИНГ АКТИВНОСТИ',
                   style: TextStyle(
                     color: SieTheme.textSecondary,
                     fontSize: 10,
@@ -82,12 +145,25 @@ class _Header extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(
-              Icons.close,
-              color: SieTheme.textSecondary,
-              size: 20,
+          // Back button — glass circle matching the bell on the main screen.
+          GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: GlassCard(
+              width: 36,
+              height: 36,
+              padding: EdgeInsets.zero,
+              shape: LiquidRoundedSuperellipse(borderRadius: 18),
+              useOwnLayer: true,
+              quality: GlassQuality.standard,
+              clipBehavior: Clip.antiAlias,
+              settings: _glassSettings(blur: 2.0, glowIntensity: 0.85),
+              child: const Center(
+                child: Icon(
+                  Icons.arrow_back_ios_new,
+                  color: SieTheme.textSecondary,
+                  size: 15,
+                ),
+              ),
             ),
           ),
         ],
@@ -96,8 +172,9 @@ class _Header extends StatelessWidget {
   }
 }
 
-// ── Countdown Panel ───────────────────────────────────────────
-
+// ─────────────────────────────────────────────────────────────────────────────
+// Countdown Panel
+// ─────────────────────────────────────────────────────────────────────────────
 class _CountdownPanel extends ConsumerWidget {
   const _CountdownPanel();
 
@@ -114,54 +191,91 @@ class _CountdownPanel extends ConsumerWidget {
     final isUrgent = countdownAsync.valueOrNull != null &&
         countdownAsync.value!.inHours < 1;
 
-    final timerColor =
-        isUrgent ? const Color(0xFFFF4D00) : const Color(0xFFFF8C42);
+    // Normal: neon cyan; urgent (< 1 h): alarm orange-red.
+    final timerColor = isUrgent ? const Color(0xFFFF4D00) : _kCyan;
 
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      decoration: BoxDecoration(
-        color: SieTheme.surface,
-        border: Border.all(color: timerColor.withValues(alpha: 0.5)),
-        borderRadius: BorderRadius.circular(4),
-        boxShadow: [
-          BoxShadow(
-            color: timerColor.withValues(alpha: isUrgent ? 0.15 : 0.06),
-            blurRadius: 12,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.timer_outlined,
-            color: timerColor,
-            size: 16,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'ДО ЗАВЕРШЕНИЯ ЦИКЛА',
-              style: TextStyle(
-                color: timerColor.withValues(alpha: 0.7),
-                fontSize: 10,
-                letterSpacing: 2,
-                fontWeight: FontWeight.w600,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: GlassCard(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        shape: LiquidRoundedSuperellipse(borderRadius: 20),
+        useOwnLayer: true,
+        quality: GlassQuality.standard,
+        clipBehavior: Clip.antiAlias,
+        settings: _glassSettings(blur: 3.5, glowIntensity: 0.92),
+        child: Stack(
+          children: [
+            // Ambient colour bloom behind the timer — feeds into the glass
+            // refraction loop so the tint is physically absorbed by the lens.
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(0.9, 0),
+                    radius: 1.0,
+                    colors: [
+                      timerColor.withValues(alpha: 0.10),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-          Text(
-            display,
-            style: TextStyle(
-              color: timerColor,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 3,
-              fontFeatures: const [FontFeature.tabularFigures()],
+            Row(
+              children: [
+                Icon(Icons.timer_outlined, color: timerColor, size: 16),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'ДО ЗАВЕРШЕНИЯ ЦИКЛА',
+                        style: TextStyle(
+                          color: timerColor.withValues(alpha: 0.75),
+                          fontSize: 10,
+                          letterSpacing: 2,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'DAILY RESET',
+                        style: TextStyle(
+                          color: SieTheme.textSecondary,
+                          fontSize: 9,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Bold monospace countdown clock.
+                Text(
+                  display,
+                  style: TextStyle(
+                    color: timerColor,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 3.5,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                    shadows: [
+                      Shadow(
+                        color: timerColor.withValues(alpha: 0.80),
+                        blurRadius: 10,
+                      ),
+                      Shadow(
+                        color: timerColor.withValues(alpha: 0.40),
+                        blurRadius: 28,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -174,8 +288,9 @@ class _CountdownPanel extends ConsumerWidget {
   }
 }
 
-// ── Leaderboard List ──────────────────────────────────────────
-
+// ─────────────────────────────────────────────────────────────────────────────
+// Leaderboard List
+// ─────────────────────────────────────────────────────────────────────────────
 class _LeaderboardList extends StatelessWidget {
   final List<LeaderboardEntry> entries;
   final String? currentUserId;
@@ -189,22 +304,18 @@ class _LeaderboardList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final topEntries = entries;
-
     return RefreshIndicator(
       color: SieTheme.accent,
-      backgroundColor: SieTheme.surface,
+      backgroundColor: Colors.transparent,
       onRefresh: onRefresh,
       child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-        // +1 if self is not in the list or we want a divider separator below top 50
-        itemCount: topEntries.length,
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 96),
+        itemCount: entries.length,
         itemBuilder: (context, index) {
-          final entry = topEntries[index];
-          final isSelf = entry.userId == currentUserId;
+          final entry = entries[index];
           return _LeaderRow(
             entry: entry,
-            isSelf: isSelf,
+            isSelf: entry.userId == currentUserId,
             isFirst: index == 0,
           );
         },
@@ -213,8 +324,9 @@ class _LeaderboardList extends StatelessWidget {
   }
 }
 
-// ── Single Leaderboard Row ────────────────────────────────────
-
+// ─────────────────────────────────────────────────────────────────────────────
+// Single Leaderboard Row
+// ─────────────────────────────────────────────────────────────────────────────
 class _LeaderRow extends ConsumerWidget {
   final LeaderboardEntry entry;
   final bool isSelf;
@@ -229,170 +341,220 @@ class _LeaderRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final frames = ref.watch(avatarFramesProvider).valueOrNull ?? [];
-    final frame = frames
+    final frame  = frames
         .where((f) => f.id == entry.equippedFrameId)
         .firstOrNull;
 
-    final rankColor = _rankColor(entry.rank);
     final isTopThree = entry.rank <= 3;
+    final rankColor  = _rankColor(entry.rank);
+
+    // Bloom tint: rank color for top 3, cyan for self, none otherwise.
+    final bloomColor = isSelf
+        ? _kCyan
+        : isTopThree
+            ? rankColor
+            : null;
+
+    // XP accent: rank color for top 3, purple neon for everyone else.
+    final xpColor = isSelf
+        ? _kCyan
+        : isTopThree
+            ? rankColor
+            : _kPurple;
 
     return GestureDetector(
       onTap: () => _openProfile(context, entry),
-      child: Container(
-        margin: EdgeInsets.only(top: isFirst ? 8 : 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelf
-              ? SieTheme.accent.withValues(alpha: 0.07)
-              : SieTheme.surface,
-          border: Border.all(
-            color: isSelf
-                ? SieTheme.accent.withValues(alpha: 0.4)
-                : isTopThree
-                    ? rankColor.withValues(alpha: 0.35)
-                    : SieTheme.borderDefault,
+      child: Padding(
+        padding: EdgeInsets.only(top: isFirst ? 8 : 6),
+        child: GlassCard(
+          padding: EdgeInsets.zero,
+          shape: LiquidRoundedSuperellipse(borderRadius: 16),
+          useOwnLayer: true,
+          quality: GlassQuality.standard,
+          clipBehavior: Clip.antiAlias,
+          settings: _glassSettings(
+            blur: 3.0,
+            // Top 3 and self get a slightly boosted specular rim.
+            glowIntensity: (isTopThree || isSelf) ? 0.92 : 0.82,
           ),
-          borderRadius: BorderRadius.circular(4),
-          boxShadow: isTopThree
-              ? [
-                  BoxShadow(
-                    color: rankColor.withValues(alpha: 0.08),
-                    blurRadius: 8,
-                    spreadRadius: 1,
-                  )
-                ]
-              : null,
-        ),
-        child: Row(
-          children: [
-            // Rank
-            SizedBox(
-              width: 32,
-              child: isTopThree
-                  ? Text(
-                      _rankEmoji(entry.rank),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 18),
-                    )
-                  : Text(
-                      '${entry.rank}',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: SieTheme.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
+          child: Stack(
+            children: [
+              // ── Rank / self inner glow bloom ──────────────────
+              // Rendered inside the GlassCard child so the shader
+              // physically absorbs the colour into the refraction pass.
+              if (bloomColor != null)
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        center: const Alignment(-0.75, 0),
+                        radius: 1.3,
+                        colors: [
+                          bloomColor.withValues(
+                            alpha: isTopThree ? 0.18 : 0.10,
+                          ),
+                          Colors.transparent,
+                        ],
                       ),
                     ),
-            ),
-            const SizedBox(width: 10),
-            // Avatar + frame
-            _Avatar(
-              avatarUrl: entry.avatarUrl,
-              frame: frame,
-              size: 36,
-            ),
-            const SizedBox(width: 12),
-            // Name + self badge
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          (entry.username ?? 'OPERATIVE').toUpperCase(),
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: isSelf
-                                ? SieTheme.accent
-                                : isTopThree
-                                    ? rankColor
-                                    : SieTheme.textPrimary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.2,
+                  ),
+                ),
+
+              // ── Row content ───────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                child: Row(
+                  children: [
+                    // ── Rank indicator ───────────────────────────
+                    SizedBox(
+                      width: 36,
+                      child: isTopThree
+                          ? _RankBadge(rank: entry.rank, color: rankColor)
+                          : Text(
+                              '${entry.rank}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: SieTheme.textSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                    ),
+                    const SizedBox(width: 10),
+
+                    // ── Avatar ────────────────────────────────────
+                    _Avatar(
+                      avatarUrl: entry.avatarUrl,
+                      frame: frame,
+                      size: 38,
+                    ),
+                    const SizedBox(width: 12),
+
+                    // ── Username + level ──────────────────────────
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  (entry.username ?? 'OPERATIVE')
+                                      .toUpperCase(),
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: isSelf
+                                        ? _kCyan
+                                        : isTopThree
+                                            ? rankColor
+                                            : SieTheme.textPrimary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 1.2,
+                                    shadows: (isTopThree || isSelf)
+                                        ? [
+                                            Shadow(
+                                              color: (isSelf
+                                                      ? _kCyan
+                                                      : rankColor)
+                                                  .withValues(alpha: 0.55),
+                                              blurRadius: 8,
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                              if (isSelf) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 5,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(
+                                      color: _kCyan.withValues(alpha: 0.6),
+                                    ),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                  child: const Text(
+                                    'YOU',
+                                    style: TextStyle(
+                                      color: _kCyan,
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 1,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
-                        ),
-                      ),
-                      if (isSelf) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 5, vertical: 2),
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                                color: SieTheme.accent.withValues(alpha: 0.6)),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                          child: const Text(
-                            'YOU',
-                            style: TextStyle(
-                              color: SieTheme.accent,
-                              fontSize: 8,
-                              fontWeight: FontWeight.w700,
+                          const SizedBox(height: 2),
+                          Text(
+                            'LVL ${(entry.totalXp ~/ 1000) + 1}',
+                            style: const TextStyle(
+                              color: SieTheme.textSecondary,
+                              fontSize: 10,
                               letterSpacing: 1,
                             ),
                           ),
+                        ],
+                      ),
+                    ),
+
+                    // ── Daily XP ──────────────────────────────────
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '${entry.dailyXp}',
+                          style: TextStyle(
+                            color: xpColor,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                            fontFeatures: const [
+                              FontFeature.tabularFigures(),
+                            ],
+                            shadows: [
+                              Shadow(
+                                color: xpColor.withValues(alpha: 0.65),
+                                blurRadius: 10,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Text(
+                          'XP TODAY',
+                          style: TextStyle(
+                            color: SieTheme.textSecondary,
+                            fontSize: 8,
+                            letterSpacing: 1.5,
+                          ),
                         ),
                       ],
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'LVL ${(entry.totalXp ~/ 1000) + 1}',
-                    style: const TextStyle(
-                      color: SieTheme.textSecondary,
-                      fontSize: 10,
-                      letterSpacing: 1,
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            // Daily XP
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '${entry.dailyXp}',
-                  style: TextStyle(
-                    color: isTopThree ? rankColor : SieTheme.textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-                const Text(
-                  'XP TODAY',
-                  style: TextStyle(
-                    color: SieTheme.textSecondary,
-                    fontSize: 8,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
   static Color _rankColor(int rank) => switch (rank) {
-        1 => const Color(0xFFFFD700),
-        2 => const Color(0xFFC0C0C0),
-        3 => const Color(0xFFCD7F32),
+        1 => _kGold,
+        2 => _kSilver,
+        3 => _kBronze,
         _ => SieTheme.textSecondary,
-      };
-
-  static String _rankEmoji(int rank) => switch (rank) {
-        1 => '🥇',
-        2 => '🥈',
-        3 => '🥉',
-        _ => '$rank',
       };
 
   void _openProfile(BuildContext context, LeaderboardEntry entry) {
@@ -416,8 +578,64 @@ class _LeaderRow extends ConsumerWidget {
   }
 }
 
-// ── Avatar with optional frame ────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Rank Badge (top 3 only)
+// ─────────────────────────────────────────────────────────────────────────────
+class _RankBadge extends StatelessWidget {
+  final int rank;
+  final Color color;
 
+  const _RankBadge({required this.rank, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Icon in a soft glow halo circle.
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    color.withValues(alpha: 0.28),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+            Icon(_rankIcon(rank), color: color, size: 16),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          '#$rank',
+          style: TextStyle(
+            color: color,
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  static IconData _rankIcon(int rank) => switch (rank) {
+        1 => Icons.emoji_events,   // gold trophy
+        2 => Icons.workspace_premium, // silver shield/star
+        _ => Icons.military_tech,  // bronze medal
+      };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Avatar with optional cosmetic frame
+// ─────────────────────────────────────────────────────────────────────────────
 class _Avatar extends StatelessWidget {
   final String? avatarUrl;
   final CosmeticAsset? frame;
