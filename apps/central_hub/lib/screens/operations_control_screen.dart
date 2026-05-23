@@ -24,7 +24,9 @@ const _kOrange = Color(0xFFFF8C42);
 // OperationsControlScreen
 // ─────────────────────────────────────────────────────────────────────────────
 class OperationsControlScreen extends ConsumerStatefulWidget {
-  const OperationsControlScreen({super.key});
+  const OperationsControlScreen({super.key, this.asTab = false});
+
+  final bool asTab;
 
   @override
   ConsumerState<OperationsControlScreen> createState() =>
@@ -52,95 +54,88 @@ class _OperationsControlScreenState
       }
     });
 
-    // GlassPage registers SieSpaceBackground as the GPU backdrop source so
-    // GlassCard's shader can physically sample and refract the star field
-    // rather than synthesising a generic frost effect.
+    final body = SafeArea(
+      bottom: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
+            child: _ScreenHeader(profileAsync: profileAsync),
+          ),
+          const SizedBox(height: 24),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SectionHeader(title: 'DEPARTMENTS'),
+                const SizedBox(height: 12),
+                _LeaderboardTile(),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+          Expanded(
+            child: branchesAsync.when(
+              data: (branches) {
+                final filtered = branches
+                    .where((b) => b.slug != 'progress_hub')
+                    .toList();
+                return filtered.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'NO DEPARTMENTS AVAILABLE',
+                          style: TextStyle(
+                            color: SieTheme.textSecondary,
+                            letterSpacing: 1.5,
+                            fontSize: 12,
+                          ),
+                        ),
+                      )
+                    : _BranchCarousel(
+                        branches: filtered,
+                        onBranchTap: (b) => _onBranchTap(context, b),
+                      );
+              },
+              loading: () => const Center(
+                child: CircularProgressIndicator(
+                  color: SieTheme.accent,
+                  strokeWidth: 1.5,
+                ),
+              ),
+              error: (e, _) => Center(
+                child: Text(
+                  'ERROR: $e',
+                  style: const TextStyle(color: Colors.redAccent),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 96),
+        ],
+      ),
+    );
+
+    if (widget.asTab) {
+      return Scaffold(backgroundColor: Colors.transparent, body: body);
+    }
+
     return GlassPage(
       background: const SieSpaceBackground(),
       statusBarStyle: GlassStatusBarStyle.light,
       child: Scaffold(
-        // GlassPage forces scaffoldBackgroundColor → transparent via Theme
-        // override when a background is provided, so this is redundant but
-        // kept for clarity if GlassPage is ever removed.
         backgroundColor: Colors.transparent,
         body: Stack(
           children: [
-          // ── Main scrollable content ─────────────────────────
-          SafeArea(
-            bottom: false,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
-                  child: _ScreenHeader(profileAsync: profileAsync),
-                ),
-                const SizedBox(height: 24),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SectionHeader(title: 'DEPARTMENTS'),
-                      const SizedBox(height: 12),
-                      _LeaderboardTile(),
-                      const SizedBox(height: 16),
-                    ],
-                  ),
-                ),
-                // ── Branch carousel (edge-to-edge) ──────────
-                Expanded(
-                  child: branchesAsync.when(
-                    data: (branches) {
-                      final filtered = branches
-                          .where((b) => b.slug != 'progress_hub')
-                          .toList();
-                      return filtered.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'NO DEPARTMENTS AVAILABLE',
-                                style: TextStyle(
-                                  color: SieTheme.textSecondary,
-                                  letterSpacing: 1.5,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            )
-                          : _BranchCarousel(
-                              branches: filtered,
-                              onBranchTap: (b) =>
-                                  _onBranchTap(context, b),
-                            );
-                    },
-                    loading: () => const Center(
-                      child: CircularProgressIndicator(
-                        color: SieTheme.accent,
-                        strokeWidth: 1.5,
-                      ),
-                    ),
-                    error: (e, _) => Center(
-                      child: Text(
-                        'ERROR: $e',
-                        style: const TextStyle(color: Colors.redAccent),
-                      ),
-                    ),
-                  ),
-                ),
-                // Reserve space so last carousel card isn't hidden
-                // behind the floating nav bar.
-                const SizedBox(height: 96),
-              ],
+            body,
+            const Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: _FloatingNavBar(),
             ),
-          ),
-
-          // ── Floating Bottom Navigation ──────────────────────
-          const Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: _FloatingNavBar(),
-          ),
-        ],
+          ],
         ),
       ),
     );

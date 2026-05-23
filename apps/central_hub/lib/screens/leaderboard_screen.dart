@@ -36,7 +36,9 @@ LiquidGlassSettings _glassSettings({
 // LeaderboardScreen
 // ─────────────────────────────────────────────────────────────────────────────
 class LeaderboardScreen extends ConsumerWidget {
-  const LeaderboardScreen({super.key});
+  const LeaderboardScreen({super.key, this.asTab = false});
+
+  final bool asTab;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -47,16 +49,11 @@ class LeaderboardScreen extends ConsumerWidget {
     // data update rebuilds only this widget, not N shader-heavy list items.
     final frames = ref.watch(avatarFramesProvider).valueOrNull ?? <CosmeticAsset>[];
 
-    return GlassPage(
-      background: const SieSpaceBackground(),
-      statusBarStyle: GlassStatusBarStyle.light,
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              _Header(),
+    final body = SafeArea(
+      bottom: false,
+      child: Column(
+        children: [
+          _Header(showBackButton: !asTab),
               const SizedBox(height: 12),
               const _CountdownPanel(),
               const SizedBox(height: 8),
@@ -89,7 +86,18 @@ class LeaderboardScreen extends ConsumerWidget {
               ),
             ],
           ),
-        ),
+        );
+
+    if (asTab) {
+      return Scaffold(backgroundColor: Colors.transparent, body: body);
+    }
+
+    return GlassPage(
+      background: const SieSpaceBackground(),
+      statusBarStyle: GlassStatusBarStyle.light,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: body,
       ),
     );
   }
@@ -99,6 +107,9 @@ class LeaderboardScreen extends ConsumerWidget {
 // Header
 // ─────────────────────────────────────────────────────────────────────────────
 class _Header extends StatelessWidget {
+  const _Header({this.showBackButton = true});
+  final bool showBackButton;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -149,27 +160,29 @@ class _Header extends StatelessWidget {
               ],
             ),
           ),
-          // Back button — glass circle matching the bell on the main screen.
-          GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
-            child: GlassCard(
-              width: 36,
-              height: 36,
-              padding: EdgeInsets.zero,
-              shape: LiquidRoundedSuperellipse(borderRadius: 18),
-              useOwnLayer: true,
-              quality: GlassQuality.standard,
-              clipBehavior: Clip.antiAlias,
-              settings: _glassSettings(blur: 2.0, glowIntensity: 0.85),
-              child: const Center(
-                child: Icon(
-                  Icons.arrow_back_ios_new,
-                  color: SieTheme.textSecondary,
-                  size: 15,
+          if (showBackButton)
+            GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: GlassCard(
+                width: 36,
+                height: 36,
+                padding: EdgeInsets.zero,
+                shape: LiquidRoundedSuperellipse(borderRadius: 18),
+                useOwnLayer: true,
+                quality: GlassQuality.standard,
+                clipBehavior: Clip.antiAlias,
+                settings: _glassSettings(blur: 2.0, glowIntensity: 0.85),
+                child: const Center(
+                  child: Icon(
+                    Icons.arrow_back_ios_new,
+                    color: SieTheme.textSecondary,
+                    size: 15,
+                  ),
                 ),
               ),
-            ),
-          ),
+            )
+          else
+            const SizedBox(width: 36),
         ],
       ),
     );

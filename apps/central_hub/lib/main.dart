@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 import 'screens/auth_screen.dart';
-import 'screens/operations_control_screen.dart';
+import 'screens/main_navigation_shell.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,7 +50,7 @@ class SieApp extends ConsumerWidget {
       builder: kIsWeb ? _webConstraint : null,
       home: authAsync.when(
         data: (isAuthenticated) => isAuthenticated
-            ? const OperationsControlScreen()
+            ? const MainNavigationShell()
             : const AuthScreen(),
         loading: () => const _SplashScreen(),
         error: (_, _) => const AuthScreen(),
