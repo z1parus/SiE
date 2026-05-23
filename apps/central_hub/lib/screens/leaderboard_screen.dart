@@ -43,6 +43,9 @@ class LeaderboardScreen extends ConsumerWidget {
     final leaderboardAsync = ref.watch(leaderboardProvider);
     final profileAsync     = ref.watch(userProfileProvider);
     final currentUserId    = profileAsync.valueOrNull?.id;
+    // Watched once here rather than inside every _LeaderRow so that a frame
+    // data update rebuilds only this widget, not N shader-heavy list items.
+    final frames = ref.watch(avatarFramesProvider).valueOrNull ?? <CosmeticAsset>[];
 
     return GlassPage(
       background: const SieSpaceBackground(),
@@ -62,6 +65,7 @@ class LeaderboardScreen extends ConsumerWidget {
                   data: (entries) => _LeaderboardList(
                     entries: entries,
                     currentUserId: currentUserId,
+                    frames: frames,
                     onRefresh: () => ref.refresh(leaderboardProvider.future),
                   ),
                   loading: () => const Center(
@@ -294,13 +298,22 @@ class _CountdownPanel extends ConsumerWidget {
 class _LeaderboardList extends StatelessWidget {
   final List<LeaderboardEntry> entries;
   final String? currentUserId;
+  final List<CosmeticAsset> frames;
   final Future<void> Function() onRefresh;
 
   const _LeaderboardList({
     required this.entries,
     required this.currentUserId,
+    required this.frames,
     required this.onRefresh,
   });
+
+  // Every row occupies exactly this vertical extent:
+  //   GlassCard (38 px content + 24 px vertical padding = 62 px)
+  //   + uniform top margin (6 px) = 68 px.
+  // A declared constant lets ListView skip runtime height measurement
+  // for every item during scroll velocity calculations.
+  static const double _rowExtent = 68;
 
   @override
   Widget build(BuildContext context) {
@@ -311,12 +324,25 @@ class _LeaderboardList extends StatelessWidget {
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 96),
         itemCount: entries.length,
+        // Fixed per-item extent bypasses intrinsic-height measurement on
+        // every scroll frame — essential for shader-heavy card lists.
+        itemExtent: _rowExtent,
         itemBuilder: (context, index) {
           final entry = entries[index];
-          return _LeaderRow(
-            entry: entry,
-            isSelf: entry.userId == currentUserId,
-            isFirst: index == 0,
+          // Frame lookup done here (O(n) but n is tiny) rather than inside
+          // the row widget, so _LeaderRow can stay a StatelessWidget.
+          final frame = frames
+              .where((f) => f.id == entry.equippedFrameId)
+              .firstOrNull;
+          // RepaintBoundary promotes each glass row to its own raster cache
+          // layer. The GPU compositor translates cached textures during scroll
+          // instead of re-running the liquid-glass shader pipeline per frame.
+          return RepaintBoundary(
+            child: _LeaderRow(
+              entry: entry,
+              frame: frame,
+              isSelf: entry.userId == currentUserId,
+            ),
           );
         },
       ),
@@ -327,23 +353,19 @@ class _LeaderboardList extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Single Leaderboard Row
 // ─────────────────────────────────────────────────────────────────────────────
-class _LeaderRow extends ConsumerWidget {
+class _LeaderRow extends StatelessWidget {
   final LeaderboardEntry entry;
+  final CosmeticAsset? frame;
   final bool isSelf;
-  final bool isFirst;
 
   const _LeaderRow({
     required this.entry,
+    required this.frame,
     required this.isSelf,
-    required this.isFirst,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final frames = ref.watch(avatarFramesProvider).valueOrNull ?? [];
-    final frame  = frames
-        .where((f) => f.id == entry.equippedFrameId)
-        .firstOrNull;
+  Widget build(BuildContext context) {
 
     final isTopThree = entry.rank <= 3;
     final rankColor  = _rankColor(entry.rank);
@@ -365,7 +387,7 @@ class _LeaderRow extends ConsumerWidget {
     return GestureDetector(
       onTap: () => _openProfile(context, entry),
       child: Padding(
-        padding: EdgeInsets.only(top: isFirst ? 8 : 6),
+        padding: const EdgeInsets.only(top: 6),
         child: GlassCard(
           padding: EdgeInsets.zero,
           shape: LiquidRoundedSuperellipse(borderRadius: 16),
@@ -409,20 +431,26 @@ class _LeaderRow extends ConsumerWidget {
                 child: Row(
                   children: [
                     // ── Rank indicator ───────────────────────────
+                    // height: 38 matches the avatar size so every row
+                    // (top-3 badge or plain number) has identical height,
+                    // enabling the ListView's itemExtent optimisation.
                     SizedBox(
                       width: 36,
-                      child: isTopThree
-                          ? _RankBadge(rank: entry.rank, color: rankColor)
-                          : Text(
-                              '${entry.rank}',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: SieTheme.textSecondary,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.5,
+                      height: 38,
+                      child: Center(
+                        child: isTopThree
+                            ? _RankBadge(rank: entry.rank, color: rankColor)
+                            : Text(
+                                '${entry.rank}',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: SieTheme.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.5,
+                                ),
                               ),
-                            ),
+                      ),
                     ),
                     const SizedBox(width: 10),
 
