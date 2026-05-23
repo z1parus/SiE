@@ -18,8 +18,6 @@ const _kPurple = Color(0xFF7000FF);
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key, this.asTab = false});
 
-  /// When true the screen is mounted inside the navigation shell — skip the
-  /// own GlassPage wrapper (shell provides it) and hide the back button.
   final bool asTab;
 
   @override
@@ -114,6 +112,8 @@ class _TopBar extends StatelessWidget {
   }
 }
 
+// Glass circle buttons in the top bar don't scroll — useOwnLayer:true is fine
+// here because they sit above the SingleChildScrollView, not inside it.
 class _GlassCircleButton extends StatelessWidget {
   const _GlassCircleButton({required this.icon, required this.onTap});
   final IconData icon;
@@ -153,7 +153,7 @@ class _GlassCircleButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Scrollable profile body
+// Scrollable profile body — resolves all equipped cosmetics here
 // ─────────────────────────────────────────────────────────────────────────────
 class _ProfileContent extends ConsumerWidget {
   const _ProfileContent({required this.profile});
@@ -161,107 +161,159 @@ class _ProfileContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final frames = ref.watch(avatarFramesProvider).valueOrNull ?? [];
-    final frame = profile?.equippedFrameId != null
-        ? frames
-            .where((f) => f.id == profile!.equippedFrameId)
-            .firstOrNull
-        : null;
-    final frameDecoration = frame?.buildFrameDecoration() ??
+    // Resolve all three cosmetic categories in one place so a single rebuild
+    // handles frame, background, and stat-style changes simultaneously.
+    final frames      = ref.watch(avatarFramesProvider).valueOrNull ?? [];
+    final backgrounds = ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
+    final styles      = ref.watch(statStylesProvider).valueOrNull ?? [];
+
+    final equipped = EquippedAssets.resolve(
+      frames:       frames,
+      backgrounds:  backgrounds,
+      styles:       styles,
+      frameId:      profile?.equippedFrameId,
+      backgroundId: profile?.equippedBackgroundId,
+      styleId:      profile?.equippedStatStyleId,
+    );
+
+    final frameDecoration = equipped.frame?.buildFrameDecoration() ??
         BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(
-            color: _kCyan.withValues(alpha: 0.45),
-            width: 1.5,
-          ),
+          border: Border.all(color: _kCyan.withValues(alpha: 0.45), width: 1.5),
           color: SieTheme.surface,
         );
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _HeaderGlassCard(
-            profile: profile,
-            frameDecoration: frameDecoration,
-          ),
-          const SizedBox(height: 20),
-          _NavButton(
-            icon: Icons.analytics_outlined,
-            title: 'PROGRESS HUB',
-            subtitle: 'Activity matrix, XP growth & focus stats',
-            iconColor: _kCyan,
-            onTap: () => Navigator.of(context).push(PageRouteBuilder(
-              pageBuilder: (_, _, _) => const ProgressAnalyticsScreen(),
-              transitionsBuilder: (_, a, _, c) =>
-                  FadeTransition(opacity: a, child: c),
-              transitionDuration: const Duration(milliseconds: 400),
-            )),
-          ),
-          const SizedBox(height: 10),
-          _NavButton(
-            icon: Icons.menu_book_rounded,
-            title: 'БАЗА ЗНАНИЙ',
-            subtitle: 'Физиология, психология, XP-таблица и этика SiE',
-            iconColor: _kCyan,
-            onTap: () => Navigator.of(context).push(PageRouteBuilder(
-              pageBuilder: (_, _, _) => const KnowledgeBaseScreen(),
-              transitionsBuilder: (_, a, _, c) =>
-                  FadeTransition(opacity: a, child: c),
-              transitionDuration: const Duration(milliseconds: 400),
-            )),
-          ),
-          const SizedBox(height: 10),
-          if (profile != null)
-            _NavButton(
-              icon: Icons.style_outlined,
-              title: 'НАСТРОЙКА ОБЛИКА',
-              subtitle: 'Рамки аватара, фоны профиля и стили статистики',
-              iconColor: _kCyan,
-              onTap: () => Navigator.of(context).push(PageRouteBuilder(
-                pageBuilder: (_, _, _) =>
-                    CustomizationScreen(profile: profile!),
-                transitionsBuilder: (_, a, _, c) =>
-                    FadeTransition(opacity: a, child: c),
-                transitionDuration: const Duration(milliseconds: 400),
-              )),
-            ),
-          const SizedBox(height: 10),
-          _NavButton(
-            icon: Icons.storefront_outlined,
-            title: 'ИНТЕРФЕЙС-ХАБ',
-            subtitle: 'Рамки, фоны и стили за Design Points',
-            iconColor: SieTheme.dp,
-            onTap: () => Navigator.of(context).push(PageRouteBuilder(
-              pageBuilder: (_, _, _) => const InterfaceHubScreen(),
-              transitionsBuilder: (_, a, _, c) =>
-                  FadeTransition(opacity: a, child: c),
-              transitionDuration: const Duration(milliseconds: 400),
-            )),
-          ),
-          const SizedBox(height: 28),
-          const SectionHeader(title: 'MEDALS VAULT'),
-          const SizedBox(height: 4),
-          Text(
-            'EARNED COMMENDATIONS & COMBAT DECORATIONS',
-            style: TextStyle(
-              color: SieTheme.textSecondary.withValues(alpha: 0.55),
-              fontSize: 9,
-              letterSpacing: 1.5,
+    final xp    = profile?.totalXp ?? 0;
+    final level = (xp ~/ 1000) + 1;
+
+    return Stack(
+      children: [
+        // ── Equipped profile-background gradient overlay ──────
+        // Rendered at reduced opacity so it tints the shared space background
+        // without completely obscuring the star field.
+        if (equipped.background?.backgroundGradient != null)
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0.28,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: equipped.background!.backgroundGradient,
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 16),
-          const _MedalsVault(),
-          const SizedBox(height: 96),
-        ],
-      ),
+
+        // ── Scrollable content ────────────────────────────────
+        // RepaintBoundary separates the scroll layer from the background
+        // overlay layer — the star field AnimationController won't trigger
+        // repaints of the scroll content (and vice-versa), eliminating the
+        // scroll-induced jank that made the stars jump.
+        RepaintBoundary(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // useOwnLayer:false — relies on the shell's GlassPage
+                // GlassBackdropScope. No per-scroll backdrop capture, so
+                // the blur never flickers or disappears during scroll.
+                _HeaderGlassCard(
+                  profile: profile,
+                  frameDecoration: frameDecoration,
+                ),
+
+                // Stat-style card — visible only when a stat style is equipped.
+                if (equipped.statStyle != null) ...[
+                  const SizedBox(height: 12),
+                  _StatStyleCard(
+                    statStyle: equipped.statStyle!,
+                    level: level,
+                    xp: xp,
+                  ),
+                ],
+
+                const SizedBox(height: 20),
+
+                // Nav buttons use plain Container+GestureDetector — no glass
+                // shaders in a scroll view (avoids backdrop capture racing).
+                _NavButton(
+                  icon: Icons.analytics_outlined,
+                  title: 'PROGRESS HUB',
+                  subtitle: 'Activity matrix, XP growth & focus stats',
+                  iconColor: _kCyan,
+                  onTap: () => Navigator.of(context).push(PageRouteBuilder(
+                    pageBuilder: (_, _, _) => const ProgressAnalyticsScreen(),
+                    transitionsBuilder: (_, a, _, c) =>
+                        FadeTransition(opacity: a, child: c),
+                    transitionDuration: const Duration(milliseconds: 400),
+                  )),
+                ),
+                const SizedBox(height: 10),
+                _NavButton(
+                  icon: Icons.menu_book_rounded,
+                  title: 'БАЗА ЗНАНИЙ',
+                  subtitle: 'Физиология, психология, XP-таблица и этика SiE',
+                  iconColor: _kCyan,
+                  onTap: () => Navigator.of(context).push(PageRouteBuilder(
+                    pageBuilder: (_, _, _) => const KnowledgeBaseScreen(),
+                    transitionsBuilder: (_, a, _, c) =>
+                        FadeTransition(opacity: a, child: c),
+                    transitionDuration: const Duration(milliseconds: 400),
+                  )),
+                ),
+                const SizedBox(height: 10),
+                if (profile != null)
+                  _NavButton(
+                    icon: Icons.style_outlined,
+                    title: 'НАСТРОЙКА ОБЛИКА',
+                    subtitle: 'Рамки аватара, фоны профиля и стили статистики',
+                    iconColor: _kCyan,
+                    onTap: () => Navigator.of(context).push(PageRouteBuilder(
+                      pageBuilder: (_, _, _) =>
+                          CustomizationScreen(profile: profile!),
+                      transitionsBuilder: (_, a, _, c) =>
+                          FadeTransition(opacity: a, child: c),
+                      transitionDuration: const Duration(milliseconds: 400),
+                    )),
+                  ),
+                const SizedBox(height: 10),
+                _NavButton(
+                  icon: Icons.storefront_outlined,
+                  title: 'ИНТЕРФЕЙС-ХАБ',
+                  subtitle: 'Рамки, фоны и стили за Design Points',
+                  iconColor: SieTheme.dp,
+                  onTap: () => Navigator.of(context).push(PageRouteBuilder(
+                    pageBuilder: (_, _, _) => const InterfaceHubScreen(),
+                    transitionsBuilder: (_, a, _, c) =>
+                        FadeTransition(opacity: a, child: c),
+                    transitionDuration: const Duration(milliseconds: 400),
+                  )),
+                ),
+                const SizedBox(height: 28),
+                const SectionHeader(title: 'MEDALS VAULT'),
+                const SizedBox(height: 4),
+                Text(
+                  'EARNED COMMENDATIONS & COMBAT DECORATIONS',
+                  style: TextStyle(
+                    color: SieTheme.textSecondary.withValues(alpha: 0.55),
+                    fontSize: 9,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const _MedalsVault(),
+                const SizedBox(height: 96),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Header Glass Card — avatar + chips + XP bar
+// Header Glass Card — useOwnLayer:false eliminates scroll-induced blur flicker
 // ─────────────────────────────────────────────────────────────────────────────
 class _HeaderGlassCard extends StatelessWidget {
   const _HeaderGlassCard({
@@ -291,7 +343,10 @@ class _HeaderGlassCard extends StatelessWidget {
     return GlassCard(
       padding: const EdgeInsets.all(20),
       shape: LiquidRoundedSuperellipse(borderRadius: 24),
-      useOwnLayer: true,
+      // useOwnLayer:false — relies on the parent GlassBackdropScope
+      // (provided by the shell's GlassPage). This avoids per-frame backdrop
+      // capture that races the ScrollView and causes blur to flash on/off.
+      useOwnLayer: false,
       quality: GlassQuality.standard,
       clipBehavior: Clip.antiAlias,
       settings: LiquidGlassSettings(
@@ -310,7 +365,6 @@ class _HeaderGlassCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Avatar + name row ─────────────────────────────
           Row(
             children: [
               Container(
@@ -335,16 +389,18 @@ class _HeaderGlassCard extends StatelessWidget {
                   children: [
                     Text(
                       username,
-                      style:
-                          Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                fontSize: 18,
-                                shadows: [
-                                  Shadow(
-                                    color: _kCyan.withValues(alpha: 0.35),
-                                    blurRadius: 10,
-                                  ),
-                                ],
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineMedium
+                          ?.copyWith(
+                            fontSize: 18,
+                            shadows: [
+                              Shadow(
+                                color: _kCyan.withValues(alpha: 0.35),
+                                blurRadius: 10,
                               ),
+                            ],
+                          ),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -369,8 +425,6 @@ class _HeaderGlassCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-
-          // ── XP progress bar ───────────────────────────────
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -452,7 +506,9 @@ class _AvatarLetter extends StatelessWidget {
           color: _kCyan,
           fontSize: 28,
           fontWeight: FontWeight.w200,
-          shadows: [Shadow(color: _kCyan.withValues(alpha: 0.6), blurRadius: 12)],
+          shadows: [
+            Shadow(color: _kCyan.withValues(alpha: 0.6), blurRadius: 12),
+          ],
         ),
       ),
     );
@@ -502,7 +558,57 @@ class _Chip extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Nav Button — SieGlassCard row with icon + title + subtitle + chevron
+// Equipped stat-style card — renders the XP summary with the user's chosen
+// cosmetic border/glow/accent so the customization is visibly reflected.
+// ─────────────────────────────────────────────────────────────────────────────
+class _StatStyleCard extends StatelessWidget {
+  const _StatStyleCard({
+    required this.statStyle,
+    required this.level,
+    required this.xp,
+  });
+  final CosmeticAsset statStyle;
+  final int level;
+  final int xp;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent   = statStyle.accentColor;
+    final glowCol  = statStyle.styleGlowColor;
+    final glowRad  = statStyle.styleGlowRadius;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+      decoration: statStyle.buildStatCardDecoration(),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.bolt, color: accent, size: 14),
+          const SizedBox(width: 8),
+          Text(
+            'LEVEL $level  ·  $xp XP',
+            style: TextStyle(
+              color: accent,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
+              shadows: glowCol != null && glowRad > 0
+                  ? [Shadow(color: glowCol, blurRadius: glowRad)]
+                  : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Nav Button — plain Container instead of SieGlassCard.
+// GlassCard(useOwnLayer:true) inside a SingleChildScrollView causes the
+// backdrop filter to race the scroll offset, making the blur flash on/off.
+// A translucent Container has zero GPU shader overhead and never flickers.
 // ─────────────────────────────────────────────────────────────────────────────
 class _NavButton extends StatelessWidget {
   const _NavButton({
@@ -520,48 +626,58 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SieGlassCard(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+    return GestureDetector(
       onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.08),
+            width: 0.8,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: iconColor, size: 16),
             ),
-            child: Icon(icon, color: iconColor, size: 16),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: iconColor == SieTheme.dp ? SieTheme.dp : null,
-                      ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontSize: 11,
-                        color: SieTheme.textSecondary,
-                      ),
-                ),
-              ],
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: iconColor == SieTheme.dp ? SieTheme.dp : null,
+                        ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontSize: 11,
+                          color: SieTheme.textSecondary,
+                        ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          Icon(
-            Icons.chevron_right,
-            color: iconColor.withValues(alpha: 0.5),
-            size: 16,
-          ),
-        ],
+            Icon(
+              Icons.chevron_right,
+              color: iconColor.withValues(alpha: 0.5),
+              size: 16,
+            ),
+          ],
+        ),
       ),
     );
   }

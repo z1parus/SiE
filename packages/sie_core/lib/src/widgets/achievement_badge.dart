@@ -1,7 +1,6 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import '../models/achievement.dart';
 import '../theme/sie_theme.dart';
@@ -42,14 +41,26 @@ class AchievementBadge extends StatelessWidget {
         final name     = userAchievement.achievement.name;
 
         return userAchievement.earned
-            ? _UnlockedBadge(slug: slug, name: name, iconSize: iconSize, fontSize: fontSize)
-            : _LockedBadge(slug: slug, name: name, iconSize: iconSize, fontSize: fontSize);
+            ? _UnlockedBadge(
+                slug: slug,
+                name: name,
+                iconSize: iconSize,
+                fontSize: fontSize,
+              )
+            : _LockedBadge(
+                slug: slug,
+                name: name,
+                iconSize: iconSize,
+                fontSize: fontSize,
+              );
       },
     );
   }
 }
 
-// ── Unlocked — amber-tinted glass card with gold glow halo ────────────────────
+// ── Unlocked — gold Container. Using GlassCard(useOwnLayer:true) inside a
+// GridView inside a SingleChildScrollView caused N backdrop-filter races per
+// scroll frame — replaced with a plain Container that has zero GPU overhead.
 class _UnlockedBadge extends StatelessWidget {
   const _UnlockedBadge({
     required this.slug,
@@ -64,78 +75,58 @@ class _UnlockedBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        // Gold diffusion halo behind the card
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: _kGold.withValues(alpha: 0.30),
-                blurRadius: 18,
-                spreadRadius: 2,
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: _kAmber.withValues(alpha: 0.09),
+        border: Border.all(
+          color: _kGold.withValues(alpha: 0.40),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: _kGold.withValues(alpha: 0.20),
+            blurRadius: 14,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            _iconForSlug(slug),
+            color: _kGold,
+            size: iconSize,
+            shadows: [
+              Shadow(
+                color: _kGold.withValues(alpha: 0.70),
+                blurRadius: 10,
               ),
             ],
           ),
-        ),
-        GlassCard(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-          shape: LiquidRoundedSuperellipse(borderRadius: 16),
-          useOwnLayer: true,
-          quality: GlassQuality.standard,
-          clipBehavior: Clip.antiAlias,
-          settings: LiquidGlassSettings(
-            blur: 2.5,
-            thickness: 22,
-            refractiveIndex: 1.45,
-            glassColor: _kAmber.withValues(alpha: 0.11),
-            lightAngle: GlassDefaults.lightAngle,
-            lightIntensity: 0.88,
-            glowIntensity: 1.0,
-            saturation: 1.6,
-            specularSharpness: GlassSpecularSharpness.sharp,
-            ambientStrength: 0.10,
-            chromaticAberration: 0.012,
+          const SizedBox(height: 4),
+          Text(
+            name.toUpperCase(),
+            style: TextStyle(
+              color: _kGold,
+              fontSize: fontSize,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+              height: 1.2,
+            ),
+            maxLines: 2,
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                _iconForSlug(slug),
-                color: _kGold,
-                size: iconSize,
-                shadows: [
-                  Shadow(
-                    color: _kGold.withValues(alpha: 0.75),
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                name.toUpperCase(),
-                style: TextStyle(
-                  color: _kGold,
-                  fontSize: fontSize,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.3,
-                  height: 1.2,
-                ),
-                maxLines: 2,
-                textAlign: TextAlign.center,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-// ── Locked — desaturated frost container at 20 % opacity ─────────────────────
+// ── Locked — frost container at 20 % opacity with desaturation filter ─────────
 class _LockedBadge extends StatelessWidget {
   const _LockedBadge({
     required this.slug,
