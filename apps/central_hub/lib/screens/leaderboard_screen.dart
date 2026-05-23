@@ -337,12 +337,10 @@ class _LeaderboardList extends StatelessWidget {
           // RepaintBoundary promotes each glass row to its own raster cache
           // layer. The GPU compositor translates cached textures during scroll
           // instead of re-running the liquid-glass shader pipeline per frame.
-          return RepaintBoundary(
-            child: _LeaderRow(
-              entry: entry,
-              frame: frame,
-              isSelf: entry.userId == currentUserId,
-            ),
+          return _LeaderRow(
+            entry: entry,
+            frame: frame,
+            isSelf: entry.userId == currentUserId,
           );
         },
       ),
@@ -388,22 +386,31 @@ class _LeaderRow extends StatelessWidget {
       onTap: () => _openProfile(context, entry),
       child: Padding(
         padding: const EdgeInsets.only(top: 6),
-        child: GlassCard(
-          padding: EdgeInsets.zero,
-          shape: LiquidRoundedSuperellipse(borderRadius: 16),
-          useOwnLayer: true,
-          quality: GlassQuality.standard,
-          clipBehavior: Clip.antiAlias,
-          settings: _glassSettings(
-            blur: 3.0,
-            // Top 3 and self get a slightly boosted specular rim.
-            glowIntensity: (isTopThree || isSelf) ? 0.92 : 0.82,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                (isSelf ? _kCyan : isTopThree ? rankColor : Colors.white)
+                    .withValues(alpha: isTopThree || isSelf ? 0.09 : 0.05),
+                Colors.white.withValues(alpha: 0.02),
+              ],
+            ),
+            border: Border.all(
+              color: isSelf
+                  ? _kCyan.withValues(alpha: 0.35)
+                  : isTopThree
+                      ? rankColor.withValues(alpha: 0.30)
+                      : Colors.white.withValues(alpha: 0.09),
+              width: 0.8,
+            ),
           ),
+          clipBehavior: Clip.antiAlias,
           child: Stack(
             children: [
               // ── Rank / self inner glow bloom ──────────────────
-              // Rendered inside the GlassCard child so the shader
-              // physically absorbs the colour into the refraction pass.
               if (bloomColor != null)
                 Positioned.fill(
                   child: DecoratedBox(
