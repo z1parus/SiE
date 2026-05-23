@@ -654,38 +654,23 @@ class _BranchCarouselCard extends ConsumerWidget {
             Expanded(
               flex: 3,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          branch.name.toUpperCase(),
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontSize: 14,
-                            letterSpacing: 1.8,
-                            shadows: const [
-                              Shadow(color: Color(0x99000000), blurRadius: 6),
-                            ],
-                          ),
-                        ),
-                        if (branch.description != null) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            branch.description!,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              shadows: const [
-                                Shadow(color: Color(0x80000000), blurRadius: 4),
-                              ],
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                    Text(
+                      branch.name.toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontSize: 14,
+                        letterSpacing: 1.8,
+                        height: 1.1,
+                        shadows: const [
+                          Shadow(color: Color(0x99000000), blurRadius: 6),
                         ],
-                      ],
+                      ),
                     ),
                     Row(
                       children: [
@@ -712,6 +697,7 @@ class _BranchCarouselCard extends ConsumerWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.2,
+                            height: 1.1,
                             shadows: [
                               Shadow(color: _kCyan, blurRadius: 8),
                             ],

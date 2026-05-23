@@ -2,8 +2,34 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 
+// ── Design tokens ──────────────────────────────────────────────
+const _kCyan = Color(0xFF00E5FF);
+
+// ── Glass settings factory (mirrors leaderboard / ops screen) ──
+LiquidGlassSettings _glassSettings({
+  double blur = 3.0,
+  double glowIntensity = 0.88,
+}) =>
+    LiquidGlassSettings(
+      blur: blur,
+      thickness: 24,
+      refractiveIndex: 1.45,
+      glassColor: const Color(0x0A0A0E1A),
+      lightAngle: GlassDefaults.lightAngle,
+      lightIntensity: 0.72,
+      glowIntensity: glowIntensity,
+      saturation: 1.4,
+      specularSharpness: GlassSpecularSharpness.sharp,
+      ambientStrength: 0.08,
+      chromaticAberration: 0.015,
+    );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HabitTrackerScreen
+// ─────────────────────────────────────────────────────────────────────────────
 class HabitTrackerScreen extends ConsumerStatefulWidget {
   const HabitTrackerScreen({super.key});
 
@@ -22,139 +48,120 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
   @override
   Widget build(BuildContext context) {
     final habitsAsync = ref.watch(habitsProvider);
-    final today = _fmt(DateTime.now());
-    final profile = ref.watch(userProfileProvider).valueOrNull;
+    final today      = _fmt(DateTime.now());
+    final profile    = ref.watch(userProfileProvider).valueOrNull;
     final showOnboarding = _showOnboardingManual ||
         (!_onboardingDismissed &&
             profile != null &&
             !profile.hasSeenOnboardingHabits);
 
-    return Stack(
-      children: [
-        Scaffold(
-      backgroundColor: SieTheme.background,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _TopBar(
-              onAdd: () => _showHabitDialog(null),
-              onInfo: () => setState(() => _showOnboardingManual = true),
-            ),
-            Expanded(
-              child: habitsAsync.when(
-                loading: () => const Center(
-                  child: CircularProgressIndicator(
-                    color: SieTheme.accent,
-                    strokeWidth: 1.5,
+    final body = SafeArea(
+      bottom: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _CyberTopBar(
+            onAdd:  () => _showHabitDialog(null),
+            onInfo: () => setState(() => _showOnboardingManual = true),
+          ),
+          Expanded(
+            child: habitsAsync.when(
+              loading: () => const Center(
+                child: CircularProgressIndicator(
+                  color: SieTheme.accent,
+                  strokeWidth: 1.5,
+                ),
+              ),
+              error: (e, _) => Center(
+                child: Text(
+                  'ERROR: $e',
+                  style: const TextStyle(
+                    color: Colors.redAccent,
+                    fontSize: 12,
                   ),
                 ),
-                error: (e, _) => Center(
-                  child: Text(
-                    'ERROR: $e',
-                    style: const TextStyle(
-                      color: Colors.redAccent,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-                data: (state) {
-                  if (state.habits.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            'NO PROTOCOLS ACTIVE',
-                            style: TextStyle(
-                              color: SieTheme.textSecondary,
-                              fontSize: 12,
-                              letterSpacing: 2,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'TAP + TO INITIALISE A HABIT',
-                            style: TextStyle(
-                              color: SieTheme.textSecondary
-                                  .withValues(alpha: 0.5),
-                              fontSize: 10,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                          const SizedBox(height: 32),
-                          _AddButton(
+              ),
+              data: (state) {
+                if (state.habits.isEmpty) {
+                  return _EmptyState(onAdd: () => _showHabitDialog(null));
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 80),
+                  itemCount: state.habits.length + 1,
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  itemBuilder: (context, i) {
+                    if (i == state.habits.length) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: _AddButton(
                             onTap: () => _showHabitDialog(null),
                           ),
-                        ],
-                      ),
-                    );
-                  }
-                  return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
-                    itemCount: state.habits.length + 1,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (context, i) {
-                      if (i == state.habits.length) {
-                        return Center(
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: _AddButton(
-                              onTap: () => _showHabitDialog(null),
-                            ),
-                          ),
-                        );
-                      }
-                      final habit = state.habits[i];
-                      final logDates = state.logDates[habit.id] ?? {};
-                      return _SwipeableHabitCard(
-                        key: ValueKey(habit.id),
-                        habit: habit,
-                        completedToday: logDates.contains(today),
-                        streak: state.streaks[habit.id] ?? 0,
-                        allLogDates: logDates,
-                        onToggle: () => ref
-                            .read(habitsProvider.notifier)
-                            .toggleHabit(habit.id, DateTime.now()),
-                        onLongPress: () => _showHabitOptions(habit),
-                        onDelete: () => ref
-                            .read(habitsProvider.notifier)
-                            .deleteHabit(habit.id),
-                        onTogglePin: () => ref
-                            .read(habitsProvider.notifier)
-                            .togglePin(habit.id),
+                        ),
                       );
-                    },
-                  );
+                    }
+                    final habit    = state.habits[i];
+                    final logDates = state.logDates[habit.id] ?? {};
+                    return _SwipeableHabitCard(
+                      key: ValueKey(habit.id),
+                      habit: habit,
+                      completedToday: logDates.contains(today),
+                      streak: state.streaks[habit.id] ?? 0,
+                      allLogDates: logDates,
+                      onToggle: () => ref
+                          .read(habitsProvider.notifier)
+                          .toggleHabit(habit.id, DateTime.now()),
+                      onLongPress: () => _showHabitOptions(habit),
+                      onDelete: () => ref
+                          .read(habitsProvider.notifier)
+                          .deleteHabit(habit.id),
+                      onTogglePin: () => ref
+                          .read(habitsProvider.notifier)
+                          .togglePin(habit.id),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return GlassPage(
+      background: const SieSpaceBackground(),
+      statusBarStyle: GlassStatusBarStyle.light,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
+            body,
+            Positioned.fill(
+              child: OnboardingOverlay(
+                visible: showOnboarding,
+                moduleLabel: 'ПРИВЫЧКИ',
+                description: 'Архив нейронных связей.',
+                benefit:
+                    'Автоматизация успеха через микро-действия и систематическую '
+                    'дисциплину. Формирование нейронных паттернов, не требующих '
+                    'волевых ресурсов.',
+                onAccept: () {
+                  if (_showOnboardingManual) {
+                    setState(() => _showOnboardingManual = false);
+                  } else {
+                    setState(() => _onboardingDismissed = true);
+                    markOnboardingSeen('habits');
+                  }
                 },
               ),
             ),
           ],
         ),
       ),
-    ),
-        Positioned.fill(
-          child: OnboardingOverlay(
-            visible: showOnboarding,
-            moduleLabel: 'ПРИВЫЧКИ',
-            description: 'Архив нейронных связей.',
-            benefit:
-                'Автоматизация успеха через микро-действия и систематическую '
-                'дисциплину. Формирование нейронных паттернов, не требующих '
-                'волевых ресурсов.',
-            onAccept: () {
-              if (_showOnboardingManual) {
-                setState(() => _showOnboardingManual = false);
-              } else {
-                setState(() => _onboardingDismissed = true);
-                markOnboardingSeen('habits');
-              }
-            },
-          ),
-        ),
-      ],
     );
   }
+
+  // ── Dialogs (logic unchanged) ─────────────────────────────────
 
   void _showHabitDialog(Habit? existing) {
     showDialog<void>(
@@ -178,10 +185,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                     duration: const Duration(seconds: 3),
                     content: Row(
                       children: [
-                        const Text(
-                          '🌱',
-                          style: TextStyle(fontSize: 18),
-                        ),
+                        const Text('🌱', style: TextStyle(fontSize: 18)),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
@@ -377,8 +381,131 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
   }
 }
 
-// ── Swipeable Card ────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Cyberpunk Top Bar
+// ─────────────────────────────────────────────────────────────────────────────
+class _CyberTopBar extends StatelessWidget {
+  const _CyberTopBar({required this.onAdd, required this.onInfo});
+  final VoidCallback onAdd;
+  final VoidCallback onInfo;
 
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 12, 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _GlassIconBtn(
+            icon: Icons.arrow_back_ios_new,
+            onTap: () => Navigator.of(context).pop(),
+            size: 15,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      const TextSpan(
+                        text: 'HABIT ',
+                        style: TextStyle(
+                          color: _kCyan,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
+                          shadows: [
+                            Shadow(color: _kCyan, blurRadius: 8),
+                            Shadow(color: _kCyan, blurRadius: 22),
+                          ],
+                        ),
+                      ),
+                      TextSpan(
+                        text: 'MATRIX',
+                        style:
+                            Theme.of(context).textTheme.headlineLarge?.copyWith(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 3.0,
+                                ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'НЕЙРОННАЯ МАТРИЦА · АРХИВ ДИСЦИПЛИНЫ',
+                  style: TextStyle(
+                    color: SieTheme.textSecondary,
+                    fontSize: 10,
+                    letterSpacing: 1.8,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _GlassIconBtn(
+            icon: Icons.help_outline,
+            onTap: onInfo,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          _GlassIconBtn(
+            icon: Icons.add,
+            onTap: onAdd,
+            color: _kCyan,
+            size: 20,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Small glass circle button — matches leaderboard header buttons.
+class _GlassIconBtn extends StatelessWidget {
+  const _GlassIconBtn({
+    required this.icon,
+    required this.onTap,
+    this.color,
+    this.size = 16,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color? color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: GlassCard(
+        width: 36,
+        height: 36,
+        padding: EdgeInsets.zero,
+        shape: LiquidRoundedSuperellipse(borderRadius: 18),
+        useOwnLayer: true,
+        quality: GlassQuality.standard,
+        clipBehavior: Clip.antiAlias,
+        settings: _glassSettings(blur: 2.0, glowIntensity: 0.85),
+        child: Center(
+          child: Icon(
+            icon,
+            color: color ?? SieTheme.textSecondary,
+            size: size,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Swipeable Habit Card (swipe logic unchanged — only inner widget replaced)
+// ─────────────────────────────────────────────────────────────────────────────
 class _SwipeableHabitCard extends StatefulWidget {
   final Habit habit;
   final bool completedToday;
@@ -412,7 +539,6 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
   double _dragOffset = 0.0;
   bool _isSnapping = false;
 
-  // Action fires when swipe reaches this fraction of screen width.
   static const _triggerFraction = 0.38;
 
   double get _triggerDist =>
@@ -448,16 +574,15 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
 
     if (_dragOffset.abs() >= trigger) {
       if (_dragOffset < 0) {
-        // Delete: fly card off-screen, then call onDelete.
         _isSnapping = true;
-        _snapAnim = Tween<double>(begin: _dragOffset, end: -_screenWidth * 1.2)
-            .animate(
-                CurvedAnimation(parent: _snapCtrl, curve: Curves.easeIn));
+        _snapAnim =
+            Tween<double>(begin: _dragOffset, end: -_screenWidth * 1.2)
+                .animate(CurvedAnimation(
+                    parent: _snapCtrl, curve: Curves.easeIn));
         await _snapCtrl.forward(from: 0);
         if (!mounted) return;
         await widget.onDelete();
       } else {
-        // Pin: trigger action then snap back with elastic bounce.
         widget.onTogglePin();
         _isSnapping = true;
         _snapAnim = Tween<double>(begin: _dragOffset, end: 0).animate(
@@ -467,7 +592,6 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
         _snapCtrl.addStatusListener(_onSnapComplete);
       }
     } else {
-      // Below threshold: snap back.
       _isSnapping = true;
       _snapAnim = Tween<double>(begin: _dragOffset, end: 0).animate(
           CurvedAnimation(parent: _snapCtrl, curve: Curves.easeOut));
@@ -500,14 +624,13 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
           final offset = (_isSnapping && _snapAnim != null)
               ? _snapAnim!.value
               : _dragOffset;
-          final trigger = _screenWidth * _triggerFraction;
-          final progress = (offset.abs() / trigger).clamp(0.0, 1.0);
-          final isLeft = offset < 0;
-          final swiping = progress > 0.01;
+          final trigger   = _screenWidth * _triggerFraction;
+          final progress  = (offset.abs() / trigger).clamp(0.0, 1.0);
+          final isLeft    = offset < 0;
+          final swiping   = progress > 0.01;
 
           return Stack(
             children: [
-              // Pin background — revealed by rightward swipe.
               if (swiping && !isLeft)
                 Positioned.fill(
                   child: _SwipePinBg(
@@ -515,25 +638,21 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
                     isPinned: widget.habit.isPinned,
                   ),
                 ),
-              // Delete background — revealed by leftward swipe.
               if (swiping && isLeft)
                 Positioned.fill(
                   child: _SwipeDeleteBg(progress: progress),
                 ),
-              // Card — slides over the background.
               Transform.translate(
                 offset: Offset(offset, 0),
                 child: Transform.scale(
                   scale: 1.0 - 0.02 * progress,
-                  child: HabitCard(
+                  child: _HabitMatrixCard(
                     habit: widget.habit,
                     completedToday: widget.completedToday,
                     streak: widget.streak,
                     allLogDates: widget.allLogDates,
                     onToggle: widget.onToggle,
                     onLongPress: widget.onLongPress,
-                    swipeProgress: progress,
-                    swipeIsLeft: swiping ? isLeft : null,
                   ),
                 ),
               ),
@@ -545,12 +664,12 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
   }
 }
 
-// ── Swipe Backgrounds ─────────────────────────────────────────
-
+// ─────────────────────────────────────────────────────────────────────────────
+// Swipe Backgrounds (unchanged)
+// ─────────────────────────────────────────────────────────────────────────────
 class _SwipePinBg extends StatelessWidget {
   final double progress;
   final bool isPinned;
-
   const _SwipePinBg({required this.progress, required this.isPinned});
 
   @override
@@ -592,7 +711,6 @@ class _SwipePinBg extends StatelessWidget {
 
 class _SwipeDeleteBg extends StatelessWidget {
   final double progress;
-
   const _SwipeDeleteBg({required this.progress});
 
   @override
@@ -632,60 +750,400 @@ class _SwipeDeleteBg extends StatelessWidget {
   }
 }
 
-// ── Top Bar ───────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Habit Matrix Card  ──  the core visual unit
+// ─────────────────────────────────────────────────────────────────────────────
+class _HabitMatrixCard extends StatelessWidget {
+  final Habit habit;
+  final bool completedToday;
+  final int streak;
+  final Set<String> allLogDates;
+  final VoidCallback onToggle;
+  final VoidCallback? onLongPress;
 
-class _TopBar extends StatelessWidget {
-  final VoidCallback onAdd;
-  final VoidCallback onInfo;
-  const _TopBar({required this.onAdd, required this.onInfo});
+  const _HabitMatrixCard({
+    required this.habit,
+    required this.completedToday,
+    required this.streak,
+    required this.allLogDates,
+    required this.onToggle,
+    this.onLongPress,
+  });
+
+  static Color _hexToColor(String hex) {
+    final h = hex.replaceAll('#', '').padLeft(6, '0');
+    return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF00C8FF);
+  }
+
+  static String _fmtDate(DateTime dt) =>
+      '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-      child: Row(
+    final accentColor = _hexToColor(habit.color);
+    final now  = DateTime.now();
+
+    // Last 7 days ending today, oldest → newest.
+    final days = List.generate(7, (i) => now.subtract(Duration(days: 6 - i)));
+    final logsThisWeek =
+        days.where((d) => allLogDates.contains(_fmtDate(d))).length;
+
+    return SieGlassCard(
+      onTap: onToggle,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: GestureDetector(
+        onLongPress: onLongPress,
+        behavior: HitTestBehavior.translucent,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Header: dot + title + pin indicator + streak badge ─
+            Row(
+              children: [
+                // Accent energy dot
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: accentColor,
+                    boxShadow: [
+                      BoxShadow(
+                        color: accentColor.withValues(alpha: 0.85),
+                        blurRadius: 7,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    habit.title.toUpperCase(),
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: SieTheme.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.5,
+                      height: 1.1,
+                    ),
+                  ),
+                ),
+                if (habit.isPinned) ...[
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.push_pin,
+                    color: SieTheme.textSecondary.withValues(alpha: 0.45),
+                    size: 11,
+                  ),
+                ],
+                if (streak > 0) ...[
+                  const SizedBox(width: 8),
+                  _StreakBadge(streak: streak, color: accentColor),
+                ],
+              ],
+            ),
+
+            // ── Optional description ───────────────────────────────
+            if (habit.description != null &&
+                habit.description!.isNotEmpty) ...[
+              const SizedBox(height: 5),
+              Padding(
+                padding: const EdgeInsets.only(left: 17),
+                child: Text(
+                  habit.description!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: SieTheme.textSecondary.withValues(alpha: 0.7),
+                    fontSize: 10.5,
+                    letterSpacing: 0.3,
+                    height: 1.2,
+                  ),
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 14),
+
+            // ── 7-day sync header ─────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '7-DAY SYNC',
+                  style: TextStyle(
+                    color: SieTheme.textSecondary.withValues(alpha: 0.5),
+                    fontSize: 9,
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  '$logsThisWeek / 7',
+                  style: TextStyle(
+                    color: accentColor.withValues(alpha: 0.85),
+                    fontSize: 9,
+                    letterSpacing: 1.5,
+                    fontWeight: FontWeight.w700,
+                    height: 1.1,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 8),
+
+            // ── Day node row ──────────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: days.asMap().entries.map((e) {
+                final isToday     = e.key == 6;
+                final isCompleted = allLogDates.contains(_fmtDate(e.value));
+                return _DayNode(
+                  date: e.value,
+                  isCompleted: isCompleted,
+                  isToday: isToday,
+                  accentColor: accentColor,
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Day Node — individual tracking cell
+// ─────────────────────────────────────────────────────────────────────────────
+class _DayNode extends StatelessWidget {
+  final DateTime date;
+  final bool isCompleted;
+  final bool isToday;
+  final Color accentColor;
+
+  const _DayNode({
+    required this.date,
+    required this.isCompleted,
+    required this.isToday,
+    required this.accentColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // ── The node circle ───────────────────────────────────────
+        Container(
+          width: 28,
+          height: 28,
+          decoration: isCompleted
+              ? BoxDecoration(
+                  shape: BoxShape.circle,
+                  // Solid energy node — fully charged
+                  gradient: RadialGradient(
+                    colors: [
+                      accentColor,
+                      accentColor.withValues(alpha: 0.75),
+                    ],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: accentColor.withValues(alpha: 0.80),
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                    ),
+                    BoxShadow(
+                      color: accentColor.withValues(alpha: 0.35),
+                      blurRadius: 18,
+                      spreadRadius: 0,
+                    ),
+                  ],
+                )
+              : BoxDecoration(
+                  shape: BoxShape.circle,
+                  // Hollow ring — space starlight shows through
+                  border: Border.all(
+                    color: isToday
+                        ? accentColor.withValues(alpha: 0.60)
+                        : Colors.white.withValues(alpha: 0.13),
+                    width: 1.5,
+                  ),
+                  color: isToday
+                      ? accentColor.withValues(alpha: 0.07)
+                      : Colors.transparent,
+                ),
+          child: isCompleted
+              ? null
+              : isToday
+                  // Inner pulse dot — "awaiting activation"
+                  ? Center(
+                      child: Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: accentColor.withValues(alpha: 0.80),
+                          boxShadow: [
+                            BoxShadow(
+                              color: accentColor.withValues(alpha: 0.50),
+                              blurRadius: 5,
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : null,
+        ),
+
+        const SizedBox(height: 5),
+
+        // ── Day-of-month label ────────────────────────────────────
+        Text(
+          '${date.day}',
+          style: TextStyle(
+            color: isCompleted
+                ? accentColor.withValues(alpha: 0.90)
+                : isToday
+                    ? accentColor.withValues(alpha: 0.65)
+                    : Colors.white.withValues(alpha: 0.22),
+            fontSize: 8,
+            height: 1.0,
+            letterSpacing: 0.5,
+            fontWeight: isToday ? FontWeight.w700 : FontWeight.w400,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Streak Badge
+// ─────────────────────────────────────────────────────────────────────────────
+class _StreakBadge extends StatelessWidget {
+  final int streak;
+  final Color color;
+  const _StreakBadge({required this.streak, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(color: color.withValues(alpha: 0.50)),
+        color: color.withValues(alpha: 0.09),
+      ),
+      child: Text(
+        'STREAK: $streak',
+        style: TextStyle(
+          color: color,
+          fontSize: 8.5,
+          height: 1.1,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.4,
+          fontFeatures: const [FontFeature.tabularFigures()],
+          shadows: [
+            Shadow(
+              color: color.withValues(alpha: 0.55),
+              blurRadius: 6,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Empty State — dormant matrix grid
+// ─────────────────────────────────────────────────────────────────────────────
+class _EmptyState extends StatelessWidget {
+  final VoidCallback onAdd;
+  const _EmptyState({required this.onAdd});
+
+  // Lit node indices for the 5×5 diamond pattern (mirrors the carousel preview).
+  static const _litNodes = {2, 6, 8, 10, 12, 14, 16, 18, 22};
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(
-              Icons.arrow_back_ios_new,
+          // Decorative dormant 5×5 matrix
+          SizedBox(
+            width: 148,
+            height: 148,
+            child: GridView.count(
+              crossAxisCount: 5,
+              crossAxisSpacing: 7,
+              mainAxisSpacing: 7,
+              physics: const NeverScrollableScrollPhysics(),
+              children: List.generate(25, (i) {
+                final lit = _litNodes.contains(i);
+                return Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: lit
+                        ? _kCyan.withValues(alpha: 0.20)
+                        : Colors.transparent,
+                    border: Border.all(
+                      color: lit
+                          ? _kCyan.withValues(alpha: 0.40)
+                          : Colors.white.withValues(alpha: 0.09),
+                      width: 1.2,
+                    ),
+                    boxShadow: lit
+                        ? [
+                            BoxShadow(
+                              color: _kCyan.withValues(alpha: 0.28),
+                              blurRadius: 7,
+                            ),
+                          ]
+                        : null,
+                  ),
+                );
+              }),
+            ),
+          ),
+          const SizedBox(height: 28),
+          const Text(
+            'NO PROTOCOLS ACTIVE',
+            style: TextStyle(
               color: SieTheme.textSecondary,
-              size: 18,
+              fontSize: 12,
+              letterSpacing: 2,
             ),
           ),
-          Expanded(
-            child: Text(
-              'HABIT ARCHIVE',
-              style: Theme.of(context).textTheme.titleMedium,
-              textAlign: TextAlign.center,
+          const SizedBox(height: 8),
+          Text(
+            'TAP + TO INITIALISE A HABIT',
+            style: TextStyle(
+              color: SieTheme.textSecondary.withValues(alpha: 0.50),
+              fontSize: 10,
+              letterSpacing: 1.5,
             ),
           ),
-          IconButton(
-            onPressed: onInfo,
-            icon: Icon(
-              Icons.help_outline,
-              color: SieTheme.textSecondary.withValues(alpha: 0.7),
-              size: 20,
-            ),
-            tooltip: 'INFO',
-          ),
-          IconButton(
-            onPressed: onAdd,
-            icon: const Icon(
-              Icons.add,
-              color: SieTheme.accent,
-              size: 22,
-            ),
-            tooltip: 'ADD PROTOCOL',
-          ),
+          const SizedBox(height: 32),
+          _AddButton(onTap: onAdd),
         ],
       ),
     );
   }
 }
 
-// ── Pulsing Add Button ────────────────────────────────────────
-
+// ─────────────────────────────────────────────────────────────────────────────
+// Pulsing Add Button (unchanged)
+// ─────────────────────────────────────────────────────────────────────────────
 class _AddButton extends StatefulWidget {
   final VoidCallback onTap;
   const _AddButton({required this.onTap});
@@ -727,52 +1185,53 @@ class _AddButtonState extends State<_AddButton>
           : const Duration(milliseconds: 500),
       curve: _pressed ? Curves.easeIn : Curves.elasticOut,
       child: AnimatedBuilder(
-      animation: _scale,
-      builder: (_, child) => Transform.scale(
-        scale: _scale.value,
-        child: child,
-      ),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTapCancel: () => setState(() => _pressed = false),
-        child: AnimatedBuilder(
-          animation: _ctrl,
-          builder: (context2, anim) => Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: SieTheme.accent.withValues(alpha: 0.10),
-              border: Border.all(
-                color: SieTheme.accent.withValues(alpha: 0.60),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: SieTheme.accent.withValues(
-                    alpha: 0.08 + 0.12 * _ctrl.value,
-                  ),
-                  blurRadius: 12 + 8 * _ctrl.value,
-                  spreadRadius: 1 + 2 * _ctrl.value,
+        animation: _scale,
+        builder: (_, child) => Transform.scale(
+          scale: _scale.value,
+          child: child,
+        ),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          onTapDown: (_) => setState(() => _pressed = true),
+          onTapUp: (_) => setState(() => _pressed = false),
+          onTapCancel: () => setState(() => _pressed = false),
+          child: AnimatedBuilder(
+            animation: _ctrl,
+            builder: (buildCtx, _) => Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: SieTheme.accent.withValues(alpha: 0.10),
+                border: Border.all(
+                  color: SieTheme.accent.withValues(alpha: 0.60),
                 ),
-              ],
-            ),
-            child: const Icon(
-              Icons.add,
-              color: SieTheme.accent,
-              size: 22,
+                boxShadow: [
+                  BoxShadow(
+                    color: SieTheme.accent.withValues(
+                      alpha: 0.08 + 0.12 * _ctrl.value,
+                    ),
+                    blurRadius: 12 + 8 * _ctrl.value,
+                    spreadRadius: 1 + 2 * _ctrl.value,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.add,
+                color: SieTheme.accent,
+                size: 22,
+              ),
             ),
           ),
         ),
       ),
-    ),
     );
   }
 }
 
-// ── Unified Add/Edit Dialog ───────────────────────────────────
-
+// ─────────────────────────────────────────────────────────────────────────────
+// Add / Edit Protocol Dialog (unchanged)
+// ─────────────────────────────────────────────────────────────────────────────
 class _HabitDialog extends StatefulWidget {
   final Habit? existing;
   final void Function(String title, String? description, String color) onSave;
@@ -803,10 +1262,8 @@ class _HabitDialogState extends State<_HabitDialog> {
   @override
   void initState() {
     super.initState();
-    _titleCtrl =
-        TextEditingController(text: widget.existing?.title ?? '');
-    _descCtrl =
-        TextEditingController(text: widget.existing?.description ?? '');
+    _titleCtrl = TextEditingController(text: widget.existing?.title ?? '');
+    _descCtrl  = TextEditingController(text: widget.existing?.description ?? '');
     _selectedColor = widget.existing?.color ?? '#00C8FF';
   }
 
@@ -955,7 +1412,6 @@ class _HabitDialogState extends State<_HabitDialog> {
 class _Field extends StatelessWidget {
   final TextEditingController controller;
   final String label;
-
   const _Field({required this.controller, required this.label});
 
   @override

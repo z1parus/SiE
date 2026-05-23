@@ -485,6 +485,7 @@ class _LeaderRow extends StatelessWidget {
                     // ── Username + level ──────────────────────────
                     Expanded(
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
@@ -501,6 +502,7 @@ class _LeaderRow extends StatelessWidget {
                                             ? rankColor
                                             : SieTheme.textPrimary,
                                     fontSize: 13,
+                                    height: 1.1,
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 1.2,
                                     shadows: (isTopThree || isSelf)
@@ -549,6 +551,7 @@ class _LeaderRow extends StatelessWidget {
                             style: const TextStyle(
                               color: SieTheme.textSecondary,
                               fontSize: 10,
+                              height: 1.1,
                               letterSpacing: 1,
                             ),
                           ),
@@ -558,6 +561,7 @@ class _LeaderRow extends StatelessWidget {
 
                     // ── Daily XP ──────────────────────────────────
                     Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
@@ -565,6 +569,7 @@ class _LeaderRow extends StatelessWidget {
                           style: TextStyle(
                             color: xpColor,
                             fontSize: 18,
+                            height: 1.1,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.5,
                             fontFeatures: const [
@@ -583,6 +588,7 @@ class _LeaderRow extends StatelessWidget {
                           style: TextStyle(
                             color: SieTheme.textSecondary,
                             fontSize: 8,
+                            height: 1.1,
                             letterSpacing: 1.5,
                           ),
                         ),
@@ -640,13 +646,12 @@ class _RankBadge extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Icon in a soft glow halo circle.
         Stack(
           alignment: Alignment.center,
           children: [
             Container(
-              width: 28,
-              height: 28,
+              width: 22,
+              height: 22,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
@@ -657,15 +662,15 @@ class _RankBadge extends StatelessWidget {
                 ),
               ),
             ),
-            Icon(_rankIcon(rank), color: color, size: 16),
+            Icon(_rankIcon(rank), color: color, size: 14),
           ],
         ),
-        const SizedBox(height: 2),
         Text(
           '#$rank',
           style: TextStyle(
             color: color,
             fontSize: 9,
+            height: 1.1,
             fontWeight: FontWeight.w800,
             letterSpacing: 0.5,
           ),
