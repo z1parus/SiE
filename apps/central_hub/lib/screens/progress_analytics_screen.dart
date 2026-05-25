@@ -4,57 +4,34 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 
-class ProgressAnalyticsScreen extends ConsumerStatefulWidget {
+const _kCyan = Color(0xFF00E5FF);
+const _kPurple = Color(0xFF7000FF);
+
+class ProgressAnalyticsScreen extends ConsumerWidget {
   const ProgressAnalyticsScreen({super.key});
 
   @override
-  ConsumerState<ProgressAnalyticsScreen> createState() =>
-      _ProgressAnalyticsScreenState();
-}
-
-class _ProgressAnalyticsScreenState
-    extends ConsumerState<ProgressAnalyticsScreen>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _skyCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _skyCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 150),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _skyCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final analyticsAsync = ref.watch(analyticsProvider);
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(child: StarrySkyBackground(animation: _skyCtrl)),
-          SafeArea(
-            child: Column(
-              children: [
-                _TopBar(onBack: () => Navigator.of(context).pop()),
-                Expanded(
-                  child: analyticsAsync.when(
-                    data: (data) => _AnalyticsBody(data: data),
-                    loading: () => const _LoadingState(),
-                    error: (e, _) => _ErrorState(error: e),
-                  ),
+    return GlassPage(
+      background: SieSpaceBackground(),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _TopBar(onBack: () => Navigator.of(context).pop()),
+              Expanded(
+                child: analyticsAsync.when(
+                  data: (data) => _AnalyticsBody(data: data),
+                  loading: () => const _LoadingState(),
+                  error: (e, _) => _ErrorState(error: e),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -69,22 +46,31 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
-          IconButton(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back_ios_new,
-                color: SieTheme.textSecondary, size: 18),
+          SieGlassCard(
+            padding: EdgeInsets.zero,
+            width: 40,
+            height: 40,
+            onTap: onBack,
+            child: const Icon(
+              Icons.arrow_back_ios_new,
+              color: _kCyan,
+              size: 18,
+            ),
           ),
           Expanded(
             child: Text(
               'PROGRESS HUB',
-              style: Theme.of(context).textTheme.headlineMedium,
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    color: Colors.white,
+                    letterSpacing: 3,
+                  ),
               textAlign: TextAlign.center,
             ),
           ),
-          const SizedBox(width: 48),
+          const SizedBox(width: 40),
         ],
       ),
     );
@@ -100,7 +86,7 @@ class _LoadingState extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Center(
       child: CircularProgressIndicator(
-        color: SieTheme.accent,
+        color: _kCyan,
         strokeWidth: 1.5,
       ),
     );
@@ -162,14 +148,26 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(width: 2, height: 12, color: SieTheme.accent),
+        Container(
+          width: 2,
+          height: 12,
+          decoration: BoxDecoration(
+            color: _kCyan,
+            boxShadow: [
+              BoxShadow(
+                color: _kCyan.withValues(alpha: 0.7),
+                blurRadius: 6,
+              ),
+            ],
+          ),
+        ),
         const SizedBox(width: 8),
         Text(
           label,
-          style: Theme.of(context)
-              .textTheme
-              .labelSmall
-              ?.copyWith(letterSpacing: 2),
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                letterSpacing: 2,
+                color: _kCyan.withValues(alpha: 0.9),
+              ),
         ),
       ],
     );
@@ -186,37 +184,41 @@ class _StatsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final focusH = data.totalFocusMinutes ~/ 60;
     final focusM = data.totalFocusMinutes % 60;
-    final focusLabel =
-        focusH > 0 ? '${focusH}h ${focusM}m' : '${focusM}m';
-    final completionPct =
-        (data.habitCompletionRate * 100).round();
+    final focusLabel = focusH > 0 ? '${focusH}h ${focusM}m' : '${focusM}m';
+    final completionPct = (data.habitCompletionRate * 100).round();
 
     return Row(
       children: [
         Expanded(
-          child: _StatCard(
-            icon: Icons.timer_outlined,
-            value: focusLabel,
-            label: 'TOTAL\nFOCUS',
-            color: SieTheme.accent,
+          child: RepaintBoundary(
+            child: _StatCard(
+              icon: Icons.timer_outlined,
+              value: focusLabel,
+              label: 'TOTAL\nFOCUS',
+              color: _kCyan,
+            ),
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: _StatCard(
-            icon: Icons.check_circle_outline,
-            value: '$completionPct%',
-            label: 'HABITS\n30 DAYS',
-            color: SieTheme.accentSecondary,
+          child: RepaintBoundary(
+            child: _StatCard(
+              icon: Icons.check_circle_outline,
+              value: '$completionPct%',
+              label: 'HABITS\n30 DAYS',
+              color: _kPurple,
+            ),
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: _StatCard(
-            icon: Icons.local_fire_department_outlined,
-            value: '${data.currentStreak}',
-            label: 'DAY\nSTREAK',
-            color: const Color(0xFFFFB347),
+          child: RepaintBoundary(
+            child: _StatCard(
+              icon: Icons.local_fire_department_outlined,
+              value: '${data.currentStreak}',
+              label: 'DAY\nSTREAK',
+              color: const Color(0xFFFFB347),
+            ),
           ),
         ),
       ],
@@ -239,13 +241,8 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SieGlassCard(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-      decoration: BoxDecoration(
-        color: SieTheme.surface,
-        border: Border.all(color: SieTheme.borderDefault),
-        borderRadius: BorderRadius.circular(4),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -259,6 +256,12 @@ class _StatCard extends StatelessWidget {
               fontWeight: FontWeight.w700,
               letterSpacing: 1,
               height: 1,
+              shadows: [
+                Shadow(
+                  color: color.withValues(alpha: 0.6),
+                  blurRadius: 8,
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 4),
@@ -286,24 +289,30 @@ class _HeatMap extends StatelessWidget {
   const _HeatMap({required this.heatMap});
 
   static Color _cellColor(int count) {
-    if (count <= 0) return SieTheme.surface;
-    if (count == 1) return SieTheme.accent.withValues(alpha: 0.22);
-    if (count <= 3) return SieTheme.accent.withValues(alpha: 0.45);
-    if (count <= 5) return SieTheme.accent.withValues(alpha: 0.70);
-    return SieTheme.accent;
+    if (count <= 0) return Colors.white.withValues(alpha: 0.05);
+    if (count == 1) return _kCyan.withValues(alpha: 0.22);
+    if (count <= 3) return _kCyan.withValues(alpha: 0.45);
+    if (count <= 5) return _kCyan.withValues(alpha: 0.70);
+    return _kCyan;
+  }
+
+  static BoxShadow? _cellGlow(int count) {
+    if (count <= 3) return null;
+    final alpha = count <= 5 ? 0.4 : 0.8;
+    return BoxShadow(
+      color: _kCyan.withValues(alpha: alpha),
+      blurRadius: 4,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final today = DateTime.now();
-    final todayNorm =
-        DateTime(today.year, today.month, today.day);
+    final todayNorm = DateTime(today.year, today.month, today.day);
 
-    // Anchor to Sunday so the grid is Mon–Sun columns
-    // weekday: Mon=1 … Sun=7
     final daysSinceMonday = (todayNorm.weekday - 1) % 7;
-    final gridEnd = todayNorm
-        .add(Duration(days: 6 - daysSinceMonday)); // next Sunday (incl. today's week)
+    final gridEnd =
+        todayNorm.add(Duration(days: 6 - daysSinceMonday));
     final gridStart = gridEnd.subtract(const Duration(days: 7 * 13 - 1));
 
     const cols = 13;
@@ -311,17 +320,11 @@ class _HeatMap extends StatelessWidget {
     const cellSize = 14.0;
     const gap = 3.0;
 
-    return Container(
+    return SieGlassCard(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: SieTheme.surface,
-        border: Border.all(color: SieTheme.borderDefault),
-        borderRadius: BorderRadius.circular(4),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Day labels (Mon Wed Fri)
           Row(
             children: [
               const SizedBox(width: 28),
@@ -331,8 +334,8 @@ class _HeatMap extends StatelessWidget {
                   width: cellSize + gap,
                   child: Text(
                     label,
-                    style: const TextStyle(
-                      color: SieTheme.textSecondary,
+                    style: TextStyle(
+                      color: _kCyan.withValues(alpha: 0.5),
                       fontSize: 8,
                       letterSpacing: 0.5,
                     ),
@@ -348,15 +351,15 @@ class _HeatMap extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: List.generate(cols, (col) {
-                // Month label on first week of month
-                final firstDayOfCol = gridStart.add(Duration(days: col * 7));
+                final firstDayOfCol =
+                    gridStart.add(Duration(days: col * 7));
                 String monthLabel = '';
                 for (var r = 0; r < rows; r++) {
                   final d = firstDayOfCol.add(Duration(days: r));
                   if (d.day == 1) {
                     const months = [
-                      'Jan','Feb','Mar','Apr','May','Jun',
-                      'Jul','Aug','Sep','Oct','Nov','Dec'
+                      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
                     ];
                     monthLabel = months[d.month - 1];
                     break;
@@ -370,8 +373,8 @@ class _HeatMap extends StatelessWidget {
                       width: cellSize + gap,
                       child: Text(
                         monthLabel,
-                        style: const TextStyle(
-                          color: SieTheme.textSecondary,
+                        style: TextStyle(
+                          color: _kCyan.withValues(alpha: 0.4),
                           fontSize: 7,
                         ),
                         textAlign: TextAlign.center,
@@ -381,8 +384,9 @@ class _HeatMap extends StatelessWidget {
                       final d =
                           gridStart.add(Duration(days: col * 7 + row));
                       final isFuture = d.isAfter(todayNorm);
-                      final count =
-                          isFuture ? -1 : (heatMap[d] ?? 0);
+                      final count = isFuture ? -1 : (heatMap[d] ?? 0);
+                      final glow =
+                          isFuture ? null : _cellGlow(count);
 
                       return Container(
                         margin: EdgeInsets.only(
@@ -398,10 +402,11 @@ class _HeatMap extends StatelessWidget {
                           border: Border.all(
                             color: isFuture
                                 ? Colors.transparent
-                                : SieTheme.borderDefault,
+                                : _kCyan.withValues(alpha: 0.15),
                             width: 0.5,
                           ),
                           borderRadius: BorderRadius.circular(2),
+                          boxShadow: glow != null ? [glow] : null,
                         ),
                       );
                     }),
@@ -414,10 +419,10 @@ class _HeatMap extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              const Text(
+              Text(
                 'LESS',
                 style: TextStyle(
-                  color: SieTheme.textSecondary,
+                  color: _kCyan.withValues(alpha: 0.45),
                   fontSize: 8,
                 ),
               ),
@@ -428,16 +433,18 @@ class _HeatMap extends StatelessWidget {
                     height: 10,
                     decoration: BoxDecoration(
                       color: _cellColor(c),
-                      border:
-                          Border.all(color: SieTheme.borderDefault, width: 0.5),
+                      border: Border.all(
+                        color: _kCyan.withValues(alpha: 0.15),
+                        width: 0.5,
+                      ),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   )),
               const SizedBox(width: 4),
-              const Text(
+              Text(
                 'MORE',
                 style: TextStyle(
-                  color: SieTheme.textSecondary,
+                  color: _kCyan.withValues(alpha: 0.45),
                   fontSize: 8,
                 ),
               ),
@@ -457,23 +464,17 @@ class _XpLineChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxY = points.fold(0, (m, p) => math.max(m, p.xp)).toDouble();
+    final maxY =
+        points.fold(0, (m, p) => math.max(m, p.xp)).toDouble();
     final topY = maxY < 100 ? 200.0 : (maxY * 1.25).ceilToDouble();
 
     final spots = points.asMap().entries.map((e) {
       return FlSpot(e.key.toDouble(), e.value.xp.toDouble());
     }).toList();
 
-    const gold = Color(0xFFD4A92A);
-
-    return Container(
-      height: 160,
+    return SieGlassCard(
+      height: 184,
       padding: const EdgeInsets.fromLTRB(0, 12, 12, 8),
-      decoration: BoxDecoration(
-        color: SieTheme.surface,
-        border: Border.all(color: SieTheme.borderDefault),
-        borderRadius: BorderRadius.circular(4),
-      ),
       child: LineChart(
         LineChartData(
           minX: 0,
@@ -485,7 +486,7 @@ class _XpLineChart extends StatelessWidget {
             drawVerticalLine: false,
             horizontalInterval: topY / 4,
             getDrawingHorizontalLine: (_) => FlLine(
-              color: SieTheme.borderDefault,
+              color: Colors.white.withValues(alpha: 0.08),
               strokeWidth: 0.5,
             ),
           ),
@@ -498,8 +499,8 @@ class _XpLineChart extends StatelessWidget {
                 interval: topY / 4,
                 getTitlesWidget: (v, _) => Text(
                   '${v.toInt()}',
-                  style: const TextStyle(
-                    color: SieTheme.textSecondary,
+                  style: TextStyle(
+                    color: _kCyan.withValues(alpha: 0.5),
                     fontSize: 9,
                   ),
                 ),
@@ -511,36 +512,46 @@ class _XpLineChart extends StatelessWidget {
                 reservedSize: 20,
                 getTitlesWidget: (v, _) {
                   final i = v.toInt();
-                  if (i < 0 || i >= points.length) return const SizedBox();
+                  if (i < 0 || i >= points.length) {
+                    return const SizedBox();
+                  }
                   final d = points[i].date;
-                  const days = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+                  const days = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
                   return Text(
                     days[d.weekday - 1],
-                    style: const TextStyle(
-                      color: SieTheme.textSecondary,
+                    style: TextStyle(
+                      color: _kCyan.withValues(alpha: 0.5),
                       fontSize: 9,
                     ),
                   );
                 },
               ),
             ),
-            topTitles:
-                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles:
-                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
           ),
           lineBarsData: [
             LineChartBarData(
               spots: spots,
               isCurved: true,
               curveSmoothness: 0.3,
-              color: gold,
+              gradient: const LinearGradient(
+                colors: [_kCyan, _kPurple],
+              ),
               barWidth: 2,
+              shadow: BoxShadow(
+                color: _kCyan.withValues(alpha: 0.5),
+                blurRadius: 6,
+              ),
               dotData: FlDotData(
                 show: true,
                 getDotPainter: (_, _, _, _) => FlDotCirclePainter(
                   radius: 3,
-                  color: gold,
+                  color: _kCyan,
                   strokeWidth: 0,
                 ),
               ),
@@ -550,8 +561,9 @@ class _XpLineChart extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    gold.withValues(alpha: 0.25),
-                    gold.withValues(alpha: 0.0),
+                    _kCyan.withValues(alpha: 0.22),
+                    _kPurple.withValues(alpha: 0.06),
+                    Colors.transparent,
                   ],
                 ),
               ),
@@ -559,12 +571,12 @@ class _XpLineChart extends StatelessWidget {
           ],
           lineTouchData: LineTouchData(
             touchTooltipData: LineTouchTooltipData(
-              getTooltipColor: (_) => SieTheme.surfaceAlt,
+              getTooltipColor: (_) => const Color(0xFF0B1E30),
               getTooltipItems: (spots) => spots.map((s) {
                 return LineTooltipItem(
                   '+${s.y.toInt()} XP',
                   const TextStyle(
-                    color: gold,
+                    color: _kCyan,
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                   ),
@@ -586,7 +598,8 @@ class _FocusBarChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxY = points.fold(0, (m, p) => math.max(m, p.minutes)).toDouble();
+    final maxY =
+        points.fold(0, (m, p) => math.max(m, p.minutes)).toDouble();
     final topY = maxY < 30 ? 60.0 : (maxY * 1.3).ceilToDouble();
 
     final groups = points.asMap().entries.map((e) {
@@ -601,28 +614,23 @@ class _FocusBarChart extends StatelessWidget {
               begin: Alignment.bottomCenter,
               end: Alignment.topCenter,
               colors: [
-                SieTheme.accent.withValues(alpha: 0.5),
-                SieTheme.accent,
+                _kPurple.withValues(alpha: 0.7),
+                _kCyan,
               ],
             ),
             backDrawRodData: BackgroundBarChartRodData(
               show: true,
               toY: topY,
-              color: SieTheme.borderDefault.withValues(alpha: 0.3),
+              color: Colors.white.withValues(alpha: 0.04),
             ),
           ),
         ],
       );
     }).toList();
 
-    return Container(
-      height: 160,
+    return SieGlassCard(
+      height: 184,
       padding: const EdgeInsets.fromLTRB(0, 12, 12, 8),
-      decoration: BoxDecoration(
-        color: SieTheme.surface,
-        border: Border.all(color: SieTheme.borderDefault),
-        borderRadius: BorderRadius.circular(4),
-      ),
       child: BarChart(
         BarChartData(
           maxY: topY,
@@ -632,7 +640,7 @@ class _FocusBarChart extends StatelessWidget {
             drawVerticalLine: false,
             horizontalInterval: topY / 4,
             getDrawingHorizontalLine: (_) => FlLine(
-              color: SieTheme.borderDefault,
+              color: Colors.white.withValues(alpha: 0.08),
               strokeWidth: 0.5,
             ),
           ),
@@ -645,8 +653,8 @@ class _FocusBarChart extends StatelessWidget {
                 interval: topY / 4,
                 getTitlesWidget: (v, _) => Text(
                   '${v.toInt()}m',
-                  style: const TextStyle(
-                    color: SieTheme.textSecondary,
+                  style: TextStyle(
+                    color: _kCyan.withValues(alpha: 0.5),
                     fontSize: 9,
                   ),
                 ),
@@ -658,31 +666,35 @@ class _FocusBarChart extends StatelessWidget {
                 reservedSize: 20,
                 getTitlesWidget: (v, _) {
                   final i = v.toInt();
-                  if (i < 0 || i >= points.length) return const SizedBox();
+                  if (i < 0 || i >= points.length) {
+                    return const SizedBox();
+                  }
                   final d = points[i].date;
-                  const days = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+                  const days = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
                   return Text(
                     days[d.weekday - 1],
-                    style: const TextStyle(
-                      color: SieTheme.textSecondary,
+                    style: TextStyle(
+                      color: _kCyan.withValues(alpha: 0.5),
                       fontSize: 9,
                     ),
                   );
                 },
               ),
             ),
-            topTitles:
-                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles:
-                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
           ),
           barTouchData: BarTouchData(
             touchTooltipData: BarTouchTooltipData(
-              getTooltipColor: (_) => SieTheme.surfaceAlt,
+              getTooltipColor: (_) => const Color(0xFF0B1E30),
               getTooltipItem: (_, _, rod, _) => BarTooltipItem(
                 '${rod.toY.toInt()} min',
                 const TextStyle(
-                  color: SieTheme.accent,
+                  color: _kCyan,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                 ),
