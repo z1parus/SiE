@@ -1,9 +1,34 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 import 'public_profile_screen.dart';
 
+// ── Design tokens ──────────────────────────────────────────────────────────────
+const _kCyan = Color(0xFF00E5FF);
+
+LiquidGlassSettings _glassSettings({
+  double blur = 3.0,
+  double glowIntensity = 0.88,
+}) =>
+    LiquidGlassSettings(
+      blur: blur,
+      thickness: 24,
+      refractiveIndex: 1.45,
+      glassColor: const Color(0x0A0A0E1A),
+      lightAngle: GlassDefaults.lightAngle,
+      lightIntensity: 0.72,
+      glowIntensity: glowIntensity,
+      saturation: 1.4,
+      specularSharpness: GlassSpecularSharpness.sharp,
+      ambientStrength: 0.08,
+      chromaticAberration: 0.015,
+    );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UserSearchScreen
+// ─────────────────────────────────────────────────────────────────────────────
 class UserSearchScreen extends ConsumerStatefulWidget {
   const UserSearchScreen({super.key});
 
@@ -41,14 +66,24 @@ class _UserSearchScreenState extends ConsumerState<UserSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: SieTheme.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _TopBar(ctrl: _ctrl, focus: _focus, onChanged: _onChanged, onClear: _clear),
-            Expanded(child: _Body(query: _query)),
-          ],
+    return GlassPage(
+      background: const SieSpaceBackground(),
+      statusBarStyle: GlassStatusBarStyle.light,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              _TopBar(
+                ctrl: _ctrl,
+                focus: _focus,
+                onChanged: _onChanged,
+                onClear: _clear,
+              ),
+              Expanded(child: _Body(query: _query)),
+            ],
+          ),
         ),
       ),
     );
@@ -62,6 +97,7 @@ class _TopBar extends StatefulWidget {
   final FocusNode focus;
   final ValueChanged<String> onChanged;
   final VoidCallback onClear;
+
   const _TopBar({
     required this.ctrl,
     required this.focus,
@@ -79,15 +115,23 @@ class _TopBarState extends State<_TopBar> {
   @override
   void initState() {
     super.initState();
-    widget.focus.addListener(() {
-      if (mounted) setState(() => _focused = widget.focus.hasFocus);
-    });
+    widget.focus.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    if (mounted) setState(() => _focused = widget.focus.hasFocus);
+  }
+
+  @override
+  void dispose() {
+    widget.focus.removeListener(_onFocusChange);
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 4, 16, 0),
+      padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
       child: Row(
         children: [
           IconButton(
@@ -99,45 +143,75 @@ class _TopBarState extends State<_TopBar> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               decoration: BoxDecoration(
-                color: SieTheme.surface,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                  color: _focused ? SieTheme.accent : SieTheme.borderDefault,
-                  width: _focused ? 1.5 : 1.0,
-                ),
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: _focused
+                    ? [
+                        BoxShadow(
+                          color: _kCyan.withValues(alpha: 0.20),
+                          blurRadius: 16,
+                          spreadRadius: 2,
+                        ),
+                      ]
+                    : [],
               ),
-              child: TextField(
-                controller: widget.ctrl,
-                focusNode: widget.focus,
-                onChanged: widget.onChanged,
-                autofocus: true,
-                style: const TextStyle(
-                  color: SieTheme.textPrimary,
-                  fontSize: 13,
-                  letterSpacing: 0.5,
+              child: GlassCard(
+                height: 44,
+                padding: EdgeInsets.zero,
+                shape: LiquidRoundedSuperellipse(borderRadius: 28),
+                useOwnLayer: true,
+                quality: GlassQuality.standard,
+                clipBehavior: Clip.antiAlias,
+                settings: _glassSettings(
+                  blur: _focused ? 4.0 : 3.0,
+                  glowIntensity: _focused ? 1.05 : 0.88,
                 ),
-                decoration: InputDecoration(
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 11),
-                  border: InputBorder.none,
-                  hintText: 'ПОИСК ОПЕРАТИВНИКА...',
-                  hintStyle: const TextStyle(
-                    color: SieTheme.textSecondary,
-                    fontSize: 12,
-                    letterSpacing: 1,
-                  ),
-                  prefixIcon: const Icon(Icons.search,
-                      color: SieTheme.textSecondary, size: 18),
-                  prefixIconConstraints:
-                      const BoxConstraints(minWidth: 40, minHeight: 40),
-                  suffixIcon: widget.ctrl.text.isNotEmpty
-                      ? GestureDetector(
-                          onTap: widget.onClear,
-                          child: const Icon(Icons.close,
+                child: Row(
+                  children: [
+                    const SizedBox(width: 14),
+                    Icon(
+                      Icons.search,
+                      color: _focused ? _kCyan : SieTheme.textSecondary,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: widget.ctrl,
+                        focusNode: widget.focus,
+                        onChanged: widget.onChanged,
+                        autofocus: true,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          letterSpacing: 0.5,
+                        ),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                          border: InputBorder.none,
+                          hintText: 'ПОИСК ОПЕРАТИВНИКА...',
+                          hintStyle: TextStyle(
+                            color: _focused
+                                ? SieTheme.textSecondary
+                                : SieTheme.borderAccent,
+                            fontSize: 12,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (widget.ctrl.text.isNotEmpty)
+                      GestureDetector(
+                        onTap: widget.onClear,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Icon(Icons.close,
                               color: SieTheme.textSecondary, size: 16),
-                        )
-                      : null,
+                        ),
+                      )
+                    else
+                      const SizedBox(width: 12),
+                  ],
                 ),
               ),
             ),
@@ -185,11 +259,12 @@ class _Body extends ConsumerWidget {
           );
         }
         return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
           itemCount: results.length,
           separatorBuilder: (_, _) => const SizedBox(height: 8),
-          itemBuilder: (context, i) =>
-              _UserTile(profile: results[i], query: query),
+          itemBuilder: (context, i) => RepaintBoundary(
+            child: _UserTile(profile: results[i], query: query),
+          ),
         );
       },
     );
@@ -224,8 +299,7 @@ class _StatusMessage extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             sub,
-            style: const TextStyle(
-                color: SieTheme.borderAccent, fontSize: 11),
+            style: const TextStyle(color: SieTheme.borderAccent, fontSize: 11),
           ),
         ],
       ),
@@ -235,33 +309,83 @@ class _StatusMessage extends StatelessWidget {
 
 // ── User Tile ─────────────────────────────────────────────────
 
-class _UserTile extends StatelessWidget {
+class _UserTile extends StatefulWidget {
   final PublicProfile profile;
   final String query;
   const _UserTile({required this.profile, required this.query});
 
   @override
+  State<_UserTile> createState() => _UserTileState();
+}
+
+class _UserTileState extends State<_UserTile>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pressCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _pressCtrl = AnimationController(vsync: this, value: 0.0);
+  }
+
+  @override
+  void dispose() {
+    _pressCtrl.dispose();
+    super.dispose();
+  }
+
+  void _down(TapDownDetails _) {
+    _pressCtrl.animateTo(1.0,
+        duration: const Duration(milliseconds: 80), curve: Curves.easeIn);
+  }
+
+  void _release() {
+    _pressCtrl.animateTo(0.0,
+        duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
+  }
+
+  void _navigate() {
+    final profile = widget.profile;
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (_, _, _) => PublicProfileScreen(profile: profile),
+        transitionsBuilder: (_, anim, _, child) =>
+            FadeTransition(opacity: anim, child: child),
+        transitionDuration: const Duration(milliseconds: 300),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final username = profile.username ?? 'UNKNOWN';
+    final username = widget.profile.username ?? 'UNKNOWN';
     final letter = username.isNotEmpty ? username[0].toUpperCase() : '?';
 
     return GestureDetector(
-      onTap: () => Navigator.of(context).push(
-        PageRouteBuilder(
-          pageBuilder: (_, _, _) =>
-              PublicProfileScreen(profile: profile),
-          transitionsBuilder: (_, anim, _, child) =>
-              FadeTransition(opacity: anim, child: child),
-          transitionDuration: const Duration(milliseconds: 300),
-        ),
-      ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: SieTheme.surface,
-          border: Border.all(color: SieTheme.borderDefault),
-          borderRadius: BorderRadius.circular(4),
-        ),
+      onTap: _navigate,
+      onTapDown: _down,
+      onTapUp: (_) => _release(),
+      onTapCancel: _release,
+      child: AnimatedBuilder(
+        animation: _pressCtrl,
+        builder: (_, child) {
+          final t = _pressCtrl.value;
+          return Transform.scale(
+            scale: 1.0 - 0.03 * t,
+            child: GlassCard(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              shape: LiquidRoundedSuperellipse(borderRadius: 16),
+              useOwnLayer: true,
+              quality: GlassQuality.standard,
+              clipBehavior: Clip.antiAlias,
+              settings: _glassSettings(
+                blur: 3.0,
+                glowIntensity: 0.88 + 0.22 * t,
+              ),
+              child: child!,
+            ),
+          );
+        },
         child: Row(
           children: [
             // Avatar
@@ -270,17 +394,16 @@ class _UserTile extends StatelessWidget {
               height: 44,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border:
-                    Border.all(color: SieTheme.borderAccent, width: 1),
+                border: Border.all(
+                    color: _kCyan.withValues(alpha: 0.5), width: 1),
                 color: SieTheme.background,
               ),
               child: ClipOval(
-                child: profile.avatarUrl != null
+                child: widget.profile.avatarUrl != null
                     ? Image.network(
-                        profile.avatarUrl!,
+                        widget.profile.avatarUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) =>
-                            _TileLetter(letter: letter),
+                        errorBuilder: (_, _, _) => _TileLetter(letter: letter),
                       )
                     : _TileLetter(letter: letter),
               ),
@@ -291,19 +414,23 @@ class _UserTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _HighlightedName(name: username.toUpperCase(), query: query.toUpperCase()),
+                  _HighlightedName(
+                    name: username.toUpperCase(),
+                    query: widget.query.toUpperCase(),
+                  ),
                   const SizedBox(height: 4),
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
-                      border: Border.all(color: SieTheme.borderAccent),
-                      borderRadius: BorderRadius.circular(2),
+                      border: Border.all(
+                          color: _kCyan.withValues(alpha: 0.4)),
+                      borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      'LEVEL ${profile.level}  ·  ${profile.totalXp} XP',
+                      'LEVEL ${widget.profile.level}  ·  ${widget.profile.totalXp} XP',
                       style: const TextStyle(
-                        color: SieTheme.accent,
+                        color: _kCyan,
                         fontSize: 9,
                         letterSpacing: 1.2,
                         fontWeight: FontWeight.w600,
@@ -313,8 +440,9 @@ class _UserTile extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right,
-                color: SieTheme.borderAccent, size: 16),
+            Icon(Icons.chevron_right,
+                color: SieTheme.textSecondary.withValues(alpha: 0.6),
+                size: 16),
           ],
         ),
       ),
@@ -331,7 +459,7 @@ class _TileLetter extends StatelessWidget {
         child: Text(
           letter,
           style: const TextStyle(
-            color: SieTheme.accent,
+            color: _kCyan,
             fontSize: 18,
             fontWeight: FontWeight.w200,
           ),
@@ -349,7 +477,7 @@ class _HighlightedName extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const base = TextStyle(
-      color: SieTheme.textPrimary,
+      color: Colors.white,
       fontSize: 13,
       fontWeight: FontWeight.w600,
       letterSpacing: 1,
@@ -365,8 +493,7 @@ class _HighlightedName extends StatelessWidget {
         TextSpan(text: name.substring(0, idx)),
         TextSpan(
           text: name.substring(idx, idx + query.length),
-          style: base.copyWith(
-              color: SieTheme.accent, fontWeight: FontWeight.w700),
+          style: base.copyWith(color: _kCyan, fontWeight: FontWeight.w700),
         ),
         TextSpan(text: name.substring(idx + query.length)),
       ]),
