@@ -1,8 +1,34 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 
+// ── Design tokens ──────────────────────────────────────────────────────────────
+const _kCyan   = Color(0xFF00E5FF);
+const _kPurple = Color(0xFF7000FF);
+
+LiquidGlassSettings _glassSettings({
+  double blur = 3.0,
+  double glowIntensity = 0.88,
+}) =>
+    LiquidGlassSettings(
+      blur: blur,
+      thickness: 24,
+      refractiveIndex: 1.45,
+      glassColor: const Color(0x0A0A0E1A),
+      lightAngle: GlassDefaults.lightAngle,
+      lightIntensity: 0.72,
+      glowIntensity: glowIntensity,
+      saturation: 1.4,
+      specularSharpness: GlassSpecularSharpness.sharp,
+      ambientStrength: 0.08,
+      chromaticAberration: 0.015,
+    );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// InterfaceHubScreen
+// ─────────────────────────────────────────────────────────────────────────────
 class InterfaceHubScreen extends ConsumerStatefulWidget {
   const InterfaceHubScreen({super.key});
 
@@ -75,11 +101,11 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
   void _showPreview(CosmeticAsset asset, Profile? profile) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: SieTheme.surface,
+      backgroundColor: const Color(0xFF0B1E30),
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(4)),
-        side: BorderSide(color: SieTheme.borderDefault),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: Color(0xFF1A3A5C)),
       ),
       builder: (_) => _PreviewSheet(asset: asset, profile: profile),
     );
@@ -87,79 +113,84 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
 
   @override
   Widget build(BuildContext context) {
-    final profile = ref.watch(userProfileProvider).valueOrNull;
-    final frames = ref.watch(avatarFramesProvider).valueOrNull ?? [];
-    final backgrounds =
-        ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
-    final styles = ref.watch(statStylesProvider).valueOrNull ?? [];
-    final inventory =
-        ref.watch(inventoryProvider).valueOrNull ?? InventoryState.empty;
-    final dp = profile?.designPoints ?? 0;
+    final profile     = ref.watch(userProfileProvider).valueOrNull;
+    final frames      = ref.watch(avatarFramesProvider).valueOrNull ?? [];
+    final backgrounds = ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
+    final styles      = ref.watch(statStylesProvider).valueOrNull ?? [];
+    final inventory   = ref.watch(inventoryProvider).valueOrNull ?? InventoryState.empty;
+    final dp          = profile?.designPoints ?? 0;
 
-    return Scaffold(
-      backgroundColor: SieTheme.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _TopBar(dp: dp, onBack: () => Navigator.of(context).pop()),
-            Container(
-                height: 1,
-                color: SieTheme.borderAccent.withValues(alpha: 0.25)),
-            Container(
-              color: SieTheme.surface,
-              child: TabBar(
-                controller: _tabs,
-                indicatorColor: SieTheme.accent,
-                indicatorWeight: 1.5,
-                labelColor: SieTheme.accent,
-                unselectedLabelColor: SieTheme.textSecondary,
-                labelStyle: const TextStyle(
-                  fontSize: 10,
-                  letterSpacing: 1.5,
-                  fontWeight: FontWeight.w600,
+    return GlassPage(
+      background: const SieSpaceBackground(),
+      statusBarStyle: GlassStatusBarStyle.light,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _TopBar(dp: dp, onBack: () => Navigator.of(context).pop()),
+              // Glass tab panel
+              GlassCard(
+                height: 44,
+                padding: EdgeInsets.zero,
+                shape: LiquidRoundedSuperellipse(borderRadius: 0),
+                useOwnLayer: true,
+                quality: GlassQuality.standard,
+                settings: _glassSettings(blur: 2.5, glowIntensity: 0.75),
+                child: TabBar(
+                  controller: _tabs,
+                  indicatorColor: _kCyan,
+                  indicatorWeight: 1.5,
+                  labelColor: _kCyan,
+                  unselectedLabelColor: SieTheme.textSecondary,
+                  labelStyle: const TextStyle(
+                    fontSize: 10,
+                    letterSpacing: 1.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  tabs: const [
+                    Tab(text: 'РАМКИ'),
+                    Tab(text: 'ФОНЫ'),
+                    Tab(text: 'СТИЛИ'),
+                  ],
                 ),
-                tabs: const [
-                  Tab(text: 'РАМКИ'),
-                  Tab(text: 'ФОНЫ'),
-                  Tab(text: 'СТИЛИ'),
-                ],
               ),
-            ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabs,
-                children: [
-                  _ShopGrid(
-                    assets: frames,
-                    inventory: inventory,
-                    profile: profile,
-                    buyingId: _buyingId,
-                    onBuy: _onBuy,
-                    onEquip: _onEquip,
-                    onPreview: (a) => _showPreview(a, profile),
-                  ),
-                  _ShopGrid(
-                    assets: backgrounds,
-                    inventory: inventory,
-                    profile: profile,
-                    buyingId: _buyingId,
-                    onBuy: _onBuy,
-                    onEquip: _onEquip,
-                    onPreview: (a) => _showPreview(a, profile),
-                  ),
-                  _ShopGrid(
-                    assets: styles,
-                    inventory: inventory,
-                    profile: profile,
-                    buyingId: _buyingId,
-                    onBuy: _onBuy,
-                    onEquip: _onEquip,
-                    onPreview: (a) => _showPreview(a, profile),
-                  ),
-                ],
+              Expanded(
+                child: TabBarView(
+                  controller: _tabs,
+                  children: [
+                    _ShopGrid(
+                      assets: frames,
+                      inventory: inventory,
+                      profile: profile,
+                      buyingId: _buyingId,
+                      onBuy: _onBuy,
+                      onEquip: _onEquip,
+                      onPreview: (a) => _showPreview(a, profile),
+                    ),
+                    _ShopGrid(
+                      assets: backgrounds,
+                      inventory: inventory,
+                      profile: profile,
+                      buyingId: _buyingId,
+                      onBuy: _onBuy,
+                      onEquip: _onEquip,
+                      onPreview: (a) => _showPreview(a, profile),
+                    ),
+                    _ShopGrid(
+                      assets: styles,
+                      inventory: inventory,
+                      profile: profile,
+                      buyingId: _buyingId,
+                      onBuy: _onBuy,
+                      onEquip: _onEquip,
+                      onPreview: (a) => _showPreview(a, profile),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -192,19 +223,22 @@ class _TopBar extends StatelessWidget {
             ),
           ),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              border:
-                  Border.all(color: SieTheme.dp.withValues(alpha: 0.5)),
-              borderRadius: BorderRadius.circular(2),
+              border: Border.all(color: SieTheme.dp.withValues(alpha: 0.5)),
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: SieTheme.dp.withValues(alpha: 0.12),
+                  blurRadius: 8,
+                ),
+              ],
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.palette_outlined,
-                    size: 11,
-                    color: SieTheme.dp.withValues(alpha: 0.9)),
+                    size: 11, color: SieTheme.dp.withValues(alpha: 0.9)),
                 const SizedBox(width: 4),
                 Text(
                   '$dp DP',
@@ -247,12 +281,9 @@ class _ShopGrid extends StatelessWidget {
   });
 
   bool _isEquipped(CosmeticAsset asset) => switch (asset.type) {
-        AssetType.avatarFrame =>
-          profile?.equippedFrameId == asset.id,
-        AssetType.profileBackground =>
-          profile?.equippedBackgroundId == asset.id,
-        AssetType.statStyle =>
-          profile?.equippedStatStyleId == asset.id,
+        AssetType.avatarFrame       => profile?.equippedFrameId == asset.id,
+        AssetType.profileBackground => profile?.equippedBackgroundId == asset.id,
+        AssetType.statStyle         => profile?.equippedStatStyleId == asset.id,
       };
 
   @override
@@ -273,21 +304,22 @@ class _ShopGrid extends StatelessWidget {
       ),
       itemCount: assets.length,
       itemBuilder: (_, i) {
-        final asset = assets[i];
-        final purchased = inventory.owns(asset);
-        // Free items (price 0) are accessible without explicit purchase.
+        final asset      = assets[i];
+        final purchased  = inventory.owns(asset);
         final accessible = purchased || asset.priceDP == 0;
-        final equipped = _isEquipped(asset);
-        return _ShopCard(
-          asset: asset,
-          accessible: accessible,
-          purchased: purchased,
-          equipped: equipped,
-          loading: buyingId == asset.id,
-          dp: profile?.designPoints ?? 0,
-          onBuy: () => onBuy(asset),
-          onEquip: () => onEquip(asset),
-          onPreview: () => onPreview(asset),
+        final equipped   = _isEquipped(asset);
+        return RepaintBoundary(
+          child: _ShopCard(
+            asset: asset,
+            accessible: accessible,
+            purchased: purchased,
+            equipped: equipped,
+            loading: buyingId == asset.id,
+            dp: profile?.designPoints ?? 0,
+            onBuy: () => onBuy(asset),
+            onEquip: () => onEquip(asset),
+            onPreview: () => onPreview(asset),
+          ),
         );
       },
     );
@@ -296,7 +328,7 @@ class _ShopGrid extends StatelessWidget {
 
 // ── Shop Card ─────────────────────────────────────────────────
 
-class _ShopCard extends StatelessWidget {
+class _ShopCard extends StatefulWidget {
   final CosmeticAsset asset;
   final bool accessible;
   final bool purchased;
@@ -320,191 +352,327 @@ class _ShopCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final canAfford = dp >= asset.priceDP;
-    final isFree = asset.priceDP == 0;
+  State<_ShopCard> createState() => _ShopCardState();
+}
 
-    return Container(
-      decoration: BoxDecoration(
-        color: SieTheme.surface,
-        border: Border.all(
-          color: equipped
-              ? SieTheme.accent
-              : accessible
-                  ? SieTheme.borderAccent.withValues(alpha: 0.5)
-                  : SieTheme.borderDefault,
-          width: equipped ? 1.5 : 1.0,
+class _ShopCardState extends State<_ShopCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, value: 0.0);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _pressDown(PointerDownEvent _) {
+    _ctrl.animateTo(1.0,
+        duration: const Duration(milliseconds: 80), curve: Curves.easeIn);
+  }
+
+  void _pressUp(PointerEvent _) {
+    _ctrl.animateTo(0.0,
+        duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canAfford = widget.dp >= widget.asset.priceDP;
+    final isFree    = widget.asset.priceDP == 0;
+
+    // Cryo-freeze state for locked items
+    if (!widget.accessible) {
+      return ColorFiltered(
+        colorFilter: const ColorFilter.matrix(<double>[
+          0.25, 0.60, 0.15, 0, 5,
+          0.25, 0.60, 0.15, 0, 5,
+          0.35, 0.60, 0.15, 0, 10,
+          0,    0,    0,    1, 0,
+        ]),
+        child: Opacity(
+          opacity: 0.22,
+          child: _CardContent(
+            asset: widget.asset,
+            accessible: false,
+            purchased: false,
+            equipped: false,
+            loading: false,
+            canAfford: canAfford,
+            isFree: isFree,
+            onPreview: widget.onPreview,
+            onAction: null,
+            glowIntensity: 0.4,
+          ),
         ),
-        borderRadius: BorderRadius.circular(6),
-        boxShadow: equipped
-            ? [
-                BoxShadow(
-                  color: SieTheme.accent.withValues(alpha: 0.1),
-                  blurRadius: 8,
-                )
-              ]
-            : null,
+      );
+    }
+
+    return Listener(
+      onPointerDown: _pressDown,
+      onPointerUp: _pressUp,
+      onPointerCancel: _pressUp,
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (_, child) {
+          final t = _ctrl.value;
+          return Transform.scale(
+            scale: 1.0 - 0.03 * t,
+            child: _CardContent(
+              asset: widget.asset,
+              accessible: widget.accessible,
+              purchased: widget.purchased,
+              equipped: widget.equipped,
+              loading: widget.loading,
+              canAfford: canAfford,
+              isFree: isFree,
+              onPreview: widget.onPreview,
+              onAction: widget.equipped ? null : (widget.accessible ? widget.onEquip : widget.onBuy),
+              glowIntensity: widget.equipped
+                  ? 1.1 + 0.15 * t
+                  : 0.88 + 0.22 * t,
+              equippedGlow: widget.equipped,
+            ),
+          );
+        },
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Visual area (tappable → preview)
-          Expanded(
-            child: GestureDetector(
-              onTap: onPreview,
-              child: Container(
-                width: double.infinity,
-                clipBehavior: Clip.hardEdge,
-                decoration: BoxDecoration(
-                  color: SieTheme.background.withValues(alpha: 0.5),
-                  borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(6)),
+    );
+  }
+}
+
+class _CardContent extends StatelessWidget {
+  final CosmeticAsset asset;
+  final bool accessible;
+  final bool purchased;
+  final bool equipped;
+  final bool loading;
+  final bool canAfford;
+  final bool isFree;
+  final VoidCallback onPreview;
+  final VoidCallback? onAction;
+  final double glowIntensity;
+  final bool equippedGlow;
+
+  const _CardContent({
+    required this.asset,
+    required this.accessible,
+    required this.purchased,
+    required this.equipped,
+    required this.loading,
+    required this.canAfford,
+    required this.isFree,
+    required this.onPreview,
+    required this.onAction,
+    required this.glowIntensity,
+    this.equippedGlow = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Border color for owned/equipped items
+    final borderColor = equipped
+        ? _kCyan
+        : accessible
+            ? _kPurple.withValues(alpha: 0.5)
+            : SieTheme.borderDefault;
+
+    return Stack(
+      children: [
+        GlassCard(
+          padding: EdgeInsets.zero,
+          shape: LiquidRoundedSuperellipse(borderRadius: 16),
+          useOwnLayer: true,
+          quality: GlassQuality.standard,
+          clipBehavior: Clip.antiAlias,
+          settings: _glassSettings(glowIntensity: glowIntensity),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Visual area (tappable → preview)
+              Expanded(
+                child: GestureDetector(
+                  onTap: onPreview,
+                  child: Container(
+                    width: double.infinity,
+                    clipBehavior: Clip.hardEdge,
+                    decoration: const BoxDecoration(
+                      color: Color(0x1A0A0E1A),
+                      borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(16)),
+                    ),
+                    child: Stack(
+                      children: [
+                        Center(child: _AssetVisualBig(asset: asset)),
+                        // Equipped / purchased badge
+                        if (equipped)
+                          Positioned(
+                            top: 7,
+                            left: 7,
+                            child: _Badge(
+                                label: 'АКТИВНО',
+                                color: _kCyan,
+                                filled: true),
+                          )
+                        else if (purchased)
+                          Positioned(
+                            top: 7,
+                            left: 7,
+                            child: _Badge(
+                                label: 'КУПЛЕНО',
+                                color: _kPurple,
+                                filled: false),
+                          ),
+                        // Preview eye
+                        Positioned(
+                          bottom: 6,
+                          right: 8,
+                          child: Icon(
+                            Icons.visibility_outlined,
+                            size: 11,
+                            color: SieTheme.textSecondary.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        // Rarity dot
+                        Positioned(
+                          bottom: 6,
+                          left: 8,
+                          child: Container(
+                            width: 5,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: asset.rarityColor,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: asset.rarityColor.withValues(alpha: 0.5),
+                                  blurRadius: 4,
+                                )
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                child: Stack(
+              ),
+              // Info + action
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Center(child: _AssetVisualBig(asset: asset)),
-                    // Equipped / purchased badge
-                    if (equipped)
-                      Positioned(
-                        top: 7,
-                        left: 7,
-                        child: _Badge(
-                            label: 'АКТИВНО',
-                            color: SieTheme.accent,
-                            filled: true),
-                      )
-                    else if (purchased)
-                      Positioned(
-                        top: 7,
-                        left: 7,
-                        child: _Badge(
-                            label: 'КУПЛЕНО',
-                            color: SieTheme.accentSecondary,
-                            filled: false),
-                      ),
-                    // Preview eye icon
-                    Positioned(
-                      bottom: 6,
-                      right: 8,
-                      child: Icon(
-                        Icons.visibility_outlined,
-                        size: 11,
-                        color: SieTheme.textSecondary
-                            .withValues(alpha: 0.4),
+                    Text(
+                      asset.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
                       ),
                     ),
-                    // Rarity dot
-                    Positioned(
-                      bottom: 6,
-                      left: 8,
-                      child: Container(
-                        width: 5,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: asset.rarityColor,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: asset.rarityColor
-                                  .withValues(alpha: 0.5),
-                              blurRadius: 4,
-                            )
-                          ],
-                        ),
+                    const SizedBox(height: 2),
+                    Text(
+                      asset.rarityLabel,
+                      style: TextStyle(
+                        color: asset.rarityColor,
+                        fontSize: 8,
+                        letterSpacing: 1,
+                        fontWeight: FontWeight.w500,
                       ),
+                    ),
+                    if (!accessible) ...[
+                      const SizedBox(height: 5),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.palette_outlined,
+                            size: 9,
+                            color: canAfford
+                                ? SieTheme.dp.withValues(alpha: 0.85)
+                                : SieTheme.textSecondary,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            '${asset.priceDP} DP',
+                            style: TextStyle(
+                              color: canAfford
+                                  ? SieTheme.dp
+                                  : SieTheme.textSecondary,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          if (!canAfford) ...[
+                            const SizedBox(width: 3),
+                            const Icon(Icons.lock_outline,
+                                size: 9, color: SieTheme.textSecondary),
+                          ],
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    _ActionButton(
+                      label: equipped
+                          ? 'ЭКИПИРОВАНО'
+                          : accessible
+                              ? 'ВЫБРАТЬ'
+                              : (loading
+                                  ? '...'
+                                  : (isFree ? 'ПОЛУЧИТЬ' : 'КУПИТЬ')),
+                      color: equipped
+                          ? SieTheme.textSecondary
+                          : accessible
+                              ? _kPurple
+                              : (canAfford ? _kCyan : SieTheme.textSecondary),
+                      enabled: !equipped && !loading,
+                      loading: loading,
+                      onTap: onAction,
                     ),
                   ],
                 ),
               ),
+            ],
+          ),
+        ),
+        // Neon border overlay for owned/equipped items
+        if (accessible)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: borderColor,
+                    width: equipped ? 1.5 : 1.0,
+                  ),
+                  boxShadow: equipped
+                      ? [
+                          BoxShadow(
+                            color: _kCyan.withValues(alpha: 0.25),
+                            blurRadius: 12,
+                            spreadRadius: 1,
+                          ),
+                        ]
+                      : [
+                          BoxShadow(
+                            color: _kPurple.withValues(alpha: 0.1),
+                            blurRadius: 8,
+                          ),
+                        ],
+                ),
+              ),
             ),
           ),
-          // Info + action
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  asset.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: SieTheme.textPrimary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  asset.rarityLabel,
-                  style: TextStyle(
-                    color: asset.rarityColor,
-                    fontSize: 8,
-                    letterSpacing: 1,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                if (!accessible) ...[
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.palette_outlined,
-                        size: 9,
-                        color: canAfford
-                            ? SieTheme.dp.withValues(alpha: 0.85)
-                            : SieTheme.textSecondary,
-                      ),
-                      const SizedBox(width: 3),
-                      Text(
-                        '${asset.priceDP} DP',
-                        style: TextStyle(
-                          color: canAfford
-                              ? SieTheme.dp
-                              : SieTheme.textSecondary,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      if (!canAfford) ...[
-                        const SizedBox(width: 3),
-                        const Icon(Icons.lock_outline,
-                            size: 9,
-                            color: SieTheme.textSecondary),
-                      ],
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 6),
-                if (accessible)
-                  _ActionButton(
-                    label: equipped ? 'ЭКИПИРОВАНО' : 'ВЫБРАТЬ',
-                    color: equipped
-                        ? SieTheme.textSecondary
-                        : SieTheme.accentSecondary,
-                    enabled: !equipped,
-                    loading: false,
-                    onTap: equipped ? null : onEquip,
-                  )
-                else
-                  _ActionButton(
-                    label: loading
-                        ? '...'
-                        : (isFree ? 'ПОЛУЧИТЬ' : 'КУПИТЬ'),
-                    color: canAfford
-                        ? SieTheme.accent
-                        : SieTheme.textSecondary,
-                    enabled: !loading,
-                    loading: loading,
-                    onTap: loading ? null : onBuy,
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -523,8 +691,9 @@ class _Badge extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
         decoration: BoxDecoration(
           color: filled ? color.withValues(alpha: 0.9) : null,
-          border: filled ? null : Border.all(color: color.withValues(alpha: 0.7)),
-          borderRadius: BorderRadius.circular(2),
+          border:
+              filled ? null : Border.all(color: color.withValues(alpha: 0.7)),
+          borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
           label,
@@ -538,9 +707,9 @@ class _Badge extends StatelessWidget {
       );
 }
 
-// ── Action Button ─────────────────────────────────────────────
+// ── Action Button with press feedback ────────────────────────
 
-class _ActionButton extends StatelessWidget {
+class _ActionButton extends StatefulWidget {
   final String label;
   final Color color;
   final bool enabled;
@@ -556,38 +725,86 @@ class _ActionButton extends StatelessWidget {
   });
 
   @override
+  State<_ActionButton> createState() => _ActionButtonState();
+}
+
+class _ActionButtonState extends State<_ActionButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, value: 0.0);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 7),
-        decoration: BoxDecoration(
-          color:
-              (enabled && !loading) ? color.withValues(alpha: 0.1) : null,
-          border: Border.all(
-              color: enabled ? color : SieTheme.borderDefault),
-          borderRadius: BorderRadius.circular(2),
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.enabled ? widget.onTap : null,
+      onTapDown: widget.enabled
+          ? (_) => _ctrl.animateTo(1.0,
+              duration: const Duration(milliseconds: 80), curve: Curves.easeIn)
+          : null,
+      onTapUp: (_) => _ctrl.animateTo(0.0,
+          duration: const Duration(milliseconds: 220), curve: Curves.easeOut),
+      onTapCancel: () => _ctrl.animateTo(0.0,
+          duration: const Duration(milliseconds: 220), curve: Curves.easeOut),
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (_, _) => Transform.scale(
+          scale: 1.0 - 0.03 * _ctrl.value,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            decoration: BoxDecoration(
+              color: (widget.enabled && !widget.loading)
+                  ? widget.color.withValues(alpha: 0.12 + 0.08 * _ctrl.value)
+                  : null,
+              border: Border.all(
+                  color: widget.enabled
+                      ? widget.color
+                      : SieTheme.borderDefault),
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: widget.enabled && _ctrl.value > 0
+                  ? [
+                      BoxShadow(
+                        color: widget.color.withValues(alpha: 0.25 * _ctrl.value),
+                        blurRadius: 8,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: widget.loading
+                ? Center(
+                    child: SizedBox(
+                      width: 10,
+                      height: 10,
+                      child: CircularProgressIndicator(
+                          color: widget.color, strokeWidth: 1.5),
+                    ),
+                  )
+                : Text(
+                    widget.label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: widget.enabled
+                          ? widget.color
+                          : SieTheme.textSecondary,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+          ),
         ),
-        child: loading
-            ? Center(
-                child: SizedBox(
-                  width: 10,
-                  height: 10,
-                  child: CircularProgressIndicator(
-                      color: color, strokeWidth: 1.5),
-                ),
-              )
-            : Text(
-                label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: enabled ? color : SieTheme.textSecondary,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.5,
-                ),
-              ),
       ),
     );
   }
@@ -728,12 +945,10 @@ class _PreviewSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final frames = ref.watch(avatarFramesProvider).valueOrNull ?? [];
-    final backgrounds =
-        ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
-    final styles = ref.watch(statStylesProvider).valueOrNull ?? [];
+    final frames      = ref.watch(avatarFramesProvider).valueOrNull ?? [];
+    final backgrounds = ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
+    final styles      = ref.watch(statStylesProvider).valueOrNull ?? [];
 
-    // Substitute this asset into the current equipped set for the preview.
     final previewEquipped = EquippedAssets.resolve(
       frames: frames,
       backgrounds: backgrounds,
@@ -758,14 +973,13 @@ class _PreviewSheet extends ConsumerWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Drag handle
           Center(
             child: Container(
               width: 36,
               height: 3,
               margin: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
-                color: SieTheme.borderDefault,
+                color: SieTheme.borderAccent,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -783,8 +997,6 @@ class _PreviewSheet extends ConsumerWidget {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 16),
-
-          // Mini profile preview
           Container(
             height: 130,
             clipBehavior: Clip.hardEdge,
@@ -795,8 +1007,8 @@ class _PreviewSheet extends ConsumerWidget {
                     end: Alignment.bottomRight,
                     colors: [Color(0xFF0D2A42), Color(0xFF071520)],
                   ),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: SieTheme.borderDefault),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _kCyan.withValues(alpha: 0.3)),
             ),
             child: Stack(
               children: [
@@ -827,7 +1039,7 @@ class _PreviewSheet extends ConsumerWidget {
                                 BoxDecoration(
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                      color: SieTheme.borderAccent,
+                                      color: _kCyan.withValues(alpha: 0.6),
                                       width: 1.5),
                                   color: SieTheme.surface,
                                 ),
@@ -850,7 +1062,7 @@ class _PreviewSheet extends ConsumerWidget {
                           Text(
                             (profile?.username ?? 'OPERATIVE').toUpperCase(),
                             style: const TextStyle(
-                              color: SieTheme.textPrimary,
+                              color: Colors.white,
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 2,
@@ -872,9 +1084,8 @@ class _PreviewSheet extends ConsumerWidget {
                               'LVL ${((profile?.totalXp ?? 0) ~/ 1000) + 1}'
                               '  ·  ${profile?.totalXp ?? 0} XP',
                               style: TextStyle(
-                                color:
-                                    previewEquipped.statStyle?.accentColor ??
-                                        SieTheme.accent,
+                                color: previewEquipped.statStyle?.accentColor ??
+                                    _kCyan,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 1,
@@ -947,7 +1158,7 @@ class _LetterFill extends StatelessWidget {
           child: Text(
             letter,
             style: const TextStyle(
-              color: SieTheme.accent,
+              color: _kCyan,
               fontSize: 22,
               fontWeight: FontWeight.w200,
             ),

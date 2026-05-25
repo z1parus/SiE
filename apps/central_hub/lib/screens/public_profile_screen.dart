@@ -1,16 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 
+// ── Design tokens ──────────────────────────────────────────────────────────────
+const _kCyan = Color(0xFF00E5FF);
+
+LiquidGlassSettings _glassSettings({double glowIntensity = 0.88}) =>
+    LiquidGlassSettings(
+      blur: 3.5,
+      thickness: 24,
+      refractiveIndex: 1.45,
+      glassColor: const Color(0x0A0A0E1A),
+      lightAngle: GlassDefaults.lightAngle,
+      lightIntensity: 0.72,
+      glowIntensity: glowIntensity,
+      saturation: 1.4,
+      specularSharpness: GlassSpecularSharpness.sharp,
+      ambientStrength: 0.08,
+      chromaticAberration: 0.015,
+    );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PublicProfileScreen
+// ─────────────────────────────────────────────────────────────────────────────
 class PublicProfileScreen extends ConsumerWidget {
   final PublicProfile profile;
   const PublicProfileScreen({super.key, required this.profile});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final frames = ref.watch(avatarFramesProvider).valueOrNull ?? [];
+    final frames      = ref.watch(avatarFramesProvider).valueOrNull ?? [];
     final backgrounds = ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
-    final styles = ref.watch(statStylesProvider).valueOrNull ?? [];
+    final styles      = ref.watch(statStylesProvider).valueOrNull ?? [];
 
     final equipped = EquippedAssets.resolve(
       frames: frames,
@@ -21,53 +43,57 @@ class PublicProfileScreen extends ConsumerWidget {
       styleId: profile.equippedStatStyleId,
     );
 
-    return Scaffold(
-      backgroundColor: SieTheme.background,
-      body: Stack(
-        children: [
-          CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                child: _HeroSection(profile: profile, equipped: equipped),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 48),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _NameSection(profile: profile),
-                      const SizedBox(height: 24),
-                      _StatsRow(profile: profile, statStyle: equipped.statStyle),
-                      const SizedBox(height: 24),
-                      _XpBar(profile: profile),
-                      const SizedBox(height: 28),
-                      const SectionHeader(title: 'AWARDS'),
-                      const SizedBox(height: 16),
-                      _AchievementsSection(userId: profile.id),
-                    ],
+    return GlassPage(
+      background: const SieSpaceBackground(),
+      statusBarStyle: GlassStatusBarStyle.light,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
+            CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: _HeroSection(profile: profile, equipped: equipped),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 48),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _NameSection(profile: profile),
+                        const SizedBox(height: 24),
+                        _StatsRow(profile: profile, statStyle: equipped.statStyle),
+                        const SizedBox(height: 16),
+                        _XpPanel(profile: profile),
+                        const SizedBox(height: 28),
+                        const SectionHeader(title: 'AWARDS'),
+                        const SizedBox(height: 16),
+                        _AchievementsSection(userId: profile.id),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            // Back button floats above the hero
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 4, top: 4),
+                child: IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.arrow_back_ios_new,
+                      color: Colors.white, size: 18),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.black45,
+                    shape: const CircleBorder(),
+                    padding: const EdgeInsets.all(8),
                   ),
                 ),
               ),
-            ],
-          ),
-          // Back button floats above the hero
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.only(left: 4, top: 4),
-              child: IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.arrow_back_ios_new,
-                    color: Colors.white, size: 18),
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.black45,
-                  shape: const CircleBorder(),
-                  padding: const EdgeInsets.all(8),
-                ),
-              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -105,8 +131,6 @@ class _HeroSection extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           bgWidget,
-
-          // Gradient fade to background at the bottom
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -121,8 +145,6 @@ class _HeroSection extends StatelessWidget {
               ),
             ),
           ),
-
-          // Avatar with frame, centered at the bottom
           Positioned(
             bottom: 16,
             left: 0,
@@ -155,7 +177,6 @@ class _DefaultHeroBg extends StatelessWidget {
   }
 }
 
-// Subtle terminal grid lines overlay for the default background
 class _GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -190,8 +211,15 @@ class _AvatarWithFrame extends StatelessWidget {
     final decoration = frame?.buildFrameDecoration() ??
         BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: SieTheme.borderAccent, width: 1.5),
+          border: Border.all(color: _kCyan.withValues(alpha: 0.6), width: 1.5),
           color: SieTheme.surface,
+          boxShadow: [
+            BoxShadow(
+              color: _kCyan.withValues(alpha: 0.2),
+              blurRadius: 16,
+              spreadRadius: 2,
+            ),
+          ],
         );
 
     return Container(
@@ -222,7 +250,7 @@ class _Initials extends StatelessWidget {
           child: Text(
             letter,
             style: const TextStyle(
-              color: SieTheme.accent,
+              color: _kCyan,
               fontSize: 32,
               fontWeight: FontWeight.w200,
               letterSpacing: 1,
@@ -257,12 +285,19 @@ class _NameSection extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
-            border: Border.all(color: SieTheme.borderAccent),
-            borderRadius: BorderRadius.circular(2),
+            border: Border.all(color: _kCyan.withValues(alpha: 0.5)),
+            borderRadius: BorderRadius.circular(6),
+            boxShadow: [
+              BoxShadow(
+                color: _kCyan.withValues(alpha: 0.08),
+                blurRadius: 8,
+              ),
+            ],
           ),
           child: Text(
             'LEVEL ${profile.level}  ·  ${profile.totalXp} XP',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: _kCyan,
                   fontSize: 10,
                   letterSpacing: 2,
                 ),
@@ -350,18 +385,45 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final decoration = statStyle?.buildStatCardDecoration() ??
-        BoxDecoration(
-          color: SieTheme.surface,
-          border: Border.all(color: SieTheme.borderDefault),
-          borderRadius: BorderRadius.circular(4),
-        );
-    final valueColor = statStyle?.accentColor ?? SieTheme.accent;
+    final valueColor = statStyle?.accentColor ?? _kCyan;
 
-    return Container(
+    if (statStyle != null) {
+      // Use cosmetic stat card decoration directly when a style is applied.
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+        decoration: statStyle!.buildStatCardDecoration(),
+        child: _StatCardContent(
+            icon: icon, value: value, label: label, valueColor: valueColor),
+      );
+    }
+
+    return GlassCard(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-      decoration: decoration,
-      child: Column(
+      shape: LiquidRoundedSuperellipse(borderRadius: 14),
+      useOwnLayer: true,
+      quality: GlassQuality.standard,
+      clipBehavior: Clip.antiAlias,
+      settings: _glassSettings(),
+      child: _StatCardContent(
+          icon: icon, value: value, label: label, valueColor: valueColor),
+    );
+  }
+}
+
+class _StatCardContent extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+  final Color valueColor;
+  const _StatCardContent({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: SieTheme.textSecondary, size: 14),
@@ -385,69 +447,70 @@ class _StatCard extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
+      );
 }
 
-// ── XP Progress Bar ───────────────────────────────────────────
+// ── XP Panel ─────────────────────────────────────────────────
 
-class _XpBar extends StatelessWidget {
+class _XpPanel extends StatelessWidget {
   final PublicProfile profile;
-  const _XpBar({required this.profile});
+  const _XpPanel({required this.profile});
 
   @override
   Widget build(BuildContext context) {
     final xpInLevel = profile.xpInLevel;
-    final progress = xpInLevel / 1000.0;
-    final xpToNext = 1000 - xpInLevel;
+    final progress  = xpInLevel / 1000.0;
+    final xpToNext  = 1000 - xpInLevel;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionHeader(title: 'EXPERIENCE'),
-        const SizedBox(height: 14),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              '${profile.totalXp} XP TOTAL',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: SieTheme.accent,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1,
-                    fontSize: 11,
-                  ),
-            ),
-            Text(
-              '$xpToNext XP TO NEXT',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(fontSize: 10),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(2),
-          child: LinearProgressIndicator(
-            value: progress,
-            minHeight: 3,
-            backgroundColor: SieTheme.borderDefault,
-            valueColor:
-                const AlwaysStoppedAnimation<Color>(SieTheme.accent),
+    return GlassCard(
+      padding: const EdgeInsets.all(16),
+      shape: LiquidRoundedSuperellipse(borderRadius: 16),
+      useOwnLayer: true,
+      quality: GlassQuality.standard,
+      clipBehavior: Clip.antiAlias,
+      settings: _glassSettings(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionHeader(title: 'EXPERIENCE'),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${profile.totalXp} XP TOTAL',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: _kCyan,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1,
+                      fontSize: 11,
+                    ),
+              ),
+              Text(
+                '$xpToNext XP TO NEXT',
+                style:
+                    Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 10),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          '${(progress * 100).toStringAsFixed(0)}%  ·  LVL ${profile.level} → LVL ${profile.level + 1}',
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(fontSize: 9, letterSpacing: 1),
-        ),
-      ],
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 3,
+              backgroundColor: SieTheme.borderDefault,
+              valueColor: const AlwaysStoppedAnimation<Color>(_kCyan),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${(progress * 100).toStringAsFixed(0)}%  ·  LVL ${profile.level} → LVL ${profile.level + 1}',
+            style:
+                Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 9, letterSpacing: 1),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -480,9 +543,7 @@ class _AchievementsSection extends ConsumerWidget {
           return const Text(
             'NO AWARDS YET',
             style: TextStyle(
-                color: SieTheme.textSecondary,
-                fontSize: 11,
-                letterSpacing: 1),
+                color: SieTheme.textSecondary, fontSize: 11, letterSpacing: 1),
           );
         }
         return GridView.builder(
@@ -507,10 +568,10 @@ class _AchievementsSection extends ConsumerWidget {
   void _showDetail(BuildContext context, UserAchievement ua) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: SieTheme.surface,
+      backgroundColor: const Color(0xFF0B1E30),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(4)),
-        side: BorderSide(color: SieTheme.borderDefault),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: Color(0xFF1A3A5C)),
       ),
       builder: (_) => _AchievementSheet(ua: ua),
     );
@@ -524,19 +585,19 @@ class _AchievementSheet extends StatelessWidget {
   const _AchievementSheet({required this.ua});
 
   static IconData _icon(String slug) => switch (slug) {
-        'first_breath'          => Icons.air,
-        'streak_7'              => Icons.local_fire_department,
-        'streak_30'             => Icons.whatshot,
-        'habits_10'             => Icons.checklist,
-        'xp_1000'               => Icons.bolt,
-        'first_habit_created'   => Icons.add_task,
-        'deep_focus_initiated'  => Icons.center_focus_strong,
-        _                       => Icons.emoji_events,
+        'first_breath'         => Icons.air,
+        'streak_7'             => Icons.local_fire_department,
+        'streak_30'            => Icons.whatshot,
+        'habits_10'            => Icons.checklist,
+        'xp_1000'              => Icons.bolt,
+        'first_habit_created'  => Icons.add_task,
+        'deep_focus_initiated' => Icons.center_focus_strong,
+        _                      => Icons.emoji_events,
       };
 
   @override
   Widget build(BuildContext context) {
-    final ach = ua.achievement;
+    final ach    = ua.achievement;
     final earned = ua.earned;
 
     return Padding(
@@ -544,6 +605,16 @@ class _AchievementSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Drag handle
+          Container(
+            width: 36,
+            height: 3,
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(
+              color: SieTheme.borderAccent,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
           // Icon badge
           Container(
             width: 56,
@@ -551,64 +622,59 @@ class _AchievementSheet extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: earned
-                  ? SieTheme.accent.withValues(alpha: 0.12)
+                  ? _kCyan.withValues(alpha: 0.12)
                   : SieTheme.background,
               border: Border.all(
-                color: earned ? SieTheme.accent : SieTheme.borderDefault,
+                color: earned ? _kCyan : SieTheme.borderDefault,
                 width: earned ? 1.5 : 1,
               ),
               boxShadow: earned
-                  ? [
-                      BoxShadow(
-                        color: SieTheme.accent.withValues(alpha: 0.25),
-                        blurRadius: 12,
-                      )
-                    ]
+                  ? [BoxShadow(color: _kCyan.withValues(alpha: 0.25), blurRadius: 16)]
                   : null,
             ),
             child: Icon(
               _icon(ach.slug),
-              color: earned ? SieTheme.accent : SieTheme.textSecondary,
+              color: earned ? _kCyan : SieTheme.textSecondary,
               size: 24,
             ),
           ),
           const SizedBox(height: 16),
-
-          // Name
           Text(
             ach.name.toUpperCase(),
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
-
-          // Description
           if (ach.description != null) ...[
             Text(
               ach.description!,
               textAlign: TextAlign.center,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(height: 1.5),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
             ),
             const SizedBox(height: 12),
           ],
-
-          // Neon divider
-          Container(height: 1, color: SieTheme.borderAccent.withValues(alpha: 0.4)),
+          Container(
+            height: 1,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.transparent,
+                  _kCyan.withValues(alpha: 0.3),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 12),
-
-          // XP reward + status row
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.bolt, color: SieTheme.accent, size: 14),
+              const Icon(Icons.bolt, color: _kCyan, size: 14),
               const SizedBox(width: 4),
               Text(
                 '+${ach.xpReward} XP',
                 style: const TextStyle(
-                  color: SieTheme.accent,
+                  color: _kCyan,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.5,
@@ -616,22 +682,16 @@ class _AchievementSheet extends StatelessWidget {
               ),
               const SizedBox(width: 20),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: earned
-                        ? SieTheme.accent
-                        : SieTheme.textSecondary,
-                  ),
-                  borderRadius: BorderRadius.circular(2),
+                      color: earned ? _kCyan : SieTheme.textSecondary),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   earned ? 'ПОЛУЧЕНО' : 'НЕ ПОЛУЧЕНО',
                   style: TextStyle(
-                    color: earned
-                        ? SieTheme.accent
-                        : SieTheme.textSecondary,
+                    color: earned ? _kCyan : SieTheme.textSecondary,
                     fontSize: 9,
                     letterSpacing: 1.5,
                     fontWeight: FontWeight.w600,
@@ -640,7 +700,6 @@ class _AchievementSheet extends StatelessWidget {
               ),
             ],
           ),
-
           if (earned && ua.earnedAt != null) ...[
             const SizedBox(height: 8),
             Text(
