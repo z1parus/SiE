@@ -8,6 +8,7 @@ export 'src/models/branch.dart';
 export 'src/models/profile.dart';
 export 'src/models/achievement.dart';
 export 'src/models/habit.dart';
+export 'src/providers/sie_theme_mode_provider.dart';
 export 'src/providers/auth_state_provider.dart';
 export 'src/providers/branches_provider.dart';
 export 'src/providers/user_profile_provider.dart';

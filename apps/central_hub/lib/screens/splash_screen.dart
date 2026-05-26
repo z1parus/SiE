@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 
-class SieSplashScreen extends StatefulWidget {
+class SieSplashScreen extends ConsumerStatefulWidget {
   const SieSplashScreen({super.key, required this.onComplete});
 
   final VoidCallback onComplete;
 
   @override
-  State<SieSplashScreen> createState() => _SieSplashScreenState();
+  ConsumerState<SieSplashScreen> createState() => _SieSplashScreenState();
 }
 
-class _SieSplashScreenState extends State<SieSplashScreen>
+class _SieSplashScreenState extends ConsumerState<SieSplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 
@@ -62,17 +63,39 @@ class _SieSplashScreenState extends State<SieSplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final sieMode =
+        ref.watch(sieThemeModeProvider).valueOrNull ?? SieThemeMode.cosmicLiquidGlass;
+
+    final bgColor = switch (sieMode) {
+      SieThemeMode.cosmicLiquidGlass => const Color(0xFF0A0E1A),
+      SieThemeMode.classicDark       => SieTheme.cdBackground,
+      SieThemeMode.classicLight      => SieTheme.clBackground,
+    };
+
+    final textColor = switch (sieMode) {
+      SieThemeMode.cosmicLiquidGlass => const Color(0xFFF0FAFF),
+      SieThemeMode.classicDark       => SieTheme.cdTextPrimary,
+      SieThemeMode.classicLight      => SieTheme.clTextPrimary,
+    };
+
+    final glowColor = switch (sieMode) {
+      SieThemeMode.cosmicLiquidGlass => const Color(0xFF00E5FF),
+      SieThemeMode.classicDark       => SieTheme.cdAccent,
+      SieThemeMode.classicLight      => SieTheme.clAccent,
+    };
+
     return AnimatedBuilder(
       animation: _ctrl,
       builder: (context, _) {
         return Opacity(
           opacity: _screenOpacity.value,
           child: Scaffold(
-            backgroundColor: const Color(0xFF0A0E1A),
+            backgroundColor: bgColor,
             body: Stack(
               fit: StackFit.expand,
               children: [
-                const SieSpaceBackground(),
+                if (sieMode == SieThemeMode.cosmicLiquidGlass)
+                  const SieSpaceBackground(),
                 Center(
                   child: FadeTransition(
                     opacity: _textOpacity,
@@ -84,29 +107,32 @@ class _SieSplashScreenState extends State<SieSplashScreen>
                           fontSize: 80,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 12,
-                          color: const Color(0xFFF0FAFF),
-                          shadows: [
-                            // Layer 1 — tight cyan core glow
-                            Shadow(
-                              color: const Color(0xFF00E5FF).withAlpha(230),
-                              blurRadius: 12,
-                            ),
-                            // Layer 2 — mid cyan halo
-                            Shadow(
-                              color: const Color(0xFF00E5FF).withAlpha(160),
-                              blurRadius: 32,
-                            ),
-                            // Layer 3 — wide cyan bloom
-                            Shadow(
-                              color: const Color(0xFF00E5FF).withAlpha(80),
-                              blurRadius: 72,
-                            ),
-                            // Layer 4 — deep purple outer aura
-                            Shadow(
-                              color: const Color(0xFF7C3AED).withAlpha(100),
-                              blurRadius: 120,
-                            ),
-                          ],
+                          color: textColor,
+                          shadows: sieMode == SieThemeMode.cosmicLiquidGlass
+                              ? [
+                                  Shadow(
+                                    color: glowColor.withAlpha(230),
+                                    blurRadius: 12,
+                                  ),
+                                  Shadow(
+                                    color: glowColor.withAlpha(160),
+                                    blurRadius: 32,
+                                  ),
+                                  Shadow(
+                                    color: glowColor.withAlpha(80),
+                                    blurRadius: 72,
+                                  ),
+                                  Shadow(
+                                    color: const Color(0xFF7C3AED).withAlpha(100),
+                                    blurRadius: 120,
+                                  ),
+                                ]
+                              : [
+                                  Shadow(
+                                    color: glowColor.withAlpha(100),
+                                    blurRadius: 20,
+                                  ),
+                                ],
                         ),
                       ),
                     ),

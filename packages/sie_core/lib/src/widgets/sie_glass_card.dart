@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
+import '../providers/sie_theme_mode_provider.dart';
 import '../theme/sie_theme.dart';
 
 /// Premium liquid-glass card backed by the [liquid_glass_widgets] shader engine.
 ///
-/// Supports interactive press feedback when [onTap] is non-null:
+/// Automatically degrades to a flat [Container] when the operative selects
+/// [SieThemeMode.classicDark] or [SieThemeMode.classicLight], dropping GPU
+/// load to near zero while preserving press feedback.
+///
+/// Interactive press feedback when [onTap] is non-null:
 ///   • Scale squeezes to 0.97 on tap-down (physical spring resistance).
-///   • [lightIntensity] and [glowIntensity] spike momentarily — the specular
-///     rim brightens like a real glass surface catching a flash of light.
+///   • In cosmic mode, [lightIntensity] and [glowIntensity] spike — the
+///     specular rim brightens like a real glass surface catching a flash.
 ///   • Returns to 1.0 with a gentle ease-out spring on release.
-class SieGlassCard extends StatefulWidget {
+class SieGlassCard extends ConsumerStatefulWidget {
   const SieGlassCard({
     super.key,
     required this.child,
@@ -33,10 +39,10 @@ class SieGlassCard extends StatefulWidget {
   final VoidCallback? onTap;
 
   @override
-  State<SieGlassCard> createState() => _SieGlassCardState();
+  ConsumerState<SieGlassCard> createState() => _SieGlassCardState();
 }
 
-class _SieGlassCardState extends State<SieGlassCard>
+class _SieGlassCardState extends ConsumerState<SieGlassCard>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pressCtrl;
   late final Animation<double> _pressAnim;
@@ -44,7 +50,6 @@ class _SieGlassCardState extends State<SieGlassCard>
   @override
   void initState() {
     super.initState();
-    // Duration is overridden per-direction in _onTapDown / _onRelease.
     _pressCtrl = AnimationController(vsync: this, value: 0.0);
     _pressAnim = CurvedAnimation(parent: _pressCtrl, curve: Curves.easeOut);
   }
@@ -74,14 +79,75 @@ class _SieGlassCardState extends State<SieGlassCard>
 
   @override
   Widget build(BuildContext context) {
+    final sieMode =
+        ref.watch(sieThemeModeProvider).valueOrNull ?? SieThemeMode.cosmicLiquidGlass;
+
+    if (sieMode != SieThemeMode.cosmicLiquidGlass) {
+      return _buildFlatCard(sieMode);
+    }
+
+    return _buildGlassCard();
+  }
+
+  // ── Flat card (classicDark / classicLight) ─────────────────────────────────
+
+  Widget _buildFlatCard(SieThemeMode mode) {
+    final bgColor = mode == SieThemeMode.classicLight
+        ? SieTheme.clSurface
+        : SieTheme.cdSurface;
+    final borderColor = mode == SieThemeMode.classicLight
+        ? SieTheme.clBorder
+        : SieTheme.cdBorder;
+
+    final decoration = BoxDecoration(
+      color: bgColor,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: borderColor),
+    );
+
+    if (widget.onTap == null) {
+      return Container(
+        width: widget.width,
+        height: widget.height,
+        margin: widget.margin,
+        padding: widget.padding ?? const EdgeInsets.all(16),
+        decoration: decoration,
+        child: widget.child,
+      );
+    }
+
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: _onTapDown,
+      onTapUp: (_) => _onRelease(),
+      onTapCancel: _onRelease,
+      child: AnimatedBuilder(
+        animation: _pressAnim,
+        builder: (_, child) => Transform.scale(
+          scale: 1.0 - 0.03 * _pressAnim.value,
+          child: Container(
+            width: widget.width,
+            height: widget.height,
+            margin: widget.margin,
+            padding: widget.padding ?? const EdgeInsets.all(16),
+            decoration: decoration,
+            child: child,
+          ),
+        ),
+        child: widget.child,
+      ),
+    );
+  }
+
+  // ── Glass card (cosmicLiquidGlass) ─────────────────────────────────────────
+
+  Widget _buildGlassCard() {
     final spaceEffects = Theme.of(context).extension<SieSpaceEffects>();
     final br = (spaceEffects?.glassDecoration.borderRadius as BorderRadius?)
             ?.topLeft.x ??
         24.0;
     final blur = (widget.blurSigma / 6).clamp(2.0, 8.0);
 
-    // Non-interactive cards (onTap == null) skip both GestureDetector and
-    // AnimatedBuilder — they render as a static GlassCard with zero overhead.
     if (widget.onTap == null) {
       return GlassCard(
         width: widget.width,
@@ -109,7 +175,6 @@ class _SieGlassCardState extends State<SieGlassCard>
       );
     }
 
-    // Interactive card — AnimatedBuilder drives scale + specular flash.
     return GestureDetector(
       onTap: widget.onTap,
       onTapDown: _onTapDown,
@@ -118,9 +183,9 @@ class _SieGlassCardState extends State<SieGlassCard>
       child: AnimatedBuilder(
         animation: _pressAnim,
         builder: (_, child) {
-          final t = _pressAnim.value; // 0.0 = idle, 1.0 = fully pressed
+          final t = _pressAnim.value;
           return Transform.scale(
-            scale: 1.0 - 0.03 * t, // 1.00 → 0.97
+            scale: 1.0 - 0.03 * t,
             child: GlassCard(
               width: widget.width,
               height: widget.height,
@@ -136,8 +201,8 @@ class _SieGlassCardState extends State<SieGlassCard>
                 refractiveIndex: 1.45,
                 glassColor: const Color(0x0A0A0E1A),
                 lightAngle: GlassDefaults.lightAngle,
-                lightIntensity: 0.72 + 0.22 * t, // specular flash on press
-                glowIntensity: 0.85 + 0.20 * t,  // edge glow boost on press
+                lightIntensity: 0.72 + 0.22 * t,
+                glowIntensity: 0.85 + 0.20 * t,
                 saturation: 1.4,
                 specularSharpness: GlassSpecularSharpness.sharp,
                 ambientStrength: 0.08,

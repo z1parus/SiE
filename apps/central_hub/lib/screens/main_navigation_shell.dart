@@ -9,14 +9,12 @@ import 'leaderboard_screen.dart';
 import 'operations_control_screen.dart';
 import 'profile_screen.dart';
 
-// Connectivity + sync imports accessed via sie_core exports.
-
 const _kCyan   = Color(0xFF00E5FF);
 const _kPurple = Color(0xFF7000FF);
 const _kMuted  = Color(0xFF90A4AE);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MainNavigationShell — root navigation shell with persistent glass nav bar
+// MainNavigationShell — root navigation shell with persistent nav bar
 // ─────────────────────────────────────────────────────────────────────────────
 class MainNavigationShell extends ConsumerStatefulWidget {
   const MainNavigationShell({super.key});
@@ -27,7 +25,6 @@ class MainNavigationShell extends ConsumerStatefulWidget {
 }
 
 class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
-  // Start on the Operations tab (index 1), matching the legacy entry point.
   int _currentIndex = 1;
 
   @override
@@ -37,61 +34,62 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
   }
 
   void _setupSync() {
-    // Fire sync once at startup if online.
-    final isOnline =
-        ref.read(connectivityProvider).valueOrNull ?? false;
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) SyncService.fromWidgetRef(ref).syncAll();
 
-    // Re-sync whenever connectivity is restored.
-    ref.listenManual<AsyncValue<bool>>(connectivityProvider,
-        (previous, next) {
+    ref.listenManual<AsyncValue<bool>>(connectivityProvider, (previous, next) {
       final wasOffline = previous?.valueOrNull == false;
       final isNowOnline = next.valueOrNull == true;
-      if (wasOffline && isNowOnline) {
-        SyncService.fromWidgetRef(ref).syncAll();
-      }
+      if (wasOffline && isNowOnline) SyncService.fromWidgetRef(ref).syncAll();
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final sieMode =
+        ref.watch(sieThemeModeProvider).valueOrNull ?? SieThemeMode.cosmicLiquidGlass;
+
+    final scaffold = Scaffold(
+      backgroundColor: sieMode == SieThemeMode.cosmicLiquidGlass
+          ? Colors.transparent
+          : SieTheme.themeDataFor(sieMode).scaffoldBackgroundColor,
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              const OfflineBanner(),
+              Expanded(
+                child: IndexedStack(
+                  index: _currentIndex,
+                  children: [
+                    ProfileScreen(asTab: true),
+                    OperationsControlScreen(asTab: true),
+                    const _GarageTab(),
+                    LeaderboardScreen(asTab: true),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: _ShellNavBar(
+              activeIndex: _currentIndex,
+              onTabChanged: (i) => setState(() => _currentIndex = i),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (sieMode != SieThemeMode.cosmicLiquidGlass) return scaffold;
+
     return GlassPage(
       background: const SieSpaceBackground(),
       statusBarStyle: GlassStatusBarStyle.light,
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Stack(
-          children: [
-            Column(
-              children: [
-                const OfflineBanner(),
-                Expanded(
-                  // IndexedStack keeps all tab states alive — no rebuilds or
-                  // state loss when switching tabs.
-                  child: IndexedStack(
-                    index: _currentIndex,
-                    children: [
-                      ProfileScreen(asTab: true),
-                      OperationsControlScreen(asTab: true),
-                      const _GarageTab(),
-                      LeaderboardScreen(asTab: true),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: _ShellNavBar(
-                activeIndex: _currentIndex,
-                onTabChanged: (i) => setState(() => _currentIndex = i),
-              ),
-            ),
-          ],
-        ),
-      ),
+      child: scaffold,
     );
   }
 }
@@ -120,9 +118,9 @@ class _GarageTab extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shell Navigation Bar — extracted from OperationsControlScreen._FloatingNavBar
+// Shell Navigation Bar
 // ─────────────────────────────────────────────────────────────────────────────
-class _ShellNavBar extends StatelessWidget {
+class _ShellNavBar extends ConsumerWidget {
   final int activeIndex;
   final ValueChanged<int> onTabChanged;
 
@@ -139,64 +137,116 @@ class _ShellNavBar extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sieMode =
+        ref.watch(sieThemeModeProvider).valueOrNull ?? SieThemeMode.cosmicLiquidGlass;
     final bottomInset = MediaQuery.of(context).padding.bottom;
+
+    final Color activeColor;
+    final Color inactiveColor;
+    if (sieMode == SieThemeMode.classicLight) {
+      activeColor = SieTheme.clAccent;
+      inactiveColor = SieTheme.clTextSecondary;
+    } else if (sieMode == SieThemeMode.classicDark) {
+      activeColor = SieTheme.cdAccent;
+      inactiveColor = SieTheme.cdTextSecondary;
+    } else {
+      activeColor = _kCyan;
+      inactiveColor = _kMuted;
+    }
+
+    final navContent = Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: List.generate(_items.length, (i) {
+        final item = _items[i];
+        return _NavItem(
+          icon: item.icon,
+          label: item.label,
+          isActive: i == activeIndex,
+          isCosmicMode: sieMode == SieThemeMode.cosmicLiquidGlass,
+          activeColor: activeColor,
+          inactiveColor: inactiveColor,
+          onTap: () => onTabChanged(i),
+        );
+      }),
+    );
+
+    if (sieMode == SieThemeMode.cosmicLiquidGlass) {
+      return Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, math.max(bottomInset, 16)),
+        child: GlassCard(
+          height: 68,
+          padding: EdgeInsets.zero,
+          shape: LiquidRoundedSuperellipse(borderRadius: 28),
+          useOwnLayer: true,
+          quality: GlassQuality.standard,
+          clipBehavior: Clip.antiAlias,
+          settings: LiquidGlassSettings(
+            blur: 3.5,
+            thickness: 24,
+            refractiveIndex: 1.45,
+            glassColor: const Color(0x0A0A0E1A),
+            lightAngle: GlassDefaults.lightAngle,
+            lightIntensity: 0.72,
+            glowIntensity: 0.92,
+            saturation: 1.4,
+            specularSharpness: GlassSpecularSharpness.sharp,
+            ambientStrength: 0.08,
+            chromaticAberration: 0.015,
+          ),
+          child: navContent,
+        ),
+      );
+    }
+
+    // Flat nav bar for classicDark / classicLight
+    final bgColor = sieMode == SieThemeMode.classicLight
+        ? SieTheme.clSurface
+        : SieTheme.cdSurface;
+    final borderColor = sieMode == SieThemeMode.classicLight
+        ? SieTheme.clBorder
+        : SieTheme.cdBorder;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 0, 16, math.max(bottomInset, 16)),
-      child: GlassCard(
+      child: Container(
         height: 68,
-        padding: EdgeInsets.zero,
-        shape: LiquidRoundedSuperellipse(borderRadius: 28),
-        useOwnLayer: true,
-        quality: GlassQuality.standard,
-        clipBehavior: Clip.antiAlias,
-        settings: LiquidGlassSettings(
-          blur: 3.5,
-          thickness: 24,
-          refractiveIndex: 1.45,
-          glassColor: const Color(0x0A0A0E1A),
-          lightAngle: GlassDefaults.lightAngle,
-          lightIntensity: 0.72,
-          glowIntensity: 0.92,
-          saturation: 1.4,
-          specularSharpness: GlassSpecularSharpness.sharp,
-          ambientStrength: 0.08,
-          chromaticAberration: 0.015,
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: borderColor),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: List.generate(_items.length, (i) {
-            final item = _items[i];
-            return _NavItem(
-              icon: item.icon,
-              label: item.label,
-              isActive: i == activeIndex,
-              onTap: () => onTabChanged(i),
-            );
-          }),
-        ),
+        child: navContent,
       ),
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Nav Item
+// ─────────────────────────────────────────────────────────────────────────────
 class _NavItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool isActive;
+  final bool isCosmicMode;
+  final Color activeColor;
+  final Color inactiveColor;
   final VoidCallback onTap;
 
   const _NavItem({
     required this.icon,
     required this.label,
     required this.isActive,
+    required this.isCosmicMode,
+    required this.activeColor,
+    required this.inactiveColor,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = isActive ? _kCyan : _kMuted;
+    final color = isActive ? activeColor : inactiveColor;
 
     return GestureDetector(
       onTap: onTap,
@@ -207,7 +257,8 @@ class _NavItem extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            if (isActive)
+            // Radial ambient glow — cosmic mode only
+            if (isActive && isCosmicMode)
               Positioned.fill(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
@@ -231,17 +282,20 @@ class _NavItem extends StatelessWidget {
                     height: 2,
                     margin: const EdgeInsets.only(bottom: 4),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [_kCyan, _kPurple],
-                      ),
+                      gradient: isCosmicMode
+                          ? const LinearGradient(colors: [_kCyan, _kPurple])
+                          : null,
+                      color: isCosmicMode ? null : activeColor,
                       borderRadius: BorderRadius.circular(1),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _kCyan.withValues(alpha: 0.7),
-                          blurRadius: 8,
-                          spreadRadius: 1,
-                        ),
-                      ],
+                      boxShadow: isCosmicMode
+                          ? [
+                              BoxShadow(
+                                color: _kCyan.withValues(alpha: 0.7),
+                                blurRadius: 8,
+                                spreadRadius: 1,
+                              ),
+                            ]
+                          : null,
                     ),
                   )
                 else
@@ -253,7 +307,8 @@ class _NavItem extends StatelessWidget {
                   style: TextStyle(
                     color: color,
                     fontSize: 9,
-                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
+                    fontWeight:
+                        isActive ? FontWeight.w700 : FontWeight.w400,
                     letterSpacing: 0.5,
                   ),
                   maxLines: 1,
