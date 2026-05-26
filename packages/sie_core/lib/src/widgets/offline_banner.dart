@@ -7,7 +7,14 @@ class OfflineBanner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isOnline = ref.watch(connectivityProvider).valueOrNull ?? true;
+    // While loading, assume online to avoid false-positive flash.
+    // Once resolved, the value is sticky until next network event.
+    final connectivity = ref.watch(connectivityProvider);
+    final isOnline = connectivity.when(
+      data: (v) => v,
+      loading: () => true,
+      error: (_, __) => false,
+    );
     if (isOnline) return const SizedBox.shrink();
 
     return SafeArea(

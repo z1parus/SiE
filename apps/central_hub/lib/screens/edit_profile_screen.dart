@@ -91,7 +91,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('ERROR: $e')),
+          const SnackBar(
+              content: Text('Проверьте подключение к интернету')),
         );
       }
     } finally {
@@ -136,12 +137,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     child: CircularProgressIndicator(
                         color: SieTheme.accent, strokeWidth: 1.5),
                   ),
-                  error: (e, _) => Center(
-                    child: Text(
-                      'ERROR: $e',
-                      style: const TextStyle(
-                          color: Colors.redAccent, fontSize: 12),
-                    ),
+                  error: (e, _) => const Center(
+                    child: _NoConnectionMessage(),
                   ),
                   data: (p) {
                     if (p == null) return const SizedBox();
@@ -752,7 +749,8 @@ class _PasswordSheetState extends State<_PasswordSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('ERROR: $e')),
+          const SnackBar(
+              content: Text('Проверьте подключение к интернету')),
         );
       }
     } finally {
@@ -986,6 +984,31 @@ class _PressButtonState extends State<_PressButton>
         },
         child: widget.child,
       ),
+    );
+  }
+}
+
+class _NoConnectionMessage extends StatelessWidget {
+  const _NoConnectionMessage();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.wifi_off_outlined,
+            color: Color(0xFF90A4AE), size: 36),
+        SizedBox(height: 12),
+        Text(
+          'Подключение к интернету отсутствует',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Color(0xFF90A4AE),
+            fontSize: 13,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
     );
   }
 }

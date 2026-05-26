@@ -141,8 +141,8 @@ final userAchievementsProvider =
       return UserAchievement(
           achievement: ach, earned: earned, earnedAt: earnedAt);
     }).toList();
-  } catch (e, st) {
-    debugPrint('SiE Achievements: error — $e');
-    Error.throwWithStackTrace(e, st);
+  } catch (e) {
+    debugPrint('SiE Achievements: offline fallback — $e');
+    return [];
   }
 });

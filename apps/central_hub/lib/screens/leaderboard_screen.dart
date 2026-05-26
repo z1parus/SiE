@@ -71,16 +71,8 @@ class LeaderboardScreen extends ConsumerWidget {
                       strokeWidth: 1.5,
                     ),
                   ),
-                  error: (e, _) => Center(
-                    child: Text(
-                      'ОШИБКА СОЕДИНЕНИЯ\n$e',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.redAccent,
-                        fontSize: 12,
-                        letterSpacing: 1,
-                      ),
-                    ),
+                  error: (e, _) => const Center(
+                    child: _NoConnectionMessage(),
                   ),
                 ),
               ),
@@ -736,6 +728,31 @@ class _Placeholder extends StatelessWidget {
         color: SieTheme.textSecondary,
         size: size * 0.55,
       ),
+    );
+  }
+}
+
+class _NoConnectionMessage extends StatelessWidget {
+  const _NoConnectionMessage();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.wifi_off_outlined,
+            color: Color(0xFF90A4AE), size: 36),
+        SizedBox(height: 12),
+        Text(
+          'Подключение к интернету отсутствует',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Color(0xFF90A4AE),
+            fontSize: 13,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
     );
   }
 }

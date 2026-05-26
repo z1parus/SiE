@@ -160,8 +160,21 @@ final analyticsProvider =
       currentStreak: streak,
     );
   } catch (e) {
-    debugPrint('SiE Analytics: fetch error — $e');
-    rethrow;
+    debugPrint('SiE Analytics: offline fallback — $e');
+    return AnalyticsData(
+      heatMap: {},
+      xpHistory: List.generate(7, (i) {
+        final d = todayDate.subtract(Duration(days: 6 - i));
+        return DayXp(d, 0);
+      }),
+      focusByDay: List.generate(7, (i) {
+        final d = todayDate.subtract(Duration(days: 6 - i));
+        return DayFocus(d, 0);
+      }),
+      totalFocusMinutes: 0,
+      habitCompletionRate: 0,
+      currentStreak: 0,
+    );
   }
 });
 

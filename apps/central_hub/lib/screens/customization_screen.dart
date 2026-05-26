@@ -74,7 +74,8 @@ class _CustomizationScreenState extends ConsumerState<CustomizationScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('ERROR: $e')),
+          const SnackBar(
+              content: Text('Проверьте подключение к интернету')),
         );
       }
     } finally {

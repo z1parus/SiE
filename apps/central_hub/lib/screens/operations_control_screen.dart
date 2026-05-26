@@ -104,11 +104,8 @@ class _OperationsControlScreenState
                   strokeWidth: 1.5,
                 ),
               ),
-              error: (e, _) => Center(
-                child: Text(
-                  'ERROR: $e',
-                  style: const TextStyle(color: Colors.redAccent),
-                ),
+              error: (e, _) => const Center(
+                child: _NoConnectionMessage(),
               ),
             ),
           ),
@@ -956,6 +953,34 @@ class _ArcPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_ArcPainter old) => old.progress != progress;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Offline / no-connection placeholder
+// ─────────────────────────────────────────────────────────────────────────────
+class _NoConnectionMessage extends StatelessWidget {
+  const _NoConnectionMessage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.wifi_off_outlined,
+            color: _kMuted, size: 36),
+        const SizedBox(height: 12),
+        const Text(
+          'Подключение к интернету отсутствует',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: _kMuted,
+            fontSize: 13,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

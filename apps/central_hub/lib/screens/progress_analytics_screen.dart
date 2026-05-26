@@ -94,16 +94,29 @@ class _LoadingState extends StatelessWidget {
 }
 
 class _ErrorState extends StatelessWidget {
-  final Object error;
-  const _ErrorState({required this.error});
+  // ignore: unused_element
+  final Object? error;
+  const _ErrorState({this.error});
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        'ERROR: $error',
-        style: const TextStyle(color: Colors.redAccent),
-        textAlign: TextAlign.center,
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.wifi_off_outlined,
+              color: Color(0xFF90A4AE), size: 36),
+          SizedBox(height: 12),
+          Text(
+            'Подключение к интернету отсутствует',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Color(0xFF90A4AE),
+              fontSize: 13,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
       ),
     );
   }

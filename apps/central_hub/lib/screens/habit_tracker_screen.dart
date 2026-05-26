@@ -72,14 +72,8 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                   strokeWidth: 1.5,
                 ),
               ),
-              error: (e, _) => Center(
-                child: Text(
-                  'ERROR: $e',
-                  style: const TextStyle(
-                    color: Colors.redAccent,
-                    fontSize: 12,
-                  ),
-                ),
+              error: (e, _) => const Center(
+                child: _NoConnectionMessage(),
               ),
               data: (state) {
                 if (state.habits.isEmpty) {
@@ -1659,6 +1653,31 @@ class _OptionTileState extends State<_OptionTile> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _NoConnectionMessage extends StatelessWidget {
+  const _NoConnectionMessage();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.wifi_off_outlined,
+            color: Color(0xFF90A4AE), size: 36),
+        SizedBox(height: 12),
+        Text(
+          'Подключение к интернету отсутствует',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Color(0xFF90A4AE),
+            fontSize: 13,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
     );
   }
 }
