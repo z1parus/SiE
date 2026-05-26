@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -73,11 +74,8 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
     final timerState = ref.read(focusTimerProvider);
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: SieTheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(4)),
-        side: BorderSide(color: SieTheme.borderDefault),
-      ),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (_) => _FocusSettingsSheet(
         settings: timerState.settings,
         isTimerActive: timerState.phase != FocusPhase.idle,
@@ -201,6 +199,7 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
             benefit:
                 'Тренировка концентрации и защита от выгорания. Временны́е блоки '
                 'защищают состояние потока и консолидируют рабочую память.',
+            xpReward: 100,
             onAccept: () {
               if (_showOnboardingManual) {
                 setState(() => _showOnboardingManual = false);
@@ -1104,62 +1103,121 @@ class _FocusSettingsSheetState extends State<_FocusSettingsSheet> {
   Widget build(BuildContext context) {
     final locked = widget.isTimerActive;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'PROTOCOL SETTINGS',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          if (locked) ...[
-            const SizedBox(height: 8),
-            Text(
-              'DURATION LOCKED DURING SESSION',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 10,
-                    letterSpacing: 1.5,
-                    color: SieTheme.textSecondary.withValues(alpha: 0.5),
-                  ),
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(20)),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                _kCyan.withValues(alpha: 0.04),
+                const Color(0xFF0A0E1A).withValues(alpha: 0.92),
+              ],
             ),
-          ],
-          const SizedBox(height: 20),
-          _FocusSettingRow(
-            label: 'FOCUS DURATION  (MIN)',
-            value: _s.workMinutes,
-            min: 5,
-            max: 60,
-            step: 5,
-            enabled: !locked,
-            onChanged: (v) => _update(_s.copyWith(workMinutes: v)),
+            border: Border(
+              top: BorderSide(
+                color: _kCyan.withValues(alpha: 0.30),
+                width: 1.0,
+              ),
+              left: BorderSide(
+                color: _kCyan.withValues(alpha: 0.12),
+                width: 1.0,
+              ),
+              right: BorderSide(
+                color: _kCyan.withValues(alpha: 0.12),
+                width: 1.0,
+              ),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _kCyan.withValues(alpha: 0.08),
+                blurRadius: 60,
+                offset: const Offset(0, -10),
+              ),
+            ],
           ),
-          _FocusSettingRow(
-            label: 'BREAK DURATION  (MIN)',
-            value: _s.breakMinutes,
-            min: 1,
-            max: 15,
-            step: 1,
-            enabled: !locked,
-            onChanged: (v) => _update(_s.copyWith(breakMinutes: v)),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 3,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(2),
+                        color: Colors.white.withValues(alpha: 0.20),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'PROTOCOL SETTINGS',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  if (locked) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'DURATION LOCKED DURING SESSION',
+                      style:
+                          Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontSize: 10,
+                                letterSpacing: 1.5,
+                                color: SieTheme.textSecondary
+                                    .withValues(alpha: 0.5),
+                              ),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  _FocusSettingRow(
+                    label: 'FOCUS DURATION  (MIN)',
+                    value: _s.workMinutes,
+                    min: 5,
+                    max: 60,
+                    step: 5,
+                    enabled: !locked,
+                    onChanged: (v) => _update(_s.copyWith(workMinutes: v)),
+                  ),
+                  _FocusSettingRow(
+                    label: 'BREAK DURATION  (MIN)',
+                    value: _s.breakMinutes,
+                    min: 1,
+                    max: 15,
+                    step: 1,
+                    enabled: !locked,
+                    onChanged: (v) => _update(_s.copyWith(breakMinutes: v)),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 4),
+                    child: Divider(color: SieTheme.borderDefault, height: 1),
+                  ),
+                  _AmbientToggleRow(
+                    label: 'FOCUS MUSIC',
+                    icon: Icons.work_outline,
+                    value: _s.isWorkMusicEnabled,
+                    onChanged: (v) =>
+                        _update(_s.copyWith(isWorkMusicEnabled: v)),
+                  ),
+                  _AmbientToggleRow(
+                    label: 'BREAK MUSIC',
+                    icon: Icons.coffee_outlined,
+                    value: _s.isBreakMusicEnabled,
+                    onChanged: (v) =>
+                        _update(_s.copyWith(isBreakMusicEnabled: v)),
+                  ),
+                ],
+              ),
+            ),
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 4),
-            child: Divider(color: SieTheme.borderDefault, height: 1),
-          ),
-          _AmbientToggleRow(
-            label: 'FOCUS MUSIC',
-            icon: Icons.work_outline,
-            value: _s.isWorkMusicEnabled,
-            onChanged: (v) => _update(_s.copyWith(isWorkMusicEnabled: v)),
-          ),
-          _AmbientToggleRow(
-            label: 'BREAK MUSIC',
-            icon: Icons.coffee_outlined,
-            value: _s.isBreakMusicEnabled,
-            onChanged: (v) => _update(_s.copyWith(isBreakMusicEnabled: v)),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1251,81 +1309,204 @@ class _AmbientToggleRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: SieTheme.textSecondary),
+          Icon(
+            icon,
+            size: 16,
+            color: value ? _kCyan : SieTheme.textSecondary,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
           ),
-          GestureDetector(
-            onTap: () => onChanged(!value),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 44,
-              height: 24,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: value
-                    ? SieTheme.accent.withValues(alpha: 0.25)
-                    : SieTheme.borderDefault,
-                border: Border.all(
-                  color: value ? SieTheme.accent : SieTheme.borderDefault,
-                  width: 1.5,
-                ),
-              ),
-              child: AnimatedAlign(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeInOut,
-                alignment:
-                    value ? Alignment.centerRight : Alignment.centerLeft,
-                child: Padding(
-                  padding: const EdgeInsets.all(3),
-                  child: Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color:
-                          value ? SieTheme.accent : SieTheme.textSecondary,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
+          _CockpitToggle(value: value, onChanged: onChanged),
         ],
       ),
     );
   }
 }
 
-class _StepBtn extends StatelessWidget {
+class _CockpitToggle extends StatefulWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _CockpitToggle({required this.value, required this.onChanged});
+
+  @override
+  State<_CockpitToggle> createState() => _CockpitToggleState();
+}
+
+class _CockpitToggleState extends State<_CockpitToggle> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => widget.onChanged(!widget.value),
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: _pressed
+            ? const Duration(milliseconds: 80)
+            : const Duration(milliseconds: 220),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeInOut,
+          width: 52,
+          height: 26,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            color: widget.value
+                ? _kCyan.withValues(alpha: 0.18)
+                : const Color(0xFF0D1B2A),
+            border: Border.all(
+              color: widget.value
+                  ? _kCyan.withValues(alpha: 0.80)
+                  : SieTheme.borderDefault,
+              width: 1.2,
+            ),
+            boxShadow: widget.value
+                ? [
+                    BoxShadow(
+                      color: _kCyan.withValues(alpha: 0.30),
+                      blurRadius: 10,
+                    ),
+                    BoxShadow(
+                      color: _kCyan.withValues(alpha: 0.12),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                    ),
+                  ]
+                : null,
+          ),
+          child: Stack(
+            children: [
+              // Cockpit track lines
+              Positioned.fill(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      height: 1,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      color: Colors.white.withValues(
+                        alpha: widget.value ? 0.18 : 0.08,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Container(
+                      height: 1,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      color: Colors.white.withValues(
+                        alpha: widget.value ? 0.12 : 0.05,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Thumb — rectangular neon lever
+              AnimatedAlign(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeInOut,
+                alignment: widget.value
+                    ? const Alignment(0.72, 0)
+                    : const Alignment(-0.72, 0),
+                child: Container(
+                  width: 16,
+                  height: 18,
+                  margin: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(2),
+                    color: widget.value ? _kCyan : SieTheme.textSecondary,
+                    boxShadow: widget.value
+                        ? [
+                            BoxShadow(
+                              color: _kCyan.withValues(alpha: 0.70),
+                              blurRadius: 8,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : null,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StepBtn extends StatefulWidget {
   const _StepBtn({
     required this.icon,
     required this.active,
     this.onTap,
   });
 
-  final IconData  icon;
-  final bool      active;
+  final IconData      icon;
+  final bool          active;
   final VoidCallback? onTap;
+
+  @override
+  State<_StepBtn> createState() => _StepBtnState();
+}
+
+class _StepBtnState extends State<_StepBtn> {
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: active ? SieTheme.borderAccent : SieTheme.borderDefault,
+      onTap: widget.onTap,
+      onTapDown: widget.onTap != null
+          ? (_) => setState(() => _pressed = true)
+          : null,
+      onTapUp: widget.onTap != null
+          ? (_) => setState(() => _pressed = false)
+          : null,
+      onTapCancel: widget.onTap != null
+          ? () => setState(() => _pressed = false)
+          : null,
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: _pressed
+            ? const Duration(milliseconds: 80)
+            : const Duration(milliseconds: 220),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: widget.active
+                  ? _pressed
+                      ? _kCyan
+                      : _kCyan.withValues(alpha: 0.65)
+                  : SieTheme.borderDefault,
+              width: 1.0,
+            ),
+            borderRadius: BorderRadius.circular(4),
+            color: widget.active && _pressed
+                ? _kCyan.withValues(alpha: 0.12)
+                : Colors.transparent,
+            boxShadow: widget.active
+                ? [
+                    BoxShadow(
+                      color: _kCyan.withValues(
+                        alpha: _pressed ? 0.28 : 0.10,
+                      ),
+                      blurRadius: _pressed ? 10 : 6,
+                    ),
+                  ]
+                : null,
           ),
-          borderRadius: BorderRadius.circular(2),
-        ),
-        child: Icon(
-          icon,
-          size: 16,
-          color: active ? SieTheme.accent : SieTheme.textSecondary,
+          child: Icon(
+            widget.icon,
+            size: 16,
+            color: widget.active ? _kCyan : SieTheme.textSecondary,
+          ),
         ),
       ),
     );

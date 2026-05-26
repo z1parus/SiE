@@ -145,6 +145,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                     'Автоматизация успеха через микро-действия и систематическую '
                     'дисциплину. Формирование нейронных паттернов, не требующих '
                     'волевых ресурсов.',
+                xpReward: 25,
                 onAccept: () {
                   if (_showOnboardingManual) {
                     setState(() => _showOnboardingManual = false);
@@ -164,8 +165,10 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
   // ── Dialogs (logic unchanged) ─────────────────────────────────
 
   void _showHabitDialog(Habit? existing) {
-    showDialog<void>(
+    showModalBottomSheet<void>(
       context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (_) => _HabitDialog(
         existing: existing,
         onSave: (title, description, color) {
@@ -235,70 +238,66 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
     showDialog<void>(
       context: context,
       builder: (ctx) => Dialog(
-        backgroundColor: SieTheme.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4),
-          side: const BorderSide(color: SieTheme.borderDefault),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                child: Text(
-                  habit.title.toUpperCase(),
-                  style: const TextStyle(
-                    color: SieTheme.textSecondary,
-                    fontSize: 10,
-                    letterSpacing: 2,
-                  ),
+        backgroundColor: Colors.transparent,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    _kCyan.withValues(alpha: 0.05),
+                    const Color(0xFF0A0E1A).withValues(alpha: 0.92),
+                  ],
+                ),
+                border: Border.all(
+                  color: _kCyan.withValues(alpha: 0.25),
                 ),
               ),
-              const Divider(color: SieTheme.borderDefault, height: 1),
-              ListTile(
-                dense: true,
-                leading: const Icon(
-                  Icons.edit_outlined,
-                  color: SieTheme.textPrimary,
-                  size: 18,
-                ),
-                title: const Text(
-                  'EDIT PROTOCOL',
-                  style: TextStyle(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 14),
+                    child: Text(
+                      habit.title.toUpperCase(),
+                      style: TextStyle(
+                        color: SieTheme.textSecondary.withValues(alpha: 0.80),
+                        fontSize: 10,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ),
+                  Divider(
+                    color: _kCyan.withValues(alpha: 0.15),
+                    height: 1,
+                  ),
+                  _OptionTile(
+                    icon: Icons.edit_outlined,
+                    label: 'EDIT PROTOCOL',
                     color: SieTheme.textPrimary,
-                    fontSize: 11,
-                    letterSpacing: 1.5,
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _showHabitDialog(habit);
+                    },
                   ),
-                ),
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  _showHabitDialog(habit);
-                },
-              ),
-              ListTile(
-                dense: true,
-                leading: const Icon(
-                  Icons.delete_outline,
-                  color: Colors.redAccent,
-                  size: 18,
-                ),
-                title: const Text(
-                  'DELETE PROTOCOL',
-                  style: TextStyle(
+                  _OptionTile(
+                    icon: Icons.delete_outline,
+                    label: 'DELETE PROTOCOL',
                     color: Colors.redAccent,
-                    fontSize: 11,
-                    letterSpacing: 1.5,
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _confirmDelete(habit);
+                    },
                   ),
-                ),
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  _confirmDelete(habit);
-                },
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -309,71 +308,74 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
     showDialog<void>(
       context: context,
       builder: (ctx) => Dialog(
-        backgroundColor: SieTheme.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4),
-          side: const BorderSide(color: SieTheme.borderDefault),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'CONFIRM DELETION',
-                style: TextStyle(
-                  color: SieTheme.textPrimary,
-                  fontSize: 12,
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w600,
+        backgroundColor: Colors.transparent,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.redAccent.withValues(alpha: 0.06),
+                    const Color(0xFF0A0E1A).withValues(alpha: 0.92),
+                  ],
+                ),
+                border: Border.all(
+                  color: Colors.redAccent.withValues(alpha: 0.35),
                 ),
               ),
-              const SizedBox(height: 12),
-              Text(
-                'Delete "${habit.title}"? All log history will be erased.',
-                style: const TextStyle(
-                  color: SieTheme.textSecondary,
-                  fontSize: 12,
-                  letterSpacing: 0.3,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextButton(
-                    onPressed: () => Navigator.of(ctx).pop(),
-                    child: const Text(
-                      'CANCEL',
-                      style: TextStyle(
-                        color: SieTheme.textSecondary,
-                        fontSize: 11,
-                        letterSpacing: 1,
-                      ),
+                  const Text(
+                    'CONFIRM DELETION',
+                    style: TextStyle(
+                      color: SieTheme.textPrimary,
+                      fontSize: 12,
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(ctx).pop();
-                      ref
-                          .read(habitsProvider.notifier)
-                          .deleteHabit(habit.id);
-                    },
-                    child: const Text(
-                      'DELETE',
-                      style: TextStyle(
-                        color: Colors.redAccent,
-                        fontSize: 11,
-                        letterSpacing: 1,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Delete "${habit.title}"? All log history will be erased.',
+                    style: const TextStyle(
+                      color: SieTheme.textSecondary,
+                      fontSize: 12,
+                      letterSpacing: 0.3,
                     ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      _SheetTextBtn(
+                        label: 'CANCEL',
+                        color: SieTheme.textSecondary,
+                        onTap: () => Navigator.of(ctx).pop(),
+                      ),
+                      const SizedBox(width: 8),
+                      _SheetTextBtn(
+                        label: 'DELETE',
+                        color: Colors.redAccent,
+                        onTap: () {
+                          Navigator.of(ctx).pop();
+                          ref
+                              .read(habitsProvider.notifier)
+                              .deleteHabit(habit.id);
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1277,131 +1279,209 @@ class _HabitDialogState extends State<_HabitDialog> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      child: TweenAnimationBuilder<Color?>(
-        tween: ColorTween(
-          begin: _toColor(_selectedColor),
-          end: _toColor(_selectedColor),
-        ),
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOut,
-        builder: (_, animColor, child) {
-          final c = animColor ?? _toColor(_selectedColor);
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: SieTheme.borderDefault),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      c.withValues(alpha: 0.10),
-                      SieTheme.surface.withValues(alpha: 0.88),
-                    ],
+    final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
+    return TweenAnimationBuilder<Color?>(
+      tween: ColorTween(
+        begin: _toColor(_selectedColor),
+        end: _toColor(_selectedColor),
+      ),
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+      builder: (_, animColor, child) {
+        final c = animColor ?? _toColor(_selectedColor);
+        return ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(20)),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    c.withValues(alpha: 0.08),
+                    const Color(0xFF0A0E1A).withValues(alpha: 0.92),
+                  ],
+                ),
+                border: Border(
+                  top: BorderSide(
+                    color: c.withValues(alpha: 0.50),
+                    width: 1.0,
+                  ),
+                  left: BorderSide(
+                    color: c.withValues(alpha: 0.18),
+                    width: 1.0,
+                  ),
+                  right: BorderSide(
+                    color: c.withValues(alpha: 0.18),
+                    width: 1.0,
                   ),
                 ),
-                child: child,
-              ),
-            ),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                isEdit ? 'EDIT PROTOCOL' : 'NEW PROTOCOL',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 20),
-              _Field(controller: _titleCtrl, label: 'TITLE'),
-              const SizedBox(height: 12),
-              _Field(
-                controller: _descCtrl,
-                label: 'DESCRIPTION (OPTIONAL)',
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'COLOR',
-                style: TextStyle(
-                  color: SieTheme.textSecondary,
-                  fontSize: 10,
-                  letterSpacing: 1.5,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: _colorOptions.map((hex) {
-                  final selected = hex == _selectedColor;
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedColor = hex),
-                    child: Container(
-                      width: 24,
-                      height: 24,
-                      margin: const EdgeInsets.only(right: 10),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _toColor(hex),
-                        border: selected
-                            ? Border.all(
-                                color: SieTheme.textPrimary,
-                                width: 2,
-                              )
-                            : null,
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text(
-                      'CANCEL',
-                      style: TextStyle(
-                        color: SieTheme.textSecondary,
-                        fontSize: 11,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  TextButton(
-                    onPressed: () {
-                      final title = _titleCtrl.text.trim();
-                      if (title.isEmpty) return;
-                      widget.onSave(
-                        title,
-                        _descCtrl.text.trim().isEmpty
-                            ? null
-                            : _descCtrl.text.trim(),
-                        _selectedColor,
-                      );
-                      Navigator.of(context).pop();
-                    },
-                    child: Text(
-                      isEdit ? 'SAVE' : 'DEPLOY',
-                      style: TextStyle(
-                        color: _toColor(_selectedColor),
-                        fontSize: 11,
-                        letterSpacing: 1,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                boxShadow: [
+                  BoxShadow(
+                    color: c.withValues(alpha: 0.12),
+                    blurRadius: 40,
+                    offset: const Offset(0, -8),
                   ),
                 ],
               ),
+              padding: EdgeInsets.fromLTRB(24, 16, 24, 32 + keyboardBottom),
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Drag handle
+          Center(
+            child: Container(
+              width: 36,
+              height: 3,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(2),
+                color: Colors.white.withValues(alpha: 0.20),
+              ),
+            ),
+          ),
+          Text(
+            isEdit ? 'EDIT PROTOCOL' : 'NEW PROTOCOL',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 20),
+          _GlowField(controller: _titleCtrl, label: 'TITLE'),
+          const SizedBox(height: 12),
+          _GlowField(
+            controller: _descCtrl,
+            label: 'DESCRIPTION (OPTIONAL)',
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'COLOR',
+            style: TextStyle(
+              color: SieTheme.textSecondary,
+              fontSize: 10,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: _colorOptions.map((hex) {
+              final selected = hex == _selectedColor;
+              return _ColorLens(
+                color: _toColor(hex),
+                selected: selected,
+                onTap: () => setState(() => _selectedColor = hex),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              _SheetTextBtn(
+                label: 'CANCEL',
+                color: SieTheme.textSecondary,
+                onTap: () => Navigator.of(context).pop(),
+              ),
+              const SizedBox(width: 8),
+              _SheetTextBtn(
+                label: isEdit ? 'SAVE' : 'DEPLOY',
+                color: _toColor(_selectedColor),
+                onTap: () {
+                  final title = _titleCtrl.text.trim();
+                  if (title.isEmpty) return;
+                  widget.onSave(
+                    title,
+                    _descCtrl.text.trim().isEmpty
+                        ? null
+                        : _descCtrl.text.trim(),
+                    _selectedColor,
+                  );
+                  Navigator.of(context).pop();
+                },
+              ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Glow Text Field ───────────────────────────────────────────
+
+class _GlowField extends StatefulWidget {
+  final TextEditingController controller;
+  final String label;
+  const _GlowField({required this.controller, required this.label});
+
+  @override
+  State<_GlowField> createState() => _GlowFieldState();
+}
+
+class _GlowFieldState extends State<_GlowField> {
+  final FocusNode _focus = FocusNode();
+  bool _hasFocus = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    setState(() => _hasFocus = _focus.hasFocus);
+  }
+
+  @override
+  void dispose() {
+    _focus.removeListener(_onFocusChange);
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(4),
+        boxShadow: _hasFocus
+            ? [
+                BoxShadow(
+                  color: _kCyan.withValues(alpha: 0.22),
+                  blurRadius: 14,
+                  spreadRadius: 2,
+                ),
+              ]
+            : [],
+      ),
+      child: TextField(
+        controller: widget.controller,
+        focusNode: _focus,
+        style: const TextStyle(
+          color: SieTheme.textPrimary,
+          fontSize: 13,
+          letterSpacing: 0.5,
+        ),
+        decoration: InputDecoration(
+          labelText: widget.label,
+          labelStyle: TextStyle(
+            color: _hasFocus ? _kCyan : SieTheme.textSecondary,
+            fontSize: 10,
+            letterSpacing: 1.5,
+          ),
+          enabledBorder: const UnderlineInputBorder(
+            borderSide: BorderSide(color: SieTheme.borderDefault),
+          ),
+          focusedBorder: const UnderlineInputBorder(
+            borderSide: BorderSide(color: _kCyan, width: 1.5),
           ),
         ),
       ),
@@ -1409,32 +1489,174 @@ class _HabitDialogState extends State<_HabitDialog> {
   }
 }
 
-class _Field extends StatelessWidget {
-  final TextEditingController controller;
-  final String label;
-  const _Field({required this.controller, required this.label});
+// ── Color Lens Chip ───────────────────────────────────────────
+
+class _ColorLens extends StatefulWidget {
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ColorLens({
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  State<_ColorLens> createState() => _ColorLensState();
+}
+
+class _ColorLensState extends State<_ColorLens> {
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      style: const TextStyle(
-        color: SieTheme.textPrimary,
-        fontSize: 13,
-        letterSpacing: 0.5,
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: _pressed
+            ? const Duration(milliseconds: 80)
+            : const Duration(milliseconds: 220),
+        child: Container(
+          width: 28,
+          height: 28,
+          margin: const EdgeInsets.only(right: 10),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: widget.selected
+                ? widget.color
+                : widget.color.withValues(alpha: 0.40),
+            border: widget.selected
+                ? Border.all(color: Colors.white, width: 2)
+                : Border.all(
+                    color: widget.color.withValues(alpha: 0.50),
+                    width: 1,
+                  ),
+            boxShadow: widget.selected
+                ? [
+                    BoxShadow(
+                      color: widget.color.withValues(alpha: 0.65),
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                    ),
+                    BoxShadow(
+                      color: widget.color.withValues(alpha: 0.30),
+                      blurRadius: 20,
+                    ),
+                  ]
+                : null,
+          ),
+        ),
       ),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(
-          color: SieTheme.textSecondary,
-          fontSize: 10,
-          letterSpacing: 1.5,
+    );
+  }
+}
+
+// ── Sheet Text Button ─────────────────────────────────────────
+
+class _SheetTextBtn extends StatefulWidget {
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _SheetTextBtn({
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  State<_SheetTextBtn> createState() => _SheetTextBtnState();
+}
+
+class _SheetTextBtnState extends State<_SheetTextBtn> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: _pressed
+            ? const Duration(milliseconds: 80)
+            : const Duration(milliseconds: 220),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              color: widget.color,
+              fontSize: 11,
+              letterSpacing: 1,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
-        enabledBorder: const UnderlineInputBorder(
-          borderSide: BorderSide(color: SieTheme.borderDefault),
-        ),
-        focusedBorder: const UnderlineInputBorder(
-          borderSide: BorderSide(color: SieTheme.accent),
+      ),
+    );
+  }
+}
+
+// ── Option Tile ───────────────────────────────────────────────
+
+class _OptionTile extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _OptionTile({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  State<_OptionTile> createState() => _OptionTileState();
+}
+
+class _OptionTileState extends State<_OptionTile> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: _pressed
+            ? const Duration(milliseconds: 80)
+            : const Duration(milliseconds: 220),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          color: _pressed
+              ? widget.color.withValues(alpha: 0.06)
+              : Colors.transparent,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          child: Row(
+            children: [
+              Icon(widget.icon, color: widget.color, size: 18),
+              const SizedBox(width: 14),
+              Text(
+                widget.label,
+                style: TextStyle(
+                  color: widget.color,
+                  fontSize: 11,
+                  letterSpacing: 1.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

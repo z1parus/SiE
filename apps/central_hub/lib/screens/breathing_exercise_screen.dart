@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
@@ -381,11 +382,8 @@ class _BreathingExerciseScreenState
   void _showSettings() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: SieTheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(4)),
-        side: BorderSide(color: SieTheme.borderDefault),
-      ),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (_) => _SettingsSheet(
         settings: _settings,
         onChanged: (s) => setState(() => _settings = s),
@@ -487,6 +485,7 @@ class _BreathingExerciseScreenState
             benefit:
                 'Моментальное снижение стресса, управляемый выброс адреналина '
                 'и ясность ума через гипервентиляцию с задержкой дыхания.',
+            xpReward: 50,
             onAccept: () {
               if (_showOnboardingManual) {
                 setState(() => _showOnboardingManual = false);
@@ -1097,54 +1096,108 @@ class _SettingsSheetState extends State<_SettingsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'PROTOCOL SETTINGS',
-            style: Theme.of(context).textTheme.titleMedium,
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                _kCyan.withValues(alpha: 0.04),
+                const Color(0xFF0A0E1A).withValues(alpha: 0.92),
+              ],
+            ),
+            border: Border(
+              top: BorderSide(
+                color: _kCyan.withValues(alpha: 0.30),
+                width: 1.0,
+              ),
+              left: BorderSide(
+                color: _kCyan.withValues(alpha: 0.12),
+                width: 1.0,
+              ),
+              right: BorderSide(
+                color: _kCyan.withValues(alpha: 0.12),
+                width: 1.0,
+              ),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _kCyan.withValues(alpha: 0.08),
+                blurRadius: 60,
+                offset: const Offset(0, -10),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
-          _SettingRow(
-            label: 'ROUNDS',
-            value: _s.rounds,
-            min: 1,
-            max: 5,
-            onChanged: (v) => _update(_s.copyWith(rounds: v)),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 3,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(2),
+                        color: Colors.white.withValues(alpha: 0.20),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'PROTOCOL SETTINGS',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 24),
+                  _SettingRow(
+                    label: 'ROUNDS',
+                    value: _s.rounds,
+                    min: 1,
+                    max: 5,
+                    onChanged: (v) => _update(_s.copyWith(rounds: v)),
+                  ),
+                  _SettingRow(
+                    label: 'CYCLES / ROUND',
+                    value: _s.cyclesPerRound,
+                    min: 10,
+                    max: 40,
+                    step: 5,
+                    onChanged: (v) => _update(_s.copyWith(cyclesPerRound: v)),
+                  ),
+                  _SettingRow(
+                    label: 'INHALE  (SEC)',
+                    value: _s.inhaleSecs,
+                    min: 1,
+                    max: 5,
+                    onChanged: (v) => _update(_s.copyWith(inhaleSecs: v)),
+                  ),
+                  _SettingRow(
+                    label: 'EXHALE  (SEC)',
+                    value: _s.exhaleSecs,
+                    min: 1,
+                    max: 7,
+                    onChanged: (v) => _update(_s.copyWith(exhaleSecs: v)),
+                  ),
+                  _SettingRow(
+                    label: 'EXHALE RETENTION (SEC)',
+                    value: _s.exhaustRetentionSecs,
+                    min: 30,
+                    max: 180,
+                    step: 15,
+                    onChanged: (v) => _update(_s.copyWith(exhaustRetentionSecs: v)),
+                  ),
+                ],
+              ),
+            ),
           ),
-          _SettingRow(
-            label: 'CYCLES / ROUND',
-            value: _s.cyclesPerRound,
-            min: 10,
-            max: 40,
-            step: 5,
-            onChanged: (v) => _update(_s.copyWith(cyclesPerRound: v)),
-          ),
-          _SettingRow(
-            label: 'INHALE  (SEC)',
-            value: _s.inhaleSecs,
-            min: 1,
-            max: 5,
-            onChanged: (v) => _update(_s.copyWith(inhaleSecs: v)),
-          ),
-          _SettingRow(
-            label: 'EXHALE  (SEC)',
-            value: _s.exhaleSecs,
-            min: 1,
-            max: 7,
-            onChanged: (v) => _update(_s.copyWith(exhaleSecs: v)),
-          ),
-          _SettingRow(
-            label: 'EXHALE RETENTION (SEC)',
-            value: _s.exhaustRetentionSecs,
-            min: 30,
-            max: 180,
-            step: 15,
-            onChanged: (v) => _update(_s.copyWith(exhaustRetentionSecs: v)),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1211,7 +1264,7 @@ class _SettingRow extends StatelessWidget {
   }
 }
 
-class _StepBtn extends StatelessWidget {
+class _StepBtn extends StatefulWidget {
   final IconData icon;
   final bool active;
   final VoidCallback? onTap;
@@ -1219,22 +1272,63 @@ class _StepBtn extends StatelessWidget {
   const _StepBtn({required this.icon, required this.active, this.onTap});
 
   @override
+  State<_StepBtn> createState() => _StepBtnState();
+}
+
+class _StepBtnState extends State<_StepBtn> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: active ? SieTheme.borderAccent : SieTheme.borderDefault,
+      onTap: widget.onTap,
+      onTapDown: widget.onTap != null
+          ? (_) => setState(() => _pressed = true)
+          : null,
+      onTapUp: widget.onTap != null
+          ? (_) => setState(() => _pressed = false)
+          : null,
+      onTapCancel: widget.onTap != null
+          ? () => setState(() => _pressed = false)
+          : null,
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: _pressed
+            ? const Duration(milliseconds: 80)
+            : const Duration(milliseconds: 220),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: widget.active
+                  ? _pressed
+                      ? _kCyan
+                      : _kCyan.withValues(alpha: 0.65)
+                  : SieTheme.borderDefault,
+              width: 1.0,
+            ),
+            borderRadius: BorderRadius.circular(4),
+            color: widget.active && _pressed
+                ? _kCyan.withValues(alpha: 0.12)
+                : Colors.transparent,
+            boxShadow: widget.active
+                ? [
+                    BoxShadow(
+                      color: _kCyan.withValues(
+                        alpha: _pressed ? 0.28 : 0.10,
+                      ),
+                      blurRadius: _pressed ? 10 : 6,
+                    ),
+                  ]
+                : null,
           ),
-          borderRadius: BorderRadius.circular(2),
-        ),
-        child: Icon(
-          icon,
-          size: 16,
-          color: active ? SieTheme.accent : SieTheme.textSecondary,
+          child: Icon(
+            widget.icon,
+            size: 16,
+            color: widget.active ? _kCyan : SieTheme.textSecondary,
+          ),
         ),
       ),
     );
