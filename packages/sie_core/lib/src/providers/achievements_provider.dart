@@ -51,6 +51,7 @@ class SessionCompletionNotifier extends Notifier<void> {
       }
     }
 
+    ref.invalidate(userProfileProvider);
     return (xpGained: xp, dpGained: _breathingDp, newAchievement: earned);
   }
 }

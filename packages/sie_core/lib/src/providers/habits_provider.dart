@@ -111,7 +111,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       state = AsyncData(await _load());
       if (isFirstHabit) {
         final awarded = await _tryAwardFirstHabit(client, userId);
-        if (awarded) ref.invalidate(userProfileProvider);
+        ref.invalidate(userProfileProvider);
         return awarded;
       }
       return false;
@@ -284,6 +284,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           }),
           addDesignPoints(10),
         ]);
+        ref.invalidate(userProfileProvider);
       }
     } catch (e, st) {
       state = AsyncData(prev);
