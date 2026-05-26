@@ -284,6 +284,19 @@ class _ProfileContent extends ConsumerWidget {
                   )),
                 ),
                 const SizedBox(height: 28),
+                const SectionHeader(title: 'РЕЖИМ ИНТЕРФЕЙСА'),
+                const SizedBox(height: 4),
+                Text(
+                  'ГРАФИЧЕСКАЯ НАГРУЗКА И СТИЛЬ ОФОРМЛЕНИЯ',
+                  style: TextStyle(
+                    color: SieTheme.textSecondary.withValues(alpha: 0.55),
+                    fontSize: 9,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const _ThemeSwitcherSection(),
+                const SizedBox(height: 28),
                 const SectionHeader(title: 'MEDALS VAULT'),
                 const SizedBox(height: 4),
                 Text(
@@ -730,6 +743,188 @@ class _MedalsVault extends ConsumerWidget {
               AchievementBadge(userAchievement: achievements[i]),
         );
       },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Theme Mode Switcher
+// ─────────────────────────────────────────────────────────────────────────────
+class _ThemeSwitcherSection extends ConsumerWidget {
+  const _ThemeSwitcherSection();
+
+  static const _options = [
+    (
+      mode: SieThemeMode.cosmicLiquidGlass,
+      label: 'COSMIC LIQUID GLASS',
+      description: 'Звёздное поле, стеклянные шейдеры',
+      bgColor: Color(0xFF0A0E1A),
+      accentColor: Color(0xFF00E5FF),
+    ),
+    (
+      mode: SieThemeMode.classicDark,
+      label: 'CLASSIC DARK',
+      description: 'Антрацит + золото, без шейдеров',
+      bgColor: Color(0xFF1C1C22),
+      accentColor: Color(0xFFC8A84B),
+    ),
+    (
+      mode: SieThemeMode.classicLight,
+      label: 'CLASSIC LIGHT',
+      description: 'Светлый фон + бирюза, без шейдеров',
+      bgColor: Color(0xFFF0F0F4),
+      accentColor: Color(0xFF5AADA0),
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeAsync = ref.watch(sieThemeModeProvider);
+    final current = themeAsync.valueOrNull ?? SieThemeMode.cosmicLiquidGlass;
+
+    return Column(
+      children: [
+        for (int i = 0; i < _options.length; i++) ...[
+          if (i > 0) const SizedBox(height: 8),
+          _ThemeOptionTile(
+            label: _options[i].label,
+            description: _options[i].description,
+            bgColor: _options[i].bgColor,
+            accentColor: _options[i].accentColor,
+            isActive: current == _options[i].mode,
+            onTap: current == _options[i].mode
+                ? null
+                : () => ref
+                    .read(sieThemeModeProvider.notifier)
+                    .setMode(_options[i].mode),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ThemeOptionTile extends StatelessWidget {
+  const _ThemeOptionTile({
+    required this.label,
+    required this.description,
+    required this.bgColor,
+    required this.accentColor,
+    required this.isActive,
+    this.onTap,
+  });
+
+  final String label;
+  final String description;
+  final Color bgColor;
+  final Color accentColor;
+  final bool isActive;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+        decoration: BoxDecoration(
+          color: isActive
+              ? accentColor.withValues(alpha: 0.07)
+              : Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isActive
+                ? accentColor.withValues(alpha: 0.50)
+                : Colors.white.withValues(alpha: 0.08),
+            width: isActive ? 1.0 : 0.8,
+          ),
+        ),
+        child: Row(
+          children: [
+            // Color swatch preview
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(
+                  color: accentColor.withValues(alpha: 0.55),
+                  width: 1.5,
+                ),
+              ),
+              child: Center(
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: accentColor,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: accentColor.withValues(alpha: 0.65),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: isActive ? accentColor : SieTheme.textPrimary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.4,
+                      shadows: isActive
+                          ? [
+                              Shadow(
+                                color: accentColor.withValues(alpha: 0.35),
+                                blurRadius: 8,
+                              ),
+                            ]
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    description,
+                    style: const TextStyle(
+                      color: SieTheme.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: isActive
+                  ? Icon(
+                      Icons.check_circle_rounded,
+                      key: const ValueKey(true),
+                      color: accentColor,
+                      size: 18,
+                    )
+                  : Icon(
+                      Icons.radio_button_unchecked_rounded,
+                      key: const ValueKey(false),
+                      color: SieTheme.textSecondary.withValues(alpha: 0.35),
+                      size: 18,
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
