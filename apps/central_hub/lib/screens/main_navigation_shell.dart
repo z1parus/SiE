@@ -9,6 +9,8 @@ import 'leaderboard_screen.dart';
 import 'operations_control_screen.dart';
 import 'profile_screen.dart';
 
+// Connectivity + sync imports accessed via sie_core exports.
+
 const _kCyan   = Color(0xFF00E5FF);
 const _kPurple = Color(0xFF7000FF);
 const _kMuted  = Color(0xFF90A4AE);
@@ -29,6 +31,29 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
   int _currentIndex = 1;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _setupSync());
+  }
+
+  void _setupSync() {
+    // Fire sync once at startup if online.
+    final isOnline =
+        ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) SyncService.fromWidgetRef(ref).syncAll();
+
+    // Re-sync whenever connectivity is restored.
+    ref.listenManual<AsyncValue<bool>>(connectivityProvider,
+        (previous, next) {
+      final wasOffline = previous?.valueOrNull == false;
+      final isNowOnline = next.valueOrNull == true;
+      if (wasOffline && isNowOnline) {
+        SyncService.fromWidgetRef(ref).syncAll();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return GlassPage(
       background: const SieSpaceBackground(),
@@ -37,16 +62,22 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
         backgroundColor: Colors.transparent,
         body: Stack(
           children: [
-            // IndexedStack keeps all tab states alive — no rebuilds or state
-            // loss when switching tabs. Each child runs under this GlassPage's
-            // GPU backdrop scope so glass cards sample the shared star field.
-            IndexedStack(
-              index: _currentIndex,
+            Column(
               children: [
-                ProfileScreen(asTab: true),
-                OperationsControlScreen(asTab: true),
-                const _GarageTab(),
-                LeaderboardScreen(asTab: true),
+                const OfflineBanner(),
+                Expanded(
+                  // IndexedStack keeps all tab states alive — no rebuilds or
+                  // state loss when switching tabs.
+                  child: IndexedStack(
+                    index: _currentIndex,
+                    children: [
+                      ProfileScreen(asTab: true),
+                      OperationsControlScreen(asTab: true),
+                      const _GarageTab(),
+                      LeaderboardScreen(asTab: true),
+                    ],
+                  ),
+                ),
               ],
             ),
             Positioned(

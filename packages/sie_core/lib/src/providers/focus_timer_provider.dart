@@ -2,13 +2,18 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:drift/drift.dart' show Value;
+import 'package:uuid/uuid.dart';
+import '../local/app_database.dart';
 import '../models/achievement.dart';
 import '../services/audio_service.dart';
+import 'connectivity_provider.dart';
 import 'user_profile_provider.dart';
 
 const _focusXp = 100;
 const _focusDp = 50;
 const _omit = Object();
+const _uuid = Uuid();
 
 typedef FocusSessionResult = ({int xpGained, int dpGained, Achievement? newAchievement});
 
@@ -258,7 +263,6 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
 
     if (state.phase == FocusPhase.work) {
       final result = await _saveWorkSession(settings: settings);
-      ref.invalidate(userProfileProvider);
       state = FocusTimerState(
         settings: settings,
         phase: FocusPhase.breakTime,
@@ -289,50 +293,86 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
     final userId = client.auth.currentUser?.id;
     if (userId == null) return (xpGained: 0, dpGained: 0, newAchievement: null);
 
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final db = ref.read(appDatabaseProvider);
+    final sessionId = _uuid.v4();
+
+    // Always record locally.
+    await db.insertFocusSession(LocalFocusSessionsCompanion(
+      id: Value(sessionId),
+      userId: Value(userId),
+      durationSeconds: Value(settings.workSecs),
+      completedAtMs: Value(DateTime.now().millisecondsSinceEpoch),
+      xpAwarded: const Value(_focusXp),
+      dpAwarded: const Value(_focusDp),
+      synced: Value(isOnline),
+    ));
+
+    Achievement? earned;
+
     try {
-      await client.from('focus_sessions').insert({
-        'user_id': userId,
-        'duration_seconds': settings.workSecs,
-        'is_completed': true,
-        'xp_gained': _focusXp,
-      });
+      if (isOnline) {
+        await client.from('focus_sessions').insert({
+          'id': sessionId,
+          'user_id': userId,
+          'duration_seconds': settings.workSecs,
+          'is_completed': true,
+          'xp_gained': _focusXp,
+        });
 
-      await Future.wait([
-        client.rpc('increment_xp', params: {
-          'p_user_id': userId,
-          'p_amount': _focusXp,
-        }),
-        addDesignPoints(_focusDp),
-      ]);
+        await Future.wait([
+          client.rpc('increment_xp', params: {
+            'p_user_id': userId,
+            'p_amount': _focusXp,
+          }),
+          client.rpc('add_design_points', params: {'p_amount': _focusDp}),
+        ]);
 
-      Achievement? earned;
-      final achRow = await client
-          .from('achievements')
-          .select()
-          .eq('slug', 'deep_focus_initiated')
-          .maybeSingle();
-
-      if (achRow != null) {
-        final alreadyHas = await client
-            .from('user_achievements')
-            .select('id')
-            .eq('user_id', userId)
-            .eq('achievement_id', achRow['id'] as String)
+        final achRow = await client
+            .from('achievements')
+            .select()
+            .eq('slug', 'deep_focus_initiated')
             .maybeSingle();
 
-        if (alreadyHas == null) {
-          await client.from('user_achievements').insert({
-            'user_id': userId,
-            'achievement_id': achRow['id'],
-          });
-          earned = Achievement.fromMap(achRow);
+        if (achRow != null) {
+          final alreadyHas = await client
+              .from('user_achievements')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('achievement_id', achRow['id'] as String)
+              .maybeSingle();
+
+          if (alreadyHas == null) {
+            await client.from('user_achievements').insert({
+              'user_id': userId,
+              'achievement_id': achRow['id'],
+            });
+            earned = Achievement.fromMap(achRow);
+          }
         }
       }
 
-      return (xpGained: _focusXp, dpGained: _focusDp, newAchievement: earned);
+      // Apply local XP delta for immediate UI update.
+      await ref
+          .read(userProfileProvider.notifier)
+          .applyLocalXpDelta(_focusXp, _focusDp);
+
+      return (
+        xpGained: _focusXp,
+        dpGained: _focusDp,
+        newAchievement: earned
+      );
     } catch (e) {
       debugPrint('SiE FocusTimer: save error — $e');
-      return (xpGained: 0, dpGained: 0, newAchievement: null);
+      // Still apply local delta so UI is not stuck.
+      await ref
+          .read(userProfileProvider.notifier)
+          .applyLocalXpDelta(_focusXp, _focusDp);
+      return (
+        xpGained: _focusXp,
+        dpGained: _focusDp,
+        newAchievement: null
+      );
     }
   }
 }

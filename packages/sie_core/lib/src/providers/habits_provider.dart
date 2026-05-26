@@ -1,17 +1,25 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:drift/drift.dart' show Value;
+import 'package:uuid/uuid.dart';
+import '../local/app_database.dart';
 import '../models/habit.dart';
 import 'auth_state_provider.dart';
+import 'connectivity_provider.dart';
 import 'user_profile_provider.dart';
 
 String _fmt(DateTime dt) =>
     '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
 
+const _uuid = Uuid();
+
 class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
   @override
   Future<HabitsState> build() async {
     ref.watch(authStateProvider);
+    ref.watch(connectivityProvider); // reload when connectivity changes
     return _load();
   }
 
@@ -21,41 +29,98 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     if (session == null) return HabitsState.empty;
 
     final userId = session.user.id;
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final db = ref.read(appDatabaseProvider);
     final cutoff = _fmt(DateTime.now().subtract(const Duration(days: 30)));
 
-    final habitsRaw = await client
-        .from('habits')
-        .select()
-        .eq('user_id', userId)
-        .order('created_at');
+    if (isOnline) {
+      try {
+        final habitsRaw = await client
+            .from('habits')
+            .select()
+            .eq('user_id', userId)
+            .order('created_at');
 
-    final logsRaw = await client
-        .from('habit_logs')
-        .select('habit_id, completed_at')
-        .eq('user_id', userId)
-        .gte('completed_at', cutoff);
+        final logsRaw = await client
+            .from('habit_logs')
+            .select('habit_id, completed_at')
+            .eq('user_id', userId)
+            .gte('completed_at', cutoff);
 
-    final habits = habitsRaw.map((r) => Habit.fromMap(r)).toList()
-      // Pinned habits always appear first; relative order within each group
-      // is preserved (habitsRaw is already ordered by created_at).
+        final habits = habitsRaw.map((r) => Habit.fromMap(r)).toList()
+          ..sort((a, b) {
+            if (a.isPinned == b.isPinned) return 0;
+            return a.isPinned ? -1 : 1;
+          });
+
+        // Mirror to local DB.
+        for (final h in habits) {
+          await db.upsertHabit(LocalHabitsCompanion(
+            id: Value(h.id),
+            userId: Value(h.userId),
+            title: Value(h.title),
+            description: Value(h.description),
+            color: Value(h.color),
+            isPinned: Value(h.isPinned),
+            createdAtMs: Value(h.createdAt.millisecondsSinceEpoch),
+            synced: const Value(true),
+          ));
+        }
+
+        final logDates = <String, Set<String>>{};
+        for (final row in logsRaw) {
+          final hId = row['habit_id']?.toString() ?? '';
+          final date = row['completed_at']?.toString() ?? '';
+          if (hId.isNotEmpty && date.isNotEmpty) {
+            logDates.putIfAbsent(hId, () => {}).add(date);
+            await db.upsertHabitLog(LocalHabitLogsCompanion(
+              habitId: Value(hId),
+              userId: Value(userId),
+              completedAt: Value(date),
+              synced: const Value(true),
+            ));
+          }
+        }
+
+        final streaks = <String, int>{
+          for (final h in habits) h.id: _streak(logDates[h.id] ?? {}),
+        };
+        return HabitsState(
+            habits: habits, logDates: logDates, streaks: streaks);
+      } catch (e) {
+        debugPrint('SiE Habits: online load failed, falling back to local — $e');
+      }
+    }
+
+    // Offline (or online fetch failed) — read from local DB.
+    final localHabits = await db.habitsForUser(userId);
+    final localLogs = await db.habitLogsForUser(userId, cutoff);
+
+    final habits = localHabits
+        .map((h) => Habit(
+              id: h.id,
+              userId: h.userId,
+              title: h.title,
+              description: h.description,
+              color: h.color,
+              isPinned: h.isPinned,
+              createdAt:
+                  DateTime.fromMillisecondsSinceEpoch(h.createdAtMs),
+            ))
+        .toList()
       ..sort((a, b) {
         if (a.isPinned == b.isPinned) return 0;
         return a.isPinned ? -1 : 1;
       });
 
     final logDates = <String, Set<String>>{};
-    for (final row in logsRaw) {
-      final hId = row['habit_id']?.toString() ?? '';
-      final date = row['completed_at']?.toString() ?? '';
-      if (hId.isNotEmpty && date.isNotEmpty) {
-        logDates.putIfAbsent(hId, () => {}).add(date);
-      }
+    for (final log in localLogs) {
+      logDates.putIfAbsent(log.habitId, () => {}).add(log.completedAt);
     }
 
     final streaks = <String, int>{
       for (final h in habits) h.id: _streak(logDates[h.id] ?? {}),
     };
-
     return HabitsState(habits: habits, logDates: logDates, streaks: streaks);
   }
 
@@ -79,40 +144,66 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     final userId = client.auth.currentUser?.id;
     if (userId == null) return false;
 
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final db = ref.read(appDatabaseProvider);
+    final habitId = _uuid.v4();
+    final now = DateTime.now();
     final prev = state.valueOrNull;
+    final isFirstHabit = prev?.habits.isEmpty ?? true;
 
-    // Optimistic insert with a temporary ID
+    // Optimistic UI update.
+    final optimistic = Habit(
+      id: habitId,
+      userId: userId,
+      title: title,
+      description: description,
+      color: color,
+      createdAt: now,
+    );
     if (prev != null) {
-      final temp = Habit(
-        id: 'tmp_${DateTime.now().millisecondsSinceEpoch}',
-        userId: userId,
-        title: title,
-        description: description,
-        color: color,
-        createdAt: DateTime.now(),
-      );
       state = AsyncData(HabitsState(
-        habits: [...prev.habits, temp],
+        habits: [...prev.habits, optimistic],
         logDates: prev.logDates,
-        streaks: {...prev.streaks, temp.id: 0},
+        streaks: {...prev.streaks, habitId: 0},
       ));
     }
 
-    final isFirstHabit = prev?.habits.isEmpty ?? true;
+    // Always write to local DB first.
+    await db.upsertHabit(LocalHabitsCompanion(
+      id: Value(habitId),
+      userId: Value(userId),
+      title: Value(title),
+      description: Value(description),
+      color: Value(color),
+      createdAtMs: Value(now.millisecondsSinceEpoch),
+      synced: Value(isOnline),
+    ));
 
     try {
-      await client.from('habits').insert({
-        'user_id': userId,
-        'title': title,
-        if (description != null && description.isNotEmpty)
-          'description': description,
-        'color': color,
-      });
-      state = AsyncData(await _load());
-      if (isFirstHabit) {
-        final awarded = await _tryAwardFirstHabit(client, userId);
-        ref.invalidate(userProfileProvider);
-        return awarded;
+      if (isOnline) {
+        await client.from('habits').insert({
+          'id': habitId,
+          'user_id': userId,
+          'title': title,
+          if (description != null && description.isNotEmpty)
+            'description': description,
+          'color': color,
+        });
+        state = AsyncData(await _load());
+        if (isFirstHabit) {
+          final awarded = await _tryAwardFirstHabit(client, userId);
+          return awarded;
+        }
+      } else {
+        await db.enqueueSyncOp('insert_habit', jsonEncode({
+          'id': habitId,
+          'user_id': userId,
+          'title': title,
+          if (description != null && description.isNotEmpty)
+            'description': description,
+          'color': color,
+        }));
+        state = AsyncData(await _load());
       }
       return false;
     } catch (e, st) {
@@ -131,6 +222,8 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     final userId = client.auth.currentUser?.id;
     if (userId == null) return;
 
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final db = ref.read(appDatabaseProvider);
     final prev = state.valueOrNull;
     if (prev == null) return;
 
@@ -150,15 +243,37 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       streaks: prev.streaks,
     ));
 
+    // Update local DB.
+    await db.upsertHabit(LocalHabitsCompanion(
+      id: Value(habitId),
+      userId: Value(userId),
+      title: Value(title),
+      description: Value(description?.isNotEmpty == true ? description : null),
+      color: Value(color),
+      createdAtMs: Value(
+          prev.habits[idx].createdAt.millisecondsSinceEpoch),
+      synced: Value(isOnline),
+    ));
+
     try {
-      await client.from('habits').update({
-        'title': title,
-        if (description != null && description.isNotEmpty)
-          'description': description
-        else
-          'description': null,
-        'color': color,
-      }).eq('id', habitId).eq('user_id', userId);
+      if (isOnline) {
+        await client.from('habits').update({
+          'title': title,
+          if (description != null && description.isNotEmpty)
+            'description': description
+          else
+            'description': null,
+          'color': color,
+        }).eq('id', habitId).eq('user_id', userId);
+      } else {
+        await db.enqueueSyncOp('update_habit', jsonEncode({
+          'id': habitId,
+          'title': title,
+          'description':
+              description?.isNotEmpty == true ? description : null,
+          'color': color,
+        }));
+      }
     } catch (e, st) {
       state = AsyncData(prev);
       Error.throwWithStackTrace(e, st);
@@ -170,13 +285,16 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     final userId = client.auth.currentUser?.id;
     if (userId == null) return;
 
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final db = ref.read(appDatabaseProvider);
     final prev = state.valueOrNull;
     if (prev == null) return;
 
     final newHabits = prev.habits.where((h) => h.id != habitId).toList();
     final newLogDates = Map<String, Set<String>>.from(prev.logDates)
       ..remove(habitId);
-    final newStreaks = Map<String, int>.from(prev.streaks)..remove(habitId);
+    final newStreaks = Map<String, int>.from(prev.streaks)
+      ..remove(habitId);
 
     state = AsyncData(HabitsState(
       habits: newHabits,
@@ -184,12 +302,19 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       streaks: newStreaks,
     ));
 
+    await db.markHabitDeleted(habitId);
+
     try {
-      await client
-          .from('habits')
-          .delete()
-          .eq('id', habitId)
-          .eq('user_id', userId);
+      if (isOnline) {
+        await client
+            .from('habits')
+            .delete()
+            .eq('id', habitId)
+            .eq('user_id', userId);
+      } else {
+        await db.enqueueSyncOp('delete_habit',
+            jsonEncode({'id': habitId, 'user_id': userId}));
+      }
     } catch (e, st) {
       state = AsyncData(prev);
       Error.throwWithStackTrace(e, st);
@@ -201,6 +326,8 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     final userId = client.auth.currentUser?.id;
     if (userId == null) return;
 
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final db = ref.read(appDatabaseProvider);
     final prev = state.valueOrNull;
     if (prev == null) return;
 
@@ -222,12 +349,31 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       streaks: prev.streaks,
     ));
 
+    await db.upsertHabit(LocalHabitsCompanion(
+      id: Value(habitId),
+      userId: Value(userId),
+      title: Value(prev.habits[idx].title),
+      description: Value(prev.habits[idx].description),
+      color: Value(prev.habits[idx].color),
+      isPinned: Value(newPinned),
+      createdAtMs:
+          Value(prev.habits[idx].createdAt.millisecondsSinceEpoch),
+      synced: Value(isOnline),
+    ));
+
     try {
-      await client
-          .from('habits')
-          .update({'is_pinned': newPinned})
-          .eq('id', habitId)
-          .eq('user_id', userId);
+      if (isOnline) {
+        await client
+            .from('habits')
+            .update({'is_pinned': newPinned})
+            .eq('id', habitId)
+            .eq('user_id', userId);
+      } else {
+        await db.enqueueSyncOp('update_habit', jsonEncode({
+          'id': habitId,
+          'is_pinned': newPinned,
+        }));
+      }
     } catch (e, st) {
       state = AsyncData(prev);
       Error.throwWithStackTrace(e, st);
@@ -243,11 +389,14 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     final prev = state.valueOrNull;
     if (prev == null) return;
 
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final db = ref.read(appDatabaseProvider);
     final isDone = prev.logDates[habitId]?.contains(dateStr) ?? false;
 
-    // Optimistic update
+    // Optimistic update.
     final newLogDates = {
-      for (final e in prev.logDates.entries) e.key: Set<String>.from(e.value),
+      for (final e in prev.logDates.entries)
+        e.key: Set<String>.from(e.value),
     };
     final habitDates = newLogDates.putIfAbsent(habitId, () => {});
     if (isDone) {
@@ -264,27 +413,52 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
 
     try {
       if (isDone) {
-        await client
-            .from('habit_logs')
-            .delete()
-            .eq('habit_id', habitId)
-            .eq('user_id', userId)
-            .eq('completed_at', dateStr);
+        await db.deleteHabitLog(habitId, userId, dateStr);
+        if (isOnline) {
+          await client
+              .from('habit_logs')
+              .delete()
+              .eq('habit_id', habitId)
+              .eq('user_id', userId)
+              .eq('completed_at', dateStr);
+        } else {
+          await db.enqueueSyncOp('delete_habit_log', jsonEncode({
+            'habit_id': habitId,
+            'user_id': userId,
+            'completed_at': dateStr,
+          }));
+        }
       } else {
-        await client.from('habit_logs').insert({
-          'habit_id': habitId,
-          'user_id': userId,
-          'completed_at': dateStr,
-          'xp_awarded': 50,
-        });
-        await Future.wait([
-          client.rpc('increment_xp', params: {
-            'p_user_id': userId,
-            'p_amount': 50,
-          }),
-          addDesignPoints(10),
-        ]);
-        ref.invalidate(userProfileProvider);
+        await db.upsertHabitLog(LocalHabitLogsCompanion(
+          habitId: Value(habitId),
+          userId: Value(userId),
+          completedAt: Value(dateStr),
+          synced: Value(isOnline),
+        ));
+        if (isOnline) {
+          await client.from('habit_logs').insert({
+            'habit_id': habitId,
+            'user_id': userId,
+            'completed_at': dateStr,
+            'xp_awarded': 50,
+          });
+          await Future.wait([
+            client.rpc('increment_xp',
+                params: {'p_user_id': userId, 'p_amount': 50}),
+            client.rpc('add_design_points', params: {'p_amount': 10}),
+          ]);
+        } else {
+          await db.enqueueSyncOp('insert_habit_log', jsonEncode({
+            'habit_id': habitId,
+            'user_id': userId,
+            'completed_at': dateStr,
+          }));
+        }
+        // Always update local XP immediately (online: mirrors server;
+        // offline: accumulates pending delta for later sync).
+        await ref
+            .read(userProfileProvider.notifier)
+            .applyLocalXpDelta(50, 10);
       }
     } catch (e, st) {
       state = AsyncData(prev);
@@ -322,10 +496,8 @@ Future<bool> _tryAwardFirstHabit(
         'user_id': userId,
         'achievement_id': achRow['id'],
       }),
-      client.rpc('increment_xp', params: {
-        'p_user_id': userId,
-        'p_amount': xpReward,
-      }),
+      client.rpc('increment_xp',
+          params: {'p_user_id': userId, 'p_amount': xpReward}),
     ]);
     return true;
   } catch (e) {
