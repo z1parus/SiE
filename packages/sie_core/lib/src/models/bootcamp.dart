@@ -8,6 +8,30 @@ import 'package:flutter/material.dart';
 enum BootcampTaskDestination { breathing, focusForge, habitArchive }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BootcampDailyActivity — today's real tool usage snapshot
+// ─────────────────────────────────────────────────────────────────────────────
+
+@immutable
+class BootcampDailyActivity {
+  final int breathingSessionsToday;
+  final int focusSessionsToday;
+  final bool hasHabitLogToday;
+
+  const BootcampDailyActivity({
+    required this.breathingSessionsToday,
+    required this.focusSessionsToday,
+    required this.hasHabitLogToday,
+  });
+
+  /// Empty snapshot — used when user is unauthenticated or DB unavailable.
+  static const empty = BootcampDailyActivity(
+    breathingSessionsToday: 0,
+    focusSessionsToday: 0,
+    hasHabitLogToday: false,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // BootcampTask
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -26,6 +50,14 @@ class BootcampTask {
     required this.destination,
     required this.icon,
   });
+
+  /// Returns true when today's real activity satisfies this task.
+  bool isAutoComplete(BootcampDailyActivity activity) =>
+      switch (destination) {
+        BootcampTaskDestination.breathing    => activity.breathingSessionsToday > 0,
+        BootcampTaskDestination.focusForge   => activity.focusSessionsToday > 0,
+        BootcampTaskDestination.habitArchive => activity.hasHabitLogToday,
+      };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

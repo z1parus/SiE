@@ -29,24 +29,30 @@ class _GarageScreenState extends ConsumerState<GarageScreen> {
     return _selectedDay!;
   }
 
-  void _navigate(BuildContext ctx, BootcampTaskDestination dest) {
-    Widget screen = switch (dest) {
-      BootcampTaskDestination.breathing   => const BreathingExerciseScreen(),
-      BootcampTaskDestination.focusForge  => const FocusProtocolScreen(),
+  /// Navigate to a tool screen; invalidate the activity provider on return
+  /// so auto-completion status refreshes immediately.
+  Future<void> _navigate(
+      BuildContext ctx, BootcampTaskDestination dest) async {
+    final Widget screen = switch (dest) {
+      BootcampTaskDestination.breathing    => const BreathingExerciseScreen(),
+      BootcampTaskDestination.focusForge   => const FocusProtocolScreen(),
       BootcampTaskDestination.habitArchive => const HabitTrackerScreen(),
     };
-    Navigator.of(ctx).push(PageRouteBuilder(
+    final nav = Navigator.of(ctx);
+    await nav.push(PageRouteBuilder(
       pageBuilder: (_, _, _) => screen,
       transitionsBuilder: (_, anim, _, child) =>
           FadeTransition(opacity: anim, child: child),
       transitionDuration: const Duration(milliseconds: 380),
     ));
+    if (mounted) ref.invalidate(bootcampDailyActivityProvider);
   }
 
   @override
   Widget build(BuildContext context) {
     final c            = ref.watch(sieColorsProvider);
     final progressAsync = ref.watch(bootcampProgressProvider);
+    final activityAsync = ref.watch(bootcampDailyActivityProvider);
 
     final body = SafeArea(
       bottom: false,
@@ -69,7 +75,8 @@ class _GarageScreenState extends ConsumerState<GarageScreen> {
         ),
         data: (progress) {
           final selectedDay = _resolveSelectedDay(progress);
-          final dayData = kBootcampCourse[selectedDay - 1];
+          final dayData     = kBootcampCourse[selectedDay - 1];
+          final activity    = activityAsync.valueOrNull;
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -113,18 +120,15 @@ class _GarageScreenState extends ConsumerState<GarageScreen> {
                           progress: progress,
                           c: c,
                           isActiveDay: selectedDay == progress.activeDay,
-                          onNavigate: (dest) =>
-                              _navigate(context, dest),
-                          onToggleTask: (taskId) => ref
-                              .read(bootcampProgressProvider.notifier)
-                              .toggleTask(selectedDay, taskId),
+                          activity: activity,
+                          onNavigate: (dest) => _navigate(context, dest),
                           onClaimReward: () async {
-                            final daysClaimed =
-                                progress.claimedDays.length;
+                            final daysClaimed  = progress.claimedDays.length;
+                            final act = activity ?? BootcampDailyActivity.empty;
                             final ok = await ref
                                 .read(bootcampProgressProvider.notifier)
                                 .claimDayReward(
-                                    selectedDay, dayData.tasks);
+                                    selectedDay, dayData.tasks, act);
                             if (!mounted) return;
                             if (ok) {
                               setState(() => _selectedDay = null);
@@ -175,7 +179,7 @@ class _GarageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final theme          = Theme.of(context);
     final completedCount = progress.claimedDays.length;
 
     return Column(
@@ -264,11 +268,11 @@ class _DayPipeline extends StatelessWidget {
         itemCount: 7,
         separatorBuilder: (_, _) => _PipelineConnector(c: c),
         itemBuilder: (_, i) {
-          final day = i + 1;
+          final day        = i + 1;
           final isCompleted = progress.isDayCompleted(day);
-          final isActive = day == progress.activeDay && !isCompleted;
-          final isSelected = day == selectedDay;
-          final isUnlocked = progress.isDayUnlocked(day);
+          final isActive    = day == progress.activeDay && !isCompleted;
+          final isSelected  = day == selectedDay;
+          final isUnlocked  = progress.isDayUnlocked(day);
 
           return _DayNode(
             day: day,
@@ -366,7 +370,7 @@ class _DayNodeState extends State<_DayNode>
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.c;
+    final c           = widget.c;
     final isCosmicMode = c.isCosmicMode;
 
     Color nodeColor;
@@ -412,7 +416,7 @@ class _DayNodeState extends State<_DayNode>
       );
     }
 
-    Widget nodeWidget = GestureDetector(
+    final nodeWidget = GestureDetector(
       onTap: widget.onTap,
       child: AnimatedBuilder(
         animation: _pulse,
@@ -516,8 +520,11 @@ class _DayContent extends StatelessWidget {
   final BootcampProgress progress;
   final SieColors c;
   final bool isActiveDay;
+
+  /// Real tool-usage snapshot for today; null while still loading.
+  final BootcampDailyActivity? activity;
+
   final ValueChanged<BootcampTaskDestination> onNavigate;
-  final ValueChanged<String> onToggleTask;
   final VoidCallback onClaimReward;
 
   const _DayContent({
@@ -526,27 +533,31 @@ class _DayContent extends StatelessWidget {
     required this.c,
     required this.isActiveDay,
     required this.onNavigate,
-    required this.onToggleTask,
     required this.onClaimReward,
+    this.activity,
   });
 
   @override
   Widget build(BuildContext context) {
-    final day = dayData.dayNumber;
+    final act        = activity ?? BootcampDailyActivity.empty;
+    final day        = dayData.dayNumber;
     final isCompleted = progress.isDayCompleted(day);
-    final isLocked = !progress.isDayUnlocked(day);
-    final canClaim =
-        isActiveDay && !isCompleted && progress.canClaimDay(day, dayData.tasks);
+    final isLocked   = !progress.isDayUnlocked(day);
+    final canClaim   = isActiveDay &&
+        !isCompleted &&
+        progress.canClaimDay(day, dayData.tasks, act);
+    final isDayLocked = !isCompleted &&
+        !isLocked &&
+        progress.isDayLockedUntilTomorrow(day);
+
+    final completedCount =
+        dayData.tasks.where((t) => t.isAutoComplete(act)).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ── Story Terminal ─────────────────────────────────────────────────
-        _StoryTerminal(
-          dayData: dayData,
-          c: c,
-          isLocked: isLocked,
-        ),
+        _StoryTerminal(dayData: dayData, c: c, isLocked: isLocked),
         const SizedBox(height: 14),
 
         // ── Tasks Section Header ───────────────────────────────────────────
@@ -566,8 +577,7 @@ class _DayContent extends StatelessWidget {
             const Spacer(),
             if (!isLocked) ...[
               Text(
-                '${progress.completedTaskIds[day]?.length ?? 0}'
-                '/${dayData.tasks.length}',
+                '$completedCount/${dayData.tasks.length}',
                 style: TextStyle(
                   color: isCompleted ? c.accent : c.textSecondary,
                   fontSize: 11,
@@ -588,18 +598,20 @@ class _DayContent extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 10),
                 child: _TaskCard(
                   task: task,
-                  isDone: progress.isTaskDone(day, task.id),
-                  isEditable: isActiveDay && !isCompleted,
+                  isDone: task.isAutoComplete(act),
+                  isLaunchable: isActiveDay && !isCompleted,
                   c: c,
                   onNavigate: () => onNavigate(task.destination),
-                  onToggle: () => onToggleTask(task.id),
                 ),
               )),
 
-          // ── Completion / Claim ─────────────────────────────────────────
+          // ── Status / CTA ────────────────────────────────────────────────
           if (isCompleted)
             _CompletedBadge(c: c)
-          else if (canClaim) ...[
+          else if (isDayLocked) ...[
+            const SizedBox(height: 6),
+            _DayLockBanner(c: c),
+          ] else if (canClaim) ...[
             const SizedBox(height: 6),
             _ClaimButton(c: c, onClaim: onClaimReward),
           ],
@@ -757,19 +769,22 @@ class _LockedTransmissionText extends StatelessWidget {
 
 class _TaskCard extends StatefulWidget {
   final BootcampTask task;
+
+  /// True when today's real tool usage already satisfies this task.
   final bool isDone;
-  final bool isEditable;
+
+  /// True when this is the active (not yet claimed) day — show launch button.
+  final bool isLaunchable;
+
   final SieColors c;
   final VoidCallback onNavigate;
-  final VoidCallback onToggle;
 
   const _TaskCard({
     required this.task,
     required this.isDone,
-    required this.isEditable,
+    required this.isLaunchable,
     required this.c,
     required this.onNavigate,
-    required this.onToggle,
   });
 
   @override
@@ -803,14 +818,15 @@ class _TaskCardState extends State<_TaskCard>
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.c;
+    final c      = widget.c;
     final isDone = widget.isDone;
 
     return SieGlassCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Task icon
+          // ── Task icon ──────────────────────────────────────────────────
           Container(
             width: 38,
             height: 38,
@@ -834,7 +850,7 @@ class _TaskCardState extends State<_TaskCard>
           ),
           const SizedBox(width: 14),
 
-          // Title + description
+          // ── Title, description, launch button ──────────────────────────
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -842,14 +858,11 @@ class _TaskCardState extends State<_TaskCard>
                 Text(
                   widget.task.title,
                   style: TextStyle(
-                    color: isDone
-                        ? c.textSecondary
-                        : c.textPrimary,
+                    color: isDone ? c.textSecondary : c.textPrimary,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.3,
-                    decoration:
-                        isDone ? TextDecoration.lineThrough : null,
+                    decoration: isDone ? TextDecoration.lineThrough : null,
                     decorationColor: c.textSecondary,
                   ),
                 ),
@@ -862,10 +875,10 @@ class _TaskCardState extends State<_TaskCard>
                     height: 1.4,
                   ),
                 ),
-                const SizedBox(height: 8),
 
-                // Launch button
-                if (!isDone && widget.isEditable)
+                // Launch button — always visible when day is active
+                if (widget.isLaunchable) ...[
+                  const SizedBox(height: 8),
                   GestureDetector(
                     onTapDown: (_) => _pressCtrl.animateTo(1.0,
                         duration: const Duration(milliseconds: 80)),
@@ -886,67 +899,35 @@ class _TaskCardState extends State<_TaskCard>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
-                          color: c.accent.withValues(alpha: 0.1),
+                          color: c.accent.withValues(alpha: 0.10),
                           borderRadius: BorderRadius.circular(4),
                           border: Border.all(
                             color: c.accent.withValues(alpha: 0.4),
                             width: 0.8,
                           ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'ЗАПУСТИТЬ → $_destinationLabel',
-                              style: TextStyle(
-                                color: c.accent,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          'ЗАПУСТИТЬ → $_destinationLabel',
+                          style: TextStyle(
+                            color: c.accent,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2,
+                          ),
                         ),
                       ),
                     ),
                   ),
+                ],
               ],
             ),
           ),
 
-          // Checkbox toggle
-          if (widget.isEditable)
-            GestureDetector(
-              onTap: widget.onToggle,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(6),
-                  color: isDone
-                      ? c.accent.withValues(alpha: 0.15)
-                      : Colors.transparent,
-                  border: Border.all(
-                    color: isDone ? c.accent : c.border,
-                    width: 1.5,
-                  ),
-                  boxShadow: isDone && c.isCosmicMode
-                      ? [
-                          BoxShadow(
-                            color: c.accent.withValues(alpha: 0.3),
-                            blurRadius: 8,
-                          ),
-                        ]
-                      : null,
-                ),
-                child: isDone
-                    ? Icon(Icons.check, color: c.accent, size: 14)
-                    : null,
-              ),
-            )
-          else if (isDone)
+          // ── Done indicator ─────────────────────────────────────────────
+          if (isDone) ...[
+            const SizedBox(width: 10),
             Icon(Icons.check_circle, color: c.accent, size: 20),
+          ],
         ],
       ),
     );
@@ -977,6 +958,65 @@ class _LockedDayCard extends StatelessWidget {
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.8,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Day Lock Banner — shown when previous day was claimed today
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _DayLockBanner extends StatelessWidget {
+  final SieColors c;
+  const _DayLockBanner({required this.c});
+
+  @override
+  Widget build(BuildContext context) {
+    const lockColor = Color(0xFFFF9800); // amber
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: lockColor.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: lockColor.withValues(alpha: 0.35),
+          width: 1.0,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.lock_clock_outlined,
+              color: lockColor.withValues(alpha: 0.8), size: 18),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'СЛЕДУЮЩИЙ ДЕНЬ ОТКРОЕТСЯ ЗАВТРА',
+                  style: TextStyle(
+                    color: lockColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.8,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Вы закрыли предыдущий день сегодня. Возвращайтесь завтра.',
+                  style: TextStyle(
+                    color: lockColor.withValues(alpha: 0.7),
+                    fontSize: 11,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -1139,8 +1179,9 @@ class _CourseCompletedView extends StatefulWidget {
 }
 
 class _CourseCompletedViewState extends State<_CourseCompletedView>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
+    with TickerProviderStateMixin {
+  late final AnimationController _enterCtrl;
+  late final AnimationController _glowCtrl;
   late final Animation<double> _fade;
   late final Animation<double> _slide;
   late final Animation<double> _glow;
@@ -1148,28 +1189,28 @@ class _CourseCompletedViewState extends State<_CourseCompletedView>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
+    _enterCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
     )..forward();
-    _fade  = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _glowCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat(reverse: true);
+
+    _fade  = CurvedAnimation(parent: _enterCtrl, curve: Curves.easeOut);
     _slide = Tween<double>(begin: 30, end: 0).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
+      CurvedAnimation(parent: _enterCtrl, curve: Curves.easeOut),
     );
     _glow = Tween<double>(begin: 0.3, end: 1.0).animate(
-      CurvedAnimation(
-        parent: AnimationController(
-          vsync: this,
-          duration: const Duration(milliseconds: 2200),
-        )..repeat(reverse: true),
-        curve: Curves.easeInOut,
-      ),
+      CurvedAnimation(parent: _glowCtrl, curve: Curves.easeInOut),
     );
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _enterCtrl.dispose();
+    _glowCtrl.dispose();
     super.dispose();
   }
 
@@ -1178,7 +1219,7 @@ class _CourseCompletedViewState extends State<_CourseCompletedView>
     final c = widget.c;
 
     return AnimatedBuilder(
-      animation: _ctrl,
+      animation: _enterCtrl,
       builder: (_, child) => FadeTransition(
         opacity: _fade,
         child: Transform.translate(
@@ -1252,10 +1293,7 @@ class _CourseCompletedViewState extends State<_CourseCompletedView>
           const SizedBox(height: 24),
 
           // Divider
-          Container(
-            height: 1,
-            color: c.border,
-          ),
+          Container(height: 1, color: c.border),
           const SizedBox(height: 20),
 
           // Achievement description
@@ -1266,8 +1304,7 @@ class _CourseCompletedViewState extends State<_CourseCompletedView>
               children: [
                 Row(
                   children: [
-                    Container(
-                        width: 3, height: 14, color: c.dp),
+                    Container(width: 3, height: 14, color: c.dp),
                     const SizedBox(width: 10),
                     Text(
                       'СЕРТИФИКАТ КОРПОРАЦИИ SiE',
@@ -1490,8 +1527,8 @@ class _RewardDialogState extends State<_RewardDialog>
                   decoration: BoxDecoration(
                     color: c.dp.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                        color: c.dp.withValues(alpha: 0.5)),
+                    border:
+                        Border.all(color: c.dp.withValues(alpha: 0.5)),
                   ),
                   child: Text(
                     'ПРОДОЛЖИТЬ',

@@ -194,6 +194,48 @@ class AppDatabase extends _$AppDatabase {
           .write(
               const LocalBreathingSessionsCompanion(synced: Value(true)));
 
+  // ── Bootcamp Activity Queries ─────────────────────────────────────────────
+
+  /// Number of breathing sessions completed by [userId] on [dateStr] (YYYY-MM-DD).
+  Future<int> countBreathingSessionsOnDate(
+      String userId, String dateStr) async {
+    final start   = DateTime.parse(dateStr);
+    final startMs = start.millisecondsSinceEpoch;
+    final endMs   = start
+        .add(const Duration(days: 1))
+        .millisecondsSinceEpoch;
+    final rows = await (select(localBreathingSessions)
+          ..where((t) =>
+              t.userId.equals(userId) &
+              t.completedAtMs.isBiggerOrEqualValue(startMs) &
+              t.completedAtMs.isSmallerThanValue(endMs)))
+        .get();
+    return rows.length;
+  }
+
+  /// Number of focus sessions completed by [userId] on [dateStr] (YYYY-MM-DD).
+  Future<int> countFocusSessionsOnDate(
+      String userId, String dateStr) async {
+    final start   = DateTime.parse(dateStr);
+    final startMs = start.millisecondsSinceEpoch;
+    final endMs   = start
+        .add(const Duration(days: 1))
+        .millisecondsSinceEpoch;
+    final rows = await (select(localFocusSessions)
+          ..where((t) =>
+              t.userId.equals(userId) &
+              t.completedAtMs.isBiggerOrEqualValue(startMs) &
+              t.completedAtMs.isSmallerThanValue(endMs)))
+        .get();
+    return rows.length;
+  }
+
+  /// Whether [userId] has at least one habit log on [dateStr] (YYYY-MM-DD).
+  Future<bool> hasHabitLogOnDate(String userId, String dateStr) async {
+    final rows = await habitLogsForUser(userId, dateStr);
+    return rows.any((r) => r.completedAt == dateStr);
+  }
+
   // ── Profile ───────────────────────────────────────────────────────────────
 
   Future<LocalProfileData?> getProfile(String userId) =>

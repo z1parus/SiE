@@ -5,6 +5,7 @@ class Achievement {
   final String? description;
   final String iconEmoji;
   final int xpReward;
+  final String rarity; // 'common' | 'rare' | 'epic' | 'legendary'
 
   const Achievement({
     required this.id,
@@ -13,7 +14,10 @@ class Achievement {
     this.description,
     this.iconEmoji = '🏆',
     required this.xpReward,
+    this.rarity = 'common',
   });
+
+  bool get isLegendary => rarity == 'legendary';
 
   factory Achievement.fromMap(Map<dynamic, dynamic> map) => Achievement(
         id: map['id']?.toString() ?? '',
@@ -22,6 +26,7 @@ class Achievement {
         description: map['description']?.toString(),
         iconEmoji: map['icon_emoji']?.toString() ?? '🏆',
         xpReward: int.tryParse('${map['xp_reward'] ?? 0}') ?? 0,
+        rarity: map['rarity']?.toString() ?? 'common',
       );
 }
 
