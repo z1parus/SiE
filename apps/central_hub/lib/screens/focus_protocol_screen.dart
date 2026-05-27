@@ -6,14 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 
-// ── Design tokens ─────────────────────────────────────────────
-const _kCyan   = Color(0xFF00E5FF);
-const _kPurple = Color(0xFF7000FF);
-const _kMuted  = Color(0xFF90A4AE);
-const _kGold   = Color(0xFFFFD700);
-
 // mirrors provider constant — used only for HUD display
 const _kFocusXp = 100;
+const _kGold    = Color(0xFFFFD700);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FocusProtocolScreen
@@ -28,13 +23,11 @@ class FocusProtocolScreen extends ConsumerStatefulWidget {
 
 class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  // SieSpaceBackground manages its own AnimationController internally —
-  // no _skyCtrl needed here. Only the pulse animation remains.
   late final AnimationController _pulseCtrl;
   late final Animation<double>   _pulseAnim;
 
-  bool _onboardingDismissed   = false;
-  bool _showOnboardingManual  = false;
+  bool _onboardingDismissed  = false;
+  bool _showOnboardingManual = false;
 
   @override
   void initState() {
@@ -56,7 +49,6 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
     super.dispose();
   }
 
-  // ── Background lifecycle handler (unchanged) ──────────────────
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -88,8 +80,8 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
   @override
   Widget build(BuildContext context) {
     final timerState = ref.watch(focusTimerProvider);
+    final c          = ref.watch(sieColorsProvider);
 
-    // Drive pulse only when timer is running — unchanged logic
     ref.listen(focusTimerProvider.select((s) => s.isRunning), (_, isRunning) {
       if (isRunning) {
         _pulseCtrl.repeat(reverse: true);
@@ -103,7 +95,7 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
     });
 
     final isBreak    = timerState.phase == FocusPhase.breakTime;
-    final phaseColor = isBreak ? _kPurple : _kCyan;
+    final phaseColor = isBreak ? c.accentSecondary : c.accent;
 
     final onboardingProfile = ref.watch(userProfileProvider).valueOrNull;
     final showOnboarding = _showOnboardingManual ||
@@ -111,19 +103,15 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
             onboardingProfile != null &&
             !onboardingProfile.hasSeenOnboardingFocus);
 
-    // Outer Stack so OnboardingOverlay can float above everything including
-    // GlassPage without being clipped by it.
+    // Outer Stack so OnboardingOverlay floats above SieBackground's GlassPage
+    // layer without being clipped by it.
     return Stack(
       children: [
-        // ── Main screen under glass backdrop ───────────────────
-        GlassPage(
-          background: const SieSpaceBackground(),
-          statusBarStyle: GlassStatusBarStyle.light,
+        SieBackground(
           child: Scaffold(
             backgroundColor: Colors.transparent,
             body: Stack(
               children: [
-                // Column layout centres the ring between the two chrome bars
                 SafeArea(
                   bottom: false,
                   child: Column(
@@ -135,7 +123,7 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
                         onInfo: () =>
                             setState(() => _showOnboardingManual = true),
                       ),
-                      // Ring fills the vertical space between bars — truly centred
+                      // Ring fills vertical space between the two chrome bars
                       Expanded(
                         child: Center(
                           child: AnimatedBuilder(
@@ -178,7 +166,6 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
                     ],
                   ),
                 ),
-                // Result overlay — full-screen, above the column
                 if (timerState.pendingResult != null)
                   _ResultOverlay(
                     result: timerState.pendingResult!,
@@ -190,7 +177,7 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
           ),
         ),
 
-        // ── Onboarding overlay (floats above GlassPage) ────────
+        // Onboarding overlay floats above GlassPage
         Positioned.fill(
           child: OnboardingOverlay(
             visible: showOnboarding,
@@ -216,9 +203,9 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Chrono-Ring — the HD circular countdown display
+// Chrono-Ring — HD circular countdown display
 // ─────────────────────────────────────────────────────────────────────────────
-class _FocusRing extends StatelessWidget {
+class _FocusRing extends ConsumerWidget {
   const _FocusRing({
     required this.progress,
     required this.formattedTime,
@@ -227,21 +214,25 @@ class _FocusRing extends StatelessWidget {
     required this.glowOpacity,
   });
 
-  final double    progress;
-  final String    formattedTime;
-  final Color     phaseColor;
+  final double     progress;
+  final String     formattedTime;
+  final Color      phaseColor;
   final FocusPhase phase;
-  final double    glowOpacity;
+  final double     glowOpacity;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c          = ref.watch(sieColorsProvider);
+    final trackColor = c.isLightMode
+        ? c.border
+        : Colors.white.withValues(alpha: 0.07);
+
     return SizedBox(
       width: 284,
       height: 284,
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Chrono-Ring painter — track + glass specular + neon arc + glow
           RepaintBoundary(
             child: CustomPaint(
               size: const Size(284, 284),
@@ -249,33 +240,37 @@ class _FocusRing extends StatelessWidget {
                 progress: progress,
                 phaseColor: phaseColor,
                 glowOpacity: glowOpacity,
+                trackColor: trackColor,
+                isLightMode: c.isLightMode,
               ),
             ),
           ),
 
-          // Timer core — monospace bold countdown + phase label
+          // Timer core — countdown + phase label
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 formattedTime,
                 style: TextStyle(
-                  color: Colors.white,
+                  color: c.textPrimary,
                   fontSize: 58,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 4,
                   height: 1.0,
                   fontFeatures: const [FontFeature.tabularFigures()],
-                  shadows: [
-                    Shadow(
-                      color: phaseColor.withValues(alpha: 0.90),
-                      blurRadius: 18,
-                    ),
-                    Shadow(
-                      color: phaseColor.withValues(alpha: 0.45),
-                      blurRadius: 44,
-                    ),
-                  ],
+                  shadows: c.isLightMode
+                      ? null
+                      : [
+                          Shadow(
+                            color: phaseColor.withValues(alpha: 0.90),
+                            blurRadius: 18,
+                          ),
+                          Shadow(
+                            color: phaseColor.withValues(alpha: 0.45),
+                            blurRadius: 44,
+                          ),
+                        ],
                 ),
               ),
               const SizedBox(height: 12),
@@ -299,12 +294,14 @@ class _FocusRing extends StatelessWidget {
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 4.5,
-                    shadows: [
-                      Shadow(
-                        color: phaseColor.withValues(alpha: 0.65),
-                        blurRadius: 8,
-                      ),
-                    ],
+                    shadows: c.isLightMode
+                        ? null
+                        : [
+                            Shadow(
+                              color: phaseColor.withValues(alpha: 0.65),
+                              blurRadius: 8,
+                            ),
+                          ],
                   ),
                 ),
               ),
@@ -317,22 +314,25 @@ class _FocusRing extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Chrono-Ring Painter — thick liquid-glass ring profile + neon gradient arc
+// Chrono-Ring Painter — track + specular + neon arc + glow
 // ─────────────────────────────────────────────────────────────────────────────
 class _FocusRingPainter extends CustomPainter {
   final double progress;
   final Color  phaseColor;
   final double glowOpacity;
+  final Color  trackColor;
+  final bool   isLightMode;
 
   const _FocusRingPainter({
     required this.progress,
     required this.phaseColor,
     required this.glowOpacity,
+    required this.trackColor,
+    required this.isLightMode,
   });
 
-  // Ring geometry
-  static const double _trackW = 10.0; // glass track width
-  static const double _arcW   = 8.0;  // neon arc width
+  static const double _trackW = 10.0;
+  static const double _arcW   = 8.0;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -342,56 +342,58 @@ class _FocusRingPainter extends CustomPainter {
 
     final trackRect = Rect.fromCircle(center: center, radius: radius);
 
-    // ── Layer 1: Glass ring substrate ─────────────────────────
-    // Outer ghost bloom — coloured faint corona around the track
+    // ── Layer 1: Ring substrate ───────────────────────────────────
+    // Ghost bloom corona
     canvas.drawCircle(
       center,
       radius,
       Paint()
-        ..color = phaseColor.withValues(alpha: 0.05)
+        ..color = phaseColor.withValues(alpha: isLightMode ? 0.03 : 0.05)
         ..style = PaintingStyle.stroke
         ..strokeWidth = _trackW + 8,
     );
-    // Main track ring — frosted white, low opacity
+    // Main track
     canvas.drawCircle(
       center,
       radius,
       Paint()
-        ..color = Colors.white.withValues(alpha: 0.07)
+        ..color = trackColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = _trackW,
     );
-    // Thin inner edge — simulates the sharp inner rim of the glass ring
+    // Inner edge — sharp rim of the glass ring
     canvas.drawCircle(
       center,
       radius - _trackW / 2 + 1,
       Paint()
-        ..color = Colors.white.withValues(alpha: 0.035)
+        ..color = isLightMode
+            ? trackColor.withValues(alpha: 0.50)
+            : Colors.white.withValues(alpha: 0.035)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.2,
     );
 
-    // ── Layer 2: Glass specular highlight ─────────────────────
-    // A short bright arc at ~135° (top-left) mimics the iOS light-source
-    // catchlight on a curved glass surface — adds depth without a shader.
-    canvas.drawArc(
-      trackRect,
-      -2.80, // ≈ 10 o'clock
-      0.65,  // ≈ 37° arc span
-      false,
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.16)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = _trackW
-        ..strokeCap = StrokeCap.round,
-    );
+    // ── Layer 2: Glass specular — skip in light mode (no glass shader) ──
+    if (!isLightMode) {
+      canvas.drawArc(
+        trackRect,
+        -2.80, // ≈ 10 o'clock
+        0.65,  // ≈ 37° arc span
+        false,
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.16)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = _trackW
+          ..strokeCap = StrokeCap.round,
+      );
+    }
 
     if (progress <= 0) return;
 
     final sweepAngle = 2 * math.pi * progress.clamp(0.0, 1.0);
 
-    // ── Layer 3: Pulsed glow halo behind the arc ──────────────
-    if (glowOpacity > 0.01) {
+    // ── Layer 3: Pulsed glow halo — skip in light mode ──────────
+    if (!isLightMode && glowOpacity > 0.01) {
       canvas.drawArc(
         trackRect,
         startAngle,
@@ -406,26 +408,25 @@ class _FocusRingPainter extends CustomPainter {
       );
     }
 
-    // Constant ambient glow always present (not pulsed)
+    // Ambient glow — softer in light mode
     canvas.drawArc(
       trackRect,
       startAngle,
       sweepAngle,
       false,
       Paint()
-        ..color = phaseColor.withValues(alpha: 0.18)
+        ..color = phaseColor.withValues(alpha: isLightMode ? 0.10 : 0.18)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = _arcW + 10
+        ..strokeWidth = isLightMode ? _arcW + 4 : _arcW + 10
         ..strokeCap = StrokeCap.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9),
+        ..maskFilter =
+            MaskFilter.blur(BlurStyle.normal, isLightMode ? 5.0 : 9.0),
     );
 
     // ── Layer 4: Neon arc — SweepGradient for glass-edge shimmer ─
-    // Gradient starts slightly transparent and builds to full colour,
-    // simulating how light grazes the curved glass edge.
     final arcGradient = SweepGradient(
       startAngle: startAngle,
-      endAngle:   startAngle + sweepAngle,
+      endAngle: startAngle + sweepAngle,
       colors: [
         phaseColor.withValues(alpha: 0.60),
         phaseColor,
@@ -443,28 +444,31 @@ class _FocusRingPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round,
     );
 
-    // ── Layer 5: Tip glow + tip dot ───────────────────────────
+    // ── Layer 5: Tip glow + tip dot ───────────────────────────────
     final tipAngle = startAngle + sweepAngle;
     final tip = Offset(
       center.dx + radius * math.cos(tipAngle),
       center.dy + radius * math.sin(tipAngle),
     );
 
-    // Outer bloom
+    if (!isLightMode) {
+      canvas.drawCircle(
+        tip,
+        11,
+        Paint()
+          ..color = phaseColor.withValues(alpha: 0.50)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9),
+      );
+    }
     canvas.drawCircle(
       tip,
-      11,
-      Paint()
-        ..color = phaseColor.withValues(alpha: 0.50)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9),
+      5.5,
+      Paint()..color = isLightMode ? phaseColor : Colors.white,
     );
-    // Solid white tip dot
-    canvas.drawCircle(tip, 5.5, Paint()..color = Colors.white);
-    // Specular micro-dot inside the tip
     canvas.drawCircle(
       Offset(tip.dx - 1.4, tip.dy - 1.4),
       1.8,
-      Paint()..color = Colors.white.withValues(alpha: 0.75),
+      Paint()..color = Colors.white.withValues(alpha: isLightMode ? 0.9 : 0.75),
     );
   }
 
@@ -472,11 +476,13 @@ class _FocusRingPainter extends CustomPainter {
   bool shouldRepaint(_FocusRingPainter old) =>
       old.progress != progress ||
       old.phaseColor != phaseColor ||
-      old.glowOpacity != glowOpacity;
+      old.glowOpacity != glowOpacity ||
+      old.trackColor != trackColor ||
+      old.isLightMode != isLightMode;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Top Bar — glass circle buttons + session counter
+// Top Bar — circle buttons + session counter
 // ─────────────────────────────────────────────────────────────────────────────
 class _TopBar extends StatelessWidget {
   const _TopBar({
@@ -486,8 +492,8 @@ class _TopBar extends StatelessWidget {
     required this.onInfo,
   });
 
-  final int completedSessions;
-  final Color phaseColor;
+  final int        completedSessions;
+  final Color      phaseColor;
   final VoidCallback onBack;
   final VoidCallback onInfo;
 
@@ -538,50 +544,59 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-// Glass circle button — used in TopBar (not inside a ScrollView, so
-// useOwnLayer:true is safe — no scroll-induced backdrop flicker risk).
-class _GlassCircleButton extends StatelessWidget {
+// Glass circle button — not inside a ScrollView, so useOwnLayer:true is safe.
+class _GlassCircleButton extends ConsumerWidget {
   const _GlassCircleButton({required this.icon, required this.onTap});
-  final IconData icon;
+  final IconData   icon;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return GestureDetector(
       onTap: onTap,
-      child: GlassCard(
-        width: 38,
-        height: 38,
-        padding: EdgeInsets.zero,
-        shape: LiquidRoundedSuperellipse(borderRadius: 19),
-        useOwnLayer: true,
-        quality: GlassQuality.standard,
-        clipBehavior: Clip.antiAlias,
-        settings: LiquidGlassSettings(
-          blur: 2.0,
-          thickness: 20,
-          refractiveIndex: 1.45,
-          glassColor: const Color(0x0A0A0E1A),
-          lightAngle: GlassDefaults.lightAngle,
-          lightIntensity: 0.72,
-          glowIntensity: 0.85,
-          saturation: 1.4,
-          specularSharpness: GlassSpecularSharpness.sharp,
-          ambientStrength: 0.08,
-          chromaticAberration: 0.015,
-        ),
-        child: Center(
-          child: Icon(icon, color: SieTheme.textSecondary, size: 17),
-        ),
-      ),
+      child: c.isCosmicMode
+          ? GlassCard(
+              width: 38,
+              height: 38,
+              padding: EdgeInsets.zero,
+              shape: LiquidRoundedSuperellipse(borderRadius: 19),
+              useOwnLayer: true,
+              quality: GlassQuality.standard,
+              clipBehavior: Clip.antiAlias,
+              settings: LiquidGlassSettings(
+                blur: 2.0,
+                thickness: 20,
+                refractiveIndex: 1.45,
+                glassColor: const Color(0x0A0A0E1A),
+                lightAngle: GlassDefaults.lightAngle,
+                lightIntensity: 0.72,
+                glowIntensity: 0.85,
+                saturation: 1.4,
+                specularSharpness: GlassSpecularSharpness.sharp,
+                ambientStrength: 0.08,
+                chromaticAberration: 0.015,
+              ),
+              child: Center(
+                child: Icon(icon, color: c.textSecondary, size: 17),
+              ),
+            )
+          : Container(
+              width: 38,
+              height: 38,
+              decoration: c.flatCard(radius: 19),
+              child: Center(
+                child: Icon(icon, color: c.textSecondary, size: 17),
+              ),
+            ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Bottom HUD — telemetry glass card + controls
+// Bottom HUD — telemetry card + controls
 // ─────────────────────────────────────────────────────────────────────────────
-class _BottomHUD extends StatelessWidget {
+class _BottomHUD extends ConsumerWidget {
   const _BottomHUD({
     required this.timerState,
     required this.phaseColor,
@@ -592,14 +607,15 @@ class _BottomHUD extends StatelessWidget {
   });
 
   final FocusTimerState timerState;
-  final Color phaseColor;
-  final VoidCallback onStart;
-  final VoidCallback onPause;
-  final VoidCallback onReset;
-  final VoidCallback onSettings;
+  final Color           phaseColor;
+  final VoidCallback    onStart;
+  final VoidCallback    onPause;
+  final VoidCallback    onReset;
+  final VoidCallback    onSettings;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c       = ref.watch(sieColorsProvider);
     final isIdle  = timerState.phase == FocusPhase.idle;
     final isBreak = timerState.phase == FocusPhase.breakTime;
     final s       = timerState.settings;
@@ -625,7 +641,7 @@ class _BottomHUD extends StatelessWidget {
                     Text(
                       'CURRENT PHASE',
                       style: TextStyle(
-                        color: SieTheme.textSecondary,
+                        color: c.textSecondary,
                         fontSize: 9,
                         letterSpacing: 1.8,
                       ),
@@ -638,12 +654,14 @@ class _BottomHUD extends StatelessWidget {
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1.2,
-                        shadows: [
-                          Shadow(
-                            color: phaseColor.withValues(alpha: 0.55),
-                            blurRadius: 8,
-                          ),
-                        ],
+                        shadows: c.isLightMode
+                            ? null
+                            : [
+                                Shadow(
+                                  color: phaseColor.withValues(alpha: 0.55),
+                                  blurRadius: 8,
+                                ),
+                              ],
                       ),
                     ),
                   ],
@@ -653,7 +671,7 @@ class _BottomHUD extends StatelessWidget {
                 height: 30,
                 width: 1,
                 margin: const EdgeInsets.symmetric(horizontal: 16),
-                color: Colors.white.withValues(alpha: 0.10),
+                color: c.border,
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -661,7 +679,7 @@ class _BottomHUD extends StatelessWidget {
                   Text(
                     'XP AT STAKE',
                     style: TextStyle(
-                      color: SieTheme.textSecondary,
+                      color: c.textSecondary,
                       fontSize: 9,
                       letterSpacing: 1.8,
                     ),
@@ -669,14 +687,14 @@ class _BottomHUD extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     xpLabel,
-                    style: const TextStyle(
-                      color: SieTheme.accent,
+                    style: TextStyle(
+                      color: c.accent,
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.5,
-                      shadows: [
-                        Shadow(color: SieTheme.accent, blurRadius: 10),
-                      ],
+                      shadows: c.isLightMode
+                          ? null
+                          : [Shadow(color: c.accent, blurRadius: 10)],
                     ),
                   ),
                 ],
@@ -694,7 +712,7 @@ class _BottomHUD extends StatelessWidget {
             child: Text(
               'TAP START TO INITIATE PROTOCOL',
               style: TextStyle(
-                color: _kCyan.withValues(alpha: 0.38),
+                color: c.accent.withValues(alpha: 0.38),
                 fontSize: 10,
                 letterSpacing: 2.0,
               ),
@@ -708,8 +726,6 @@ class _BottomHUD extends StatelessWidget {
         const SizedBox(height: 10),
 
         // ── Primary / secondary control buttons ─────────────────
-        // SieGlassCard(onTap:...) provides the 0.97-scale + specular-flash
-        // press feedback automatically — no custom StatefulWidget needed.
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -726,12 +742,14 @@ class _BottomHUD extends StatelessWidget {
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 3.0,
-                  shadows: [
-                    Shadow(
-                      color: phaseColor.withValues(alpha: 0.65),
-                      blurRadius: 12,
-                    ),
-                  ],
+                  shadows: c.isLightMode
+                      ? null
+                      : [
+                          Shadow(
+                            color: phaseColor.withValues(alpha: 0.65),
+                            blurRadius: 12,
+                          ),
+                        ],
                 ),
               ),
             ),
@@ -743,10 +761,10 @@ class _BottomHUD extends StatelessWidget {
                   vertical: 14,
                 ),
                 onTap: onReset,
-                child: const Text(
+                child: Text(
                   'RESET',
                   style: TextStyle(
-                    color: _kMuted,
+                    color: c.iconMuted,
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 2.5,
@@ -764,12 +782,13 @@ class _BottomHUD extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Settings Button
 // ─────────────────────────────────────────────────────────────────────────────
-class _SettingsButton extends StatelessWidget {
+class _SettingsButton extends ConsumerWidget {
   const _SettingsButton({required this.onTap});
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Center(
       child: SieGlassCard(
         padding:
@@ -778,14 +797,15 @@ class _SettingsButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.tune, size: 15, color: _kMuted),
+            Icon(Icons.tune, size: 15, color: c.iconMuted),
             const SizedBox(width: 8),
             Text(
               'PROTOCOL SETTINGS',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 11,
-                    letterSpacing: 1.5,
-                  ),
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 11,
+                letterSpacing: 1.5,
+              ),
             ),
           ],
         ),
@@ -795,18 +815,18 @@ class _SettingsButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Session Result Overlay — full-screen glass reward display
+// Session Result Overlay — full-screen reward display
 // ─────────────────────────────────────────────────────────────────────────────
-class _ResultOverlay extends StatefulWidget {
+class _ResultOverlay extends ConsumerStatefulWidget {
   const _ResultOverlay({required this.result, required this.onContinue});
   final FocusSessionResult result;
   final VoidCallback       onContinue;
 
   @override
-  State<_ResultOverlay> createState() => _ResultOverlayState();
+  ConsumerState<_ResultOverlay> createState() => _ResultOverlayState();
 }
 
-class _ResultOverlayState extends State<_ResultOverlay>
+class _ResultOverlayState extends ConsumerState<_ResultOverlay>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _scale;
@@ -834,15 +854,21 @@ class _ResultOverlayState extends State<_ResultOverlay>
 
   @override
   Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
+    final bgColor = c.isCosmicMode
+        ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
+        : c.background.withValues(alpha: 0.96);
+
     return FadeTransition(
       opacity: _opacity,
       child: Container(
-        color: const Color(0xFF0A0E1A).withValues(alpha: 0.92),
+        color: bgColor,
         child: Center(
           child: ScaleTransition(
             scale: _scale,
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -852,20 +878,28 @@ class _ResultOverlayState extends State<_ResultOverlay>
                     height: 88,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: SieTheme.surface,
-                      border: Border.all(color: _kCyan, width: 1.5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _kCyan.withValues(alpha: 0.45),
-                          blurRadius: 40,
-                          spreadRadius: 4,
-                        ),
-                      ],
+                      color: c.surface,
+                      border: Border.all(color: c.accent, width: 1.5),
+                      boxShadow: c.isLightMode
+                          ? [
+                              BoxShadow(
+                                color: c.accent.withValues(alpha: 0.20),
+                                blurRadius: 20,
+                                spreadRadius: 2,
+                              ),
+                            ]
+                          : [
+                              BoxShadow(
+                                color: c.accent.withValues(alpha: 0.45),
+                                blurRadius: 40,
+                                spreadRadius: 4,
+                              ),
+                            ],
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.psychology_outlined,
                       size: 38,
-                      color: _kCyan,
+                      color: c.accent,
                     ),
                   ),
 
@@ -876,20 +910,24 @@ class _ResultOverlayState extends State<_ResultOverlay>
                     'SESSION COMPLETE',
                     style:
                         Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              shadows: [
-                                Shadow(
-                                  color: _kCyan.withValues(alpha: 0.40),
-                                  blurRadius: 12,
-                                ),
-                              ],
+                              color: c.textPrimary,
+                              shadows: c.isLightMode
+                                  ? null
+                                  : [
+                                      Shadow(
+                                        color:
+                                            c.accent.withValues(alpha: 0.40),
+                                        blurRadius: 12,
+                                      ),
+                                    ],
                             ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 6),
-                  const Text(
+                  Text(
                     'FOCUS PROTOCOL EXECUTED',
                     style: TextStyle(
-                      color: SieTheme.textSecondary,
+                      color: c.textSecondary,
                       fontSize: 11,
                       letterSpacing: 2,
                     ),
@@ -898,7 +936,7 @@ class _ResultOverlayState extends State<_ResultOverlay>
 
                   const SizedBox(height: 24),
 
-                  // ── Reward glass card ─────────────────────────
+                  // ── Reward card ───────────────────────────────
                   SieGlassCard(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 20,
@@ -909,33 +947,35 @@ class _ResultOverlayState extends State<_ResultOverlay>
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
+                            Text(
                               'XP GAINED',
                               style: TextStyle(
-                                color: SieTheme.textSecondary,
+                                color: c.textSecondary,
                                 fontSize: 11,
                                 letterSpacing: 1.2,
                               ),
                             ),
                             Text(
                               '+${widget.result.xpGained} XP',
-                              style: const TextStyle(
-                                color: _kCyan,
+                              style: TextStyle(
+                                color: c.accent,
                                 fontSize: 24,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: 2,
-                                shadows: [
-                                  Shadow(color: _kCyan, blurRadius: 10),
-                                ],
+                                shadows: c.isLightMode
+                                    ? null
+                                    : [
+                                        Shadow(
+                                          color: c.accent,
+                                          blurRadius: 10,
+                                        ),
+                                      ],
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 12),
-                        Container(
-                          height: 1,
-                          color: Colors.white.withValues(alpha: 0.08),
-                        ),
+                        Container(height: 1, color: c.border),
                         const SizedBox(height: 12),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -945,13 +985,13 @@ class _ResultOverlayState extends State<_ResultOverlay>
                                 Icon(
                                   Icons.palette_outlined,
                                   size: 13,
-                                  color: SieTheme.dp.withValues(alpha: 0.85),
+                                  color: c.dp.withValues(alpha: 0.85),
                                 ),
                                 const SizedBox(width: 6),
-                                const Text(
+                                Text(
                                   'DP GAINED',
                                   style: TextStyle(
-                                    color: SieTheme.textSecondary,
+                                    color: c.textSecondary,
                                     fontSize: 11,
                                     letterSpacing: 1.2,
                                   ),
@@ -961,16 +1001,19 @@ class _ResultOverlayState extends State<_ResultOverlay>
                             Text(
                               '+${widget.result.dpGained} DP',
                               style: TextStyle(
-                                color: SieTheme.dp,
+                                color: c.dp,
                                 fontSize: 24,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: 2,
-                                shadows: [
-                                  Shadow(
-                                    color: SieTheme.dp.withValues(alpha: 0.6),
-                                    blurRadius: 10,
-                                  ),
-                                ],
+                                shadows: c.isLightMode
+                                    ? null
+                                    : [
+                                        Shadow(
+                                          color:
+                                              c.dp.withValues(alpha: 0.60),
+                                          blurRadius: 10,
+                                        ),
+                                      ],
                               ),
                             ),
                           ],
@@ -1010,7 +1053,7 @@ class _ResultOverlayState extends State<_ResultOverlay>
                                 Text(
                                   'ACHIEVEMENT UNLOCKED',
                                   style: TextStyle(
-                                    color: SieTheme.textSecondary,
+                                    color: c.textSecondary,
                                     fontSize: 9,
                                     letterSpacing: 1.5,
                                   ),
@@ -1044,16 +1087,21 @@ class _ResultOverlayState extends State<_ResultOverlay>
                       vertical: 14,
                     ),
                     onTap: widget.onContinue,
-                    child: const Text(
+                    child: Text(
                       'START BREAK',
                       style: TextStyle(
-                        color: _kPurple,
+                        color: c.accentSecondary,
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 2.5,
-                        shadows: [
-                          Shadow(color: _kPurple, blurRadius: 14),
-                        ],
+                        shadows: c.isLightMode
+                            ? null
+                            : [
+                                Shadow(
+                                  color: c.accentSecondary,
+                                  blurRadius: 14,
+                                ),
+                              ],
                       ),
                     ),
                   ),
@@ -1068,24 +1116,25 @@ class _ResultOverlayState extends State<_ResultOverlay>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Focus Settings Sheet — logic + wiring unchanged; only visual chrome updated
+// Focus Settings Sheet
 // ─────────────────────────────────────────────────────────────────────────────
-class _FocusSettingsSheet extends StatefulWidget {
+class _FocusSettingsSheet extends ConsumerStatefulWidget {
   const _FocusSettingsSheet({
     required this.settings,
     required this.isTimerActive,
     required this.onChanged,
   });
 
-  final FocusSettings          settings;
-  final bool                   isTimerActive;
+  final FocusSettings           settings;
+  final bool                    isTimerActive;
   final ValueChanged<FocusSettings> onChanged;
 
   @override
-  State<_FocusSettingsSheet> createState() => _FocusSettingsSheetState();
+  ConsumerState<_FocusSettingsSheet> createState() =>
+      _FocusSettingsSheetState();
 }
 
-class _FocusSettingsSheetState extends State<_FocusSettingsSheet> {
+class _FocusSettingsSheetState extends ConsumerState<_FocusSettingsSheet> {
   late FocusSettings _s;
 
   @override
@@ -1101,129 +1150,145 @@ class _FocusSettingsSheetState extends State<_FocusSettingsSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final c      = ref.watch(sieColorsProvider);
     final locked = widget.isTimerActive;
+
+    final content = SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 3,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(2),
+                  color: c.isLightMode
+                      ? c.border
+                      : Colors.white.withValues(alpha: 0.20),
+                ),
+              ),
+            ),
+            Text(
+              'PROTOCOL SETTINGS',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: c.textPrimary,
+                  ),
+            ),
+            if (locked) ...[
+              const SizedBox(height: 8),
+              Text(
+                'DURATION LOCKED DURING SESSION',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontSize: 10,
+                      letterSpacing: 1.5,
+                      color: c.textSecondary.withValues(alpha: 0.5),
+                    ),
+              ),
+            ],
+            const SizedBox(height: 20),
+            _FocusSettingRow(
+              label: 'FOCUS DURATION  (MIN)',
+              value: _s.workMinutes,
+              min: 5,
+              max: 60,
+              step: 5,
+              enabled: !locked,
+              onChanged: (v) => _update(_s.copyWith(workMinutes: v)),
+            ),
+            _FocusSettingRow(
+              label: 'BREAK DURATION  (MIN)',
+              value: _s.breakMinutes,
+              min: 1,
+              max: 15,
+              step: 1,
+              enabled: !locked,
+              onChanged: (v) => _update(_s.copyWith(breakMinutes: v)),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Divider(color: c.border, height: 1),
+            ),
+            _AmbientToggleRow(
+              label: 'FOCUS MUSIC',
+              icon: Icons.work_outline,
+              value: _s.isWorkMusicEnabled,
+              onChanged: (v) =>
+                  _update(_s.copyWith(isWorkMusicEnabled: v)),
+            ),
+            _AmbientToggleRow(
+              label: 'BREAK MUSIC',
+              icon: Icons.coffee_outlined,
+              value: _s.isBreakMusicEnabled,
+              onChanged: (v) =>
+                  _update(_s.copyWith(isBreakMusicEnabled: v)),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final cosmicDecoration = BoxDecoration(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          c.accent.withValues(alpha: 0.04),
+          const Color(0xFF0A0E1A).withValues(alpha: 0.92),
+        ],
+      ),
+      border: Border(
+        top: BorderSide(color: c.accent.withValues(alpha: 0.30), width: 1.0),
+        left: BorderSide(color: c.accent.withValues(alpha: 0.12), width: 1.0),
+        right: BorderSide(color: c.accent.withValues(alpha: 0.12), width: 1.0),
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: c.accent.withValues(alpha: 0.08),
+          blurRadius: 60,
+          offset: const Offset(0, -10),
+        ),
+      ],
+    );
+
+    final lightDecoration = BoxDecoration(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      color: c.surface,
+      border: Border(
+        top: BorderSide(color: c.border, width: 1.0),
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.06),
+          blurRadius: 20,
+          offset: const Offset(0, -4),
+        ),
+      ],
+    );
+
+    if (c.isCosmicMode) {
+      return ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
+          child: Container(decoration: cosmicDecoration, child: content),
+        ),
+      );
+    }
 
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(20)),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                _kCyan.withValues(alpha: 0.04),
-                const Color(0xFF0A0E1A).withValues(alpha: 0.92),
-              ],
-            ),
-            border: Border(
-              top: BorderSide(
-                color: _kCyan.withValues(alpha: 0.30),
-                width: 1.0,
-              ),
-              left: BorderSide(
-                color: _kCyan.withValues(alpha: 0.12),
-                width: 1.0,
-              ),
-              right: BorderSide(
-                color: _kCyan.withValues(alpha: 0.12),
-                width: 1.0,
-              ),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: _kCyan.withValues(alpha: 0.08),
-                blurRadius: 60,
-                offset: const Offset(0, -10),
-              ),
-            ],
-          ),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 36,
-                      height: 3,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(2),
-                        color: Colors.white.withValues(alpha: 0.20),
-                      ),
-                    ),
-                  ),
-                  Text(
-                    'PROTOCOL SETTINGS',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  if (locked) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'DURATION LOCKED DURING SESSION',
-                      style:
-                          Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                fontSize: 10,
-                                letterSpacing: 1.5,
-                                color: SieTheme.textSecondary
-                                    .withValues(alpha: 0.5),
-                              ),
-                    ),
-                  ],
-                  const SizedBox(height: 20),
-                  _FocusSettingRow(
-                    label: 'FOCUS DURATION  (MIN)',
-                    value: _s.workMinutes,
-                    min: 5,
-                    max: 60,
-                    step: 5,
-                    enabled: !locked,
-                    onChanged: (v) => _update(_s.copyWith(workMinutes: v)),
-                  ),
-                  _FocusSettingRow(
-                    label: 'BREAK DURATION  (MIN)',
-                    value: _s.breakMinutes,
-                    min: 1,
-                    max: 15,
-                    step: 1,
-                    enabled: !locked,
-                    onChanged: (v) => _update(_s.copyWith(breakMinutes: v)),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 4),
-                    child: Divider(color: SieTheme.borderDefault, height: 1),
-                  ),
-                  _AmbientToggleRow(
-                    label: 'FOCUS MUSIC',
-                    icon: Icons.work_outline,
-                    value: _s.isWorkMusicEnabled,
-                    onChanged: (v) =>
-                        _update(_s.copyWith(isWorkMusicEnabled: v)),
-                  ),
-                  _AmbientToggleRow(
-                    label: 'BREAK MUSIC',
-                    icon: Icons.coffee_outlined,
-                    value: _s.isBreakMusicEnabled,
-                    onChanged: (v) =>
-                        _update(_s.copyWith(isBreakMusicEnabled: v)),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
+      child: Container(decoration: lightDecoration, child: content),
     );
   }
 }
 
-class _FocusSettingRow extends StatelessWidget {
+class _FocusSettingRow extends ConsumerWidget {
   const _FocusSettingRow({
     required this.label,
     required this.value,
@@ -1243,7 +1308,8 @@ class _FocusSettingRow extends StatelessWidget {
   final ValueChanged<int> onChanged;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Opacity(
@@ -1251,8 +1317,12 @@ class _FocusSettingRow extends StatelessWidget {
         child: Row(
           children: [
             Expanded(
-              child:
-                  Text(label, style: Theme.of(context).textTheme.bodyMedium),
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: c.textSecondary,
+                    ),
+              ),
             ),
             _StepBtn(
               icon: Icons.remove,
@@ -1267,8 +1337,8 @@ class _FocusSettingRow extends StatelessWidget {
               child: Text(
                 '$value',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: SieTheme.textPrimary,
+                style: TextStyle(
+                  color: c.textPrimary,
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 1,
@@ -1290,7 +1360,7 @@ class _FocusSettingRow extends StatelessWidget {
   }
 }
 
-class _AmbientToggleRow extends StatelessWidget {
+class _AmbientToggleRow extends ConsumerWidget {
   const _AmbientToggleRow({
     required this.label,
     required this.icon,
@@ -1304,7 +1374,8 @@ class _AmbientToggleRow extends StatelessWidget {
   final ValueChanged<bool> onChanged;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
@@ -1312,11 +1383,16 @@ class _AmbientToggleRow extends StatelessWidget {
           Icon(
             icon,
             size: 16,
-            color: value ? _kCyan : SieTheme.textSecondary,
+            color: value ? c.accent : c.textSecondary,
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: c.textSecondary,
+                  ),
+            ),
           ),
           _CockpitToggle(value: value, onChanged: onChanged),
         ],
@@ -1325,20 +1401,21 @@ class _AmbientToggleRow extends StatelessWidget {
   }
 }
 
-class _CockpitToggle extends StatefulWidget {
+class _CockpitToggle extends ConsumerStatefulWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
   const _CockpitToggle({required this.value, required this.onChanged});
 
   @override
-  State<_CockpitToggle> createState() => _CockpitToggleState();
+  ConsumerState<_CockpitToggle> createState() => _CockpitToggleState();
 }
 
-class _CockpitToggleState extends State<_CockpitToggle> {
+class _CockpitToggleState extends ConsumerState<_CockpitToggle> {
   bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
     return GestureDetector(
       onTap: () => widget.onChanged(!widget.value),
       onTapDown: (_) => setState(() => _pressed = true),
@@ -1357,22 +1434,22 @@ class _CockpitToggleState extends State<_CockpitToggle> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(4),
             color: widget.value
-                ? _kCyan.withValues(alpha: 0.18)
-                : const Color(0xFF0D1B2A),
+                ? c.accent.withValues(alpha: 0.18)
+                : c.border,
             border: Border.all(
               color: widget.value
-                  ? _kCyan.withValues(alpha: 0.80)
-                  : SieTheme.borderDefault,
+                  ? c.accent.withValues(alpha: 0.80)
+                  : c.border,
               width: 1.2,
             ),
             boxShadow: widget.value
                 ? [
                     BoxShadow(
-                      color: _kCyan.withValues(alpha: 0.30),
+                      color: c.accent.withValues(alpha: 0.30),
                       blurRadius: 10,
                     ),
                     BoxShadow(
-                      color: _kCyan.withValues(alpha: 0.12),
+                      color: c.accent.withValues(alpha: 0.12),
                       blurRadius: 20,
                       spreadRadius: 2,
                     ),
@@ -1389,17 +1466,25 @@ class _CockpitToggleState extends State<_CockpitToggle> {
                     Container(
                       height: 1,
                       margin: const EdgeInsets.symmetric(horizontal: 8),
-                      color: Colors.white.withValues(
-                        alpha: widget.value ? 0.18 : 0.08,
-                      ),
+                      color: c.isCosmicMode
+                          ? Colors.white.withValues(
+                              alpha: widget.value ? 0.18 : 0.08,
+                            )
+                          : c.border.withValues(
+                              alpha: widget.value ? 0.5 : 0.3,
+                            ),
                     ),
                     const SizedBox(height: 3),
                     Container(
                       height: 1,
                       margin: const EdgeInsets.symmetric(horizontal: 8),
-                      color: Colors.white.withValues(
-                        alpha: widget.value ? 0.12 : 0.05,
-                      ),
+                      color: c.isCosmicMode
+                          ? Colors.white.withValues(
+                              alpha: widget.value ? 0.12 : 0.05,
+                            )
+                          : c.border.withValues(
+                              alpha: widget.value ? 0.3 : 0.15,
+                            ),
                     ),
                   ],
                 ),
@@ -1417,11 +1502,11 @@ class _CockpitToggleState extends State<_CockpitToggle> {
                   margin: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(2),
-                    color: widget.value ? _kCyan : SieTheme.textSecondary,
+                    color: widget.value ? c.accent : c.textSecondary,
                     boxShadow: widget.value
                         ? [
                             BoxShadow(
-                              color: _kCyan.withValues(alpha: 0.70),
+                              color: c.accent.withValues(alpha: 0.70),
                               blurRadius: 8,
                               spreadRadius: 1,
                             ),
@@ -1438,7 +1523,7 @@ class _CockpitToggleState extends State<_CockpitToggle> {
   }
 }
 
-class _StepBtn extends StatefulWidget {
+class _StepBtn extends ConsumerStatefulWidget {
   const _StepBtn({
     required this.icon,
     required this.active,
@@ -1450,14 +1535,15 @@ class _StepBtn extends StatefulWidget {
   final VoidCallback? onTap;
 
   @override
-  State<_StepBtn> createState() => _StepBtnState();
+  ConsumerState<_StepBtn> createState() => _StepBtnState();
 }
 
-class _StepBtnState extends State<_StepBtn> {
+class _StepBtnState extends ConsumerState<_StepBtn> {
   bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
     return GestureDetector(
       onTap: widget.onTap,
       onTapDown: widget.onTap != null
@@ -1482,19 +1568,19 @@ class _StepBtnState extends State<_StepBtn> {
             border: Border.all(
               color: widget.active
                   ? _pressed
-                      ? _kCyan
-                      : _kCyan.withValues(alpha: 0.65)
-                  : SieTheme.borderDefault,
+                      ? c.accent
+                      : c.accent.withValues(alpha: 0.65)
+                  : c.border,
               width: 1.0,
             ),
             borderRadius: BorderRadius.circular(4),
             color: widget.active && _pressed
-                ? _kCyan.withValues(alpha: 0.12)
+                ? c.accent.withValues(alpha: 0.12)
                 : Colors.transparent,
-            boxShadow: widget.active
+            boxShadow: widget.active && !c.isLightMode
                 ? [
                     BoxShadow(
-                      color: _kCyan.withValues(
+                      color: c.accent.withValues(
                         alpha: _pressed ? 0.28 : 0.10,
                       ),
                       blurRadius: _pressed ? 10 : 6,
@@ -1505,7 +1591,7 @@ class _StepBtnState extends State<_StepBtn> {
           child: Icon(
             widget.icon,
             size: 16,
-            color: widget.active ? _kCyan : SieTheme.textSecondary,
+            color: widget.active ? c.accent : c.textSecondary,
           ),
         ),
       ),

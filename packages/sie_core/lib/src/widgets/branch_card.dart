@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import '../theme/sie_theme.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../theme/sie_colors.dart';
 
-class BranchCard extends StatelessWidget {
+class BranchCard extends ConsumerWidget {
   final String name;
   final String? description;
   final int? level;
@@ -16,16 +17,13 @@ class BranchCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     final theme = Theme.of(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        decoration: BoxDecoration(
-          color: SieTheme.surface,
-          border: Border.all(color: SieTheme.borderDefault),
-          borderRadius: BorderRadius.circular(4),
-        ),
+        decoration: c.flatCard(radius: 4),
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -40,7 +38,7 @@ class BranchCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                _LevelBadge(level: level),
+                _LevelBadge(level: level, c: c),
               ],
             ),
             if (description != null) ...[
@@ -53,17 +51,17 @@ class BranchCard extends StatelessWidget {
                 Container(
                   width: 6,
                   height: 6,
-                  decoration: const BoxDecoration(
-                    color: SieTheme.accent,
+                  decoration: BoxDecoration(
+                    color: c.accent,
                     shape: BoxShape.circle,
                   ),
                 ),
                 const SizedBox(width: 8),
                 Text('DEPARTMENT ACTIVE', style: theme.textTheme.labelSmall),
                 const Spacer(),
-                const Icon(
+                Icon(
                   Icons.chevron_right,
-                  color: SieTheme.textSecondary,
+                  color: c.textSecondary,
                   size: 16,
                 ),
               ],
@@ -77,15 +75,16 @@ class BranchCard extends StatelessWidget {
 
 class _LevelBadge extends StatelessWidget {
   final int? level;
+  final SieColors c;
 
-  const _LevelBadge({this.level});
+  const _LevelBadge({this.level, required this.c});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        border: Border.all(color: SieTheme.borderAccent),
+        border: Border.all(color: c.accent.withValues(alpha: 0.5)),
         borderRadius: BorderRadius.circular(2),
       ),
       child: Text(

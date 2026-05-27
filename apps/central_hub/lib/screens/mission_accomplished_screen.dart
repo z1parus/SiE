@@ -75,60 +75,61 @@ class _MissionAccomplishedScreenState
   Widget build(BuildContext context) {
     final totalXp = ref.watch(userProfileProvider).valueOrNull?.totalXp ?? 0;
 
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Animated medal
-              ScaleTransition(
-                scale: _medalScale,
-                child: FadeTransition(
-                  opacity: _medalOpacity,
-                  child: const _MedalWidget(),
-                ),
-              ),
-              const SizedBox(height: 52),
-              // Content reveal
-              FadeTransition(
-                opacity: _contentOpacity,
-                child: SlideTransition(
-                  position: _contentSlide,
-                  child: Column(
-                    children: [
-                      Text(
-                        'MISSION ACCOMPLISHED',
-                        style: Theme.of(context).textTheme.headlineMedium,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'BREATHING PROTOCOL COMPLETE',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 36),
-                      _XpPanel(xpGained: widget.xpGained, totalXp: totalXp),
-                      if (widget.dpGained > 0) ...[
-                        const SizedBox(height: 10),
-                        _DpPanel(dpGained: widget.dpGained),
-                      ],
-                      if (widget.achievement != null) ...[
-                        const SizedBox(height: 16),
-                        _AchievementPanel(achievement: widget.achievement!),
-                      ],
-                      const SizedBox(height: 48),
-                      _ReturnButton(
-                        onPressed: () =>
-                            Navigator.of(context).popUntil((r) => r.isFirst),
-                      ),
-                    ],
+    return SieBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ScaleTransition(
+                  scale: _medalScale,
+                  child: FadeTransition(
+                    opacity: _medalOpacity,
+                    child: const _MedalWidget(),
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 52),
+                FadeTransition(
+                  opacity: _contentOpacity,
+                  child: SlideTransition(
+                    position: _contentSlide,
+                    child: Column(
+                      children: [
+                        Text(
+                          'MISSION ACCOMPLISHED',
+                          style: Theme.of(context).textTheme.headlineMedium,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          'BREATHING PROTOCOL COMPLETE',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 36),
+                        _XpPanel(xpGained: widget.xpGained, totalXp: totalXp),
+                        if (widget.dpGained > 0) ...[
+                          const SizedBox(height: 10),
+                          _DpPanel(dpGained: widget.dpGained),
+                        ],
+                        if (widget.achievement != null) ...[
+                          const SizedBox(height: 16),
+                          _AchievementPanel(achievement: widget.achievement!),
+                        ],
+                        const SizedBox(height: 48),
+                        _ReturnButton(
+                          onPressed: () =>
+                              Navigator.of(context).popUntil((r) => r.isFirst),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -138,71 +139,67 @@ class _MissionAccomplishedScreenState
 
 // ── Medal ─────────────────────────────────────────────────────
 
-class _MedalWidget extends StatelessWidget {
+class _MedalWidget extends ConsumerWidget {
   const _MedalWidget();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Container(
       width: 128,
       height: 128,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: SieTheme.surface,
-        border: Border.all(color: SieTheme.accent, width: 2),
+        color: c.surface,
+        border: Border.all(color: c.accent, width: 2),
         boxShadow: [
           BoxShadow(
-            color: SieTheme.accent.withValues(alpha:0.45),
-            blurRadius: 40,
-            spreadRadius: 6,
+            color: c.accent.withValues(alpha: c.isCosmicMode ? 0.45 : 0.20),
+            blurRadius: c.isCosmicMode ? 40 : 20,
+            spreadRadius: c.isCosmicMode ? 6 : 2,
           ),
         ],
       ),
-      child: const Icon(Icons.air_rounded, size: 56, color: SieTheme.accent),
+      child: Icon(Icons.air_rounded, size: 56, color: c.accent),
     );
   }
 }
 
 // ── XP Panel ──────────────────────────────────────────────────
 
-class _XpPanel extends StatelessWidget {
+class _XpPanel extends ConsumerWidget {
   final int xpGained;
   final int totalXp;
 
   const _XpPanel({required this.xpGained, required this.totalXp});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      decoration: BoxDecoration(
-        color: SieTheme.surface,
-        border: Border.all(color: SieTheme.borderAccent),
-        borderRadius: BorderRadius.circular(4),
-      ),
+      decoration: c.flatCard(radius: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'XP GAINED',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
+              Text('XP GAINED', style: Theme.of(context).textTheme.bodyMedium),
               const SizedBox(height: 2),
               Text(
                 'TOTAL: $totalXp XP',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontSize: 11,
-                    ),
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(fontSize: 11),
               ),
             ],
           ),
           Text(
             '+$xpGained XP',
-            style: const TextStyle(
-              color: SieTheme.accent,
+            style: TextStyle(
+              color: c.accent,
               fontSize: 22,
               fontWeight: FontWeight.w700,
               letterSpacing: 2,
@@ -216,18 +213,27 @@ class _XpPanel extends StatelessWidget {
 
 // ── DP Panel ──────────────────────────────────────────────────
 
-class _DpPanel extends StatelessWidget {
+class _DpPanel extends ConsumerWidget {
   final int dpGained;
   const _DpPanel({required this.dpGained});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
-        color: SieTheme.surface,
-        border: Border.all(color: SieTheme.dp.withValues(alpha: 0.4)),
+        color: c.surface,
+        border: Border.all(color: c.dp.withValues(alpha: 0.4)),
         borderRadius: BorderRadius.circular(4),
+        boxShadow: c.isLightMode
+            ? const [
+                BoxShadow(
+                    color: Color(0x0F000000),
+                    blurRadius: 12,
+                    offset: Offset(0, 2))
+              ]
+            : null,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -235,15 +241,15 @@ class _DpPanel extends StatelessWidget {
           Row(
             children: [
               Icon(Icons.palette_outlined,
-                  size: 14, color: SieTheme.dp.withValues(alpha: 0.85)),
+                  size: 14, color: c.dp.withValues(alpha: 0.85)),
               const SizedBox(width: 8),
               Text('DP GAINED', style: Theme.of(context).textTheme.bodyMedium),
             ],
           ),
           Text(
             '+$dpGained DP',
-            style: const TextStyle(
-              color: SieTheme.dp,
+            style: TextStyle(
+              color: c.dp,
               fontSize: 20,
               fontWeight: FontWeight.w700,
               letterSpacing: 2,
@@ -257,19 +263,28 @@ class _DpPanel extends StatelessWidget {
 
 // ── Achievement Panel ─────────────────────────────────────────
 
-class _AchievementPanel extends StatelessWidget {
+class _AchievementPanel extends ConsumerWidget {
   final Achievement achievement;
 
   const _AchievementPanel({required this.achievement});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: SieTheme.surfaceAlt,
-        border: Border.all(color: SieTheme.accent.withValues(alpha:0.45)),
+        color: c.surface,
+        border: Border.all(color: c.accent.withValues(alpha: 0.45)),
         borderRadius: BorderRadius.circular(4),
+        boxShadow: c.isLightMode
+            ? const [
+                BoxShadow(
+                    color: Color(0x0F000000),
+                    blurRadius: 12,
+                    offset: Offset(0, 2))
+              ]
+            : null,
       ),
       child: Row(
         children: [
@@ -278,11 +293,10 @@ class _AchievementPanel extends StatelessWidget {
             height: 42,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: SieTheme.accent.withValues(alpha:0.12),
-              border: Border.all(color: SieTheme.accent),
+              color: c.accent.withValues(alpha: 0.12),
+              border: Border.all(color: c.accent),
             ),
-            child:
-                const Icon(Icons.military_tech, color: SieTheme.accent, size: 22),
+            child: Icon(Icons.military_tech, color: c.accent, size: 22),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -309,25 +323,26 @@ class _AchievementPanel extends StatelessWidget {
 
 // ── Return Button ─────────────────────────────────────────────
 
-class _ReturnButton extends StatelessWidget {
+class _ReturnButton extends ConsumerWidget {
   final VoidCallback onPressed;
 
   const _ReturnButton({required this.onPressed});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return GestureDetector(
       onTap: onPressed,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
         decoration: BoxDecoration(
-          border: Border.all(color: SieTheme.accent),
+          border: Border.all(color: c.accent),
           borderRadius: BorderRadius.circular(2),
         ),
-        child: const Text(
+        child: Text(
           'RETURN TO OPERATIONS',
           style: TextStyle(
-            color: SieTheme.accent,
+            color: c.accent,
             fontSize: 13,
             fontWeight: FontWeight.w700,
             letterSpacing: 2.5,

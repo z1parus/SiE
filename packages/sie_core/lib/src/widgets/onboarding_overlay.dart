@@ -1,10 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import '../theme/sie_theme.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../theme/sie_colors.dart';
 
-const _kCyan = Color(0xFF00E5FF);
-
-class OnboardingOverlay extends StatefulWidget {
+class OnboardingOverlay extends ConsumerStatefulWidget {
   final bool visible;
   final String moduleLabel;
   final String description;
@@ -23,10 +22,10 @@ class OnboardingOverlay extends StatefulWidget {
   });
 
   @override
-  State<OnboardingOverlay> createState() => _OnboardingOverlayState();
+  ConsumerState<OnboardingOverlay> createState() => _OnboardingOverlayState();
 }
 
-class _OnboardingOverlayState extends State<OnboardingOverlay>
+class _OnboardingOverlayState extends ConsumerState<OnboardingOverlay>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _fade;
@@ -65,6 +64,7 @@ class _OnboardingOverlayState extends State<OnboardingOverlay>
 
   @override
   Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
     return IgnorePointer(
       ignoring: !widget.visible,
       child: AnimatedBuilder(
@@ -76,18 +76,19 @@ class _OnboardingOverlayState extends State<OnboardingOverlay>
             child: child,
           ),
         ),
-        child: _buildOverlayContent(context),
+        child: _buildOverlayContent(context, c),
       ),
     );
   }
 
-  Widget _buildOverlayContent(BuildContext context) {
+  Widget _buildOverlayContent(BuildContext context, SieColors c) {
+    final backdropAlpha = c.isLightMode ? 0.40 : 0.68;
     return Material(
       color: Colors.transparent,
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
         child: Container(
-          color: Colors.black.withValues(alpha: 0.68),
+          color: Colors.black.withValues(alpha: backdropAlpha),
           child: Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -102,17 +103,17 @@ class _OnboardingOverlayState extends State<OnboardingOverlay>
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          _kCyan.withValues(alpha: 0.06),
-                          const Color(0xFF0A0E1A).withValues(alpha: 0.90),
+                          c.accent.withValues(alpha: 0.06),
+                          c.surface.withValues(alpha: 0.95),
                         ],
                       ),
                       border: Border.all(
-                        color: _kCyan.withValues(alpha: 0.38),
+                        color: c.accent.withValues(alpha: 0.38),
                         width: 1.0,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: _kCyan.withValues(alpha: 0.10),
+                          color: c.accent.withValues(alpha: 0.10),
                           blurRadius: 40,
                           spreadRadius: 0,
                         ),
@@ -130,29 +131,33 @@ class _OnboardingOverlayState extends State<OnboardingOverlay>
                               width: 3,
                               height: 14,
                               decoration: BoxDecoration(
-                                color: _kCyan,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: _kCyan.withValues(alpha: 0.60),
-                                    blurRadius: 8,
-                                  ),
-                                ],
+                                color: c.accent,
+                                boxShadow: c.isCosmicMode
+                                    ? [
+                                        BoxShadow(
+                                          color: c.accent.withValues(alpha: 0.60),
+                                          blurRadius: 8,
+                                        ),
+                                      ]
+                                    : null,
                               ),
                             ),
                             const SizedBox(width: 10),
                             Text(
                               'ПРОТОКОЛ АКТИВИРОВАН',
                               style: TextStyle(
-                                color: _kCyan,
+                                color: c.accent,
                                 fontSize: 10,
                                 letterSpacing: 2.5,
                                 fontWeight: FontWeight.w600,
-                                shadows: [
-                                  Shadow(
-                                    color: _kCyan.withValues(alpha: 0.55),
-                                    blurRadius: 8,
-                                  ),
-                                ],
+                                shadows: c.isCosmicMode
+                                    ? [
+                                        Shadow(
+                                          color: c.accent.withValues(alpha: 0.55),
+                                          blurRadius: 8,
+                                        ),
+                                      ]
+                                    : null,
                               ),
                             ),
                           ],
@@ -161,58 +166,60 @@ class _OnboardingOverlayState extends State<OnboardingOverlay>
                         // Module label
                         Text(
                           widget.moduleLabel,
-                          style: const TextStyle(
-                            color: SieTheme.textPrimary,
+                          style: TextStyle(
+                            color: c.textPrimary,
                             fontSize: 22,
                             fontWeight: FontWeight.w200,
                             letterSpacing: 3,
                           ),
                         ),
                         const SizedBox(height: 8),
-                        // Description with cyan glow
+                        // Description
                         Text(
                           widget.description,
-                          style: const TextStyle(
-                            color: SieTheme.textSecondary,
+                          style: TextStyle(
+                            color: c.textSecondary,
                             fontSize: 13,
                             letterSpacing: 0.4,
                             height: 1.5,
-                            shadows: [
-                              Shadow(color: _kCyan, blurRadius: 6),
-                            ],
+                            shadows: c.isCosmicMode
+                                ? [Shadow(color: c.accent, blurRadius: 6)]
+                                : null,
                           ),
                         ),
                         const SizedBox(height: 20),
-                        const Divider(color: SieTheme.borderDefault, height: 1),
+                        Divider(color: c.border, height: 1),
                         const SizedBox(height: 16),
-                        // Benefit with glowing bullet token
+                        // Benefit with bullet token
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               '◆',
                               style: TextStyle(
-                                color: _kCyan,
+                                color: c.accent,
                                 fontSize: 10,
                                 height: 1.6,
-                                shadows: [
-                                  Shadow(
-                                    color: _kCyan.withValues(alpha: 0.80),
-                                    blurRadius: 10,
-                                  ),
-                                  Shadow(
-                                    color: _kCyan.withValues(alpha: 0.40),
-                                    blurRadius: 20,
-                                  ),
-                                ],
+                                shadows: c.isCosmicMode
+                                    ? [
+                                        Shadow(
+                                          color: c.accent.withValues(alpha: 0.80),
+                                          blurRadius: 10,
+                                        ),
+                                        Shadow(
+                                          color: c.accent.withValues(alpha: 0.40),
+                                          blurRadius: 20,
+                                        ),
+                                      ]
+                                    : null,
                               ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 widget.benefit,
-                                style: const TextStyle(
-                                  color: SieTheme.textPrimary,
+                                style: TextStyle(
+                                  color: c.textPrimary,
                                   fontSize: 12,
                                   letterSpacing: 0.3,
                                   height: 1.55,
@@ -231,31 +238,32 @@ class _OnboardingOverlayState extends State<OnboardingOverlay>
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(4),
                               border: Border.all(
-                                color: _kCyan.withValues(alpha: 0.28),
+                                color: c.accent.withValues(alpha: 0.28),
                               ),
-                              color: _kCyan.withValues(alpha: 0.04),
+                              color: c.accent.withValues(alpha: 0.04),
                             ),
                             child: Row(
                               children: [
                                 Text(
                                   '◆',
                                   style: TextStyle(
-                                    color: _kCyan.withValues(alpha: 0.70),
+                                    color: c.accent.withValues(alpha: 0.70),
                                     fontSize: 9,
-                                    shadows: [
-                                      Shadow(
-                                        color: _kCyan,
-                                        blurRadius: 8,
-                                      ),
-                                    ],
+                                    shadows: c.isCosmicMode
+                                        ? [
+                                            Shadow(
+                                              color: c.accent,
+                                              blurRadius: 8,
+                                            ),
+                                          ]
+                                        : null,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
                                   'REWARD',
                                   style: TextStyle(
-                                    color: SieTheme.textSecondary
-                                        .withValues(alpha: 0.70),
+                                    color: c.textSecondary.withValues(alpha: 0.70),
                                     fontSize: 9,
                                     letterSpacing: 2,
                                   ),
@@ -263,15 +271,17 @@ class _OnboardingOverlayState extends State<OnboardingOverlay>
                                 const Spacer(),
                                 Text(
                                   '+${widget.xpReward} XP',
-                                  style: const TextStyle(
-                                    color: _kCyan,
+                                  style: TextStyle(
+                                    color: c.accent,
                                     fontSize: 15,
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: 1.5,
-                                    shadows: [
-                                      Shadow(color: _kCyan, blurRadius: 10),
-                                      Shadow(color: _kCyan, blurRadius: 24),
-                                    ],
+                                    shadows: c.isCosmicMode
+                                        ? [
+                                            Shadow(color: c.accent, blurRadius: 10),
+                                            Shadow(color: c.accent, blurRadius: 24),
+                                          ]
+                                        : null,
                                   ),
                                 ),
                               ],
@@ -279,7 +289,7 @@ class _OnboardingOverlayState extends State<OnboardingOverlay>
                           ),
                         ],
                         const SizedBox(height: 28),
-                        // Accept button with press scale + specular flash
+                        // Accept button
                         GestureDetector(
                           onTap: widget.onAccept,
                           onTapDown: (_) =>
@@ -303,34 +313,36 @@ class _OnboardingOverlayState extends State<OnboardingOverlay>
                                   const EdgeInsets.symmetric(vertical: 14),
                               decoration: BoxDecoration(
                                 color: _btnPressed
-                                    ? _kCyan.withValues(alpha: 0.18)
-                                    : _kCyan.withValues(alpha: 0.08),
+                                    ? c.accent.withValues(alpha: 0.18)
+                                    : c.accent.withValues(alpha: 0.08),
                                 border: Border.all(
-                                  color: _kCyan.withValues(
+                                  color: c.accent.withValues(
                                     alpha: _btnPressed ? 1.0 : 0.85,
                                   ),
                                 ),
                                 borderRadius: BorderRadius.circular(4),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: _kCyan.withValues(
+                                    color: c.accent.withValues(
                                       alpha: _btnPressed ? 0.35 : 0.12,
                                     ),
                                     blurRadius: _btnPressed ? 20 : 8,
                                   ),
                                 ],
                               ),
-                              child: const Text(
+                              child: Text(
                                 'ПРИНЯТЬ ПРОТОКОЛ',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: _kCyan,
+                                  color: c.accent,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 2.5,
-                                  shadows: [
-                                    Shadow(color: _kCyan, blurRadius: 8),
-                                  ],
+                                  shadows: c.isCosmicMode
+                                      ? [
+                                          Shadow(color: c.accent, blurRadius: 8),
+                                        ]
+                                      : null,
                                 ),
                               ),
                             ),

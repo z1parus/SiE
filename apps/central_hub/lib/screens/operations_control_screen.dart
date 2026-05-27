@@ -12,12 +12,6 @@ import 'leaderboard_screen.dart';
 import 'profile_screen.dart';
 import 'user_search_screen.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Design tokens (local to this file)
-// ─────────────────────────────────────────────────────────────────────────────
-const _kCyan   = Color(0xFF00E5FF);
-const _kPurple = Color(0xFF7000FF);
-const _kMuted  = Color(0xFF90A4AE);
 const _kOrange = Color(0xFFFF8C42);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -39,8 +33,9 @@ class _OperationsControlScreenState
 
   @override
   Widget build(BuildContext context) {
-    final branchesAsync = ref.watch(branchesProvider);
-    final profileAsync  = ref.watch(userProfileProvider);
+    final c              = ref.watch(sieColorsProvider);
+    final branchesAsync  = ref.watch(branchesProvider);
+    final profileAsync   = ref.watch(userProfileProvider);
 
     ref.listen<AsyncValue<Profile?>>(userProfileProvider, (_, next) {
       if (_welcomeShown) return;
@@ -83,11 +78,11 @@ class _OperationsControlScreenState
                     .where((b) => b.slug != 'progress_hub')
                     .toList();
                 return filtered.isEmpty
-                    ? const Center(
+                    ? Center(
                         child: Text(
                           'NO DEPARTMENTS AVAILABLE',
                           style: TextStyle(
-                            color: SieTheme.textSecondary,
+                            color: c.textSecondary,
                             letterSpacing: 1.5,
                             fontSize: 12,
                           ),
@@ -98,9 +93,9 @@ class _OperationsControlScreenState
                         onBranchTap: (b) => _onBranchTap(context, b),
                       );
               },
-              loading: () => const Center(
+              loading: () => Center(
                 child: CircularProgressIndicator(
-                  color: SieTheme.accent,
+                  color: c.accent,
                   strokeWidth: 1.5,
                 ),
               ),
@@ -118,9 +113,7 @@ class _OperationsControlScreenState
       return Scaffold(backgroundColor: Colors.transparent, body: body);
     }
 
-    return GlassPage(
-      background: const SieSpaceBackground(),
-      statusBarStyle: GlassStatusBarStyle.light,
+    return SieBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: Stack(
@@ -152,19 +145,19 @@ class _OperationsControlScreenState
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Welcome Dialog  (business logic unchanged)
+// Welcome Dialog
 // ─────────────────────────────────────────────────────────────────────────────
-class _WelcomeDialog extends StatefulWidget {
+class _WelcomeDialog extends ConsumerStatefulWidget {
   final Profile profile;
   final VoidCallback onAccept;
 
   const _WelcomeDialog({required this.profile, required this.onAccept});
 
   @override
-  State<_WelcomeDialog> createState() => _WelcomeDialogState();
+  ConsumerState<_WelcomeDialog> createState() => _WelcomeDialogState();
 }
 
-class _WelcomeDialogState extends State<_WelcomeDialog>
+class _WelcomeDialogState extends ConsumerState<_WelcomeDialog>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _fade;
@@ -191,6 +184,7 @@ class _WelcomeDialogState extends State<_WelcomeDialog>
 
   @override
   Widget build(BuildContext context) {
+    final c    = ref.watch(sieColorsProvider);
     final name = widget.profile.username?.toUpperCase() ?? 'OPERATIVE';
 
     return Dialog(
@@ -206,9 +200,17 @@ class _WelcomeDialogState extends State<_WelcomeDialog>
         ),
         child: Container(
           decoration: BoxDecoration(
-            color: SieTheme.surface,
-            border: Border.all(color: SieTheme.borderAccent),
+            color: c.surface,
+            border: Border.all(color: c.accent.withValues(alpha: 0.5)),
             borderRadius: BorderRadius.circular(4),
+            boxShadow: c.isLightMode
+                ? const [
+                    BoxShadow(
+                        color: Color(0x0F000000),
+                        blurRadius: 12,
+                        offset: Offset(0, 2))
+                  ]
+                : null,
           ),
           padding: const EdgeInsets.all(28),
           child: Column(
@@ -217,13 +219,13 @@ class _WelcomeDialogState extends State<_WelcomeDialog>
             children: [
               Row(
                 children: [
-                  Container(width: 3, height: 16, color: SieTheme.accent),
+                  Container(width: 3, height: 16, color: c.accent),
                   const SizedBox(width: 10),
                   Text(
                     'ВХОДЯЩЕЕ СООБЩЕНИЕ',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           letterSpacing: 2.5,
-                          color: SieTheme.accent,
+                          color: c.accent,
                         ),
                   ),
                 ],
@@ -237,7 +239,7 @@ class _WelcomeDialogState extends State<_WelcomeDialog>
                     ),
               ),
               const SizedBox(height: 16),
-              const Divider(color: SieTheme.borderDefault, height: 1),
+              Divider(color: c.border, height: 1),
               const SizedBox(height: 16),
               Text(
                 'Вы успешно вошли в систему Корпорации SiE. Все протоколы '
@@ -259,15 +261,15 @@ class _WelcomeDialogState extends State<_WelcomeDialog>
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(
-                      color: SieTheme.accent.withValues(alpha: 0.1),
-                      border: Border.all(color: SieTheme.accent),
+                      color: c.accent.withValues(alpha: 0.1),
+                      border: Border.all(color: c.accent),
                       borderRadius: BorderRadius.circular(2),
                     ),
-                    child: const Text(
+                    child: Text(
                       'ПРИНЯТЬ ЗАДАНИЕ',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: SieTheme.accent,
+                        color: c.accent,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 2.5,
@@ -285,7 +287,7 @@ class _WelcomeDialogState extends State<_WelcomeDialog>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Branch navigation  (business logic unchanged)
+// Branch navigation
 // ─────────────────────────────────────────────────────────────────────────────
 void _onBranchTap(BuildContext context, Branch branch) {
   Widget? screen;
@@ -321,17 +323,16 @@ void _onBranchTap(BuildContext context, Branch branch) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Floating Bottom Navigation Bar
 // ─────────────────────────────────────────────────────────────────────────────
-class _FloatingNavBar extends StatelessWidget {
+class _FloatingNavBar extends ConsumerWidget {
   const _FloatingNavBar();
 
   static const _items = [
-    (icon: Icons.language_outlined,   label: 'Hub'),
+    (icon: Icons.language_outlined,    label: 'Hub'),
     (icon: Icons.my_location_outlined, label: 'Operations'),
-    (icon: Icons.shield_outlined,     label: 'Garage'),
-    (icon: Icons.star_outline,        label: 'Hall of Fame'),
+    (icon: Icons.shield_outlined,      label: 'Garage'),
+    (icon: Icons.star_outline,         label: 'Hall of Fame'),
   ];
 
-  // "Operations" is always the active tab on this screen.
   static const _activeIndex = 1;
 
   void _onItemTap(BuildContext context, int index) {
@@ -361,43 +362,65 @@ class _FloatingNavBar extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c           = ref.watch(sieColorsProvider);
     final bottomInset = MediaQuery.of(context).padding.bottom;
+
+    final navContent = Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: List.generate(_items.length, (i) {
+        final item = _items[i];
+        return _NavItem(
+          icon: item.icon,
+          label: item.label,
+          isActive: i == _activeIndex,
+          isCosmicMode: c.isCosmicMode,
+          activeColor: c.accent,
+          accentSecondary: c.accentSecondary,
+          inactiveColor: c.iconMuted,
+          onTap: () => _onItemTap(context, i),
+        );
+      }),
+    );
+
+    if (c.isCosmicMode) {
+      return Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, math.max(bottomInset, 16)),
+        child: GlassCard(
+          height: 68,
+          padding: EdgeInsets.zero,
+          shape: LiquidRoundedSuperellipse(borderRadius: 28),
+          useOwnLayer: true,
+          quality: GlassQuality.standard,
+          clipBehavior: Clip.antiAlias,
+          settings: LiquidGlassSettings(
+            blur: 3.5,
+            thickness: 24,
+            refractiveIndex: 1.45,
+            glassColor: const Color(0x0A0A0E1A),
+            lightAngle: GlassDefaults.lightAngle,
+            lightIntensity: 0.72,
+            glowIntensity: 0.92,
+            saturation: 1.4,
+            specularSharpness: GlassSpecularSharpness.sharp,
+            ambientStrength: 0.08,
+            chromaticAberration: 0.015,
+          ),
+          child: navContent,
+        ),
+      );
+    }
 
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 0, 16, math.max(bottomInset, 16)),
-      child: GlassCard(
+      child: Container(
         height: 68,
-        padding: EdgeInsets.zero,
-        shape: LiquidRoundedSuperellipse(borderRadius: 28),
-        useOwnLayer: true,
-        quality: GlassQuality.standard,
-        clipBehavior: Clip.antiAlias,
-        settings: LiquidGlassSettings(
-          blur: 3.5,
-          thickness: 24,
-          refractiveIndex: 1.45,
-          glassColor: const Color(0x0A0A0E1A),
-          lightAngle: GlassDefaults.lightAngle,
-          lightIntensity: 0.72,
-          glowIntensity: 0.92,
-          saturation: 1.4,
-          specularSharpness: GlassSpecularSharpness.sharp,
-          ambientStrength: 0.08,
-          chromaticAberration: 0.015,
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: c.border),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: List.generate(_items.length, (i) {
-            final item = _items[i];
-            return _NavItem(
-              icon: item.icon,
-              label: item.label,
-              isActive: i == _activeIndex,
-              onTap: () => _onItemTap(context, i),
-            );
-          }),
-        ),
+        child: navContent,
       ),
     );
   }
@@ -407,18 +430,26 @@ class _NavItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool isActive;
+  final bool isCosmicMode;
+  final Color activeColor;
+  final Color accentSecondary;
+  final Color inactiveColor;
   final VoidCallback onTap;
 
   const _NavItem({
     required this.icon,
     required this.label,
     required this.isActive,
+    required this.isCosmicMode,
+    required this.activeColor,
+    required this.accentSecondary,
+    required this.inactiveColor,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = isActive ? _kCyan : _kMuted;
+    final color = isActive ? activeColor : inactiveColor;
 
     return GestureDetector(
       onTap: onTap,
@@ -429,9 +460,7 @@ class _NavItem extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            // Ambient glow bloom — diffuses cyan light through the glass
-            // substrate rather than sitting as a flat overlay on top.
-            if (isActive)
+            if (isActive && isCosmicMode)
               Positioned.fill(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
@@ -439,7 +468,7 @@ class _NavItem extends StatelessWidget {
                       center: const Alignment(0, -0.3),
                       radius: 1.1,
                       colors: [
-                        _kCyan.withValues(alpha: 0.14),
+                        activeColor.withValues(alpha: 0.14),
                         Colors.transparent,
                       ],
                     ),
@@ -449,24 +478,27 @@ class _NavItem extends StatelessWidget {
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Active indicator — gradient line at the top of the item.
                 if (isActive)
                   Container(
                     width: 28,
                     height: 2,
                     margin: const EdgeInsets.only(bottom: 4),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [_kCyan, _kPurple],
-                      ),
+                      gradient: isCosmicMode
+                          ? LinearGradient(
+                              colors: [activeColor, accentSecondary])
+                          : null,
+                      color: isCosmicMode ? null : activeColor,
                       borderRadius: BorderRadius.circular(1),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _kCyan.withValues(alpha: 0.7),
-                          blurRadius: 8,
-                          spreadRadius: 1,
-                        ),
-                      ],
+                      boxShadow: isCosmicMode
+                          ? [
+                              BoxShadow(
+                                color: activeColor.withValues(alpha: 0.7),
+                                blurRadius: 8,
+                                spreadRadius: 1,
+                              ),
+                            ]
+                          : null,
                     ),
                   )
                 else
@@ -613,6 +645,7 @@ class _BranchCarouselCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final c     = ref.watch(sieColorsProvider);
     final theme = Theme.of(context);
 
     return Padding(
@@ -622,32 +655,26 @@ class _BranchCarouselCard extends ConsumerWidget {
         onTap: onTap,
         child: Column(
           children: [
-            // ── Visual preview  (≈60 % of card height) ──────
             Expanded(
               flex: 5,
               child: Container(
                 width: double.infinity,
-                decoration: const BoxDecoration(
-                  gradient: RadialGradient(
-                    center: Alignment.center,
-                    radius: 0.85,
-                    colors: [
-                      Color(0x0F00E5FF),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
+                decoration: c.isCosmicMode
+                    ? const BoxDecoration(
+                        gradient: RadialGradient(
+                          center: Alignment.center,
+                          radius: 0.85,
+                          colors: [Color(0x0F00E5FF), Colors.transparent],
+                        ),
+                      )
+                    : null,
                 child: _preview(),
               ),
             ),
-
-            // ── Divider ──────────────────────────────────────
             Container(
               height: 1,
-              color: Colors.white.withValues(alpha: 0.08),
+              color: c.border,
             ),
-
-            // ── Info section (≈40 % of card height) ─────────
             Expanded(
               flex: 3,
               child: Padding(
@@ -676,34 +703,36 @@ class _BranchCarouselCard extends ConsumerWidget {
                           height: 6,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: _kCyan,
-                            boxShadow: [
-                              BoxShadow(
-                                color: _kCyan.withValues(alpha: 0.8),
-                                blurRadius: 6,
-                                spreadRadius: 2,
-                              ),
-                            ],
+                            color: c.accent,
+                            boxShadow: c.isCosmicMode
+                                ? [
+                                    BoxShadow(
+                                      color: c.accent.withValues(alpha: 0.8),
+                                      blurRadius: 6,
+                                      spreadRadius: 2,
+                                    ),
+                                  ]
+                                : null,
                           ),
                         ),
                         const SizedBox(width: 8),
                         Text(
                           _statusLabel(ref),
-                          style: const TextStyle(
-                            color: _kCyan,
+                          style: TextStyle(
+                            color: c.accent,
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.2,
                             height: 1.1,
-                            shadows: [
-                              Shadow(color: _kCyan, blurRadius: 8),
-                            ],
+                            shadows: c.isCosmicMode
+                                ? [Shadow(color: c.accent, blurRadius: 8)]
+                                : null,
                           ),
                         ),
                         const Spacer(),
-                        const Icon(
+                        Icon(
                           Icons.chevron_right,
-                          color: _kCyan,
+                          color: c.accent,
                           size: 16,
                         ),
                       ],
@@ -723,15 +752,15 @@ class _BranchCarouselCard extends ConsumerWidget {
 // Branch preview widgets
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Breathing — radial gradient sphere with infinite scale "breath" animation.
-class _BreathSpherePreview extends StatefulWidget {
+class _BreathSpherePreview extends ConsumerStatefulWidget {
   const _BreathSpherePreview();
 
   @override
-  State<_BreathSpherePreview> createState() => _BreathSpherePreviewState();
+  ConsumerState<_BreathSpherePreview> createState() =>
+      _BreathSpherePreviewState();
 }
 
-class _BreathSpherePreviewState extends State<_BreathSpherePreview>
+class _BreathSpherePreviewState extends ConsumerState<_BreathSpherePreview>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _scale;
@@ -756,6 +785,7 @@ class _BreathSpherePreviewState extends State<_BreathSpherePreview>
 
   @override
   Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
     return Center(
       child: AnimatedBuilder(
         animation: _scale,
@@ -766,27 +796,45 @@ class _BreathSpherePreviewState extends State<_BreathSpherePreview>
             height: 130,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: const RadialGradient(
-                colors: [
-                  Color(0xFFCCF8FF), // bright core
-                  Color(0xFF00E5FF), // neon cyan
-                  Color(0xFF7000FF), // purple rim
-                  Color(0x007000FF), // fade to transparent
-                ],
-                stops: [0.0, 0.28, 0.68, 1.0],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: _kCyan.withValues(alpha: 0.35),
-                  blurRadius: 40,
-                  spreadRadius: 12,
-                ),
-                BoxShadow(
-                  color: _kPurple.withValues(alpha: 0.2),
-                  blurRadius: 70,
-                  spreadRadius: 24,
-                ),
-              ],
+              gradient: c.isLightMode
+                  ? RadialGradient(
+                      colors: [
+                        const Color(0xFFCCF5F2),
+                        c.accent,
+                        c.accentSecondary,
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.35, 0.70, 1.0],
+                    )
+                  : const RadialGradient(
+                      colors: [
+                        Color(0xFFCCF8FF),
+                        Color(0xFF00E5FF),
+                        Color(0xFF7000FF),
+                        Color(0x007000FF),
+                      ],
+                      stops: [0.0, 0.28, 0.68, 1.0],
+                    ),
+              boxShadow: c.isCosmicMode
+                  ? [
+                      BoxShadow(
+                        color: c.accent.withValues(alpha: 0.35),
+                        blurRadius: 40,
+                        spreadRadius: 12,
+                      ),
+                      BoxShadow(
+                        color: c.accentSecondary.withValues(alpha: 0.2),
+                        blurRadius: 70,
+                        spreadRadius: 24,
+                      ),
+                    ]
+                  : [
+                      BoxShadow(
+                        color: c.accent.withValues(alpha: 0.20),
+                        blurRadius: 20,
+                        spreadRadius: 4,
+                      ),
+                    ],
             ),
           ),
         ),
@@ -795,11 +843,9 @@ class _BreathSpherePreviewState extends State<_BreathSpherePreview>
   }
 }
 
-/// Habit Matrix — 5×5 dot grid with specific nodes glowing in Neon Cyan.
-class _HabitMatrixPreview extends StatelessWidget {
+class _HabitMatrixPreview extends ConsumerWidget {
   const _HabitMatrixPreview();
 
-  // (row, col) of glowing nodes
   static const _lit = {
     (0, 2),
     (1, 1), (1, 3),
@@ -809,7 +855,8 @@ class _HabitMatrixPreview extends StatelessWidget {
   };
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -826,13 +873,11 @@ class _HabitMatrixPreview extends StatelessWidget {
                   margin: const EdgeInsets.symmetric(horizontal: 6),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: glow
-                        ? _kCyan
-                        : const Color(0xFF1A3A5C),
-                    boxShadow: glow
+                    color: glow ? c.accent : c.border,
+                    boxShadow: glow && c.isCosmicMode
                         ? [
                             BoxShadow(
-                              color: _kCyan.withValues(alpha: 0.75),
+                              color: c.accent.withValues(alpha: 0.75),
                               blurRadius: 10,
                               spreadRadius: 2,
                             ),
@@ -849,12 +894,12 @@ class _HabitMatrixPreview extends StatelessWidget {
   }
 }
 
-/// Focus Forge — thin circular arc ring showing a countdown timer.
-class _FocusRingPreview extends StatelessWidget {
+class _FocusRingPreview extends ConsumerWidget {
   const _FocusRingPreview();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Center(
       child: SizedBox(
         width: 140,
@@ -864,15 +909,22 @@ class _FocusRingPreview extends StatelessWidget {
           children: [
             CustomPaint(
               size: const Size(140, 140),
-              painter: _ArcPainter(progress: 0.65),
+              painter: _ArcPainter(
+                progress: 0.65,
+                trackColor: c.border,
+                arcStart: c.accent,
+                arcEnd: c.accentSecondary,
+                tipColor: c.accent,
+                isCosmicMode: c.isCosmicMode,
+              ),
             ),
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
+                Text(
                   '15:00',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: c.textPrimary,
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 2,
@@ -883,7 +935,7 @@ class _FocusRingPreview extends StatelessWidget {
                 Text(
                   'FOCUS',
                   style: TextStyle(
-                    color: _kMuted,
+                    color: c.iconMuted,
                     fontSize: 9,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 2.5,
@@ -900,7 +952,20 @@ class _FocusRingPreview extends StatelessWidget {
 
 class _ArcPainter extends CustomPainter {
   final double progress;
-  const _ArcPainter({required this.progress});
+  final Color trackColor;
+  final Color arcStart;
+  final Color arcEnd;
+  final Color tipColor;
+  final bool isCosmicMode;
+
+  const _ArcPainter({
+    required this.progress,
+    required this.trackColor,
+    required this.arcStart,
+    required this.arcEnd,
+    required this.tipColor,
+    required this.isCosmicMode,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -908,17 +973,15 @@ class _ArcPainter extends CustomPainter {
     final radius = size.width / 2 - 8;
     final bounds = Rect.fromCircle(center: center, radius: radius);
 
-    // Track (background ring)
     canvas.drawCircle(
       center,
       radius,
       Paint()
-        ..color = const Color(0xFF1A3A5C)
+        ..color = trackColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = 7,
     );
 
-    // Progress arc with diagonal gradient
     final sweepAngle = 2 * math.pi * progress.clamp(0.0, 1.0);
     canvas.drawArc(
       bounds,
@@ -926,18 +989,17 @@ class _ArcPainter extends CustomPainter {
       sweepAngle,
       false,
       Paint()
-        ..shader = const LinearGradient(
+        ..shader = LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [_kCyan, _kPurple],
+          colors: [arcStart, arcEnd],
         ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
         ..style = PaintingStyle.stroke
         ..strokeWidth = 7
         ..strokeCap = StrokeCap.round,
     );
 
-    // Glowing tip at arc end
-    if (progress > 0.01) {
+    if (progress > 0.01 && isCosmicMode) {
       final tipAngle = -math.pi / 2 + sweepAngle;
       final tipX = center.dx + radius * math.cos(tipAngle);
       final tipY = center.dy + radius * math.sin(tipAngle);
@@ -945,35 +1007,38 @@ class _ArcPainter extends CustomPainter {
         Offset(tipX, tipY),
         5,
         Paint()
-          ..color = _kCyan
+          ..color = tipColor
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
       );
     }
   }
 
   @override
-  bool shouldRepaint(_ArcPainter old) => old.progress != progress;
+  bool shouldRepaint(_ArcPainter old) =>
+      old.progress != progress ||
+      old.arcStart != arcStart ||
+      old.trackColor != trackColor;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Offline / no-connection placeholder
 // ─────────────────────────────────────────────────────────────────────────────
-class _NoConnectionMessage extends StatelessWidget {
+class _NoConnectionMessage extends ConsumerWidget {
   const _NoConnectionMessage();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.wifi_off_outlined,
-            color: _kMuted, size: 36),
+        Icon(Icons.wifi_off_outlined, color: c.iconMuted, size: 36),
         const SizedBox(height: 12),
-        const Text(
+        Text(
           'Подключение к интернету отсутствует',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: _kMuted,
+            color: c.iconMuted,
             fontSize: 13,
             letterSpacing: 0.5,
           ),
@@ -986,39 +1051,49 @@ class _NoConnectionMessage extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Glass Bell Badge
 // ─────────────────────────────────────────────────────────────────────────────
-class _GlassBell extends StatelessWidget {
+class _GlassBell extends ConsumerWidget {
   const _GlassBell();
 
   @override
-  Widget build(BuildContext context) {
-    return GlassCard(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c    = ref.watch(sieColorsProvider);
+    final icon = Icon(
+      Icons.notifications_outlined,
+      color: c.textSecondary,
+      size: 18,
+    );
+
+    if (c.isCosmicMode) {
+      return GlassCard(
+        width: 38,
+        height: 38,
+        padding: EdgeInsets.zero,
+        shape: LiquidRoundedSuperellipse(borderRadius: 19),
+        useOwnLayer: true,
+        quality: GlassQuality.standard,
+        clipBehavior: Clip.antiAlias,
+        settings: LiquidGlassSettings(
+          blur: 2.0,
+          thickness: 20,
+          refractiveIndex: 1.45,
+          glassColor: const Color(0x0A0A0E1A),
+          lightAngle: GlassDefaults.lightAngle,
+          lightIntensity: 0.72,
+          glowIntensity: 0.85,
+          saturation: 1.4,
+          specularSharpness: GlassSpecularSharpness.sharp,
+          ambientStrength: 0.08,
+          chromaticAberration: 0.015,
+        ),
+        child: Center(child: icon),
+      );
+    }
+
+    return Container(
       width: 38,
       height: 38,
-      padding: EdgeInsets.zero,
-      shape: LiquidRoundedSuperellipse(borderRadius: 19),
-      useOwnLayer: true,
-      quality: GlassQuality.standard,
-      clipBehavior: Clip.antiAlias,
-      settings: LiquidGlassSettings(
-        blur: 2.0,
-        thickness: 20,
-        refractiveIndex: 1.45,
-        glassColor: const Color(0x0A0A0E1A),
-        lightAngle: GlassDefaults.lightAngle,
-        lightIntensity: 0.72,
-        glowIntensity: 0.85,
-        saturation: 1.4,
-        specularSharpness: GlassSpecularSharpness.sharp,
-        ambientStrength: 0.08,
-        chromaticAberration: 0.015,
-      ),
-      child: const Center(
-        child: Icon(
-          Icons.notifications_outlined,
-          color: SieTheme.textSecondary,
-          size: 18,
-        ),
-      ),
+      decoration: c.flatCard(radius: 19),
+      child: Center(child: icon),
     );
   }
 }
@@ -1026,7 +1101,7 @@ class _GlassBell extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Screen Header
 // ─────────────────────────────────────────────────────────────────────────────
-class _ScreenHeader extends StatelessWidget {
+class _ScreenHeader extends ConsumerWidget {
   final AsyncValue<Profile?> profileAsync;
 
   const _ScreenHeader({required this.profileAsync});
@@ -1039,11 +1114,13 @@ class _ScreenHeader extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final theme         = Theme.of(context);
-    final spaceEffects  = theme.extension<SieSpaceEffects>();
-    final gradientColors =
-        spaceEffects?.primaryGradient ?? [SieTheme.accent, SieTheme.dp];
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c              = ref.watch(sieColorsProvider);
+    final theme          = Theme.of(context);
+    final spaceEffects   = theme.extension<SieSpaceEffects>();
+    final gradientColors = c.isCosmicMode
+        ? (spaceEffects?.primaryGradient ?? [c.accent, c.dp])
+        : [c.accent, c.accentSecondary];
 
     final operative = profileAsync.when(
       data: (p) => p?.username?.toUpperCase() ?? 'UNIDENTIFIED',
@@ -1065,17 +1142,19 @@ class _ScreenHeader extends StatelessWidget {
                   RichText(
                     text: TextSpan(
                       children: [
-                        const TextSpan(
+                        TextSpan(
                           text: 'SiE ',
                           style: TextStyle(
-                            color: _kCyan,
+                            color: c.accent,
                             fontSize: 22,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 1.5,
-                            shadows: [
-                              Shadow(color: _kCyan, blurRadius: 8),
-                              Shadow(color: _kCyan, blurRadius: 20),
-                            ],
+                            shadows: c.isCosmicMode
+                                ? [
+                                    Shadow(color: c.accent, blurRadius: 8),
+                                    Shadow(color: c.accent, blurRadius: 20),
+                                  ]
+                                : null,
                           ),
                         ),
                         TextSpan(
@@ -1111,8 +1190,7 @@ class _ScreenHeader extends StatelessWidget {
                         const SizedBox(width: 6),
                         Icon(
                           Icons.chevron_right,
-                          color:
-                              gradientColors.first.withValues(alpha: 0.7),
+                          color: gradientColors.first.withValues(alpha: 0.7),
                           size: 14,
                         ),
                       ],
@@ -1132,26 +1210,22 @@ class _ScreenHeader extends StatelessWidget {
                   transitionDuration: const Duration(milliseconds: 300),
                 ),
               ),
-              icon: const Icon(
-                Icons.search,
-                color: SieTheme.textSecondary,
-                size: 20,
-              ),
+              icon: Icon(Icons.search, color: c.textSecondary, size: 20),
               tooltip: 'NETWORK SCAN',
             ),
             IconButton(
               onPressed: () async => SupabaseService.signOut(),
-              icon: const Icon(
-                Icons.logout,
-                color: SieTheme.textSecondary,
-                size: 20,
-              ),
+              icon: Icon(Icons.logout, color: c.textSecondary, size: 20),
               tooltip: 'SIGN OUT',
             ),
           ],
         ),
         const SizedBox(height: 20),
-        _XpBar(xp: xp, gradientColors: gradientColors, badge: _badge(xp ~/ 1000)),
+        _XpBar(
+            xp: xp,
+            gradientColors: gradientColors,
+            badge: _badge(xp ~/ 1000),
+            c: c),
       ],
     );
   }
@@ -1164,24 +1238,25 @@ class _XpBar extends StatelessWidget {
   final int xp;
   final List<Color> gradientColors;
   final String badge;
+  final SieColors c;
 
   const _XpBar({
     required this.xp,
     required this.gradientColors,
     required this.badge,
+    required this.c,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme      = Theme.of(context);
-    final level      = xp ~/ 1000;
-    final xpInLevel  = xp % 1000;
-    final progress   = (xpInLevel / 1000.0).clamp(0.0, 1.0);
+    final theme     = Theme.of(context);
+    final level     = xp ~/ 1000;
+    final xpInLevel = xp % 1000;
+    final progress  = (xpInLevel / 1000.0).clamp(0.0, 1.0);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Level + badge column
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1194,8 +1269,7 @@ class _XpBar extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 gradient: LinearGradient(colors: gradientColors),
                 borderRadius: BorderRadius.circular(10),
@@ -1213,7 +1287,6 @@ class _XpBar extends StatelessWidget {
           ],
         ),
         const SizedBox(width: 14),
-        // Progress track
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1232,17 +1305,13 @@ class _XpBar extends StatelessWidget {
                 borderRadius: BorderRadius.circular(2),
                 child: Stack(
                   children: [
-                    Container(
-                      height: 4,
-                      color: SieTheme.borderDefault,
-                    ),
+                    Container(height: 4, color: c.border),
                     FractionallySizedBox(
                       widthFactor: progress,
                       child: Container(
                         height: 4,
                         decoration: BoxDecoration(
-                          gradient:
-                              LinearGradient(colors: gradientColors),
+                          gradient: LinearGradient(colors: gradientColors),
                         ),
                       ),
                     ),

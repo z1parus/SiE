@@ -1,25 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
-
-const _kCyan = Color(0xFF00E5FF);
-const _kPurple = Color(0xFF7000FF);
 
 // ── Knowledge Base Screen ─────────────────────────────────────
 
-class KnowledgeBaseScreen extends StatelessWidget {
+class KnowledgeBaseScreen extends ConsumerWidget {
   const KnowledgeBaseScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return GlassPage(
-      background: SieSpaceBackground(),
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SieBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _TopBar(),
+              const _TopBar(),
               Expanded(
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 48),
@@ -69,9 +66,12 @@ class KnowledgeBaseScreen extends StatelessWidget {
 
 // ── Top Bar ───────────────────────────────────────────────────
 
-class _TopBar extends StatelessWidget {
+class _TopBar extends ConsumerWidget {
+  const _TopBar();
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
@@ -81,9 +81,9 @@ class _TopBar extends StatelessWidget {
             width: 40,
             height: 40,
             onTap: () => Navigator.of(context).pop(),
-            child: const Icon(
+            child: Icon(
               Icons.arrow_back_ios_new,
-              color: _kCyan,
+              color: c.accent,
               size: 18,
             ),
           ),
@@ -91,7 +91,7 @@ class _TopBar extends StatelessWidget {
             child: Text(
               'БАЗА ЗНАНИЙ',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
+                    color: c.textPrimary,
                     letterSpacing: 3,
                     fontWeight: FontWeight.w700,
                   ),
@@ -107,25 +107,28 @@ class _TopBar extends StatelessWidget {
 
 // ── Neon Section Label ────────────────────────────────────────
 
-class _NeonSectionLabel extends StatelessWidget {
+class _NeonSectionLabel extends ConsumerWidget {
   final String label;
   const _NeonSectionLabel({required this.label});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Row(
       children: [
         Container(
           width: 2,
           height: 12,
           decoration: BoxDecoration(
-            color: _kCyan,
-            boxShadow: [
-              BoxShadow(
-                color: _kCyan.withValues(alpha: 0.7),
-                blurRadius: 6,
-              ),
-            ],
+            color: c.accent,
+            boxShadow: c.isCosmicMode
+                ? [
+                    BoxShadow(
+                      color: c.accent.withValues(alpha: 0.7),
+                      blurRadius: 6,
+                    ),
+                  ]
+                : null,
           ),
         ),
         const SizedBox(width: 8),
@@ -133,7 +136,7 @@ class _NeonSectionLabel extends StatelessWidget {
           label,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 letterSpacing: 2,
-                color: _kCyan.withValues(alpha: 0.9),
+                color: c.accent.withValues(alpha: 0.9),
               ),
         ),
       ],
@@ -143,11 +146,12 @@ class _NeonSectionLabel extends StatelessWidget {
 
 // ── System Header ─────────────────────────────────────────────
 
-class _SystemHeader extends StatelessWidget {
+class _SystemHeader extends ConsumerWidget {
   const _SystemHeader();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return SieGlassCard(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -159,29 +163,33 @@ class _SystemHeader extends StatelessWidget {
                 width: 3,
                 height: 14,
                 decoration: BoxDecoration(
-                  color: _kCyan,
-                  boxShadow: [
-                    BoxShadow(
-                      color: _kCyan.withValues(alpha: 0.7),
-                      blurRadius: 8,
-                    ),
-                  ],
+                  color: c.accent,
+                  boxShadow: c.isCosmicMode
+                      ? [
+                          BoxShadow(
+                            color: c.accent.withValues(alpha: 0.7),
+                            blurRadius: 8,
+                          ),
+                        ]
+                      : null,
                 ),
               ),
               const SizedBox(width: 10),
               Text(
                 'SiE KNOWLEDGE MATRIX v1.0',
                 style: TextStyle(
-                  color: _kCyan,
+                  color: c.accent,
                   fontSize: 10,
                   letterSpacing: 2.5,
                   fontWeight: FontWeight.w700,
-                  shadows: [
-                    Shadow(
-                      color: _kCyan.withValues(alpha: 0.6),
-                      blurRadius: 8,
-                    ),
-                  ],
+                  shadows: c.isCosmicMode
+                      ? [
+                          Shadow(
+                            color: c.accent.withValues(alpha: 0.6),
+                            blurRadius: 8,
+                          ),
+                        ]
+                      : null,
                 ),
               ),
             ],
@@ -196,7 +204,7 @@ class _SystemHeader extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   height: 1.6,
                   fontSize: 12,
-                  color: Colors.white.withValues(alpha: 0.85),
+                  color: c.textPrimary.withValues(alpha: 0.85),
                 ),
           ),
         ],
@@ -207,7 +215,7 @@ class _SystemHeader extends StatelessWidget {
 
 // ── Expandable KB Entry ───────────────────────────────────────
 
-class _KbEntry extends StatefulWidget {
+class _KbEntry extends ConsumerStatefulWidget {
   final String moduleTag;
   final String label;
   final String subtitle;
@@ -221,10 +229,10 @@ class _KbEntry extends StatefulWidget {
   });
 
   @override
-  State<_KbEntry> createState() => _KbEntryState();
+  ConsumerState<_KbEntry> createState() => _KbEntryState();
 }
 
-class _KbEntryState extends State<_KbEntry>
+class _KbEntryState extends ConsumerState<_KbEntry>
     with TickerProviderStateMixin {
   bool _expanded = false;
   late final AnimationController _fadeCtrl;
@@ -281,16 +289,14 @@ class _KbEntryState extends State<_KbEntry>
 
   @override
   Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
     return RepaintBoundary(
       child: AnimatedBuilder(
         animation: _press,
-        builder: (_, child) {
-          final t = _press.value;
-          return Transform.scale(
-            scale: 1.0 - 0.03 * t,
-            child: child,
-          );
-        },
+        builder: (_, child) => Transform.scale(
+          scale: 1.0 - 0.03 * _press.value,
+          child: child,
+        ),
         child: SieGlassCard(
           padding: EdgeInsets.zero,
           child: Column(
@@ -316,20 +322,22 @@ class _KbEntryState extends State<_KbEntry>
                           ),
                           decoration: BoxDecoration(
                             border: Border.all(
-                              color: _kCyan.withValues(alpha: 0.6),
+                              color: c.accent.withValues(alpha: 0.6),
                             ),
                             borderRadius: BorderRadius.circular(4),
-                            boxShadow: [
-                              BoxShadow(
-                                color: _kCyan.withValues(alpha: 0.2),
-                                blurRadius: 6,
-                              ),
-                            ],
+                            boxShadow: c.isCosmicMode
+                                ? [
+                                    BoxShadow(
+                                      color: c.accent.withValues(alpha: 0.2),
+                                      blurRadius: 6,
+                                    ),
+                                  ]
+                                : null,
                           ),
                           child: Text(
                             widget.moduleTag,
-                            style: const TextStyle(
-                              color: _kCyan,
+                            style: TextStyle(
+                              color: c.accent,
                               fontSize: 9,
                               letterSpacing: 1.5,
                               fontWeight: FontWeight.w700,
@@ -343,8 +351,8 @@ class _KbEntryState extends State<_KbEntry>
                             children: [
                               Text(
                                 widget.label,
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: c.textPrimary,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 1.5,
@@ -354,8 +362,7 @@ class _KbEntryState extends State<_KbEntry>
                               Text(
                                 widget.subtitle,
                                 style: TextStyle(
-                                  color:
-                                      Colors.white.withValues(alpha: 0.5),
+                                  color: c.textSecondary,
                                   fontSize: 11,
                                 ),
                               ),
@@ -368,8 +375,8 @@ class _KbEntryState extends State<_KbEntry>
                           child: Icon(
                             Icons.chevron_right,
                             color: _expanded
-                                ? _kCyan
-                                : Colors.white.withValues(alpha: 0.4),
+                                ? c.accent
+                                : c.textSecondary.withValues(alpha: 0.6),
                             size: 18,
                           ),
                         ),
@@ -392,10 +399,10 @@ class _KbEntryState extends State<_KbEntry>
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: [
-                                    _kCyan.withValues(alpha: 0.0),
-                                    _kCyan.withValues(alpha: 0.4),
-                                    _kPurple.withValues(alpha: 0.4),
-                                    _kPurple.withValues(alpha: 0.0),
+                                    c.accent.withValues(alpha: 0.0),
+                                    c.accent.withValues(alpha: 0.4),
+                                    c.accentSecondary.withValues(alpha: 0.4),
+                                    c.accentSecondary.withValues(alpha: 0.0),
                                   ],
                                 ),
                               ),
@@ -404,8 +411,8 @@ class _KbEntryState extends State<_KbEntry>
                               padding: const EdgeInsets.all(16),
                               child: Text(
                                 widget.body,
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: c.textPrimary,
                                   height: 1.7,
                                   fontSize: 12,
                                 ),
@@ -426,11 +433,12 @@ class _KbEntryState extends State<_KbEntry>
 
 // ── XP Table ──────────────────────────────────────────────────
 
-class _XpTable extends StatelessWidget {
+class _XpTable extends ConsumerWidget {
   const _XpTable();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     const rows = [
       _XpRow('Завершение дыхательной сессии', '100 XP', 'Breathing'),
       _XpRow('Выход из дыхания ≥ 30 сек', '10–80 XP', 'Breathing'),
@@ -446,13 +454,10 @@ class _XpTable extends StatelessWidget {
       child: Column(
         children: [
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               border: Border(
-                bottom: BorderSide(
-                  color: _kCyan.withValues(alpha: 0.2),
-                ),
+                bottom: BorderSide(color: c.accent.withValues(alpha: 0.2)),
               ),
             ),
             child: Row(
@@ -462,7 +467,7 @@ class _XpTable extends StatelessWidget {
                   child: Text(
                     'АКТИВНОСТЬ',
                     style: TextStyle(
-                      color: _kCyan.withValues(alpha: 0.6),
+                      color: c.accent.withValues(alpha: 0.6),
                       fontSize: 9,
                       letterSpacing: 2,
                     ),
@@ -472,7 +477,7 @@ class _XpTable extends StatelessWidget {
                 Text(
                   'НАГРАДА',
                   style: TextStyle(
-                    color: _kCyan.withValues(alpha: 0.6),
+                    color: c.accent.withValues(alpha: 0.6),
                     fontSize: 9,
                     letterSpacing: 2,
                   ),
@@ -483,7 +488,7 @@ class _XpTable extends StatelessWidget {
                   child: Text(
                     'МОДУЛЬ',
                     style: TextStyle(
-                      color: _kCyan.withValues(alpha: 0.6),
+                      color: c.accent.withValues(alpha: 0.6),
                       fontSize: 9,
                       letterSpacing: 2,
                     ),
@@ -494,14 +499,14 @@ class _XpTable extends StatelessWidget {
           ),
           ...rows.asMap().entries.map((e) {
             final isLast = e.key == rows.length - 1;
-            return _XpTableRow(row: e.value, isLast: isLast);
+            return _XpTableRow(row: e.value, isLast: isLast, c: c);
           }),
           Padding(
             padding: const EdgeInsets.all(12),
             child: Text(
               '1000 XP = LEVEL UP  ·  Уровень определяет ранг оперативника в иерархии SiE',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.35),
+                color: c.textSecondary.withValues(alpha: 0.7),
                 fontSize: 10,
                 letterSpacing: 0.5,
               ),
@@ -524,7 +529,8 @@ class _XpRow {
 class _XpTableRow extends StatelessWidget {
   final _XpRow row;
   final bool isLast;
-  const _XpTableRow({required this.row, required this.isLast});
+  final SieColors c;
+  const _XpTableRow({required this.row, required this.isLast, required this.c});
 
   @override
   Widget build(BuildContext context) {
@@ -535,7 +541,7 @@ class _XpTableRow extends StatelessWidget {
           : BoxDecoration(
               border: Border(
                 bottom: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.07),
+                  color: c.border,
                   width: 0.5,
                 ),
               ),
@@ -546,17 +552,14 @@ class _XpTableRow extends StatelessWidget {
             flex: 4,
             child: Text(
               row.activity,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-              ),
+              style: TextStyle(color: c.textPrimary, fontSize: 11),
             ),
           ),
           const SizedBox(width: 8),
           Text(
             row.reward,
-            style: const TextStyle(
-              color: _kCyan,
+            style: TextStyle(
+              color: c.accent,
               fontSize: 11,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.5,
@@ -568,7 +571,7 @@ class _XpTableRow extends StatelessWidget {
             child: Text(
               row.module,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.4),
+                color: c.textSecondary,
                 fontSize: 10,
                 letterSpacing: 0.3,
               ),
@@ -582,11 +585,12 @@ class _XpTableRow extends StatelessWidget {
 
 // ── Ethics Section ────────────────────────────────────────────
 
-class _EthicsSection extends StatelessWidget {
+class _EthicsSection extends ConsumerWidget {
   const _EthicsSection();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     const paragraphs = [
       'SiE — Self-improvement Ecosystem — не приложение, это операционная система личного роста. Каждое действие здесь является вкладом в долгосрочную архитектуру твоей эффективности.',
       'Мы верим в науку, а не в мотивацию. Мотивация нестабильна — системы и протоколы постоянны. Каждый модуль SiE построен на верифицированных механиках: нейробиологии дыхания, психологии формирования привычек и когнитивной науке концентрации.',
@@ -605,17 +609,17 @@ class _EthicsSection extends StatelessWidget {
               paragraphs[i],
               style: TextStyle(
                 color: i == paragraphs.length - 1
-                    ? _kCyan
-                    : Colors.white.withValues(alpha: 0.85),
+                    ? c.accent
+                    : c.textPrimary.withValues(alpha: 0.85),
                 height: 1.7,
                 fontSize: 12,
                 fontStyle: i == paragraphs.length - 1
                     ? FontStyle.italic
                     : FontStyle.normal,
-                shadows: i == paragraphs.length - 1
+                shadows: (i == paragraphs.length - 1 && c.isCosmicMode)
                     ? [
                         Shadow(
-                          color: _kCyan.withValues(alpha: 0.4),
+                          color: c.accent.withValues(alpha: 0.4),
                           blurRadius: 8,
                         ),
                       ]

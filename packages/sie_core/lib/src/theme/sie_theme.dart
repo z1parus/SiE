@@ -144,10 +144,10 @@ class SieTheme {
 
   // ── Classic Light palette ──────────────────────────────────────────────────
 
-  static const clBackground    = Color(0xFFF0F0F4); // crisp light grey
+  static const clBackground    = Color(0xFFF5F6FA); // crisp light grey
   static const clSurface       = Color(0xFFFFFFFF);
   static const clAccent        = Color(0xFF5AADA0); // seafoam teal
-  static const clBorder        = Color(0xFFC8C8D4);
+  static const clBorder        = Color(0xFFE4E4EE);
   static const clTextPrimary   = Color(0xFF1C1C22);
   static const clTextSecondary = Color(0xFF646470);
   static const clDp            = Color(0xFF8B5CF6); // muted violet

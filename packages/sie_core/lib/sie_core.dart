@@ -4,6 +4,8 @@ export 'src/providers/connectivity_provider.dart';
 export 'src/services/sync_service.dart';
 export 'src/widgets/offline_banner.dart';
 export 'src/theme/sie_theme.dart';
+export 'src/theme/sie_colors.dart';
+export 'src/widgets/sie_background.dart';
 export 'src/models/branch.dart';
 export 'src/models/profile.dart';
 export 'src/models/achievement.dart';

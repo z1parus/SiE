@@ -4,9 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 
-const _kCyan = Color(0xFF00E5FF);
-const _kPurple = Color(0xFF7000FF);
-
 class ProgressAnalyticsScreen extends ConsumerWidget {
   const ProgressAnalyticsScreen({super.key});
 
@@ -14,14 +11,13 @@ class ProgressAnalyticsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final analyticsAsync = ref.watch(analyticsProvider);
 
-    return GlassPage(
-      background: SieSpaceBackground(),
+    return SieBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(
           child: Column(
             children: [
-              _TopBar(onBack: () => Navigator.of(context).pop()),
+              const _TopBar(),
               Expanded(
                 child: analyticsAsync.when(
                   data: (data) => _AnalyticsBody(data: data),
@@ -39,12 +35,12 @@ class ProgressAnalyticsScreen extends ConsumerWidget {
 
 // ── Top Bar ───────────────────────────────────────────────────
 
-class _TopBar extends StatelessWidget {
-  final VoidCallback onBack;
-  const _TopBar({required this.onBack});
+class _TopBar extends ConsumerWidget {
+  const _TopBar();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
@@ -53,10 +49,10 @@ class _TopBar extends StatelessWidget {
             padding: EdgeInsets.zero,
             width: 40,
             height: 40,
-            onTap: onBack,
-            child: const Icon(
+            onTap: () => Navigator.of(context).pop(),
+            child: Icon(
               Icons.arrow_back_ios_new,
-              color: _kCyan,
+              color: c.accent,
               size: 18,
             ),
           ),
@@ -64,7 +60,7 @@ class _TopBar extends StatelessWidget {
             child: Text(
               'PROGRESS HUB',
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: Colors.white,
+                    color: c.textPrimary,
                     letterSpacing: 3,
                   ),
               textAlign: TextAlign.center,
@@ -79,39 +75,36 @@ class _TopBar extends StatelessWidget {
 
 // ── Loading / Error ───────────────────────────────────────────
 
-class _LoadingState extends StatelessWidget {
+class _LoadingState extends ConsumerWidget {
   const _LoadingState();
 
   @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: CircularProgressIndicator(
-        color: _kCyan,
-        strokeWidth: 1.5,
-      ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Center(
+      child: CircularProgressIndicator(color: c.accent, strokeWidth: 1.5),
     );
   }
 }
 
-class _ErrorState extends StatelessWidget {
-  // ignore: unused_element
+class _ErrorState extends ConsumerWidget {
   final Object? error;
   const _ErrorState({this.error});
 
   @override
-  Widget build(BuildContext context) {
-    return const Center(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.wifi_off_outlined,
-              color: Color(0xFF90A4AE), size: 36),
-          SizedBox(height: 12),
+          Icon(Icons.wifi_off_outlined, color: c.iconMuted, size: 36),
+          const SizedBox(height: 12),
           Text(
             'Подключение к интернету отсутствует',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: Color(0xFF90A4AE),
+              color: c.iconMuted,
               fontSize: 13,
               letterSpacing: 0.5,
             ),
@@ -135,15 +128,15 @@ class _AnalyticsBody extends StatelessWidget {
       children: [
         _StatsRow(data: data),
         const SizedBox(height: 28),
-        _SectionLabel(label: 'ACTIVITY MATRIX'),
+        const _SectionLabel(label: 'ACTIVITY MATRIX'),
         const SizedBox(height: 12),
         _HeatMap(heatMap: data.heatMap),
         const SizedBox(height: 28),
-        _SectionLabel(label: 'XP GROWTH — 7 DAYS'),
+        const _SectionLabel(label: 'XP GROWTH — 7 DAYS'),
         const SizedBox(height: 12),
         _XpLineChart(points: data.xpHistory),
         const SizedBox(height: 28),
-        _SectionLabel(label: 'FOCUS TIME — 7 DAYS'),
+        const _SectionLabel(label: 'FOCUS TIME — 7 DAYS'),
         const SizedBox(height: 12),
         _FocusBarChart(points: data.focusByDay),
       ],
@@ -153,25 +146,23 @@ class _AnalyticsBody extends StatelessWidget {
 
 // ── Section label ─────────────────────────────────────────────
 
-class _SectionLabel extends StatelessWidget {
+class _SectionLabel extends ConsumerWidget {
   final String label;
   const _SectionLabel({required this.label});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Row(
       children: [
         Container(
           width: 2,
           height: 12,
           decoration: BoxDecoration(
-            color: _kCyan,
-            boxShadow: [
-              BoxShadow(
-                color: _kCyan.withValues(alpha: 0.7),
-                blurRadius: 6,
-              ),
-            ],
+            color: c.accent,
+            boxShadow: c.isCosmicMode
+                ? [BoxShadow(color: c.accent.withValues(alpha: 0.7), blurRadius: 6)]
+                : null,
           ),
         ),
         const SizedBox(width: 8),
@@ -179,7 +170,7 @@ class _SectionLabel extends StatelessWidget {
           label,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 letterSpacing: 2,
-                color: _kCyan.withValues(alpha: 0.9),
+                color: c.accent.withValues(alpha: 0.9),
               ),
         ),
       ],
@@ -189,12 +180,13 @@ class _SectionLabel extends StatelessWidget {
 
 // ── Stats Cards ───────────────────────────────────────────────
 
-class _StatsRow extends StatelessWidget {
+class _StatsRow extends ConsumerWidget {
   final AnalyticsData data;
   const _StatsRow({required this.data});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     final focusH = data.totalFocusMinutes ~/ 60;
     final focusM = data.totalFocusMinutes % 60;
     final focusLabel = focusH > 0 ? '${focusH}h ${focusM}m' : '${focusM}m';
@@ -208,7 +200,8 @@ class _StatsRow extends StatelessWidget {
               icon: Icons.timer_outlined,
               value: focusLabel,
               label: 'TOTAL\nFOCUS',
-              color: _kCyan,
+              color: c.accent,
+              c: c,
             ),
           ),
         ),
@@ -219,7 +212,8 @@ class _StatsRow extends StatelessWidget {
               icon: Icons.check_circle_outline,
               value: '$completionPct%',
               label: 'HABITS\n30 DAYS',
-              color: _kPurple,
+              color: c.accentSecondary,
+              c: c,
             ),
           ),
         ),
@@ -231,6 +225,7 @@ class _StatsRow extends StatelessWidget {
               value: '${data.currentStreak}',
               label: 'DAY\nSTREAK',
               color: const Color(0xFFFFB347),
+              c: c,
             ),
           ),
         ),
@@ -244,12 +239,14 @@ class _StatCard extends StatelessWidget {
   final String value;
   final String label;
   final Color color;
+  final SieColors c;
 
   const _StatCard({
     required this.icon,
     required this.value,
     required this.label,
     required this.color,
+    required this.c,
   });
 
   @override
@@ -269,19 +266,16 @@ class _StatCard extends StatelessWidget {
               fontWeight: FontWeight.w700,
               letterSpacing: 1,
               height: 1,
-              shadows: [
-                Shadow(
-                  color: color.withValues(alpha: 0.6),
-                  blurRadius: 8,
-                ),
-              ],
+              shadows: c.isCosmicMode
+                  ? [Shadow(color: color.withValues(alpha: 0.6), blurRadius: 8)]
+                  : null,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             label,
-            style: const TextStyle(
-              color: SieTheme.textSecondary,
+            style: TextStyle(
+              color: c.textSecondary,
               fontSize: 9,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.5,
@@ -295,37 +289,33 @@ class _StatCard extends StatelessWidget {
 }
 
 // ── Heat Map ──────────────────────────────────────────────────
-// 13 columns (weeks) × 7 rows (Mon–Sun), most recent day = bottom-right
 
-class _HeatMap extends StatelessWidget {
+class _HeatMap extends ConsumerWidget {
   final Map<DateTime, int> heatMap;
   const _HeatMap({required this.heatMap});
 
-  static Color _cellColor(int count) {
-    if (count <= 0) return Colors.white.withValues(alpha: 0.05);
-    if (count == 1) return _kCyan.withValues(alpha: 0.22);
-    if (count <= 3) return _kCyan.withValues(alpha: 0.45);
-    if (count <= 5) return _kCyan.withValues(alpha: 0.70);
-    return _kCyan;
-  }
-
-  static BoxShadow? _cellGlow(int count) {
-    if (count <= 3) return null;
-    final alpha = count <= 5 ? 0.4 : 0.8;
-    return BoxShadow(
-      color: _kCyan.withValues(alpha: alpha),
-      blurRadius: 4,
-    );
-  }
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+
+    Color cellColor(int count) {
+      if (count <= 0) return c.border.withValues(alpha: 0.5);
+      if (count == 1) return c.accent.withValues(alpha: 0.22);
+      if (count <= 3) return c.accent.withValues(alpha: 0.45);
+      if (count <= 5) return c.accent.withValues(alpha: 0.70);
+      return c.accent;
+    }
+
+    BoxShadow? cellGlow(int count) {
+      if (!c.isCosmicMode || count <= 3) return null;
+      final alpha = count <= 5 ? 0.4 : 0.8;
+      return BoxShadow(color: c.accent.withValues(alpha: alpha), blurRadius: 4);
+    }
+
     final today = DateTime.now();
     final todayNorm = DateTime(today.year, today.month, today.day);
-
     final daysSinceMonday = (todayNorm.weekday - 1) % 7;
-    final gridEnd =
-        todayNorm.add(Duration(days: 6 - daysSinceMonday));
+    final gridEnd = todayNorm.add(Duration(days: 6 - daysSinceMonday));
     final gridStart = gridEnd.subtract(const Duration(days: 7 * 13 - 1));
 
     const cols = 13;
@@ -348,7 +338,7 @@ class _HeatMap extends StatelessWidget {
                   child: Text(
                     label,
                     style: TextStyle(
-                      color: _kCyan.withValues(alpha: 0.5),
+                      color: c.accent.withValues(alpha: 0.5),
                       fontSize: 8,
                       letterSpacing: 0.5,
                     ),
@@ -364,8 +354,7 @@ class _HeatMap extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: List.generate(cols, (col) {
-                final firstDayOfCol =
-                    gridStart.add(Duration(days: col * 7));
+                final firstDayOfCol = gridStart.add(Duration(days: col * 7));
                 String monthLabel = '';
                 for (var r = 0; r < rows; r++) {
                   final d = firstDayOfCol.add(Duration(days: r));
@@ -387,19 +376,17 @@ class _HeatMap extends StatelessWidget {
                       child: Text(
                         monthLabel,
                         style: TextStyle(
-                          color: _kCyan.withValues(alpha: 0.4),
+                          color: c.accent.withValues(alpha: 0.4),
                           fontSize: 7,
                         ),
                         textAlign: TextAlign.center,
                       ),
                     ),
                     ...List.generate(rows, (row) {
-                      final d =
-                          gridStart.add(Duration(days: col * 7 + row));
+                      final d = gridStart.add(Duration(days: col * 7 + row));
                       final isFuture = d.isAfter(todayNorm);
                       final count = isFuture ? -1 : (heatMap[d] ?? 0);
-                      final glow =
-                          isFuture ? null : _cellGlow(count);
+                      final glow = isFuture ? null : cellGlow(count);
 
                       return Container(
                         margin: EdgeInsets.only(
@@ -409,13 +396,11 @@ class _HeatMap extends StatelessWidget {
                         width: cellSize,
                         height: cellSize,
                         decoration: BoxDecoration(
-                          color: isFuture
-                              ? Colors.transparent
-                              : _cellColor(count),
+                          color: isFuture ? Colors.transparent : cellColor(count),
                           border: Border.all(
                             color: isFuture
                                 ? Colors.transparent
-                                : _kCyan.withValues(alpha: 0.15),
+                                : c.accent.withValues(alpha: 0.15),
                             width: 0.5,
                           ),
                           borderRadius: BorderRadius.circular(2),
@@ -434,20 +419,17 @@ class _HeatMap extends StatelessWidget {
             children: [
               Text(
                 'LESS',
-                style: TextStyle(
-                  color: _kCyan.withValues(alpha: 0.45),
-                  fontSize: 8,
-                ),
+                style: TextStyle(color: c.accent.withValues(alpha: 0.45), fontSize: 8),
               ),
               const SizedBox(width: 4),
-              ...[0, 1, 3, 5, 7].map((c) => Container(
+              ...[0, 1, 3, 5, 7].map((count) => Container(
                     margin: const EdgeInsets.only(left: 3),
                     width: 10,
                     height: 10,
                     decoration: BoxDecoration(
-                      color: _cellColor(c),
+                      color: cellColor(count),
                       border: Border.all(
-                        color: _kCyan.withValues(alpha: 0.15),
+                        color: c.accent.withValues(alpha: 0.15),
                         width: 0.5,
                       ),
                       borderRadius: BorderRadius.circular(2),
@@ -456,10 +438,7 @@ class _HeatMap extends StatelessWidget {
               const SizedBox(width: 4),
               Text(
                 'MORE',
-                style: TextStyle(
-                  color: _kCyan.withValues(alpha: 0.45),
-                  fontSize: 8,
-                ),
+                style: TextStyle(color: c.accent.withValues(alpha: 0.45), fontSize: 8),
               ),
             ],
           ),
@@ -471,19 +450,23 @@ class _HeatMap extends StatelessWidget {
 
 // ── XP Line Chart ─────────────────────────────────────────────
 
-class _XpLineChart extends StatelessWidget {
+class _XpLineChart extends ConsumerWidget {
   final List<DayXp> points;
   const _XpLineChart({required this.points});
 
   @override
-  Widget build(BuildContext context) {
-    final maxY =
-        points.fold(0, (m, p) => math.max(m, p.xp)).toDouble();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final maxY = points.fold(0, (m, p) => math.max(m, p.xp)).toDouble();
     final topY = maxY < 100 ? 200.0 : (maxY * 1.25).ceilToDouble();
 
     final spots = points.asMap().entries.map((e) {
       return FlSpot(e.key.toDouble(), e.value.xp.toDouble());
     }).toList();
+
+    final gridLineColor = c.isLightMode
+        ? c.border
+        : Colors.white.withValues(alpha: 0.08);
 
     return SieGlassCard(
       height: 184,
@@ -499,7 +482,7 @@ class _XpLineChart extends StatelessWidget {
             drawVerticalLine: false,
             horizontalInterval: topY / 4,
             getDrawingHorizontalLine: (_) => FlLine(
-              color: Colors.white.withValues(alpha: 0.08),
+              color: gridLineColor,
               strokeWidth: 0.5,
             ),
           ),
@@ -513,7 +496,7 @@ class _XpLineChart extends StatelessWidget {
                 getTitlesWidget: (v, _) => Text(
                   '${v.toInt()}',
                   style: TextStyle(
-                    color: _kCyan.withValues(alpha: 0.5),
+                    color: c.accent.withValues(alpha: 0.5),
                     fontSize: 9,
                   ),
                 ),
@@ -525,15 +508,13 @@ class _XpLineChart extends StatelessWidget {
                 reservedSize: 20,
                 getTitlesWidget: (v, _) {
                   final i = v.toInt();
-                  if (i < 0 || i >= points.length) {
-                    return const SizedBox();
-                  }
+                  if (i < 0 || i >= points.length) return const SizedBox();
                   final d = points[i].date;
                   const days = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
                   return Text(
                     days[d.weekday - 1],
                     style: TextStyle(
-                      color: _kCyan.withValues(alpha: 0.5),
+                      color: c.accent.withValues(alpha: 0.5),
                       fontSize: 9,
                     ),
                   );
@@ -552,19 +533,21 @@ class _XpLineChart extends StatelessWidget {
               spots: spots,
               isCurved: true,
               curveSmoothness: 0.3,
-              gradient: const LinearGradient(
-                colors: [_kCyan, _kPurple],
+              gradient: LinearGradient(
+                colors: [c.accent, c.accentSecondary],
               ),
               barWidth: 2,
-              shadow: BoxShadow(
-                color: _kCyan.withValues(alpha: 0.5),
-                blurRadius: 6,
-              ),
+              shadow: c.isCosmicMode
+                  ? Shadow(
+                      color: c.accent.withValues(alpha: 0.5),
+                      blurRadius: 6,
+                    )
+                  : const Shadow(color: Colors.transparent),
               dotData: FlDotData(
                 show: true,
                 getDotPainter: (_, _, _, _) => FlDotCirclePainter(
                   radius: 3,
-                  color: _kCyan,
+                  color: c.accent,
                   strokeWidth: 0,
                 ),
               ),
@@ -574,8 +557,8 @@ class _XpLineChart extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    _kCyan.withValues(alpha: 0.22),
-                    _kPurple.withValues(alpha: 0.06),
+                    c.accent.withValues(alpha: 0.22),
+                    c.accentSecondary.withValues(alpha: 0.06),
                     Colors.transparent,
                   ],
                 ),
@@ -584,12 +567,12 @@ class _XpLineChart extends StatelessWidget {
           ],
           lineTouchData: LineTouchData(
             touchTooltipData: LineTouchTooltipData(
-              getTooltipColor: (_) => const Color(0xFF0B1E30),
+              getTooltipColor: (_) => c.surface,
               getTooltipItems: (spots) => spots.map((s) {
                 return LineTooltipItem(
                   '+${s.y.toInt()} XP',
-                  const TextStyle(
-                    color: _kCyan,
+                  TextStyle(
+                    color: c.accent,
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                   ),
@@ -605,15 +588,22 @@ class _XpLineChart extends StatelessWidget {
 
 // ── Focus Bar Chart ───────────────────────────────────────────
 
-class _FocusBarChart extends StatelessWidget {
+class _FocusBarChart extends ConsumerWidget {
   final List<DayFocus> points;
   const _FocusBarChart({required this.points});
 
   @override
-  Widget build(BuildContext context) {
-    final maxY =
-        points.fold(0, (m, p) => math.max(m, p.minutes)).toDouble();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final maxY = points.fold(0, (m, p) => math.max(m, p.minutes)).toDouble();
     final topY = maxY < 30 ? 60.0 : (maxY * 1.3).ceilToDouble();
+
+    final gridLineColor = c.isLightMode
+        ? c.border
+        : Colors.white.withValues(alpha: 0.08);
+    final barBgColor = c.isLightMode
+        ? c.border.withValues(alpha: 0.4)
+        : Colors.white.withValues(alpha: 0.04);
 
     final groups = points.asMap().entries.map((e) {
       return BarChartGroupData(
@@ -627,14 +617,14 @@ class _FocusBarChart extends StatelessWidget {
               begin: Alignment.bottomCenter,
               end: Alignment.topCenter,
               colors: [
-                _kPurple.withValues(alpha: 0.7),
-                _kCyan,
+                c.accentSecondary.withValues(alpha: 0.7),
+                c.accent,
               ],
             ),
             backDrawRodData: BackgroundBarChartRodData(
               show: true,
               toY: topY,
-              color: Colors.white.withValues(alpha: 0.04),
+              color: barBgColor,
             ),
           ),
         ],
@@ -653,7 +643,7 @@ class _FocusBarChart extends StatelessWidget {
             drawVerticalLine: false,
             horizontalInterval: topY / 4,
             getDrawingHorizontalLine: (_) => FlLine(
-              color: Colors.white.withValues(alpha: 0.08),
+              color: gridLineColor,
               strokeWidth: 0.5,
             ),
           ),
@@ -667,7 +657,7 @@ class _FocusBarChart extends StatelessWidget {
                 getTitlesWidget: (v, _) => Text(
                   '${v.toInt()}m',
                   style: TextStyle(
-                    color: _kCyan.withValues(alpha: 0.5),
+                    color: c.accent.withValues(alpha: 0.5),
                     fontSize: 9,
                   ),
                 ),
@@ -679,15 +669,13 @@ class _FocusBarChart extends StatelessWidget {
                 reservedSize: 20,
                 getTitlesWidget: (v, _) {
                   final i = v.toInt();
-                  if (i < 0 || i >= points.length) {
-                    return const SizedBox();
-                  }
+                  if (i < 0 || i >= points.length) return const SizedBox();
                   final d = points[i].date;
                   const days = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
                   return Text(
                     days[d.weekday - 1],
                     style: TextStyle(
-                      color: _kCyan.withValues(alpha: 0.5),
+                      color: c.accent.withValues(alpha: 0.5),
                       fontSize: 9,
                     ),
                   );
@@ -703,11 +691,11 @@ class _FocusBarChart extends StatelessWidget {
           ),
           barTouchData: BarTouchData(
             touchTooltipData: BarTouchTooltipData(
-              getTooltipColor: (_) => const Color(0xFF0B1E30),
+              getTooltipColor: (_) => c.surface,
               getTooltipItem: (_, _, rod, _) => BarTooltipItem(
                 '${rod.toY.toInt()} min',
-                const TextStyle(
-                  color: _kCyan,
+                TextStyle(
+                  color: c.accent,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                 ),

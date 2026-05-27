@@ -4,10 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 
-// ── Design tokens ──────────────────────────────────────────────────────────────
-const _kCyan   = Color(0xFF00E5FF);
-const _kPurple = Color(0xFF7000FF);
-
 LiquidGlassSettings _glassSettings({
   double blur = 3.0,
   double glowIntensity = 0.88,
@@ -99,13 +95,16 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
   }
 
   void _showPreview(CosmeticAsset asset, Profile? profile) {
+    final c = SieColors.forMode(
+      ref.read(sieThemeModeProvider).valueOrNull ?? SieThemeMode.cosmicLiquidGlass,
+    );
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF0B1E30),
+      backgroundColor: c.surface,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        side: BorderSide(color: Color(0xFF1A3A5C)),
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: c.border),
       ),
       builder: (_) => _PreviewSheet(asset: asset, profile: profile),
     );
@@ -120,41 +119,33 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
     final inventory   = ref.watch(inventoryProvider).valueOrNull ?? InventoryState.empty;
     final dp          = profile?.designPoints ?? 0;
 
-    return GlassPage(
-      background: const SieSpaceBackground(),
-      statusBarStyle: GlassStatusBarStyle.light,
+    final c = ref.watch(sieColorsProvider);
+    return SieBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(
           child: Column(
             children: [
               _TopBar(dp: dp, onBack: () => Navigator.of(context).pop()),
-              // Glass tab panel
-              GlassCard(
-                height: 44,
-                padding: EdgeInsets.zero,
-                shape: LiquidRoundedSuperellipse(borderRadius: 0),
-                useOwnLayer: true,
-                quality: GlassQuality.standard,
-                settings: _glassSettings(blur: 2.5, glowIntensity: 0.75),
-                child: TabBar(
-                  controller: _tabs,
-                  indicatorColor: _kCyan,
-                  indicatorWeight: 1.5,
-                  labelColor: _kCyan,
-                  unselectedLabelColor: SieTheme.textSecondary,
-                  labelStyle: const TextStyle(
-                    fontSize: 10,
-                    letterSpacing: 1.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  tabs: const [
-                    Tab(text: 'РАМКИ'),
-                    Tab(text: 'ФОНЫ'),
-                    Tab(text: 'СТИЛИ'),
-                  ],
-                ),
-              ),
+              // Tab panel
+              c.isCosmicMode
+                  ? GlassCard(
+                      height: 44,
+                      padding: EdgeInsets.zero,
+                      shape: LiquidRoundedSuperellipse(borderRadius: 0),
+                      useOwnLayer: true,
+                      quality: GlassQuality.standard,
+                      settings: _glassSettings(blur: 2.5, glowIntensity: 0.75),
+                      child: _buildTabBar(c),
+                    )
+                  : Container(
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: c.surface,
+                        border: Border(bottom: BorderSide(color: c.border)),
+                      ),
+                      child: _buildTabBar(c),
+                    ),
               Expanded(
                 child: TabBarView(
                   controller: _tabs,
@@ -195,25 +186,46 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
       ),
     );
   }
+
+  Widget _buildTabBar(SieColors c) {
+    return TabBar(
+      controller: _tabs,
+      indicatorColor: c.accent,
+      indicatorWeight: 1.5,
+      labelColor: c.accent,
+      unselectedLabelColor: c.textSecondary,
+      labelStyle: const TextStyle(
+        fontSize: 10,
+        letterSpacing: 1.5,
+        fontWeight: FontWeight.w600,
+      ),
+      tabs: const [
+        Tab(text: 'РАМКИ'),
+        Tab(text: 'ФОНЫ'),
+        Tab(text: 'СТИЛИ'),
+      ],
+    );
+  }
 }
 
 // ── Top Bar ───────────────────────────────────────────────────
 
-class _TopBar extends StatelessWidget {
+class _TopBar extends ConsumerWidget {
   final int dp;
   final VoidCallback onBack;
   const _TopBar({required this.dp, required this.onBack});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Row(
         children: [
           IconButton(
             onPressed: onBack,
-            icon: const Icon(Icons.arrow_back_ios_new,
-                color: SieTheme.textSecondary, size: 18),
+            icon: Icon(Icons.arrow_back_ios_new,
+                color: c.textSecondary, size: 18),
           ),
           Expanded(
             child: Text(
@@ -225,25 +237,22 @@ class _TopBar extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              border: Border.all(color: SieTheme.dp.withValues(alpha: 0.5)),
+              border: Border.all(color: c.dp.withValues(alpha: 0.5)),
               borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: SieTheme.dp.withValues(alpha: 0.12),
-                  blurRadius: 8,
-                ),
-              ],
+              boxShadow: c.isCosmicMode
+                  ? [BoxShadow(color: c.dp.withValues(alpha: 0.12), blurRadius: 8)]
+                  : null,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.palette_outlined,
-                    size: 11, color: SieTheme.dp.withValues(alpha: 0.9)),
+                    size: 11, color: c.dp.withValues(alpha: 0.9)),
                 const SizedBox(width: 4),
                 Text(
                   '$dp DP',
-                  style: const TextStyle(
-                    color: SieTheme.dp,
+                  style: TextStyle(
+                    color: c.dp,
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1,
@@ -261,7 +270,7 @@ class _TopBar extends StatelessWidget {
 
 // ── Shop Grid ─────────────────────────────────────────────────
 
-class _ShopGrid extends StatelessWidget {
+class _ShopGrid extends ConsumerWidget {
   final List<CosmeticAsset> assets;
   final InventoryState inventory;
   final Profile? profile;
@@ -287,11 +296,12 @@ class _ShopGrid extends StatelessWidget {
       };
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     if (assets.isEmpty) {
-      return const Center(
+      return Center(
         child: CircularProgressIndicator(
-            color: SieTheme.accent, strokeWidth: 1.5),
+            color: c.accent, strokeWidth: 1.5),
       );
     }
     return GridView.builder(
@@ -445,7 +455,7 @@ class _ShopCardState extends State<_ShopCard>
   }
 }
 
-class _CardContent extends StatelessWidget {
+class _CardContent extends ConsumerWidget {
   final CosmeticAsset asset;
   final bool accessible;
   final bool purchased;
@@ -473,176 +483,187 @@ class _CardContent extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     // Border color for owned/equipped items
     final borderColor = equipped
-        ? _kCyan
+        ? c.accent
         : accessible
-            ? _kPurple.withValues(alpha: 0.5)
-            : SieTheme.borderDefault;
+            ? c.accentSecondary.withValues(alpha: 0.5)
+            : c.border;
 
-    return Stack(
+    final cardChild = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        GlassCard(
-          padding: EdgeInsets.zero,
-          shape: LiquidRoundedSuperellipse(borderRadius: 16),
-          useOwnLayer: true,
-          quality: GlassQuality.standard,
-          clipBehavior: Clip.antiAlias,
-          settings: _glassSettings(glowIntensity: glowIntensity),
+        // Visual area (tappable → preview)
+        Expanded(
+          child: GestureDetector(
+            onTap: onPreview,
+            child: Container(
+              width: double.infinity,
+              clipBehavior: Clip.hardEdge,
+              decoration: BoxDecoration(
+                color: c.isLightMode
+                    ? c.border.withValues(alpha: 0.3)
+                    : const Color(0x1A0A0E1A),
+                borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16)),
+              ),
+              child: Stack(
+                children: [
+                  Center(child: _AssetVisualBig(asset: asset)),
+                  // Equipped / purchased badge
+                  if (equipped)
+                    Positioned(
+                      top: 7,
+                      left: 7,
+                      child: _Badge(
+                          label: 'АКТИВНО',
+                          color: c.accent,
+                          filled: true),
+                    )
+                  else if (purchased)
+                    Positioned(
+                      top: 7,
+                      left: 7,
+                      child: _Badge(
+                          label: 'КУПЛЕНО',
+                          color: c.accentSecondary,
+                          filled: false),
+                    ),
+                  // Preview eye
+                  Positioned(
+                    bottom: 6,
+                    right: 8,
+                    child: Icon(
+                      Icons.visibility_outlined,
+                      size: 11,
+                      color: c.textSecondary.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  // Rarity dot
+                  Positioned(
+                    bottom: 6,
+                    left: 8,
+                    child: Container(
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: asset.rarityColor,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: asset.rarityColor.withValues(alpha: 0.5),
+                            blurRadius: 4,
+                          )
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Info + action
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Visual area (tappable → preview)
-              Expanded(
-                child: GestureDetector(
-                  onTap: onPreview,
-                  child: Container(
-                    width: double.infinity,
-                    clipBehavior: Clip.hardEdge,
-                    decoration: const BoxDecoration(
-                      color: Color(0x1A0A0E1A),
-                      borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(16)),
-                    ),
-                    child: Stack(
-                      children: [
-                        Center(child: _AssetVisualBig(asset: asset)),
-                        // Equipped / purchased badge
-                        if (equipped)
-                          Positioned(
-                            top: 7,
-                            left: 7,
-                            child: _Badge(
-                                label: 'АКТИВНО',
-                                color: _kCyan,
-                                filled: true),
-                          )
-                        else if (purchased)
-                          Positioned(
-                            top: 7,
-                            left: 7,
-                            child: _Badge(
-                                label: 'КУПЛЕНО',
-                                color: _kPurple,
-                                filled: false),
-                          ),
-                        // Preview eye
-                        Positioned(
-                          bottom: 6,
-                          right: 8,
-                          child: Icon(
-                            Icons.visibility_outlined,
-                            size: 11,
-                            color: SieTheme.textSecondary.withValues(alpha: 0.4),
-                          ),
-                        ),
-                        // Rarity dot
-                        Positioned(
-                          bottom: 6,
-                          left: 8,
-                          child: Container(
-                            width: 5,
-                            height: 5,
-                            decoration: BoxDecoration(
-                              color: asset.rarityColor,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: asset.rarityColor.withValues(alpha: 0.5),
-                                  blurRadius: 4,
-                                )
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+              Text(
+                asset.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
                 ),
               ),
-              // Info + action
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 2),
+              Text(
+                asset.rarityLabel,
+                style: TextStyle(
+                  color: asset.rarityColor,
+                  fontSize: 8,
+                  letterSpacing: 1,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              if (!accessible) ...[
+                const SizedBox(height: 5),
+                Row(
                   children: [
+                    Icon(
+                      Icons.palette_outlined,
+                      size: 9,
+                      color: canAfford
+                          ? c.dp.withValues(alpha: 0.85)
+                          : c.textSecondary,
+                    ),
+                    const SizedBox(width: 3),
                     Text(
-                      asset.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                      '${asset.priceDP} DP',
+                      style: TextStyle(
+                        color: canAfford ? c.dp : c.textSecondary,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: 0.5,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      asset.rarityLabel,
-                      style: TextStyle(
-                        color: asset.rarityColor,
-                        fontSize: 8,
-                        letterSpacing: 1,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    if (!accessible) ...[
-                      const SizedBox(height: 5),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.palette_outlined,
-                            size: 9,
-                            color: canAfford
-                                ? SieTheme.dp.withValues(alpha: 0.85)
-                                : SieTheme.textSecondary,
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            '${asset.priceDP} DP',
-                            style: TextStyle(
-                              color: canAfford
-                                  ? SieTheme.dp
-                                  : SieTheme.textSecondary,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          if (!canAfford) ...[
-                            const SizedBox(width: 3),
-                            const Icon(Icons.lock_outline,
-                                size: 9, color: SieTheme.textSecondary),
-                          ],
-                        ],
-                      ),
+                    if (!canAfford) ...[
+                      const SizedBox(width: 3),
+                      Icon(Icons.lock_outline,
+                          size: 9, color: c.textSecondary),
                     ],
-                    const SizedBox(height: 6),
-                    _ActionButton(
-                      label: equipped
-                          ? 'ЭКИПИРОВАНО'
-                          : accessible
-                              ? 'ВЫБРАТЬ'
-                              : (loading
-                                  ? '...'
-                                  : (isFree ? 'ПОЛУЧИТЬ' : 'КУПИТЬ')),
-                      color: equipped
-                          ? SieTheme.textSecondary
-                          : accessible
-                              ? _kPurple
-                              : (canAfford ? _kCyan : SieTheme.textSecondary),
-                      enabled: !equipped && !loading,
-                      loading: loading,
-                      onTap: onAction,
-                    ),
                   ],
                 ),
+              ],
+              const SizedBox(height: 6),
+              _ActionButton(
+                label: equipped
+                    ? 'ЭКИПИРОВАНО'
+                    : accessible
+                        ? 'ВЫБРАТЬ'
+                        : (loading
+                            ? '...'
+                            : (isFree ? 'ПОЛУЧИТЬ' : 'КУПИТЬ')),
+                color: equipped
+                    ? c.textSecondary
+                    : accessible
+                        ? c.accentSecondary
+                        : (canAfford ? c.accent : c.textSecondary),
+                enabled: !equipped && !loading,
+                loading: loading,
+                onTap: onAction,
               ),
             ],
           ),
         ),
+      ],
+    );
+
+    return Stack(
+      children: [
+        c.isCosmicMode
+            ? GlassCard(
+                padding: EdgeInsets.zero,
+                shape: LiquidRoundedSuperellipse(borderRadius: 16),
+                useOwnLayer: true,
+                quality: GlassQuality.standard,
+                clipBehavior: Clip.antiAlias,
+                settings: _glassSettings(glowIntensity: glowIntensity),
+                child: cardChild,
+              )
+            : Container(
+                decoration: c.flatCard(radius: 16),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: cardChild,
+                ),
+              ),
         // Neon border overlay for owned/equipped items
         if (accessible)
           Positioned.fill(
@@ -654,20 +675,22 @@ class _CardContent extends StatelessWidget {
                     color: borderColor,
                     width: equipped ? 1.5 : 1.0,
                   ),
-                  boxShadow: equipped
-                      ? [
-                          BoxShadow(
-                            color: _kCyan.withValues(alpha: 0.25),
-                            blurRadius: 12,
-                            spreadRadius: 1,
-                          ),
-                        ]
-                      : [
-                          BoxShadow(
-                            color: _kPurple.withValues(alpha: 0.1),
-                            blurRadius: 8,
-                          ),
-                        ],
+                  boxShadow: c.isCosmicMode
+                      ? (equipped
+                          ? [
+                              BoxShadow(
+                                color: c.accent.withValues(alpha: 0.25),
+                                blurRadius: 12,
+                                spreadRadius: 1,
+                              ),
+                            ]
+                          : [
+                              BoxShadow(
+                                color: c.accentSecondary.withValues(alpha: 0.1),
+                                blurRadius: 8,
+                              ),
+                            ])
+                      : null,
                 ),
               ),
             ),
@@ -709,7 +732,7 @@ class _Badge extends StatelessWidget {
 
 // ── Action Button with press feedback ────────────────────────
 
-class _ActionButton extends StatefulWidget {
+class _ActionButton extends ConsumerStatefulWidget {
   final String label;
   final Color color;
   final bool enabled;
@@ -725,10 +748,10 @@ class _ActionButton extends StatefulWidget {
   });
 
   @override
-  State<_ActionButton> createState() => _ActionButtonState();
+  ConsumerState<_ActionButton> createState() => _ActionButtonState();
 }
 
-class _ActionButtonState extends State<_ActionButton>
+class _ActionButtonState extends ConsumerState<_ActionButton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 
@@ -746,6 +769,7 @@ class _ActionButtonState extends State<_ActionButton>
 
   @override
   Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: widget.enabled ? widget.onTap : null,
@@ -769,9 +793,7 @@ class _ActionButtonState extends State<_ActionButton>
                   ? widget.color.withValues(alpha: 0.12 + 0.08 * _ctrl.value)
                   : null,
               border: Border.all(
-                  color: widget.enabled
-                      ? widget.color
-                      : SieTheme.borderDefault),
+                  color: widget.enabled ? widget.color : c.border),
               borderRadius: BorderRadius.circular(8),
               boxShadow: widget.enabled && _ctrl.value > 0
                   ? [
@@ -795,9 +817,7 @@ class _ActionButtonState extends State<_ActionButton>
                     widget.label,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: widget.enabled
-                          ? widget.color
-                          : SieTheme.textSecondary,
+                      color: widget.enabled ? widget.color : c.textSecondary,
                       fontSize: 9,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 1.5,
@@ -849,8 +869,8 @@ class _FrameVisual extends StatelessWidget {
         width: 64,
         height: 64,
         decoration: asset.buildFrameDecoration(),
-        child: const Icon(Icons.person_outline,
-            color: SieTheme.textSecondary, size: 32),
+        child: Icon(Icons.person_outline,
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4), size: 32),
       );
 }
 
@@ -949,6 +969,8 @@ class _PreviewSheet extends ConsumerWidget {
     final backgrounds = ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
     final styles      = ref.watch(statStylesProvider).valueOrNull ?? [];
 
+    final c = ref.watch(sieColorsProvider);
+
     final previewEquipped = EquippedAssets.resolve(
       frames: frames,
       backgrounds: backgrounds,
@@ -979,7 +1001,7 @@ class _PreviewSheet extends ConsumerWidget {
               height: 3,
               margin: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
-                color: SieTheme.borderAccent,
+                color: c.accent.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -1002,13 +1024,19 @@ class _PreviewSheet extends ConsumerWidget {
             clipBehavior: Clip.hardEdge,
             decoration: BoxDecoration(
               gradient: previewEquipped.background?.backgroundGradient ??
-                  const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF0D2A42), Color(0xFF071520)],
-                  ),
+                  (c.isLightMode
+                      ? LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [c.border, c.surface],
+                        )
+                      : const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFF0D2A42), Color(0xFF071520)],
+                        )),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _kCyan.withValues(alpha: 0.3)),
+              border: Border.all(color: c.accent.withValues(alpha: 0.3)),
             ),
             child: Stack(
               children: [
@@ -1021,7 +1049,7 @@ class _PreviewSheet extends ConsumerWidget {
                         end: Alignment.bottomCenter,
                         colors: [
                           Colors.transparent,
-                          SieTheme.background.withValues(alpha: 0.5),
+                          c.background.withValues(alpha: 0.5),
                         ],
                       ),
                     ),
@@ -1039,9 +1067,9 @@ class _PreviewSheet extends ConsumerWidget {
                                 BoxDecoration(
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                      color: _kCyan.withValues(alpha: 0.6),
+                                      color: c.accent.withValues(alpha: 0.6),
                                       width: 1.5),
-                                  color: SieTheme.surface,
+                                  color: c.surface,
                                 ),
                         child: ClipOval(
                           child: profile?.avatarUrl != null
@@ -1061,8 +1089,8 @@ class _PreviewSheet extends ConsumerWidget {
                         children: [
                           Text(
                             (profile?.username ?? 'OPERATIVE').toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: c.textPrimary,
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 2,
@@ -1075,9 +1103,8 @@ class _PreviewSheet extends ConsumerWidget {
                             decoration: previewEquipped.statStyle
                                     ?.buildStatCardDecoration() ??
                                 BoxDecoration(
-                                  color: SieTheme.surface,
-                                  border: Border.all(
-                                      color: SieTheme.borderDefault),
+                                  color: c.surface,
+                                  border: Border.all(color: c.border),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                             child: Text(
@@ -1085,7 +1112,7 @@ class _PreviewSheet extends ConsumerWidget {
                               '  ·  ${profile?.totalXp ?? 0} XP',
                               style: TextStyle(
                                 color: previewEquipped.statStyle?.accentColor ??
-                                    _kCyan,
+                                    c.accent,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 1,
@@ -1097,13 +1124,13 @@ class _PreviewSheet extends ConsumerWidget {
                     ],
                   ),
                 ),
-                const Positioned(
+                Positioned(
                   bottom: 5,
                   right: 10,
                   child: Text(
                     'ПРЕДПРОСМОТР',
                     style: TextStyle(
-                      color: SieTheme.borderAccent,
+                      color: c.accent.withValues(alpha: 0.5),
                       fontSize: 7,
                       letterSpacing: 1.5,
                     ),
@@ -1147,22 +1174,25 @@ class _PreviewSheet extends ConsumerWidget {
   }
 }
 
-class _LetterFill extends StatelessWidget {
+class _LetterFill extends ConsumerWidget {
   final String letter;
   const _LetterFill({required this.letter});
 
   @override
-  Widget build(BuildContext context) => ColoredBox(
-        color: SieTheme.surface,
-        child: Center(
-          child: Text(
-            letter,
-            style: const TextStyle(
-              color: _kCyan,
-              fontSize: 22,
-              fontWeight: FontWeight.w200,
-            ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return ColoredBox(
+      color: c.surface,
+      child: Center(
+        child: Text(
+          letter,
+          style: TextStyle(
+            color: c.accent,
+            fontSize: 22,
+            fontWeight: FontWeight.w200,
           ),
         ),
-      );
+      ),
+    );
+  }
 }

@@ -4,16 +4,12 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 import 'public_profile_screen.dart';
 
-// ── Design tokens ──────────────────────────────────────────────
-const _kCyan   = Color(0xFF00E5FF);
-const _kPurple = Color(0xFF9D00FF);
+// Rank medal colors — universal across all themes
 const _kGold   = Color(0xFFFFD700);
 const _kSilver = Color(0xFFC0C0C0);
 const _kBronze = Color(0xFFCD7F32);
 
-// ── Shared GlassCard settings factory ─────────────────────────
-// Matches the main Operations screen's aesthetic so all surfaces
-// share the same physical refraction model.
+// Shared GlassCard settings factory
 LiquidGlassSettings _glassSettings({
   double blur = 3.0,
   double glowIntensity = 0.88,
@@ -42,11 +38,10 @@ class LeaderboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final c                = ref.watch(sieColorsProvider);
     final leaderboardAsync = ref.watch(leaderboardProvider);
     final profileAsync     = ref.watch(userProfileProvider);
     final currentUserId    = profileAsync.valueOrNull?.id;
-    // Watched once here rather than inside every _LeaderRow so that a frame
-    // data update rebuilds only this widget, not N shader-heavy list items.
     final frames = ref.watch(avatarFramesProvider).valueOrNull ?? <CosmeticAsset>[];
 
     final body = SafeArea(
@@ -54,43 +49,38 @@ class LeaderboardScreen extends ConsumerWidget {
       child: Column(
         children: [
           _Header(showBackButton: !asTab),
-              const SizedBox(height: 12),
-              const _CountdownPanel(),
-              const SizedBox(height: 8),
-              Expanded(
-                child: leaderboardAsync.when(
-                  data: (entries) => _LeaderboardList(
-                    entries: entries,
-                    currentUserId: currentUserId,
-                    frames: frames,
-                    onRefresh: () => ref.refresh(leaderboardProvider.future),
-                  ),
-                  loading: () => const Center(
-                    child: CircularProgressIndicator(
-                      color: SieTheme.accent,
-                      strokeWidth: 1.5,
-                    ),
-                  ),
-                  error: (e, _) => const Center(
-                    child: _NoConnectionMessage(),
-                  ),
+          const SizedBox(height: 12),
+          const _CountdownPanel(),
+          const SizedBox(height: 8),
+          Expanded(
+            child: leaderboardAsync.when(
+              data: (entries) => _LeaderboardList(
+                entries: entries,
+                currentUserId: currentUserId,
+                frames: frames,
+                onRefresh: () => ref.refresh(leaderboardProvider.future),
+              ),
+              loading: () => Center(
+                child: CircularProgressIndicator(
+                  color: c.accent,
+                  strokeWidth: 1.5,
                 ),
               ),
-            ],
+              error: (e, _) => const Center(
+                child: _NoConnectionMessage(),
+              ),
+            ),
           ),
-        );
+        ],
+      ),
+    );
 
     if (asTab) {
       return Scaffold(backgroundColor: Colors.transparent, body: body);
     }
 
-    return GlassPage(
-      background: const SieSpaceBackground(),
-      statusBarStyle: GlassStatusBarStyle.light,
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: body,
-      ),
+    return SieBackground(
+      child: Scaffold(backgroundColor: Colors.transparent, body: body),
     );
   }
 }
@@ -98,12 +88,13 @@ class LeaderboardScreen extends ConsumerWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Header
 // ─────────────────────────────────────────────────────────────────────────────
-class _Header extends StatelessWidget {
+class _Header extends ConsumerWidget {
   const _Header({this.showBackButton = true});
   final bool showBackButton;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 12, 0),
       child: Row(
@@ -116,22 +107,28 @@ class _Header extends StatelessWidget {
                 RichText(
                   text: TextSpan(
                     children: [
-                      const TextSpan(
+                      TextSpan(
                         text: 'HALL ',
                         style: TextStyle(
-                          color: _kCyan,
+                          color: c.accent,
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 1.5,
-                          shadows: [
-                            Shadow(color: _kCyan, blurRadius: 8),
-                            Shadow(color: _kCyan, blurRadius: 22),
-                          ],
+                          shadows: c.isLightMode
+                              ? null
+                              : [
+                                  Shadow(color: c.accent, blurRadius: 8),
+                                  Shadow(color: c.accent, blurRadius: 22),
+                                ],
                         ),
                       ),
                       TextSpan(
                         text: 'OF FAME',
-                        style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineLarge
+                            ?.copyWith(
+                              color: c.textPrimary,
                               fontSize: 22,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 3.0,
@@ -141,10 +138,10 @@ class _Header extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'СУТОЧНЫЙ АВАНГАРД · РЕЙТИНГ АКТИВНОСТИ',
                   style: TextStyle(
-                    color: SieTheme.textSecondary,
+                    color: c.textSecondary,
                     fontSize: 10,
                     letterSpacing: 1.8,
                   ),
@@ -155,23 +152,36 @@ class _Header extends StatelessWidget {
           if (showBackButton)
             GestureDetector(
               onTap: () => Navigator.of(context).pop(),
-              child: GlassCard(
-                width: 36,
-                height: 36,
-                padding: EdgeInsets.zero,
-                shape: LiquidRoundedSuperellipse(borderRadius: 18),
-                useOwnLayer: true,
-                quality: GlassQuality.standard,
-                clipBehavior: Clip.antiAlias,
-                settings: _glassSettings(blur: 2.0, glowIntensity: 0.85),
-                child: const Center(
-                  child: Icon(
-                    Icons.arrow_back_ios_new,
-                    color: SieTheme.textSecondary,
-                    size: 15,
-                  ),
-                ),
-              ),
+              child: c.isCosmicMode
+                  ? GlassCard(
+                      width: 36,
+                      height: 36,
+                      padding: EdgeInsets.zero,
+                      shape: LiquidRoundedSuperellipse(borderRadius: 18),
+                      useOwnLayer: true,
+                      quality: GlassQuality.standard,
+                      clipBehavior: Clip.antiAlias,
+                      settings: _glassSettings(blur: 2.0, glowIntensity: 0.85),
+                      child: Center(
+                        child: Icon(
+                          Icons.arrow_back_ios_new,
+                          color: c.textSecondary,
+                          size: 15,
+                        ),
+                      ),
+                    )
+                  : Container(
+                      width: 36,
+                      height: 36,
+                      decoration: c.flatCard(radius: 18),
+                      child: Center(
+                        child: Icon(
+                          Icons.arrow_back_ios_new,
+                          color: c.textSecondary,
+                          size: 15,
+                        ),
+                      ),
+                    ),
             )
           else
             const SizedBox(width: 36),
@@ -189,6 +199,7 @@ class _CountdownPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final c              = ref.watch(sieColorsProvider);
     final countdownAsync = ref.watch(countdownProvider);
 
     final display = countdownAsync.when(
@@ -200,92 +211,104 @@ class _CountdownPanel extends ConsumerWidget {
     final isUrgent = countdownAsync.valueOrNull != null &&
         countdownAsync.value!.inHours < 1;
 
-    // Normal: neon cyan; urgent (< 1 h): alarm orange-red.
-    final timerColor = isUrgent ? const Color(0xFFFF4D00) : _kCyan;
+    // Urgent: alarm orange-red; normal: accent (teal in light, cyan in dark/cosmic)
+    final timerColor =
+        isUrgent ? const Color(0xFFFF4D00) : c.accent;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: GlassCard(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-        shape: LiquidRoundedSuperellipse(borderRadius: 20),
-        useOwnLayer: true,
-        quality: GlassQuality.standard,
-        clipBehavior: Clip.antiAlias,
-        settings: _glassSettings(blur: 3.5, glowIntensity: 0.92),
-        child: Stack(
-          children: [
-            // Ambient colour bloom behind the timer — feeds into the glass
-            // refraction loop so the tint is physically absorbed by the lens.
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: const Alignment(0.9, 0),
-                    radius: 1.0,
-                    colors: [
-                      timerColor.withValues(alpha: 0.10),
-                      Colors.transparent,
-                    ],
-                  ),
+    final cardContent = Stack(
+      children: [
+        // Ambient colour bloom (cosmic only — feeds into glass refraction)
+        if (c.isCosmicMode)
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(0.9, 0),
+                  radius: 1.0,
+                  colors: [
+                    timerColor.withValues(alpha: 0.10),
+                    Colors.transparent,
+                  ],
                 ),
               ),
             ),
-            Row(
-              children: [
-                Icon(Icons.timer_outlined, color: timerColor, size: 16),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'ДО ЗАВЕРШЕНИЯ ЦИКЛА',
-                        style: TextStyle(
-                          color: timerColor.withValues(alpha: 0.75),
-                          fontSize: 10,
-                          letterSpacing: 2,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'DAILY RESET',
-                        style: TextStyle(
-                          color: SieTheme.textSecondary,
-                          fontSize: 9,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ],
+          ),
+        Row(
+          children: [
+            Icon(Icons.timer_outlined, color: timerColor, size: 16),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'ДО ЗАВЕРШЕНИЯ ЦИКЛА',
+                    style: TextStyle(
+                      color: timerColor.withValues(alpha: 0.75),
+                      fontSize: 10,
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                // Bold monospace countdown clock.
-                Text(
-                  display,
-                  style: TextStyle(
-                    color: timerColor,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 3.5,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                    shadows: [
-                      Shadow(
-                        color: timerColor.withValues(alpha: 0.80),
-                        blurRadius: 10,
-                      ),
-                      Shadow(
-                        color: timerColor.withValues(alpha: 0.40),
-                        blurRadius: 28,
-                      ),
-                    ],
+                  const SizedBox(height: 2),
+                  Text(
+                    'DAILY RESET',
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 9,
+                      letterSpacing: 1.5,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
+            ),
+            Text(
+              display,
+              style: TextStyle(
+                color: timerColor,
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 3.5,
+                fontFeatures: const [FontFeature.tabularFigures()],
+                shadows: c.isLightMode
+                    ? null
+                    : [
+                        Shadow(
+                          color: timerColor.withValues(alpha: 0.80),
+                          blurRadius: 10,
+                        ),
+                        Shadow(
+                          color: timerColor.withValues(alpha: 0.40),
+                          blurRadius: 28,
+                        ),
+                      ],
+              ),
             ),
           ],
         ),
-      ),
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: c.isCosmicMode
+          ? GlassCard(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+              shape: LiquidRoundedSuperellipse(borderRadius: 20),
+              useOwnLayer: true,
+              quality: GlassQuality.standard,
+              clipBehavior: Clip.antiAlias,
+              settings: _glassSettings(blur: 3.5, glowIntensity: 0.92),
+              child: cardContent,
+            )
+          : Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+              decoration: c.flatCard(radius: 20),
+              child: cardContent,
+            ),
     );
   }
 
@@ -300,7 +323,7 @@ class _CountdownPanel extends ConsumerWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Leaderboard List
 // ─────────────────────────────────────────────────────────────────────────────
-class _LeaderboardList extends StatelessWidget {
+class _LeaderboardList extends ConsumerWidget {
   final List<LeaderboardEntry> entries;
   final String? currentUserId;
   final List<CosmeticAsset> frames;
@@ -313,35 +336,24 @@ class _LeaderboardList extends StatelessWidget {
     required this.onRefresh,
   });
 
-  // Every row occupies exactly this vertical extent:
-  //   GlassCard (38 px content + 24 px vertical padding = 62 px)
-  //   + uniform top margin (6 px) = 68 px.
-  // A declared constant lets ListView skip runtime height measurement
-  // for every item during scroll velocity calculations.
   static const double _rowExtent = 68;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return RefreshIndicator(
-      color: SieTheme.accent,
+      color: c.accent,
       backgroundColor: Colors.transparent,
       onRefresh: onRefresh,
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 96),
         itemCount: entries.length,
-        // Fixed per-item extent bypasses intrinsic-height measurement on
-        // every scroll frame — essential for shader-heavy card lists.
         itemExtent: _rowExtent,
         itemBuilder: (context, index) {
           final entry = entries[index];
-          // Frame lookup done here (O(n) but n is tiny) rather than inside
-          // the row widget, so _LeaderRow can stay a StatelessWidget.
           final frame = frames
               .where((f) => f.id == entry.equippedFrameId)
               .firstOrNull;
-          // RepaintBoundary promotes each glass row to its own raster cache
-          // layer. The GPU compositor translates cached textures during scroll
-          // instead of re-running the liquid-glass shader pipeline per frame.
           return _LeaderRow(
             entry: entry,
             frame: frame,
@@ -356,7 +368,7 @@ class _LeaderboardList extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Single Leaderboard Row
 // ─────────────────────────────────────────────────────────────────────────────
-class _LeaderRow extends StatelessWidget {
+class _LeaderRow extends ConsumerWidget {
   final LeaderboardEntry entry;
   final CosmeticAsset? frame;
   final bool isSelf;
@@ -368,55 +380,81 @@ class _LeaderRow extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
 
     final isTopThree = entry.rank <= 3;
     final rankColor  = _rankColor(entry.rank);
 
-    // Bloom tint: rank color for top 3, cyan for self, none otherwise.
     final bloomColor = isSelf
-        ? _kCyan
+        ? c.accent
         : isTopThree
             ? rankColor
             : null;
 
-    // XP accent: rank color for top 3, purple neon for everyone else.
+    // XP accent: rank color for top 3, accentSecondary for others, accent for self
     final xpColor = isSelf
-        ? _kCyan
+        ? c.accent
         : isTopThree
             ? rankColor
-            : _kPurple;
+            : c.accentSecondary;
 
-    return GestureDetector(
-      onTap: () => _openProfile(context, entry),
-      child: Padding(
-        padding: const EdgeInsets.only(top: 6),
-        child: Container(
-          decoration: BoxDecoration(
+    final decoration = c.isCosmicMode
+        ? BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                (isSelf ? _kCyan : isTopThree ? rankColor : Colors.white)
+                (isSelf
+                        ? c.accent
+                        : isTopThree
+                            ? rankColor
+                            : Colors.white)
                     .withValues(alpha: isTopThree || isSelf ? 0.09 : 0.05),
                 Colors.white.withValues(alpha: 0.02),
               ],
             ),
             border: Border.all(
               color: isSelf
-                  ? _kCyan.withValues(alpha: 0.35)
+                  ? c.accent.withValues(alpha: 0.35)
                   : isTopThree
                       ? rankColor.withValues(alpha: 0.30)
                       : Colors.white.withValues(alpha: 0.09),
               width: 0.8,
             ),
-          ),
+          )
+        : BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: c.surface,
+            border: Border.all(
+              color: isSelf
+                  ? c.accent.withValues(alpha: 0.35)
+                  : isTopThree
+                      ? rankColor.withValues(alpha: 0.30)
+                      : c.border,
+              width: 0.8,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          );
+
+    return GestureDetector(
+      onTap: () => _openProfile(context, entry),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Container(
+          decoration: decoration,
           clipBehavior: Clip.antiAlias,
           child: Stack(
             children: [
-              // ── Rank / self inner glow bloom ──────────────────
-              if (bloomColor != null)
+              // Bloom (cosmic only)
+              if (c.isCosmicMode && bloomColor != null)
                 Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
@@ -434,7 +472,6 @@ class _LeaderRow extends StatelessWidget {
                   ),
                 ),
 
-              // ── Row content ───────────────────────────────────
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
@@ -442,10 +479,7 @@ class _LeaderRow extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    // ── Rank indicator ───────────────────────────
-                    // height: 38 matches the avatar size so every row
-                    // (top-3 badge or plain number) has identical height,
-                    // enabling the ListView's itemExtent optimisation.
+                    // Rank indicator
                     SizedBox(
                       width: 36,
                       height: 38,
@@ -455,8 +489,8 @@ class _LeaderRow extends StatelessWidget {
                             : Text(
                                 '${entry.rank}',
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: SieTheme.textSecondary,
+                                style: TextStyle(
+                                  color: c.textSecondary,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 0.5,
@@ -466,7 +500,7 @@ class _LeaderRow extends StatelessWidget {
                     ),
                     const SizedBox(width: 10),
 
-                    // ── Avatar ────────────────────────────────────
+                    // Avatar
                     _Avatar(
                       avatarUrl: entry.avatarUrl,
                       frame: frame,
@@ -474,7 +508,7 @@ class _LeaderRow extends StatelessWidget {
                     ),
                     const SizedBox(width: 12),
 
-                    // ── Username + level ──────────────────────────
+                    // Username + level
                     Expanded(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -489,19 +523,20 @@ class _LeaderRow extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: isSelf
-                                        ? _kCyan
+                                        ? c.accent
                                         : isTopThree
                                             ? rankColor
-                                            : SieTheme.textPrimary,
+                                            : c.textPrimary,
                                     fontSize: 13,
                                     height: 1.1,
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 1.2,
-                                    shadows: (isTopThree || isSelf)
+                                    shadows: (isTopThree || isSelf) &&
+                                            !c.isLightMode
                                         ? [
                                             Shadow(
                                               color: (isSelf
-                                                      ? _kCyan
+                                                      ? c.accent
                                                       : rankColor)
                                                   .withValues(alpha: 0.55),
                                               blurRadius: 8,
@@ -520,14 +555,14 @@ class _LeaderRow extends StatelessWidget {
                                   ),
                                   decoration: BoxDecoration(
                                     border: Border.all(
-                                      color: _kCyan.withValues(alpha: 0.6),
+                                      color: c.accent.withValues(alpha: 0.6),
                                     ),
                                     borderRadius: BorderRadius.circular(2),
                                   ),
-                                  child: const Text(
+                                  child: Text(
                                     'YOU',
                                     style: TextStyle(
-                                      color: _kCyan,
+                                      color: c.accent,
                                       fontSize: 8,
                                       fontWeight: FontWeight.w700,
                                       letterSpacing: 1,
@@ -540,8 +575,8 @@ class _LeaderRow extends StatelessWidget {
                           const SizedBox(height: 2),
                           Text(
                             'LVL ${(entry.totalXp ~/ 1000) + 1}',
-                            style: const TextStyle(
-                              color: SieTheme.textSecondary,
+                            style: TextStyle(
+                              color: c.textSecondary,
                               fontSize: 10,
                               height: 1.1,
                               letterSpacing: 1,
@@ -551,7 +586,7 @@ class _LeaderRow extends StatelessWidget {
                       ),
                     ),
 
-                    // ── Daily XP ──────────────────────────────────
+                    // Daily XP
                     Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.end,
@@ -567,18 +602,20 @@ class _LeaderRow extends StatelessWidget {
                             fontFeatures: const [
                               FontFeature.tabularFigures(),
                             ],
-                            shadows: [
-                              Shadow(
-                                color: xpColor.withValues(alpha: 0.65),
-                                blurRadius: 10,
-                              ),
-                            ],
+                            shadows: c.isLightMode
+                                ? null
+                                : [
+                                    Shadow(
+                                      color: xpColor.withValues(alpha: 0.65),
+                                      blurRadius: 10,
+                                    ),
+                                  ],
                           ),
                         ),
-                        const Text(
+                        Text(
                           'XP TODAY',
                           style: TextStyle(
-                            color: SieTheme.textSecondary,
+                            color: c.textSecondary,
                             fontSize: 8,
                             height: 1.1,
                             letterSpacing: 1.5,
@@ -672,16 +709,16 @@ class _RankBadge extends StatelessWidget {
   }
 
   static IconData _rankIcon(int rank) => switch (rank) {
-        1 => Icons.emoji_events,   // gold trophy
-        2 => Icons.workspace_premium, // silver shield/star
-        _ => Icons.military_tech,  // bronze medal
+        1 => Icons.emoji_events,
+        2 => Icons.workspace_premium,
+        _ => Icons.military_tech,
       };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Avatar with optional cosmetic frame
 // ─────────────────────────────────────────────────────────────────────────────
-class _Avatar extends StatelessWidget {
+class _Avatar extends ConsumerWidget {
   final String? avatarUrl;
   final CosmeticAsset? frame;
   final double size;
@@ -689,13 +726,14 @@ class _Avatar extends StatelessWidget {
   const _Avatar({this.avatarUrl, this.frame, required this.size});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     final decoration = frame != null
         ? frame!.buildFrameDecoration()
         : BoxDecoration(
             shape: BoxShape.circle,
-            color: SieTheme.surfaceAlt,
-            border: Border.all(color: SieTheme.borderDefault),
+            color: c.surface,
+            border: Border.all(color: c.border),
           );
 
     return Container(
@@ -715,39 +753,40 @@ class _Avatar extends StatelessWidget {
   }
 }
 
-class _Placeholder extends StatelessWidget {
+class _Placeholder extends ConsumerWidget {
   final double size;
   const _Placeholder({required this.size});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Container(
-      color: SieTheme.surfaceAlt,
+      color: c.surface,
       child: Icon(
         Icons.person,
-        color: SieTheme.textSecondary,
+        color: c.textSecondary,
         size: size * 0.55,
       ),
     );
   }
 }
 
-class _NoConnectionMessage extends StatelessWidget {
+class _NoConnectionMessage extends ConsumerWidget {
   const _NoConnectionMessage();
 
   @override
-  Widget build(BuildContext context) {
-    return const Column(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.wifi_off_outlined,
-            color: Color(0xFF90A4AE), size: 36),
-        SizedBox(height: 12),
+        Icon(Icons.wifi_off_outlined, color: c.iconMuted, size: 36),
+        const SizedBox(height: 12),
         Text(
           'Подключение к интернету отсутствует',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Color(0xFF90A4AE),
+            color: c.iconMuted,
             fontSize: 13,
             letterSpacing: 0.5,
           ),

@@ -13,7 +13,7 @@ class OfflineBanner extends ConsumerWidget {
     final isOnline = connectivity.when(
       data: (v) => v,
       loading: () => true,
-      error: (_, __) => false,
+      error: (_, _) => false,
     );
     if (isOnline) return const SizedBox.shrink();
 

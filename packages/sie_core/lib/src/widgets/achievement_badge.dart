@@ -1,13 +1,13 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/achievement.dart';
-import '../theme/sie_theme.dart';
+import '../theme/sie_colors.dart';
 
 const _kGold  = Color(0xFFFFD700);
 const _kAmber = Color(0xFFFFB300);
-const _kFrost = Color(0xFF0A1628);
 
 const _lockedFilter = ColorFilter.matrix(<double>[
   0.2126, 0.7152, 0.0722, 0, 0,
@@ -25,13 +25,14 @@ IconData _iconForSlug(String slug) => switch (slug) {
       _              => Icons.emoji_events,
     };
 
-class AchievementBadge extends StatelessWidget {
+class AchievementBadge extends ConsumerWidget {
   const AchievementBadge({super.key, required this.userAchievement});
 
   final UserAchievement userAchievement;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return LayoutBuilder(
       builder: (context, constraints) {
         final size     = min(constraints.maxWidth, constraints.maxHeight);
@@ -52,15 +53,14 @@ class AchievementBadge extends StatelessWidget {
                 name: name,
                 iconSize: iconSize,
                 fontSize: fontSize,
+                c: c,
               );
       },
     );
   }
 }
 
-// ── Unlocked — gold Container. Using GlassCard(useOwnLayer:true) inside a
-// GridView inside a SingleChildScrollView caused N backdrop-filter races per
-// scroll frame — replaced with a plain Container that has zero GPU overhead.
+// ── Unlocked — gold Container. Gold colors are universal across all themes.
 class _UnlockedBadge extends StatelessWidget {
   const _UnlockedBadge({
     required this.slug,
@@ -126,18 +126,20 @@ class _UnlockedBadge extends StatelessWidget {
   }
 }
 
-// ── Locked — frost container at 20 % opacity with desaturation filter ─────────
+// ── Locked — uses SieColors so light mode gets a white surface + grey border
 class _LockedBadge extends StatelessWidget {
   const _LockedBadge({
     required this.slug,
     required this.name,
     required this.iconSize,
     required this.fontSize,
+    required this.c,
   });
   final String slug;
   final String name;
   final double iconSize;
   final double fontSize;
+  final SieColors c;
 
   @override
   Widget build(BuildContext context) {
@@ -146,11 +148,8 @@ class _LockedBadge extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
-          color: _kFrost,
-          border: Border.all(
-            color: const Color(0xFF1E3A5F),
-            width: 1.0,
-          ),
+          color: c.surface,
+          border: Border.all(color: c.border, width: 1.0),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
         child: ColorFiltered(
@@ -160,14 +159,14 @@ class _LockedBadge extends StatelessWidget {
             children: [
               Icon(
                 _iconForSlug(slug),
-                color: SieTheme.textSecondary,
+                color: c.textSecondary,
                 size: iconSize,
               ),
               const SizedBox(height: 4),
               Text(
                 name.toUpperCase(),
                 style: TextStyle(
-                  color: SieTheme.textSecondary,
+                  color: c.textSecondary,
                   fontSize: fontSize,
                   fontWeight: FontWeight.w500,
                   letterSpacing: 0.3,

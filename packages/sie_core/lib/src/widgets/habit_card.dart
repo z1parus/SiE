@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/habit.dart';
-import '../theme/sie_theme.dart';
+import '../theme/sie_colors.dart';
 
-class HabitCard extends StatelessWidget {
+class HabitCard extends ConsumerWidget {
   final Habit habit;
   final bool completedToday;
   final int streak;
@@ -37,7 +38,8 @@ class HabitCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     final color = _habitColor;
     final today = DateTime.now();
     final weekDays =
@@ -61,21 +63,21 @@ class HabitCard extends StatelessWidget {
 
     final baseBg = completedToday
         ? color.withValues(alpha: 0.06)
-        : SieTheme.surface;
+        : c.surface;
     final cardBg = lerp(baseBg, swipeBg);
 
     final baseBorder = completedToday
         ? color.withValues(alpha: 0.40)
-        : SieTheme.borderDefault;
+        : c.border;
     final cardBorder = lerp(baseBorder, swipeBg.withValues(alpha: 0.50));
 
     final titleColor = lerp(
-      completedToday ? color : SieTheme.textPrimary,
+      completedToday ? color : c.textPrimary,
       swipeFgStrong,
     );
-    final descColor = lerp(SieTheme.textSecondary, swipeFgSoft);
+    final descColor = lerp(c.textSecondary, swipeFgSoft);
     final dotDone = lerp(color, swipeFgStrong);
-    final dotIdle = lerp(SieTheme.borderDefault, swipeFgSoft);
+    final dotIdle = lerp(c.border, swipeFgSoft);
     final accentCol = lerp(color, swipeFgStrong);
     final accentColSoft = lerp(
       color.withValues(alpha: 0.50),
@@ -215,8 +217,7 @@ class HabitCard extends StatelessWidget {
                             border: Border.all(
                               color: completedToday
                                   ? accentCol
-                                  : lerp(SieTheme.borderDefault,
-                                      swipeFgSoft),
+                                  : lerp(c.border, swipeFgSoft),
                               width: completedToday ? 1.5 : 1.0,
                             ),
                           ),

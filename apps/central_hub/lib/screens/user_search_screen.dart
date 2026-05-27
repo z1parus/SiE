@@ -5,9 +5,6 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 import 'public_profile_screen.dart';
 
-// ── Design tokens ──────────────────────────────────────────────────────────────
-const _kCyan = Color(0xFF00E5FF);
-
 LiquidGlassSettings _glassSettings({
   double blur = 3.0,
   double glowIntensity = 0.88,
@@ -66,9 +63,7 @@ class _UserSearchScreenState extends ConsumerState<UserSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return GlassPage(
-      background: const SieSpaceBackground(),
-      statusBarStyle: GlassStatusBarStyle.light,
+    return SieBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(
@@ -92,7 +87,7 @@ class _UserSearchScreenState extends ConsumerState<UserSearchScreen> {
 
 // ── Top Bar ───────────────────────────────────────────────────
 
-class _TopBar extends StatefulWidget {
+class _TopBar extends ConsumerStatefulWidget {
   final TextEditingController ctrl;
   final FocusNode focus;
   final ValueChanged<String> onChanged;
@@ -106,10 +101,10 @@ class _TopBar extends StatefulWidget {
   });
 
   @override
-  State<_TopBar> createState() => _TopBarState();
+  ConsumerState<_TopBar> createState() => _TopBarState();
 }
 
-class _TopBarState extends State<_TopBar> {
+class _TopBarState extends ConsumerState<_TopBar> {
   bool _focused = false;
 
   @override
@@ -130,14 +125,15 @@ class _TopBarState extends State<_TopBar> {
 
   @override
   Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
       child: Row(
         children: [
           IconButton(
             onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.arrow_back_ios_new,
-                color: SieTheme.textSecondary, size: 18),
+            icon: Icon(Icons.arrow_back_ios_new,
+                color: c.textSecondary, size: 18),
           ),
           Expanded(
             child: AnimatedContainer(
@@ -147,77 +143,92 @@ class _TopBarState extends State<_TopBar> {
                 boxShadow: _focused
                     ? [
                         BoxShadow(
-                          color: _kCyan.withValues(alpha: 0.20),
+                          color: c.accent.withValues(alpha: 0.20),
                           blurRadius: 16,
                           spreadRadius: 2,
                         ),
                       ]
                     : [],
               ),
-              child: GlassCard(
-                height: 44,
-                padding: EdgeInsets.zero,
-                shape: LiquidRoundedSuperellipse(borderRadius: 28),
-                useOwnLayer: true,
-                quality: GlassQuality.standard,
-                clipBehavior: Clip.antiAlias,
-                settings: _glassSettings(
-                  blur: _focused ? 4.0 : 3.0,
-                  glowIntensity: _focused ? 1.05 : 0.88,
-                ),
-                child: Row(
-                  children: [
-                    const SizedBox(width: 14),
-                    Icon(
-                      Icons.search,
-                      color: _focused ? _kCyan : SieTheme.textSecondary,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: widget.ctrl,
-                        focusNode: widget.focus,
-                        onChanged: widget.onChanged,
-                        autofocus: true,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          letterSpacing: 0.5,
-                        ),
-                        decoration: InputDecoration(
-                          isDense: true,
-                          contentPadding: EdgeInsets.zero,
-                          border: InputBorder.none,
-                          hintText: 'ПОИСК ОПЕРАТИВНИКА...',
-                          hintStyle: TextStyle(
-                            color: _focused
-                                ? SieTheme.textSecondary
-                                : SieTheme.borderAccent,
-                            fontSize: 12,
-                            letterSpacing: 1,
-                          ),
+              child: c.isCosmicMode
+                  ? GlassCard(
+                      height: 44,
+                      padding: EdgeInsets.zero,
+                      shape: LiquidRoundedSuperellipse(borderRadius: 28),
+                      useOwnLayer: true,
+                      quality: GlassQuality.standard,
+                      clipBehavior: Clip.antiAlias,
+                      settings: _glassSettings(
+                        blur: _focused ? 4.0 : 3.0,
+                        glowIntensity: _focused ? 1.05 : 0.88,
+                      ),
+                      child: _searchFieldContent(c),
+                    )
+                  : Container(
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: c.surface,
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(
+                          color: _focused
+                              ? c.accent.withValues(alpha: 0.6)
+                              : c.border,
                         ),
                       ),
+                      child: _searchFieldContent(c),
                     ),
-                    if (widget.ctrl.text.isNotEmpty)
-                      GestureDetector(
-                        onTap: widget.onClear,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: Icon(Icons.close,
-                              color: SieTheme.textSecondary, size: 16),
-                        ),
-                      )
-                    else
-                      const SizedBox(width: 12),
-                  ],
-                ),
-              ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _searchFieldContent(SieColors c) {
+    return Row(
+      children: [
+        const SizedBox(width: 14),
+        Icon(
+          Icons.search,
+          color: _focused ? c.accent : c.textSecondary,
+          size: 18,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: TextField(
+            controller: widget.ctrl,
+            focusNode: widget.focus,
+            onChanged: widget.onChanged,
+            autofocus: true,
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 13,
+              letterSpacing: 0.5,
+            ),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
+              border: InputBorder.none,
+              hintText: 'ПОИСК ОПЕРАТИВНИКА...',
+              hintStyle: TextStyle(
+                color: _focused ? c.textSecondary : c.iconMuted,
+                fontSize: 12,
+                letterSpacing: 1,
+              ),
+            ),
+          ),
+        ),
+        if (widget.ctrl.text.isNotEmpty)
+          GestureDetector(
+            onTap: widget.onClear,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Icon(Icons.close, color: c.textSecondary, size: 16),
+            ),
+          )
+        else
+          const SizedBox(width: 12),
+      ],
     );
   }
 }
@@ -230,6 +241,7 @@ class _Body extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     if (query.length < 2) {
       return const _StatusMessage(
         icon: Icons.radar,
@@ -241,9 +253,8 @@ class _Body extends ConsumerWidget {
     final resultsAsync = ref.watch(userSearchProvider(query));
 
     return resultsAsync.when(
-      loading: () => const Center(
-        child: CircularProgressIndicator(
-            color: SieTheme.accent, strokeWidth: 1.5),
+      loading: () => Center(
+        child: CircularProgressIndicator(color: c.accent, strokeWidth: 1.5),
       ),
       error: (e, _) => _StatusMessage(
         icon: Icons.error_outline,
@@ -273,7 +284,7 @@ class _Body extends ConsumerWidget {
 
 // ── Status Placeholder ────────────────────────────────────────
 
-class _StatusMessage extends StatelessWidget {
+class _StatusMessage extends ConsumerWidget {
   final IconData icon;
   final String text;
   final String sub;
@@ -281,17 +292,18 @@ class _StatusMessage extends StatelessWidget {
       {required this.icon, required this.text, required this.sub});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: SieTheme.borderAccent, size: 36),
+          Icon(icon, color: c.iconMuted, size: 36),
           const SizedBox(height: 16),
           Text(
             text,
-            style: const TextStyle(
-              color: SieTheme.textSecondary,
+            style: TextStyle(
+              color: c.textSecondary,
               fontSize: 12,
               letterSpacing: 1.5,
             ),
@@ -299,7 +311,7 @@ class _StatusMessage extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             sub,
-            style: const TextStyle(color: SieTheme.borderAccent, fontSize: 11),
+            style: TextStyle(color: c.iconMuted, fontSize: 11),
           ),
         ],
       ),
@@ -309,16 +321,16 @@ class _StatusMessage extends StatelessWidget {
 
 // ── User Tile ─────────────────────────────────────────────────
 
-class _UserTile extends StatefulWidget {
+class _UserTile extends ConsumerStatefulWidget {
   final PublicProfile profile;
   final String query;
   const _UserTile({required this.profile, required this.query});
 
   @override
-  State<_UserTile> createState() => _UserTileState();
+  ConsumerState<_UserTile> createState() => _UserTileState();
 }
 
-class _UserTileState extends State<_UserTile>
+class _UserTileState extends ConsumerState<_UserTile>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pressCtrl;
 
@@ -358,8 +370,67 @@ class _UserTileState extends State<_UserTile>
 
   @override
   Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
     final username = widget.profile.username ?? 'UNKNOWN';
     final letter = username.isNotEmpty ? username[0].toUpperCase() : '?';
+
+    final tileContent = Row(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+                color: c.accent.withValues(alpha: 0.5), width: 1),
+            color: c.background,
+          ),
+          child: ClipOval(
+            child: widget.profile.avatarUrl != null
+                ? Image.network(
+                    widget.profile.avatarUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _TileLetter(letter: letter),
+                  )
+                : _TileLetter(letter: letter),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _HighlightedName(
+                name: username.toUpperCase(),
+                query: widget.query.toUpperCase(),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                      color: c.accent.withValues(alpha: 0.4)),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'LEVEL ${widget.profile.level}  ·  ${widget.profile.totalXp} XP',
+                  style: TextStyle(
+                    color: c.accent,
+                    fontSize: 9,
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Icon(Icons.chevron_right,
+            color: c.textSecondary.withValues(alpha: 0.6),
+            size: 16),
+      ],
+    );
 
     return GestureDetector(
       onTap: _navigate,
@@ -370,120 +441,78 @@ class _UserTileState extends State<_UserTile>
         animation: _pressCtrl,
         builder: (_, child) {
           final t = _pressCtrl.value;
+          if (c.isCosmicMode) {
+            return Transform.scale(
+              scale: 1.0 - 0.03 * t,
+              child: GlassCard(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                shape: LiquidRoundedSuperellipse(borderRadius: 16),
+                useOwnLayer: true,
+                quality: GlassQuality.standard,
+                clipBehavior: Clip.antiAlias,
+                settings: _glassSettings(
+                  blur: 3.0,
+                  glowIntensity: 0.88 + 0.22 * t,
+                ),
+                child: child!,
+              ),
+            );
+          }
           return Transform.scale(
             scale: 1.0 - 0.03 * t,
-            child: GlassCard(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              shape: LiquidRoundedSuperellipse(borderRadius: 16),
-              useOwnLayer: true,
-              quality: GlassQuality.standard,
-              clipBehavior: Clip.antiAlias,
-              settings: _glassSettings(
-                blur: 3.0,
-                glowIntensity: 0.88 + 0.22 * t,
-              ),
-              child: child!,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: c.flatCard(radius: 16),
+              child: child,
             ),
           );
         },
-        child: Row(
-          children: [
-            // Avatar
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                    color: _kCyan.withValues(alpha: 0.5), width: 1),
-                color: SieTheme.background,
-              ),
-              child: ClipOval(
-                child: widget.profile.avatarUrl != null
-                    ? Image.network(
-                        widget.profile.avatarUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => _TileLetter(letter: letter),
-                      )
-                    : _TileLetter(letter: letter),
-              ),
-            ),
-            const SizedBox(width: 14),
-            // Name + level
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _HighlightedName(
-                    name: username.toUpperCase(),
-                    query: widget.query.toUpperCase(),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 7, vertical: 2),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                          color: _kCyan.withValues(alpha: 0.4)),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      'LEVEL ${widget.profile.level}  ·  ${widget.profile.totalXp} XP',
-                      style: const TextStyle(
-                        color: _kCyan,
-                        fontSize: 9,
-                        letterSpacing: 1.2,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right,
-                color: SieTheme.textSecondary.withValues(alpha: 0.6),
-                size: 16),
-          ],
+        child: tileContent,
+      ),
+    );
+  }
+}
+
+class _TileLetter extends ConsumerWidget {
+  final String letter;
+  const _TileLetter({required this.letter});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Center(
+      child: Text(
+        letter,
+        style: TextStyle(
+          color: c.accent,
+          fontSize: 18,
+          fontWeight: FontWeight.w200,
         ),
       ),
     );
   }
 }
 
-class _TileLetter extends StatelessWidget {
-  final String letter;
-  const _TileLetter({required this.letter});
-
-  @override
-  Widget build(BuildContext context) => Center(
-        child: Text(
-          letter,
-          style: const TextStyle(
-            color: _kCyan,
-            fontSize: 18,
-            fontWeight: FontWeight.w200,
-          ),
-        ),
-      );
-}
-
 // ── Highlighted Name ──────────────────────────────────────────
 
-class _HighlightedName extends StatelessWidget {
+class _HighlightedName extends ConsumerWidget {
   final String name;
   final String query;
   const _HighlightedName({required this.name, required this.query});
 
   @override
-  Widget build(BuildContext context) {
-    const base = TextStyle(
-      color: Colors.white,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final base = TextStyle(
+      color: c.textPrimary,
       fontSize: 13,
       fontWeight: FontWeight.w600,
       letterSpacing: 1,
     );
 
-    if (query.isEmpty) return const Text('', style: base);
+    if (query.isEmpty) return Text('', style: base);
 
     final idx = name.indexOf(query);
     if (idx == -1) return Text(name, style: base);
@@ -493,7 +522,7 @@ class _HighlightedName extends StatelessWidget {
         TextSpan(text: name.substring(0, idx)),
         TextSpan(
           text: name.substring(idx, idx + query.length),
-          style: base.copyWith(color: _kCyan, fontWeight: FontWeight.w700),
+          style: base.copyWith(color: c.accent, fontWeight: FontWeight.w700),
         ),
         TextSpan(text: name.substring(idx + query.length)),
       ]),

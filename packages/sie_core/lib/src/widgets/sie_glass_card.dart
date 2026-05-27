@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import '../providers/sie_theme_mode_provider.dart';
+import '../theme/sie_colors.dart';
 import '../theme/sie_theme.dart';
 
 /// Premium liquid-glass card backed by the [liquid_glass_widgets] shader engine.
@@ -92,18 +93,8 @@ class _SieGlassCardState extends ConsumerState<SieGlassCard>
   // ── Flat card (classicDark / classicLight) ─────────────────────────────────
 
   Widget _buildFlatCard(SieThemeMode mode) {
-    final bgColor = mode == SieThemeMode.classicLight
-        ? SieTheme.clSurface
-        : SieTheme.cdSurface;
-    final borderColor = mode == SieThemeMode.classicLight
-        ? SieTheme.clBorder
-        : SieTheme.cdBorder;
-
-    final decoration = BoxDecoration(
-      color: bgColor,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: borderColor),
-    );
+    final c = SieColors.forMode(mode);
+    final decoration = c.flatCard();
 
     if (widget.onTap == null) {
       return Container(

@@ -9,9 +9,6 @@ import 'interface_hub_screen.dart';
 import 'knowledge_base_screen.dart';
 import 'progress_analytics_screen.dart';
 
-const _kCyan   = Color(0xFF00E5FF);
-const _kPurple = Color(0xFF7000FF);
-
 // ─────────────────────────────────────────────────────────────────────────────
 // ProfileScreen
 // ─────────────────────────────────────────────────────────────────────────────
@@ -22,6 +19,7 @@ class ProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final c            = ref.watch(sieColorsProvider);
     final profileAsync = ref.watch(userProfileProvider);
 
     final body = SafeArea(
@@ -32,9 +30,9 @@ class ProfileScreen extends ConsumerWidget {
           _TopBar(showBackButton: !asTab),
           Expanded(
             child: profileAsync.when(
-              loading: () => const Center(
+              loading: () => Center(
                 child: CircularProgressIndicator(
-                  color: SieTheme.accent,
+                  color: c.accent,
                   strokeWidth: 1.5,
                 ),
               ),
@@ -52,9 +50,7 @@ class ProfileScreen extends ConsumerWidget {
       return Scaffold(backgroundColor: Colors.transparent, body: body);
     }
 
-    return GlassPage(
-      background: const SieSpaceBackground(),
-      statusBarStyle: GlassStatusBarStyle.light,
+    return SieBackground(
       child: Scaffold(backgroundColor: Colors.transparent, body: body),
     );
   }
@@ -106,48 +102,61 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-// Glass circle buttons in the top bar don't scroll — useOwnLayer:true is fine
-// here because they sit above the SingleChildScrollView, not inside it.
-class _GlassCircleButton extends StatelessWidget {
+class _GlassCircleButton extends ConsumerWidget {
   const _GlassCircleButton({required this.icon, required this.onTap});
   final IconData icon;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c    = ref.watch(sieColorsProvider);
+    final child = Center(
+      child: Icon(icon, color: c.textSecondary, size: 15),
+    );
+
+    if (c.isCosmicMode) {
+      return GestureDetector(
+        onTap: onTap,
+        child: GlassCard(
+          width: 36,
+          height: 36,
+          padding: EdgeInsets.zero,
+          shape: LiquidRoundedSuperellipse(borderRadius: 18),
+          useOwnLayer: true,
+          quality: GlassQuality.standard,
+          clipBehavior: Clip.antiAlias,
+          settings: LiquidGlassSettings(
+            blur: 2.0,
+            thickness: 20,
+            refractiveIndex: 1.45,
+            glassColor: const Color(0x0A0A0E1A),
+            lightAngle: GlassDefaults.lightAngle,
+            lightIntensity: 0.72,
+            glowIntensity: 0.85,
+            saturation: 1.4,
+            specularSharpness: GlassSpecularSharpness.sharp,
+            ambientStrength: 0.08,
+            chromaticAberration: 0.015,
+          ),
+          child: child,
+        ),
+      );
+    }
+
     return GestureDetector(
       onTap: onTap,
-      child: GlassCard(
+      child: Container(
         width: 36,
         height: 36,
-        padding: EdgeInsets.zero,
-        shape: LiquidRoundedSuperellipse(borderRadius: 18),
-        useOwnLayer: true,
-        quality: GlassQuality.standard,
-        clipBehavior: Clip.antiAlias,
-        settings: LiquidGlassSettings(
-          blur: 2.0,
-          thickness: 20,
-          refractiveIndex: 1.45,
-          glassColor: const Color(0x0A0A0E1A),
-          lightAngle: GlassDefaults.lightAngle,
-          lightIntensity: 0.72,
-          glowIntensity: 0.85,
-          saturation: 1.4,
-          specularSharpness: GlassSpecularSharpness.sharp,
-          ambientStrength: 0.08,
-          chromaticAberration: 0.015,
-        ),
-        child: Center(
-          child: Icon(icon, color: SieTheme.textSecondary, size: 15),
-        ),
+        decoration: c.flatCard(radius: 18),
+        child: child,
       ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Scrollable profile body — resolves all equipped cosmetics here
+// Scrollable profile body
 // ─────────────────────────────────────────────────────────────────────────────
 class _ProfileContent extends ConsumerWidget {
   const _ProfileContent({required this.profile});
@@ -155,11 +164,10 @@ class _ProfileContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Resolve all three cosmetic categories in one place so a single rebuild
-    // handles frame, background, and stat-style changes simultaneously.
-    final frames      = ref.watch(avatarFramesProvider).valueOrNull ?? [];
-    final backgrounds = ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
-    final styles      = ref.watch(statStylesProvider).valueOrNull ?? [];
+    final c            = ref.watch(sieColorsProvider);
+    final frames       = ref.watch(avatarFramesProvider).valueOrNull ?? [];
+    final backgrounds  = ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
+    final styles       = ref.watch(statStylesProvider).valueOrNull ?? [];
 
     final equipped = EquippedAssets.resolve(
       frames:       frames,
@@ -173,8 +181,8 @@ class _ProfileContent extends ConsumerWidget {
     final frameDecoration = equipped.frame?.buildFrameDecoration() ??
         BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: _kCyan.withValues(alpha: 0.45), width: 1.5),
-          color: SieTheme.surface,
+          border: Border.all(color: c.accent.withValues(alpha: 0.45), width: 1.5),
+          color: c.surface,
         );
 
     final xp    = profile?.totalXp ?? 0;
@@ -182,10 +190,7 @@ class _ProfileContent extends ConsumerWidget {
 
     return Stack(
       children: [
-        // ── Equipped profile-background gradient overlay ──────
-        // Rendered at reduced opacity so it tints the shared space background
-        // without completely obscuring the star field.
-        if (equipped.background?.backgroundGradient != null)
+        if (equipped.background?.backgroundGradient != null && c.isCosmicMode)
           Positioned.fill(
             child: Opacity(
               opacity: 0.28,
@@ -196,27 +201,16 @@ class _ProfileContent extends ConsumerWidget {
               ),
             ),
           ),
-
-        // ── Scrollable content ────────────────────────────────
-        // RepaintBoundary separates the scroll layer from the background
-        // overlay layer — the star field AnimationController won't trigger
-        // repaints of the scroll content (and vice-versa), eliminating the
-        // scroll-induced jank that made the stars jump.
         RepaintBoundary(
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // useOwnLayer:false — relies on the shell's GlassPage
-                // GlassBackdropScope. No per-scroll backdrop capture, so
-                // the blur never flickers or disappears during scroll.
                 _HeaderGlassCard(
                   profile: profile,
                   frameDecoration: frameDecoration,
                 ),
-
-                // Stat-style card — visible only when a stat style is equipped.
                 if (equipped.statStyle != null) ...[
                   const SizedBox(height: 12),
                   _StatStyleCard(
@@ -225,20 +219,16 @@ class _ProfileContent extends ConsumerWidget {
                     xp: xp,
                   ),
                 ],
-
                 const SizedBox(height: 20),
-
-                // Nav buttons use plain Container+GestureDetector — no glass
-                // shaders in a scroll view (avoids backdrop capture racing).
                 _NavButton(
                   icon: Icons.analytics_outlined,
                   title: 'PROGRESS HUB',
                   subtitle: 'Activity matrix, XP growth & focus stats',
-                  iconColor: _kCyan,
+                  iconColor: c.accent,
                   onTap: () => Navigator.of(context).push(PageRouteBuilder(
                     pageBuilder: (_, _, _) => const ProgressAnalyticsScreen(),
-                    transitionsBuilder: (_, a, _, c) =>
-                        FadeTransition(opacity: a, child: c),
+                    transitionsBuilder: (_, a, _, ch) =>
+                        FadeTransition(opacity: a, child: ch),
                     transitionDuration: const Duration(milliseconds: 400),
                   )),
                 ),
@@ -247,11 +237,11 @@ class _ProfileContent extends ConsumerWidget {
                   icon: Icons.menu_book_rounded,
                   title: 'БАЗА ЗНАНИЙ',
                   subtitle: 'Физиология, психология, XP-таблица и этика SiE',
-                  iconColor: _kCyan,
+                  iconColor: c.accent,
                   onTap: () => Navigator.of(context).push(PageRouteBuilder(
                     pageBuilder: (_, _, _) => const KnowledgeBaseScreen(),
-                    transitionsBuilder: (_, a, _, c) =>
-                        FadeTransition(opacity: a, child: c),
+                    transitionsBuilder: (_, a, _, ch) =>
+                        FadeTransition(opacity: a, child: ch),
                     transitionDuration: const Duration(milliseconds: 400),
                   )),
                 ),
@@ -261,12 +251,12 @@ class _ProfileContent extends ConsumerWidget {
                     icon: Icons.style_outlined,
                     title: 'НАСТРОЙКА ОБЛИКА',
                     subtitle: 'Рамки аватара, фоны профиля и стили статистики',
-                    iconColor: _kCyan,
+                    iconColor: c.accent,
                     onTap: () => Navigator.of(context).push(PageRouteBuilder(
                       pageBuilder: (_, _, _) =>
                           CustomizationScreen(profile: profile!),
-                      transitionsBuilder: (_, a, _, c) =>
-                          FadeTransition(opacity: a, child: c),
+                      transitionsBuilder: (_, a, _, ch) =>
+                          FadeTransition(opacity: a, child: ch),
                       transitionDuration: const Duration(milliseconds: 400),
                     )),
                   ),
@@ -275,11 +265,12 @@ class _ProfileContent extends ConsumerWidget {
                   icon: Icons.storefront_outlined,
                   title: 'ИНТЕРФЕЙС-ХАБ',
                   subtitle: 'Рамки, фоны и стили за Design Points',
-                  iconColor: SieTheme.dp,
+                  iconColor: c.dp,
+                  highlightTitle: true,
                   onTap: () => Navigator.of(context).push(PageRouteBuilder(
                     pageBuilder: (_, _, _) => const InterfaceHubScreen(),
-                    transitionsBuilder: (_, a, _, c) =>
-                        FadeTransition(opacity: a, child: c),
+                    transitionsBuilder: (_, a, _, ch) =>
+                        FadeTransition(opacity: a, child: ch),
                     transitionDuration: const Duration(milliseconds: 400),
                   )),
                 ),
@@ -289,7 +280,7 @@ class _ProfileContent extends ConsumerWidget {
                 Text(
                   'ГРАФИЧЕСКАЯ НАГРУЗКА И СТИЛЬ ОФОРМЛЕНИЯ',
                   style: TextStyle(
-                    color: SieTheme.textSecondary.withValues(alpha: 0.55),
+                    color: c.textSecondary.withValues(alpha: 0.55),
                     fontSize: 9,
                     letterSpacing: 1.5,
                   ),
@@ -302,7 +293,7 @@ class _ProfileContent extends ConsumerWidget {
                 Text(
                   'EARNED COMMENDATIONS & COMBAT DECORATIONS',
                   style: TextStyle(
-                    color: SieTheme.textSecondary.withValues(alpha: 0.55),
+                    color: c.textSecondary.withValues(alpha: 0.55),
                     fontSize: 9,
                     letterSpacing: 1.5,
                   ),
@@ -320,9 +311,9 @@ class _ProfileContent extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Header Glass Card — useOwnLayer:false eliminates scroll-induced blur flicker
+// Header Glass Card
 // ─────────────────────────────────────────────────────────────────────────────
-class _HeaderGlassCard extends StatelessWidget {
+class _HeaderGlassCard extends ConsumerWidget {
   const _HeaderGlassCard({
     required this.profile,
     required this.frameDecoration,
@@ -338,184 +329,199 @@ class _HeaderGlassCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final username  = profile?.username?.toUpperCase() ?? 'UNKNOWN';
-    final letter    = username.isNotEmpty ? username[0] : '?';
-    final xp        = profile?.totalXp ?? 0;
-    final level     = (xp ~/ 1000) + 1;
-    final xpInLevel = xp % 1000;
-    final progress  = (xpInLevel / 1000.0).clamp(0.0, 1.0);
-    final xpToNext  = 1000 - xpInLevel;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c          = ref.watch(sieColorsProvider);
+    final username   = profile?.username?.toUpperCase() ?? 'UNKNOWN';
+    final letter     = username.isNotEmpty ? username[0] : '?';
+    final xp         = profile?.totalXp ?? 0;
+    final level      = (xp ~/ 1000) + 1;
+    final xpInLevel  = xp % 1000;
+    final progress   = (xpInLevel / 1000.0).clamp(0.0, 1.0);
+    final xpToNext   = 1000 - xpInLevel;
 
-    return GlassCard(
-      padding: const EdgeInsets.all(20),
-      shape: LiquidRoundedSuperellipse(borderRadius: 24),
-      // useOwnLayer:false — relies on the parent GlassBackdropScope
-      // (provided by the shell's GlassPage). This avoids per-frame backdrop
-      // capture that races the ScrollView and causes blur to flash on/off.
-      useOwnLayer: false,
-      quality: GlassQuality.standard,
-      clipBehavior: Clip.antiAlias,
-      settings: LiquidGlassSettings(
-        blur: 3.5,
-        thickness: 28,
-        refractiveIndex: 1.45,
-        glassColor: const Color(0x0A0A0E1A),
-        lightAngle: GlassDefaults.lightAngle,
-        lightIntensity: 0.72,
-        glowIntensity: 0.92,
-        saturation: 1.4,
-        specularSharpness: GlassSpecularSharpness.sharp,
-        ambientStrength: 0.08,
-        chromaticAberration: 0.015,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    final inner = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 68,
+              height: 68,
+              decoration: frameDecoration,
+              child: ClipOval(
+                child: profile?.avatarUrl != null
+                    ? Image.network(
+                        profile!.avatarUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) =>
+                            _AvatarLetter(letter: letter),
+                      )
+                    : _AvatarLetter(letter: letter),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    username,
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineMedium
+                        ?.copyWith(
+                          fontSize: 18,
+                          shadows: c.isCosmicMode
+                              ? [
+                                  Shadow(
+                                    color: c.accent.withValues(alpha: 0.35),
+                                    blurRadius: 10,
+                                  ),
+                                ]
+                              : null,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _Chip(
+                        label: 'LEVEL $level',
+                        borderColor: c.accent.withValues(alpha: 0.5),
+                        textColor: c.accent,
+                      ),
+                      const SizedBox(width: 8),
+                      _Chip(
+                        label: '${profile?.designPoints ?? 0} DP',
+                        borderColor: c.dp.withValues(alpha: 0.45),
+                        textColor: c.dp,
+                        icon: Icons.palette_outlined,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '$xp XP TOTAL',
+              style: TextStyle(
+                color: c.accent,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.2,
+              ),
+            ),
+            Text(
+              '$xpToNext XP TO LVL ${level + 1}',
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(3),
+          child: Stack(
             children: [
               Container(
-                width: 68,
-                height: 68,
-                decoration: frameDecoration,
-                child: ClipOval(
-                  child: profile?.avatarUrl != null
-                      ? Image.network(
-                          profile!.avatarUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) =>
-                              _AvatarLetter(letter: letter),
-                        )
-                      : _AvatarLetter(letter: letter),
-                ),
+                height: 6,
+                color: c.isCosmicMode
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : c.border,
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      username,
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineMedium
-                          ?.copyWith(
-                            fontSize: 18,
-                            shadows: [
-                              Shadow(
-                                color: _kCyan.withValues(alpha: 0.35),
-                                blurRadius: 10,
-                              ),
-                            ],
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        _Chip(
-                          label: 'LEVEL $level',
-                          borderColor: _kCyan.withValues(alpha: 0.5),
-                          textColor: _kCyan,
-                        ),
-                        const SizedBox(width: 8),
-                        _Chip(
-                          label: '${profile?.designPoints ?? 0} DP',
-                          borderColor: SieTheme.dp.withValues(alpha: 0.45),
-                          textColor: SieTheme.dp,
-                          icon: Icons.palette_outlined,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '$xp XP TOTAL',
-                style: const TextStyle(
-                  color: _kCyan,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.2,
-                ),
-              ),
-              Text(
-                '$xpToNext XP TO LVL ${level + 1}',
-                style: const TextStyle(
-                  color: SieTheme.textSecondary,
-                  fontSize: 10,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: Stack(
-              children: [
-                Container(
+              FractionallySizedBox(
+                widthFactor: progress,
+                child: Container(
                   height: 6,
-                  color: Colors.white.withValues(alpha: 0.08),
-                ),
-                FractionallySizedBox(
-                  widthFactor: progress,
-                  child: Container(
-                    height: 6,
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [_kCyan, _kPurple],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0x4400E5FF),
-                          blurRadius: 8,
-                          spreadRadius: 1,
-                        ),
-                      ],
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [c.accent, c.accentSecondary],
                     ),
+                    boxShadow: c.isCosmicMode
+                        ? [
+                            BoxShadow(
+                              color: c.accent.withValues(alpha: 0.27),
+                              blurRadius: 8,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : null,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            '${(progress * 100).toStringAsFixed(0)}%  ·  '
-            '${_rankLabel(level).toUpperCase()}  ·  '
-            'LVL $level → LVL ${level + 1}',
-            style: const TextStyle(
-              color: SieTheme.textSecondary,
-              fontSize: 9,
-              letterSpacing: 1,
-            ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '${(progress * 100).toStringAsFixed(0)}%  ·  '
+          '${_rankLabel(level).toUpperCase()}  ·  '
+          'LVL $level → LVL ${level + 1}',
+          style: TextStyle(
+            color: c.textSecondary,
+            fontSize: 9,
+            letterSpacing: 1,
           ),
-        ],
-      ),
+        ),
+      ],
+    );
+
+    if (c.isCosmicMode) {
+      return GlassCard(
+        padding: const EdgeInsets.all(20),
+        shape: LiquidRoundedSuperellipse(borderRadius: 24),
+        useOwnLayer: false,
+        quality: GlassQuality.standard,
+        clipBehavior: Clip.antiAlias,
+        settings: LiquidGlassSettings(
+          blur: 3.5,
+          thickness: 28,
+          refractiveIndex: 1.45,
+          glassColor: const Color(0x0A0A0E1A),
+          lightAngle: GlassDefaults.lightAngle,
+          lightIntensity: 0.72,
+          glowIntensity: 0.92,
+          saturation: 1.4,
+          specularSharpness: GlassSpecularSharpness.sharp,
+          ambientStrength: 0.08,
+          chromaticAberration: 0.015,
+        ),
+        child: inner,
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: c.flatCard(radius: 24),
+      child: inner,
     );
   }
 }
 
-class _AvatarLetter extends StatelessWidget {
+class _AvatarLetter extends ConsumerWidget {
   const _AvatarLetter({required this.letter});
   final String letter;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Center(
       child: Text(
         letter,
         style: TextStyle(
-          color: _kCyan,
+          color: c.accent,
           fontSize: 28,
           fontWeight: FontWeight.w200,
-          shadows: [
-            Shadow(color: _kCyan.withValues(alpha: 0.6), blurRadius: 12),
-          ],
+          shadows: c.isCosmicMode
+              ? [Shadow(color: c.accent.withValues(alpha: 0.6), blurRadius: 12)]
+              : null,
         ),
       ),
     );
@@ -565,8 +571,7 @@ class _Chip extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Equipped stat-style card — renders the XP summary with the user's chosen
-// cosmetic border/glow/accent so the customization is visibly reflected.
+// Equipped stat-style card
 // ─────────────────────────────────────────────────────────────────────────────
 class _StatStyleCard extends StatelessWidget {
   const _StatStyleCard({
@@ -580,9 +585,9 @@ class _StatStyleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent   = statStyle.accentColor;
-    final glowCol  = statStyle.styleGlowColor;
-    final glowRad  = statStyle.styleGlowRadius;
+    final accent  = statStyle.accentColor;
+    final glowCol = statStyle.styleGlowColor;
+    final glowRad = statStyle.styleGlowRadius;
 
     return Container(
       width: double.infinity,
@@ -612,39 +617,32 @@ class _StatStyleCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Nav Button — plain Container instead of SieGlassCard.
-// GlassCard(useOwnLayer:true) inside a SingleChildScrollView causes the
-// backdrop filter to race the scroll offset, making the blur flash on/off.
-// A translucent Container has zero GPU shader overhead and never flickers.
+// Nav Button
 // ─────────────────────────────────────────────────────────────────────────────
-class _NavButton extends StatelessWidget {
+class _NavButton extends ConsumerWidget {
   const _NavButton({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.iconColor,
     required this.onTap,
+    this.highlightTitle = false,
   });
   final IconData icon;
   final String title;
   final String subtitle;
   final Color iconColor;
   final VoidCallback onTap;
+  final bool highlightTitle;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.08),
-            width: 0.8,
-          ),
-        ),
+        decoration: c.subtleContainer(radius: 20),
         child: Row(
           children: [
             Container(
@@ -664,7 +662,7 @@ class _NavButton extends StatelessWidget {
                   Text(
                     title,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: iconColor == SieTheme.dp ? SieTheme.dp : null,
+                          color: highlightTitle ? iconColor : null,
                         ),
                   ),
                   const SizedBox(height: 2),
@@ -672,7 +670,7 @@ class _NavButton extends StatelessWidget {
                     subtitle,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontSize: 11,
-                          color: SieTheme.textSecondary,
+                          color: c.textSecondary,
                         ),
                   ),
                 ],
@@ -698,32 +696,30 @@ class _MedalsVault extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final c                = ref.watch(sieColorsProvider);
     final achievementsAsync = ref.watch(userAchievementsProvider);
 
     return achievementsAsync.when(
-      loading: () => const SizedBox(
+      loading: () => SizedBox(
         height: 80,
         child: Center(
-          child: CircularProgressIndicator(
-            color: SieTheme.accent,
-            strokeWidth: 1.5,
-          ),
+          child: CircularProgressIndicator(color: c.accent, strokeWidth: 1.5),
         ),
       ),
-      error: (_, _) => const Text(
+      error: (_, _) => Text(
         'NO ACHIEVEMENTS DEFINED IN DATABASE',
         style: TextStyle(
-          color: SieTheme.textSecondary,
+          color: c.textSecondary,
           fontSize: 11,
           letterSpacing: 1,
         ),
       ),
       data: (achievements) {
         if (achievements.isEmpty) {
-          return const Text(
+          return Text(
             'NO MEDALS YET — COMPLETE MISSIONS TO EARN COMMENDATIONS',
             style: TextStyle(
-              color: SieTheme.textSecondary,
+              color: c.textSecondary,
               fontSize: 11,
               letterSpacing: 1,
             ),
@@ -772,15 +768,16 @@ class _ThemeSwitcherSection extends ConsumerWidget {
       mode: SieThemeMode.classicLight,
       label: 'CLASSIC LIGHT',
       description: 'Светлый фон + бирюза, без шейдеров',
-      bgColor: Color(0xFFF0F0F4),
+      bgColor: Color(0xFFF5F6FA),
       accentColor: Color(0xFF5AADA0),
     ),
   ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final c          = ref.watch(sieColorsProvider);
     final themeAsync = ref.watch(sieThemeModeProvider);
-    final current = themeAsync.valueOrNull ?? SieThemeMode.cosmicLiquidGlass;
+    final current    = themeAsync.valueOrNull ?? SieThemeMode.cosmicLiquidGlass;
 
     return Column(
       children: [
@@ -792,6 +789,7 @@ class _ThemeSwitcherSection extends ConsumerWidget {
             bgColor: _options[i].bgColor,
             accentColor: _options[i].accentColor,
             isActive: current == _options[i].mode,
+            c: c,
             onTap: current == _options[i].mode
                 ? null
                 : () => ref
@@ -811,6 +809,7 @@ class _ThemeOptionTile extends StatelessWidget {
     required this.bgColor,
     required this.accentColor,
     required this.isActive,
+    required this.c,
     this.onTap,
   });
 
@@ -819,6 +818,7 @@ class _ThemeOptionTile extends StatelessWidget {
   final Color bgColor;
   final Color accentColor;
   final bool isActive;
+  final SieColors c;
   final VoidCallback? onTap;
 
   @override
@@ -832,18 +832,21 @@ class _ThemeOptionTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: isActive
               ? accentColor.withValues(alpha: 0.07)
-              : Colors.white.withValues(alpha: 0.04),
+              : (c.isLightMode
+                  ? const Color(0x0A000000)
+                  : Colors.white.withValues(alpha: 0.04)),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isActive
                 ? accentColor.withValues(alpha: 0.50)
-                : Colors.white.withValues(alpha: 0.08),
+                : (c.isLightMode
+                    ? c.border
+                    : Colors.white.withValues(alpha: 0.08)),
             width: isActive ? 1.0 : 0.8,
           ),
         ),
         child: Row(
           children: [
-            // Color swatch preview
             Container(
               width: 38,
               height: 38,
@@ -881,11 +884,11 @@ class _ThemeOptionTile extends StatelessWidget {
                   Text(
                     label,
                     style: TextStyle(
-                      color: isActive ? accentColor : SieTheme.textPrimary,
+                      color: isActive ? accentColor : c.textPrimary,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 1.4,
-                      shadows: isActive
+                      shadows: isActive && c.isCosmicMode
                           ? [
                               Shadow(
                                 color: accentColor.withValues(alpha: 0.35),
@@ -898,8 +901,8 @@ class _ThemeOptionTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     description,
-                    style: const TextStyle(
-                      color: SieTheme.textSecondary,
+                    style: TextStyle(
+                      color: c.textSecondary,
                       fontSize: 11,
                     ),
                   ),
@@ -918,7 +921,7 @@ class _ThemeOptionTile extends StatelessWidget {
                   : Icon(
                       Icons.radio_button_unchecked_rounded,
                       key: const ValueKey(false),
-                      color: SieTheme.textSecondary.withValues(alpha: 0.35),
+                      color: c.textSecondary.withValues(alpha: 0.35),
                       size: 18,
                     ),
             ),
@@ -929,22 +932,22 @@ class _ThemeOptionTile extends StatelessWidget {
   }
 }
 
-class _NoConnectionMessage extends StatelessWidget {
+class _NoConnectionMessage extends ConsumerWidget {
   const _NoConnectionMessage();
 
   @override
-  Widget build(BuildContext context) {
-    return const Column(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.wifi_off_outlined,
-            color: Color(0xFF90A4AE), size: 36),
-        SizedBox(height: 12),
+        Icon(Icons.wifi_off_outlined, color: c.iconMuted, size: 36),
+        const SizedBox(height: 12),
         Text(
           'Подключение к интернету отсутствует',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Color(0xFF90A4AE),
+            color: c.iconMuted,
             fontSize: 13,
             letterSpacing: 0.5,
           ),

@@ -5,10 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 
-// ── Design tokens ──────────────────────────────────────────────
-const _kCyan = Color(0xFF00E5FF);
-
-// ── Glass settings factory (mirrors leaderboard / ops screen) ──
 LiquidGlassSettings _glassSettings({
   double blur = 3.0,
   double glowIntensity = 0.88,
@@ -47,9 +43,10 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final habitsAsync = ref.watch(habitsProvider);
-    final today      = _fmt(DateTime.now());
-    final profile    = ref.watch(userProfileProvider).valueOrNull;
+    final sc           = ref.watch(sieColorsProvider);
+    final habitsAsync  = ref.watch(habitsProvider);
+    final today        = _fmt(DateTime.now());
+    final profile      = ref.watch(userProfileProvider).valueOrNull;
     final showOnboarding = _showOnboardingManual ||
         (!_onboardingDismissed &&
             profile != null &&
@@ -66,15 +63,13 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
           ),
           Expanded(
             child: habitsAsync.when(
-              loading: () => const Center(
+              loading: () => Center(
                 child: CircularProgressIndicator(
-                  color: SieTheme.accent,
+                  color: sc.accent,
                   strokeWidth: 1.5,
                 ),
               ),
-              error: (e, _) => const Center(
-                child: _NoConnectionMessage(),
-              ),
+              error: (e, _) => const Center(child: _NoConnectionMessage()),
               data: (state) {
                 if (state.habits.isEmpty) {
                   return _EmptyState(onAdd: () => _showHabitDialog(null));
@@ -88,9 +83,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                       return Center(
                         child: Padding(
                           padding: const EdgeInsets.only(top: 8),
-                          child: _AddButton(
-                            onTap: () => _showHabitDialog(null),
-                          ),
+                          child: _AddButton(onTap: () => _showHabitDialog(null)),
                         ),
                       );
                     }
@@ -122,9 +115,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
       ),
     );
 
-    return GlassPage(
-      background: const SieSpaceBackground(),
-      statusBarStyle: GlassStatusBarStyle.light,
+    return SieBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: Stack(
@@ -156,9 +147,10 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
     );
   }
 
-  // ── Dialogs (logic unchanged) ─────────────────────────────────
+  // ── Dialogs ───────────────────────────────────────────────────
 
   void _showHabitDialog(Habit? existing) {
+    final sc = ref.read(sieColorsProvider);
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -169,16 +161,12 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
           if (existing == null) {
             ref
                 .read(habitsProvider.notifier)
-                .addHabit(
-                  title: title,
-                  description: description,
-                  color: color,
-                )
+                .addHabit(title: title, description: description, color: color)
                 .then((awarded) {
               if (awarded && mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    backgroundColor: SieTheme.surface,
+                    backgroundColor: sc.surface,
                     duration: const Duration(seconds: 3),
                     content: Row(
                       children: [
@@ -189,10 +177,10 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Text(
+                              Text(
                                 'ПЕРВЫЙ ПРОТОКОЛ ДИСЦИПЛИНЫ',
                                 style: TextStyle(
-                                  color: SieTheme.accent,
+                                  color: sc.accent,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 1.5,
@@ -202,7 +190,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                               Text(
                                 '+25 XP получено',
                                 style: TextStyle(
-                                  color: SieTheme.textSecondary,
+                                  color: sc.textSecondary,
                                   fontSize: 11,
                                 ),
                               ),
@@ -229,6 +217,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
   }
 
   void _showHabitOptions(Habit habit) {
+    final sc = ref.read(sieColorsProvider);
     showDialog<void>(
       context: context,
       builder: (ctx) => Dialog(
@@ -244,12 +233,14 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    _kCyan.withValues(alpha: 0.05),
-                    const Color(0xFF0A0E1A).withValues(alpha: 0.92),
+                    sc.accent.withValues(alpha: 0.05),
+                    sc.isCosmicMode
+                        ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
+                        : sc.surface,
                   ],
                 ),
                 border: Border.all(
-                  color: _kCyan.withValues(alpha: 0.25),
+                  color: sc.accent.withValues(alpha: 0.25),
                 ),
               ),
               child: Column(
@@ -261,20 +252,17 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                     child: Text(
                       habit.title.toUpperCase(),
                       style: TextStyle(
-                        color: SieTheme.textSecondary.withValues(alpha: 0.80),
+                        color: sc.textSecondary.withValues(alpha: 0.80),
                         fontSize: 10,
                         letterSpacing: 2,
                       ),
                     ),
                   ),
-                  Divider(
-                    color: _kCyan.withValues(alpha: 0.15),
-                    height: 1,
-                  ),
+                  Divider(color: sc.accent.withValues(alpha: 0.15), height: 1),
                   _OptionTile(
                     icon: Icons.edit_outlined,
                     label: 'EDIT PROTOCOL',
-                    color: SieTheme.textPrimary,
+                    color: sc.textPrimary,
                     onTap: () {
                       Navigator.of(ctx).pop();
                       _showHabitDialog(habit);
@@ -299,6 +287,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
   }
 
   void _confirmDelete(Habit habit) {
+    final sc = ref.read(sieColorsProvider);
     showDialog<void>(
       context: context,
       builder: (ctx) => Dialog(
@@ -315,7 +304,9 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                   end: Alignment.bottomRight,
                   colors: [
                     Colors.redAccent.withValues(alpha: 0.06),
-                    const Color(0xFF0A0E1A).withValues(alpha: 0.92),
+                    sc.isCosmicMode
+                        ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
+                        : sc.surface,
                   ],
                 ),
                 border: Border.all(
@@ -327,10 +318,10 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'CONFIRM DELETION',
                     style: TextStyle(
-                      color: SieTheme.textPrimary,
+                      color: sc.textPrimary,
                       fontSize: 12,
                       letterSpacing: 2,
                       fontWeight: FontWeight.w600,
@@ -339,8 +330,8 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                   const SizedBox(height: 12),
                   Text(
                     'Delete "${habit.title}"? All log history will be erased.',
-                    style: const TextStyle(
-                      color: SieTheme.textSecondary,
+                    style: TextStyle(
+                      color: sc.textSecondary,
                       fontSize: 12,
                       letterSpacing: 0.3,
                     ),
@@ -351,7 +342,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                     children: [
                       _SheetTextBtn(
                         label: 'CANCEL',
-                        color: SieTheme.textSecondary,
+                        color: sc.textSecondary,
                         onTap: () => Navigator.of(ctx).pop(),
                       ),
                       const SizedBox(width: 8),
@@ -380,13 +371,14 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
 // ─────────────────────────────────────────────────────────────────────────────
 // Cyberpunk Top Bar
 // ─────────────────────────────────────────────────────────────────────────────
-class _CyberTopBar extends StatelessWidget {
+class _CyberTopBar extends ConsumerWidget {
   const _CyberTopBar({required this.onAdd, required this.onInfo});
   final VoidCallback onAdd;
   final VoidCallback onInfo;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 12, 4),
       child: Row(
@@ -405,17 +397,19 @@ class _CyberTopBar extends StatelessWidget {
                 RichText(
                   text: TextSpan(
                     children: [
-                      const TextSpan(
+                      TextSpan(
                         text: 'HABIT ',
                         style: TextStyle(
-                          color: _kCyan,
+                          color: sc.accent,
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 1.5,
-                          shadows: [
-                            Shadow(color: _kCyan, blurRadius: 8),
-                            Shadow(color: _kCyan, blurRadius: 22),
-                          ],
+                          shadows: sc.isCosmicMode
+                              ? [
+                                  Shadow(color: sc.accent, blurRadius: 8),
+                                  Shadow(color: sc.accent, blurRadius: 22),
+                                ]
+                              : null,
                         ),
                       ),
                       TextSpan(
@@ -431,10 +425,10 @@ class _CyberTopBar extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'НЕЙРОННАЯ МАТРИЦА · АРХИВ ДИСЦИПЛИНЫ',
                   style: TextStyle(
-                    color: SieTheme.textSecondary,
+                    color: sc.textSecondary,
                     fontSize: 10,
                     letterSpacing: 1.8,
                   ),
@@ -442,16 +436,12 @@ class _CyberTopBar extends StatelessWidget {
               ],
             ),
           ),
-          _GlassIconBtn(
-            icon: Icons.help_outline,
-            onTap: onInfo,
-            size: 18,
-          ),
+          _GlassIconBtn(icon: Icons.help_outline, onTap: onInfo, size: 18),
           const SizedBox(width: 8),
           _GlassIconBtn(
             icon: Icons.add,
             onTap: onAdd,
-            color: _kCyan,
+            color: sc.accent,
             size: 20,
           ),
         ],
@@ -460,8 +450,7 @@ class _CyberTopBar extends StatelessWidget {
   }
 }
 
-// Small glass circle button — matches leaderboard header buttons.
-class _GlassIconBtn extends StatelessWidget {
+class _GlassIconBtn extends ConsumerWidget {
   const _GlassIconBtn({
     required this.icon,
     required this.onTap,
@@ -475,32 +464,43 @@ class _GlassIconBtn extends StatelessWidget {
   final double size;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc    = ref.watch(sieColorsProvider);
+    final child = Center(
+      child: Icon(icon, color: color ?? sc.textSecondary, size: size),
+    );
+
+    if (sc.isCosmicMode) {
+      return GestureDetector(
+        onTap: onTap,
+        child: GlassCard(
+          width: 36,
+          height: 36,
+          padding: EdgeInsets.zero,
+          shape: LiquidRoundedSuperellipse(borderRadius: 18),
+          useOwnLayer: true,
+          quality: GlassQuality.standard,
+          clipBehavior: Clip.antiAlias,
+          settings: _glassSettings(blur: 2.0, glowIntensity: 0.85),
+          child: child,
+        ),
+      );
+    }
+
     return GestureDetector(
       onTap: onTap,
-      child: GlassCard(
+      child: Container(
         width: 36,
         height: 36,
-        padding: EdgeInsets.zero,
-        shape: LiquidRoundedSuperellipse(borderRadius: 18),
-        useOwnLayer: true,
-        quality: GlassQuality.standard,
-        clipBehavior: Clip.antiAlias,
-        settings: _glassSettings(blur: 2.0, glowIntensity: 0.85),
-        child: Center(
-          child: Icon(
-            icon,
-            color: color ?? SieTheme.textSecondary,
-            size: size,
-          ),
-        ),
+        decoration: sc.flatCard(radius: 18),
+        child: child,
       ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Swipeable Habit Card (swipe logic unchanged — only inner widget replaced)
+// Swipeable Habit Card
 // ─────────────────────────────────────────────────────────────────────────────
 class _SwipeableHabitCard extends StatefulWidget {
   final Habit habit;
@@ -620,10 +620,10 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
           final offset = (_isSnapping && _snapAnim != null)
               ? _snapAnim!.value
               : _dragOffset;
-          final trigger   = _screenWidth * _triggerFraction;
-          final progress  = (offset.abs() / trigger).clamp(0.0, 1.0);
-          final isLeft    = offset < 0;
-          final swiping   = progress > 0.01;
+          final trigger  = _screenWidth * _triggerFraction;
+          final progress = (offset.abs() / trigger).clamp(0.0, 1.0);
+          final isLeft   = offset < 0;
+          final swiping  = progress > 0.01;
 
           return Stack(
             children: [
@@ -661,26 +661,23 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Swipe Backgrounds (unchanged)
+// Swipe Backgrounds
 // ─────────────────────────────────────────────────────────────────────────────
-class _SwipePinBg extends StatelessWidget {
+class _SwipePinBg extends ConsumerWidget {
   final double progress;
   final bool isPinned;
   const _SwipePinBg({required this.progress, required this.isPinned});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(4),
         gradient: LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: [
-            SieTheme.background,
-            const Color(0xFFDAA520),
-            SieTheme.background,
-          ],
+          colors: [sc.background, const Color(0xFFDAA520), sc.background],
           stops: const [0.0, 0.45, 1.0],
         ),
       ),
@@ -705,23 +702,20 @@ class _SwipePinBg extends StatelessWidget {
   }
 }
 
-class _SwipeDeleteBg extends StatelessWidget {
+class _SwipeDeleteBg extends ConsumerWidget {
   final double progress;
   const _SwipeDeleteBg({required this.progress});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(4),
         gradient: LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: [
-            SieTheme.background,
-            const Color(0xFF8B0000),
-            SieTheme.background,
-          ],
+          colors: [sc.background, const Color(0xFF8B0000), sc.background],
           stops: const [0.0, 0.55, 1.0],
         ),
       ),
@@ -733,11 +727,8 @@ class _SwipeDeleteBg extends StatelessWidget {
             opacity: progress.clamp(0.0, 1.0),
             child: Transform.scale(
               scale: 0.75 + 0.25 * progress,
-              child: const Icon(
-                Icons.delete_outline,
-                color: Colors.white,
-                size: 24,
-              ),
+              child: const Icon(Icons.delete_outline,
+                  color: Colors.white, size: 24),
             ),
           ),
         ),
@@ -747,9 +738,9 @@ class _SwipeDeleteBg extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Habit Matrix Card  ──  the core visual unit
+// Habit Matrix Card
 // ─────────────────────────────────────────────────────────────────────────────
-class _HabitMatrixCard extends StatelessWidget {
+class _HabitMatrixCard extends ConsumerWidget {
   final Habit habit;
   final bool completedToday;
   final int streak;
@@ -775,11 +766,11 @@ class _HabitMatrixCard extends StatelessWidget {
       '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc          = ref.watch(sieColorsProvider);
     final accentColor = _hexToColor(habit.color);
-    final now  = DateTime.now();
+    final now         = DateTime.now();
 
-    // Last 7 days ending today, oldest → newest.
     final days = List.generate(7, (i) => now.subtract(Duration(days: 6 - i)));
     final logsThisWeek =
         days.where((d) => allLogDates.contains(_fmtDate(d))).length;
@@ -794,23 +785,23 @@ class _HabitMatrixCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // ── Header: dot + title + pin indicator + streak badge ─
             Row(
               children: [
-                // Accent energy dot
                 Container(
                   width: 7,
                   height: 7,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: accentColor,
-                    boxShadow: [
-                      BoxShadow(
-                        color: accentColor.withValues(alpha: 0.85),
-                        blurRadius: 7,
-                        spreadRadius: 1,
-                      ),
-                    ],
+                    boxShadow: sc.isCosmicMode
+                        ? [
+                            BoxShadow(
+                              color: accentColor.withValues(alpha: 0.85),
+                              blurRadius: 7,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : null,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -818,8 +809,8 @@ class _HabitMatrixCard extends StatelessWidget {
                   child: Text(
                     habit.title.toUpperCase(),
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: SieTheme.textPrimary,
+                    style: TextStyle(
+                      color: sc.textPrimary,
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 1.5,
@@ -831,7 +822,7 @@ class _HabitMatrixCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Icon(
                     Icons.push_pin,
-                    color: SieTheme.textSecondary.withValues(alpha: 0.45),
+                    color: sc.textSecondary.withValues(alpha: 0.45),
                     size: 11,
                   ),
                 ],
@@ -841,8 +832,6 @@ class _HabitMatrixCard extends StatelessWidget {
                 ],
               ],
             ),
-
-            // ── Optional description ───────────────────────────────
             if (habit.description != null &&
                 habit.description!.isNotEmpty) ...[
               const SizedBox(height: 5),
@@ -853,7 +842,7 @@ class _HabitMatrixCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: SieTheme.textSecondary.withValues(alpha: 0.7),
+                    color: sc.textSecondary.withValues(alpha: 0.7),
                     fontSize: 10.5,
                     letterSpacing: 0.3,
                     height: 1.2,
@@ -861,17 +850,14 @@ class _HabitMatrixCard extends StatelessWidget {
                 ),
               ),
             ],
-
             const SizedBox(height: 14),
-
-            // ── 7-day sync header ─────────────────────────────────
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   '7-DAY SYNC',
                   style: TextStyle(
-                    color: SieTheme.textSecondary.withValues(alpha: 0.5),
+                    color: sc.textSecondary.withValues(alpha: 0.5),
                     fontSize: 9,
                     letterSpacing: 2,
                     fontWeight: FontWeight.w600,
@@ -890,10 +876,7 @@ class _HabitMatrixCard extends StatelessWidget {
                 ),
               ],
             ),
-
             const SizedBox(height: 8),
-
-            // ── Day node row ──────────────────────────────────────
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: days.asMap().entries.map((e) {
@@ -915,9 +898,9 @@ class _HabitMatrixCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Day Node — individual tracking cell
+// Day Node
 // ─────────────────────────────────────────────────────────────────────────────
-class _DayNode extends StatelessWidget {
+class _DayNode extends ConsumerWidget {
   final DateTime date;
   final bool isCompleted;
   final bool isToday;
@@ -931,18 +914,17 @@ class _DayNode extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // ── The node circle ───────────────────────────────────────
         Container(
           width: 28,
           height: 28,
           decoration: isCompleted
               ? BoxDecoration(
                   shape: BoxShape.circle,
-                  // Solid energy node — fully charged
                   gradient: RadialGradient(
                     colors: [
                       accentColor,
@@ -964,11 +946,12 @@ class _DayNode extends StatelessWidget {
                 )
               : BoxDecoration(
                   shape: BoxShape.circle,
-                  // Hollow ring — space starlight shows through
                   border: Border.all(
                     color: isToday
                         ? accentColor.withValues(alpha: 0.60)
-                        : Colors.white.withValues(alpha: 0.13),
+                        : (sc.isCosmicMode
+                            ? Colors.white.withValues(alpha: 0.13)
+                            : sc.border),
                     width: 1.5,
                   ),
                   color: isToday
@@ -978,7 +961,6 @@ class _DayNode extends StatelessWidget {
           child: isCompleted
               ? null
               : isToday
-                  // Inner pulse dot — "awaiting activation"
                   ? Center(
                       child: Container(
                         width: 6,
@@ -986,21 +968,20 @@ class _DayNode extends StatelessWidget {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: accentColor.withValues(alpha: 0.80),
-                          boxShadow: [
-                            BoxShadow(
-                              color: accentColor.withValues(alpha: 0.50),
-                              blurRadius: 5,
-                            ),
-                          ],
+                          boxShadow: sc.isCosmicMode
+                              ? [
+                                  BoxShadow(
+                                    color: accentColor.withValues(alpha: 0.50),
+                                    blurRadius: 5,
+                                  ),
+                                ]
+                              : null,
                         ),
                       ),
                     )
                   : null,
         ),
-
         const SizedBox(height: 5),
-
-        // ── Day-of-month label ────────────────────────────────────
         Text(
           '${date.day}',
           style: TextStyle(
@@ -1008,7 +989,9 @@ class _DayNode extends StatelessWidget {
                 ? accentColor.withValues(alpha: 0.90)
                 : isToday
                     ? accentColor.withValues(alpha: 0.65)
-                    : Colors.white.withValues(alpha: 0.22),
+                    : (sc.isCosmicMode
+                        ? Colors.white.withValues(alpha: 0.22)
+                        : sc.textSecondary.withValues(alpha: 0.4)),
             fontSize: 8,
             height: 1.0,
             letterSpacing: 0.5,
@@ -1048,10 +1031,7 @@ class _StreakBadge extends StatelessWidget {
           letterSpacing: 1.4,
           fontFeatures: const [FontFeature.tabularFigures()],
           shadows: [
-            Shadow(
-              color: color.withValues(alpha: 0.55),
-              blurRadius: 6,
-            ),
+            Shadow(color: color.withValues(alpha: 0.55), blurRadius: 6),
           ],
         ),
       ),
@@ -1062,20 +1042,19 @@ class _StreakBadge extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Empty State — dormant matrix grid
 // ─────────────────────────────────────────────────────────────────────────────
-class _EmptyState extends StatelessWidget {
+class _EmptyState extends ConsumerWidget {
   final VoidCallback onAdd;
   const _EmptyState({required this.onAdd});
 
-  // Lit node indices for the 5×5 diamond pattern (mirrors the carousel preview).
   static const _litNodes = {2, 6, 8, 10, 12, 14, 16, 18, 22};
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Decorative dormant 5×5 matrix
           SizedBox(
             width: 148,
             height: 148,
@@ -1090,18 +1069,20 @@ class _EmptyState extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: lit
-                        ? _kCyan.withValues(alpha: 0.20)
+                        ? sc.accent.withValues(alpha: 0.20)
                         : Colors.transparent,
                     border: Border.all(
                       color: lit
-                          ? _kCyan.withValues(alpha: 0.40)
-                          : Colors.white.withValues(alpha: 0.09),
+                          ? sc.accent.withValues(alpha: 0.40)
+                          : (sc.isCosmicMode
+                              ? Colors.white.withValues(alpha: 0.09)
+                              : sc.border),
                       width: 1.2,
                     ),
-                    boxShadow: lit
+                    boxShadow: lit && sc.isCosmicMode
                         ? [
                             BoxShadow(
-                              color: _kCyan.withValues(alpha: 0.28),
+                              color: sc.accent.withValues(alpha: 0.28),
                               blurRadius: 7,
                             ),
                           ]
@@ -1112,10 +1093,10 @@ class _EmptyState extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 28),
-          const Text(
+          Text(
             'NO PROTOCOLS ACTIVE',
             style: TextStyle(
-              color: SieTheme.textSecondary,
+              color: sc.textSecondary,
               fontSize: 12,
               letterSpacing: 2,
             ),
@@ -1124,7 +1105,7 @@ class _EmptyState extends StatelessWidget {
           Text(
             'TAP + TO INITIALISE A HABIT',
             style: TextStyle(
-              color: SieTheme.textSecondary.withValues(alpha: 0.50),
+              color: sc.textSecondary.withValues(alpha: 0.50),
               fontSize: 10,
               letterSpacing: 1.5,
             ),
@@ -1138,17 +1119,17 @@ class _EmptyState extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Pulsing Add Button (unchanged)
+// Pulsing Add Button
 // ─────────────────────────────────────────────────────────────────────────────
-class _AddButton extends StatefulWidget {
+class _AddButton extends ConsumerStatefulWidget {
   final VoidCallback onTap;
   const _AddButton({required this.onTap});
 
   @override
-  State<_AddButton> createState() => _AddButtonState();
+  ConsumerState<_AddButton> createState() => _AddButtonState();
 }
 
-class _AddButtonState extends State<_AddButton>
+class _AddButtonState extends ConsumerState<_AddButton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _scale;
@@ -1174,6 +1155,7 @@ class _AddButtonState extends State<_AddButton>
 
   @override
   Widget build(BuildContext context) {
+    final sc = ref.watch(sieColorsProvider);
     return AnimatedScale(
       scale: _pressed ? 0.88 : 1.0,
       duration: _pressed
@@ -1198,13 +1180,13 @@ class _AddButtonState extends State<_AddButton>
               height: 48,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: SieTheme.accent.withValues(alpha: 0.10),
+                color: sc.accent.withValues(alpha: 0.10),
                 border: Border.all(
-                  color: SieTheme.accent.withValues(alpha: 0.60),
+                  color: sc.accent.withValues(alpha: 0.60),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: SieTheme.accent.withValues(
+                    color: sc.accent.withValues(
                       alpha: 0.08 + 0.12 * _ctrl.value,
                     ),
                     blurRadius: 12 + 8 * _ctrl.value,
@@ -1212,11 +1194,7 @@ class _AddButtonState extends State<_AddButton>
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.add,
-                color: SieTheme.accent,
-                size: 22,
-              ),
+              child: Icon(Icons.add, color: sc.accent, size: 22),
             ),
           ),
         ),
@@ -1226,19 +1204,19 @@ class _AddButtonState extends State<_AddButton>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Add / Edit Protocol Dialog (unchanged)
+// Add / Edit Protocol Dialog
 // ─────────────────────────────────────────────────────────────────────────────
-class _HabitDialog extends StatefulWidget {
+class _HabitDialog extends ConsumerStatefulWidget {
   final Habit? existing;
   final void Function(String title, String? description, String color) onSave;
 
   const _HabitDialog({this.existing, required this.onSave});
 
   @override
-  State<_HabitDialog> createState() => _HabitDialogState();
+  ConsumerState<_HabitDialog> createState() => _HabitDialogState();
 }
 
-class _HabitDialogState extends State<_HabitDialog> {
+class _HabitDialogState extends ConsumerState<_HabitDialog> {
   late final TextEditingController _titleCtrl;
   late final TextEditingController _descCtrl;
   late String _selectedColor;
@@ -1272,6 +1250,7 @@ class _HabitDialogState extends State<_HabitDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final sc     = ref.watch(sieColorsProvider);
     final isEdit = widget.existing != null;
     final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
     return TweenAnimationBuilder<Color?>(
@@ -1282,7 +1261,7 @@ class _HabitDialogState extends State<_HabitDialog> {
       duration: const Duration(milliseconds: 350),
       curve: Curves.easeInOut,
       builder: (_, animColor, child) {
-        final c = animColor ?? _toColor(_selectedColor);
+        final habitColor = animColor ?? _toColor(_selectedColor);
         return ClipRRect(
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           child: BackdropFilter(
@@ -1295,27 +1274,29 @@ class _HabitDialogState extends State<_HabitDialog> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    c.withValues(alpha: 0.08),
-                    const Color(0xFF0A0E1A).withValues(alpha: 0.92),
+                    habitColor.withValues(alpha: 0.08),
+                    sc.isCosmicMode
+                        ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
+                        : sc.surface,
                   ],
                 ),
                 border: Border(
                   top: BorderSide(
-                    color: c.withValues(alpha: 0.50),
+                    color: habitColor.withValues(alpha: 0.50),
                     width: 1.0,
                   ),
                   left: BorderSide(
-                    color: c.withValues(alpha: 0.18),
+                    color: habitColor.withValues(alpha: 0.18),
                     width: 1.0,
                   ),
                   right: BorderSide(
-                    color: c.withValues(alpha: 0.18),
+                    color: habitColor.withValues(alpha: 0.18),
                     width: 1.0,
                   ),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: c.withValues(alpha: 0.12),
+                    color: habitColor.withValues(alpha: 0.12),
                     blurRadius: 40,
                     offset: const Offset(0, -8),
                   ),
@@ -1331,7 +1312,6 @@ class _HabitDialogState extends State<_HabitDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Drag handle
           Center(
             child: Container(
               width: 36,
@@ -1351,18 +1331,20 @@ class _HabitDialogState extends State<_HabitDialog> {
           _GlowField(controller: _titleCtrl, label: 'TITLE'),
           const SizedBox(height: 12),
           _GlowField(
-            controller: _descCtrl,
-            label: 'DESCRIPTION (OPTIONAL)',
-          ),
+              controller: _descCtrl,
+              label: 'DESCRIPTION (OPTIONAL)'),
           const SizedBox(height: 16),
-          const Text(
-            'COLOR',
-            style: TextStyle(
-              color: SieTheme.textSecondary,
-              fontSize: 10,
-              letterSpacing: 1.5,
-            ),
-          ),
+          Consumer(builder: (_, ref2, _) {
+            final sc2 = ref2.watch(sieColorsProvider);
+            return Text(
+              'COLOR',
+              style: TextStyle(
+                color: sc2.textSecondary,
+                fontSize: 10,
+                letterSpacing: 1.5,
+              ),
+            );
+          }),
           const SizedBox(height: 8),
           Row(
             children: _colorOptions.map((hex) {
@@ -1375,33 +1357,36 @@ class _HabitDialogState extends State<_HabitDialog> {
             }).toList(),
           ),
           const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              _SheetTextBtn(
-                label: 'CANCEL',
-                color: SieTheme.textSecondary,
-                onTap: () => Navigator.of(context).pop(),
-              ),
-              const SizedBox(width: 8),
-              _SheetTextBtn(
-                label: isEdit ? 'SAVE' : 'DEPLOY',
-                color: _toColor(_selectedColor),
-                onTap: () {
-                  final title = _titleCtrl.text.trim();
-                  if (title.isEmpty) return;
-                  widget.onSave(
-                    title,
-                    _descCtrl.text.trim().isEmpty
-                        ? null
-                        : _descCtrl.text.trim(),
-                    _selectedColor,
-                  );
-                  Navigator.of(context).pop();
-                },
-              ),
-            ],
-          ),
+          Consumer(builder: (_, ref2, _) {
+            final sc2 = ref2.watch(sieColorsProvider);
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _SheetTextBtn(
+                  label: 'CANCEL',
+                  color: sc2.textSecondary,
+                  onTap: () => Navigator.of(context).pop(),
+                ),
+                const SizedBox(width: 8),
+                _SheetTextBtn(
+                  label: isEdit ? 'SAVE' : 'DEPLOY',
+                  color: _toColor(_selectedColor),
+                  onTap: () {
+                    final title = _titleCtrl.text.trim();
+                    if (title.isEmpty) return;
+                    widget.onSave(
+                      title,
+                      _descCtrl.text.trim().isEmpty
+                          ? null
+                          : _descCtrl.text.trim(),
+                      _selectedColor,
+                    );
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            );
+          }),
         ],
       ),
     );
@@ -1410,16 +1395,16 @@ class _HabitDialogState extends State<_HabitDialog> {
 
 // ── Glow Text Field ───────────────────────────────────────────
 
-class _GlowField extends StatefulWidget {
+class _GlowField extends ConsumerStatefulWidget {
   final TextEditingController controller;
   final String label;
   const _GlowField({required this.controller, required this.label});
 
   @override
-  State<_GlowField> createState() => _GlowFieldState();
+  ConsumerState<_GlowField> createState() => _GlowFieldState();
 }
 
-class _GlowFieldState extends State<_GlowField> {
+class _GlowFieldState extends ConsumerState<_GlowField> {
   final FocusNode _focus = FocusNode();
   bool _hasFocus = false;
 
@@ -1442,6 +1427,7 @@ class _GlowFieldState extends State<_GlowField> {
 
   @override
   Widget build(BuildContext context) {
+    final sc = ref.watch(sieColorsProvider);
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       decoration: BoxDecoration(
@@ -1449,7 +1435,7 @@ class _GlowFieldState extends State<_GlowField> {
         boxShadow: _hasFocus
             ? [
                 BoxShadow(
-                  color: _kCyan.withValues(alpha: 0.22),
+                  color: sc.accent.withValues(alpha: 0.22),
                   blurRadius: 14,
                   spreadRadius: 2,
                 ),
@@ -1459,23 +1445,23 @@ class _GlowFieldState extends State<_GlowField> {
       child: TextField(
         controller: widget.controller,
         focusNode: _focus,
-        style: const TextStyle(
-          color: SieTheme.textPrimary,
+        style: TextStyle(
+          color: sc.textPrimary,
           fontSize: 13,
           letterSpacing: 0.5,
         ),
         decoration: InputDecoration(
           labelText: widget.label,
           labelStyle: TextStyle(
-            color: _hasFocus ? _kCyan : SieTheme.textSecondary,
+            color: _hasFocus ? sc.accent : sc.textSecondary,
             fontSize: 10,
             letterSpacing: 1.5,
           ),
-          enabledBorder: const UnderlineInputBorder(
-            borderSide: BorderSide(color: SieTheme.borderDefault),
+          enabledBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: sc.border),
           ),
-          focusedBorder: const UnderlineInputBorder(
-            borderSide: BorderSide(color: _kCyan, width: 1.5),
+          focusedBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: sc.accent, width: 1.5),
           ),
         ),
       ),
@@ -1657,22 +1643,22 @@ class _OptionTileState extends State<_OptionTile> {
   }
 }
 
-class _NoConnectionMessage extends StatelessWidget {
+class _NoConnectionMessage extends ConsumerWidget {
   const _NoConnectionMessage();
 
   @override
-  Widget build(BuildContext context) {
-    return const Column(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+    return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.wifi_off_outlined,
-            color: Color(0xFF90A4AE), size: 36),
-        SizedBox(height: 12),
+        Icon(Icons.wifi_off_outlined, color: sc.iconMuted, size: 36),
+        const SizedBox(height: 12),
         Text(
           'Подключение к интернету отсутствует',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Color(0xFF90A4AE),
+            color: sc.iconMuted,
             fontSize: 13,
             letterSpacing: 0.5,
           ),

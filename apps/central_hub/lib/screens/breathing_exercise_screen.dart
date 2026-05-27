@@ -6,10 +6,6 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 import 'mission_accomplished_screen.dart';
 
-// ── Design tokens ──────────────────────────────────────────────
-const _kCyan   = Color(0xFF00E5FF);
-const _kPurple = Color(0xFF7000FF);
-
 // ── Shared HUD glass settings ──────────────────────────────────
 LiquidGlassSettings _hudGlass({double blur = 3.0, double glow = 0.88}) =>
     LiquidGlassSettings(
@@ -102,7 +98,6 @@ class _BreathingExerciseScreenState
   @override
   void initState() {
     super.initState();
-    // Capture before dispose() where ref is no longer valid.
     _audio = ref.read(audioServiceProvider);
     _circleCtrl = AnimationController(vsync: this, value: 0.3);
     _pulseCtrl = AnimationController(
@@ -133,14 +128,13 @@ class _BreathingExerciseScreenState
 
   void _onBack() {
     _cancelTimers();
-    _audio.stopAll(); // fade-out, fire-and-forget
+    _audio.stopAll();
     _awardPartialXpIfEligible();
     Navigator.of(context).pop();
   }
 
   void _onSphereTap() {
     if (_phase == _Phase.idle) _startSession();
-    // When a session is in progress, tapping the sphere is a no-op.
   }
 
   Future<void> _awardPartialXpIfEligible() async {
@@ -173,12 +167,9 @@ class _BreathingExerciseScreenState
       _phase = _Phase.countdown;
       _countdownValue = 5;
     });
-    _audio.startAmbient(); // fade-in begins now
+    _audio.startAmbient();
     _breathTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) {
-        t.cancel();
-        return;
-      }
+      if (!mounted) { t.cancel(); return; }
       final next = _countdownValue - 1;
       if (next <= 0) {
         t.cancel();
@@ -245,10 +236,7 @@ class _BreathingExerciseScreenState
     });
     _pulseCtrl.repeat(reverse: true);
     _retentionTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) {
-        t.cancel();
-        return;
-      }
+      if (!mounted) { t.cancel(); return; }
       final next = _retentionElapsed + 1;
       if (next >= _settings.exhaustRetentionSecs) {
         t.cancel();
@@ -266,7 +254,7 @@ class _BreathingExerciseScreenState
     _startRecoveryPhase();
   }
 
-  // ── Phase: Recovery (Phase 3 — Hold on Inhale) ────────────
+  // ── Phase: Recovery (Hold on Inhale) ─────────────────────
 
   void _startRecoveryPhase() {
     if (!mounted) return;
@@ -274,7 +262,6 @@ class _BreathingExerciseScreenState
       _phase = _Phase.recovery;
       _recoveryElapsed = 0;
     });
-    // Deep inhale: circle expands to maximum over 3 s with matching audio.
     _audio.playInhale(targetSecs: 3);
     _circleCtrl.animateTo(
       1.0,
@@ -282,10 +269,7 @@ class _BreathingExerciseScreenState
       curve: Curves.easeIn,
     );
     _breathTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) {
-        t.cancel();
-        return;
-      }
+      if (!mounted) { t.cancel(); return; }
       final next = _recoveryElapsed + 1;
       setState(() => _recoveryElapsed = next);
       if (next >= _recoveryHoldSecs) {
@@ -299,27 +283,19 @@ class _BreathingExerciseScreenState
 
   void _startRoundTransitionPhase() {
     if (!mounted) return;
-    // Establish max size at phase entry so the exhale animation has full
-    // visual range. Retention ended with the circle at its minimum.
     _circleCtrl.value = 1.0;
     setState(() {
       _phase = _Phase.roundTransition;
       _transitionElapsed = 0;
     });
-    // First 5 s: exhale — circle shrinks to minimum with matching audio.
-    // AudioService fade-out timer ensures the cue naturally ends at T+5 s.
     _audio.playExhale(targetSecs: 5);
     _circleCtrl.animateTo(
       0.3,
       duration: const Duration(seconds: 5),
       curve: Curves.easeOut,
     );
-    // Second 5 s: circle is static at minimum, no breathing sound.
     _transitionTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) {
-        t.cancel();
-        return;
-      }
+      if (!mounted) { t.cancel(); return; }
       final next = _transitionElapsed + 1;
       setState(() => _transitionElapsed = next);
       if (next >= 10) {
@@ -351,7 +327,6 @@ class _BreathingExerciseScreenState
         ? 60
         : DateTime.now().difference(_sessionStart!).inSeconds;
 
-    // Fade-out and DB write run in parallel; UI shows spinner during both.
     final stopFuture = _audio.stopAll();
     final dbFuture = ref
         .read(sessionCompletionProvider.notifier)
@@ -395,6 +370,8 @@ class _BreathingExerciseScreenState
 
   @override
   Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
+
     final profile = ref.watch(userProfileProvider).valueOrNull;
     final showOnboarding = _showOnboardingManual ||
         (!_onboardingDismissed &&
@@ -403,77 +380,78 @@ class _BreathingExerciseScreenState
 
     return Stack(
       children: [
-        Scaffold(
-          backgroundColor: Colors.transparent,
-          body: Stack(
-            children: [
-              // Layer 0: Deterministic three-tier starfield.
-              const Positioned.fill(child: SieSpaceBackground()),
-              SafeArea(
-                child: Stack(
-                  children: [
-                    Positioned(
-                      top: 0, left: 0, right: 0,
-                      child: _TopBar(
-                        phase: _phase,
-                        round: _round,
-                        totalRounds: _settings.rounds,
-                        onBack: _onBack,
-                        onInfo: () => setState(() => _showOnboardingManual = true),
+        SieBackground(
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: SafeArea(
+              child: Stack(
+                children: [
+                  Positioned(
+                    top: 0, left: 0, right: 0,
+                    child: _TopBar(
+                      phase: _phase,
+                      round: _round,
+                      totalRounds: _settings.rounds,
+                      onBack: _onBack,
+                      onInfo: () => setState(() => _showOnboardingManual = true),
+                    ),
+                  ),
+                  Center(
+                    child: GestureDetector(
+                      onTap: _onSphereTap,
+                      onTapDown: (_) {
+                        if (_phase == _Phase.idle) {
+                          setState(() => _spherePressed = true);
+                        }
+                      },
+                      onTapUp: (_) => setState(() => _spherePressed = false),
+                      onTapCancel: () => setState(() => _spherePressed = false),
+                      child: AnimatedScale(
+                        scale: (_phase == _Phase.idle && _spherePressed)
+                            ? 0.95
+                            : 1.0,
+                        duration: const Duration(milliseconds: 80),
+                        child: _buildCircle(c),
                       ),
                     ),
+                  ),
+                  if (_phase == _Phase.countdown)
                     Center(
-                      child: GestureDetector(
-                        onTap: _onSphereTap,
-                        onTapDown: (_) {
-                          if (_phase == _Phase.idle) {
-                            setState(() => _spherePressed = true);
-                          }
-                        },
-                        onTapUp: (_) => setState(() => _spherePressed = false),
-                        onTapCancel: () => setState(() => _spherePressed = false),
-                        child: AnimatedScale(
-                          scale: (_phase == _Phase.idle && _spherePressed) ? 0.95 : 1.0,
-                          duration: const Duration(milliseconds: 80),
-                          child: _buildCircle(),
-                        ),
-                      ),
-                    ),
-                    if (_phase == _Phase.countdown)
-                      Center(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 250),
-                          transitionBuilder: (child, anim) => FadeTransition(
-                            opacity: anim,
-                            child: ScaleTransition(
-                              scale: Tween<double>(begin: 0.7, end: 1.0).animate(anim),
-                              child: child,
-                            ),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        transitionBuilder: (child, anim) => FadeTransition(
+                          opacity: anim,
+                          child: ScaleTransition(
+                            scale: Tween<double>(begin: 0.7, end: 1.0)
+                                .animate(anim),
+                            child: child,
                           ),
-                          child: Text(
-                            '$_countdownValue',
-                            key: ValueKey(_countdownValue),
-                            style: const TextStyle(
-                              color: _kCyan,
-                              fontSize: 80,
-                              fontWeight: FontWeight.w100,
-                              letterSpacing: 4,
-                              shadows: [
-                                Shadow(color: _kCyan, blurRadius: 20),
-                                Shadow(color: _kCyan, blurRadius: 60),
-                              ],
-                            ),
+                        ),
+                        child: Text(
+                          '$_countdownValue',
+                          key: ValueKey(_countdownValue),
+                          style: TextStyle(
+                            color: c.accent,
+                            fontSize: 80,
+                            fontWeight: FontWeight.w100,
+                            letterSpacing: 4,
+                            shadows: c.isLightMode
+                                ? null
+                                : [
+                                    Shadow(color: c.accent, blurRadius: 20),
+                                    Shadow(color: c.accent, blurRadius: 60),
+                                  ],
                           ),
                         ),
                       ),
-                    Positioned(
-                      bottom: 40, left: 32, right: 32,
-                      child: _buildBottomArea(),
                     ),
-                  ],
-                ),
+                  Positioned(
+                    bottom: 40, left: 32, right: 32,
+                    child: _buildBottomArea(c),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
         const Positioned.fill(child: AudioInitOverlay()),
@@ -500,7 +478,7 @@ class _BreathingExerciseScreenState
     );
   }
 
-  Widget _buildCircle() {
+  Widget _buildCircle(SieColors c) {
     return AnimatedBuilder(
       animation: Listenable.merge([_circleCtrl, _pulseAnim]),
       builder: (_, _) {
@@ -512,17 +490,9 @@ class _BreathingExerciseScreenState
         final bool isInhale    = _phase == _Phase.active && _isInhaling;
         final bool isExhale    = _phase == _Phase.active && !_isInhaling;
 
-        // Accent colour follows the breath direction.
-        final Color accent = (isRetention || isExhale) ? _kPurple : _kCyan;
+        final Color accent = (isRetention || isExhale) ? c.accentSecondary : c.accent;
 
-        // Frost blur deepens as the sphere expands; retention gets a fixed
-        // dreamy value independent of the paused _circleCtrl.
         final double blur = isRetention ? 4.5 : (2.0 + t * 3.5).clamp(2.0, 5.5);
-
-        // Glow intensity synced to breath phase:
-        //   inhale  → 0.55 at min, 1.10 at full expansion
-        //   exhale  → 0.40 at min, 0.90 at max
-        //   hold    → 0.70 pulsing to 0.98 with _pulseAnim
         final double glow = isRetention
             ? 0.70 + (pulse - 0.92) * 3.5
             : isInhale
@@ -540,7 +510,7 @@ class _BreathingExerciseScreenState
         return Stack(
           alignment: Alignment.center,
           children: [
-            // Outer diffuse corona — painted behind the glass surface.
+            // Outer diffuse corona
             Container(
               width: size + 52,
               height: size + 52,
@@ -549,7 +519,8 @@ class _BreathingExerciseScreenState
                 boxShadow: [
                   BoxShadow(
                     color: accent.withValues(
-                      alpha: t * 0.24 * (isRetention ? pulse : 1.0),
+                      alpha: t * (c.isLightMode ? 0.12 : 0.24) *
+                          (isRetention ? pulse : 1.0),
                     ),
                     blurRadius: 80,
                   ),
@@ -557,7 +528,7 @@ class _BreathingExerciseScreenState
               ),
             ),
 
-            // Shader glass sphere — the primary visual element.
+            // Glass sphere — always rendered with shader for refractive effect
             GlassCard(
               width: size,
               height: size,
@@ -580,15 +551,13 @@ class _BreathingExerciseScreenState
                 chromaticAberration: 0.030,
               ),
               child: switch (_phase) {
-                // Tap hint only visible when idle.
                 _Phase.idle => Center(
                     child: Icon(
                       Icons.fingerprint,
-                      color: _kCyan.withValues(alpha: 0.35),
+                      color: c.accent.withValues(alpha: 0.35),
                       size: 36,
                     ),
                   ),
-                // Purple plasma core during breath-hold retention.
                 _Phase.retention => Center(
                     child: Container(
                       width: size * 0.30,
@@ -597,8 +566,8 @@ class _BreathingExerciseScreenState
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
                           colors: [
-                            _kPurple.withValues(alpha: 0.28),
-                            _kPurple.withValues(alpha: 0.0),
+                            c.accentSecondary.withValues(alpha: 0.28),
+                            c.accentSecondary.withValues(alpha: 0.0),
                           ],
                         ),
                       ),
@@ -613,7 +582,7 @@ class _BreathingExerciseScreenState
     );
   }
 
-  Widget _buildBottomArea() {
+  Widget _buildBottomArea(SieColors c) {
     switch (_phase) {
 
       // ── Idle ──────────────────────────────────────────────────
@@ -621,19 +590,16 @@ class _BreathingExerciseScreenState
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            GlassCard(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-              shape: LiquidRoundedSuperellipse(borderRadius: 20),
-              useOwnLayer: true,
-              quality: GlassQuality.standard,
-              clipBehavior: Clip.antiAlias,
-              settings: _hudGlass(blur: 3.5, glow: 0.90),
+            _hudCard(
+              c,
+              blur: 3.5,
+              glow: 0.90,
               child: Column(
                 children: [
-                  const Text(
+                  Text(
                     'WIM HOF METHOD',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: c.textPrimary,
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 2.5,
@@ -643,14 +609,18 @@ class _BreathingExerciseScreenState
                   const SizedBox(height: 6),
                   Text(
                     '${_settings.rounds} ROUNDS  ·  ${_settings.cyclesPerRound} CYCLES',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 12,
+                      letterSpacing: 1.5,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 12),
                   Text(
                     'TAP SPHERE TO START',
                     style: TextStyle(
-                      color: _kCyan.withValues(alpha: 0.55),
+                      color: c.accent.withValues(alpha: 0.55),
                       fontSize: 11,
                       letterSpacing: 2.5,
                     ),
@@ -668,25 +638,27 @@ class _BreathingExerciseScreenState
 
       // ── Countdown ─────────────────────────────────────────────
       case _Phase.countdown:
-        return GlassCard(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-          shape: LiquidRoundedSuperellipse(borderRadius: 20),
-          useOwnLayer: true,
-          quality: GlassQuality.standard,
-          clipBehavior: Clip.antiAlias,
-          settings: _hudGlass(blur: 3.0, glow: 0.88),
+        return _hudCard(
+          c,
+          blur: 3.0,
+          glow: 0.88,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 'ПРИГОТОВЬТЕСЬ',
-                style: Theme.of(context).textTheme.titleMedium,
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 2,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 4),
               Text(
                 'К ПРАКТИКЕ',
-                style: Theme.of(context).textTheme.bodyMedium,
+                style: TextStyle(color: c.textSecondary, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -695,14 +667,11 @@ class _BreathingExerciseScreenState
 
       // ── Active ────────────────────────────────────────────────
       case _Phase.active:
-        final activeColor = _isInhaling ? _kCyan : _kPurple;
-        return GlassCard(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-          shape: LiquidRoundedSuperellipse(borderRadius: 20),
-          useOwnLayer: true,
-          quality: GlassQuality.standard,
-          clipBehavior: Clip.antiAlias,
-          settings: _hudGlass(blur: 3.0, glow: _isInhaling ? 0.92 : 0.84),
+        final activeColor = _isInhaling ? c.accent : c.accentSecondary;
+        return _hudCard(
+          c,
+          blur: 3.0,
+          glow: _isInhaling ? 0.92 : 0.84,
           child: Column(
             children: [
               Text(
@@ -712,19 +681,21 @@ class _BreathingExerciseScreenState
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 5,
-                  shadows: [
-                    Shadow(
-                      color: activeColor.withValues(alpha: 0.70),
-                      blurRadius: 12,
-                    ),
-                  ],
+                  shadows: c.isLightMode
+                      ? null
+                      : [
+                          Shadow(
+                            color: activeColor.withValues(alpha: 0.70),
+                            blurRadius: 12,
+                          ),
+                        ],
                 ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 10),
               Text(
                 'CYCLE ${_cycle + 1} / ${_settings.cyclesPerRound}',
-                style: Theme.of(context).textTheme.bodyMedium,
+                style: TextStyle(color: c.textSecondary, fontSize: 12),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -738,67 +709,79 @@ class _BreathingExerciseScreenState
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            GlassCard(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-              shape: LiquidRoundedSuperellipse(borderRadius: 20),
-              useOwnLayer: true,
-              quality: GlassQuality.standard,
-              clipBehavior: Clip.antiAlias,
-              settings: _hudGlass(blur: 3.5, glow: 0.92),
+            _hudCard(
+              c,
+              blur: 3.5,
+              glow: 0.92,
               child: Stack(
                 children: [
-                  // Ambient purple bloom absorbed by the glass refraction.
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: RadialGradient(
-                          center: const Alignment(0.8, -0.5),
-                          radius: 1.1,
-                          colors: [
-                            _kPurple.withValues(alpha: 0.09),
-                            Colors.transparent,
-                          ],
+                  // Ambient bloom absorbed by glass refraction (cosmic only)
+                  if (c.isCosmicMode)
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: RadialGradient(
+                            center: const Alignment(0.8, -0.5),
+                            radius: 1.1,
+                            colors: [
+                              c.accentSecondary.withValues(alpha: 0.09),
+                              Colors.transparent,
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
                   Column(
                     children: [
-                      const Text(
+                      Text(
                         'HOLD',
                         style: TextStyle(
-                          color: _kPurple,
+                          color: c.accentSecondary,
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 5,
-                          shadows: [Shadow(color: _kPurple, blurRadius: 10)],
+                          shadows: c.isLightMode
+                              ? null
+                              : [
+                                  Shadow(
+                                    color: c.accentSecondary,
+                                    blurRadius: 10,
+                                  ),
+                                ],
                         ),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 10),
-                      // Bold monospace timer — high-contrast over the glass.
                       Text(
                         '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: c.textPrimary,
                           fontSize: 52,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 6,
-                          fontFeatures: [FontFeature.tabularFigures()],
-                          shadows: [
-                            Shadow(color: _kPurple, blurRadius: 14),
-                            Shadow(color: _kPurple, blurRadius: 42),
-                          ],
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                          shadows: c.isLightMode
+                              ? null
+                              : [
+                                  Shadow(
+                                    color: c.accentSecondary,
+                                    blurRadius: 14,
+                                  ),
+                                  Shadow(
+                                    color: c.accentSecondary,
+                                    blurRadius: 42,
+                                  ),
+                                ],
                         ),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 6),
                       Text(
                         'MAX ${_settings.exhaustRetentionSecs ~/ 60}:${(_settings.exhaustRetentionSecs % 60).toString().padLeft(2, '0')}',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(fontSize: 11),
+                        style: TextStyle(
+                          color: c.textSecondary,
+                          fontSize: 11,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ],
@@ -814,48 +797,51 @@ class _BreathingExerciseScreenState
       // ── Recovery (inhale hold) ────────────────────────────────
       case _Phase.recovery:
         final recovSecsLeft = _recoveryHoldSecs - _recoveryElapsed;
-        return GlassCard(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-          shape: LiquidRoundedSuperellipse(borderRadius: 20),
-          useOwnLayer: true,
-          quality: GlassQuality.standard,
-          clipBehavior: Clip.antiAlias,
-          settings: _hudGlass(blur: 3.5, glow: 0.92),
+        return _hudCard(
+          c,
+          blur: 3.5,
+          glow: 0.92,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
+              Text(
                 'HOLD YOUR BREATH',
                 style: TextStyle(
-                  color: _kCyan,
+                  color: c.accent,
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 4,
-                  shadows: [Shadow(color: _kCyan, blurRadius: 10)],
+                  shadows: c.isLightMode
+                      ? null
+                      : [Shadow(color: c.accent, blurRadius: 10)],
                 ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 2),
               Text(
                 '(INHALE)',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      letterSpacing: 2,
-                    ),
+                style: TextStyle(
+                  color: c.textSecondary,
+                  fontSize: 12,
+                  letterSpacing: 2,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 10),
               Text(
                 '${recovSecsLeft}s',
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: c.textPrimary,
                   fontSize: 52,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 4,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                  shadows: [
-                    Shadow(color: _kCyan, blurRadius: 14),
-                    Shadow(color: _kCyan, blurRadius: 42),
-                  ],
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                  shadows: c.isLightMode
+                      ? null
+                      : [
+                          Shadow(color: c.accent, blurRadius: 14),
+                          Shadow(color: c.accent, blurRadius: 42),
+                        ],
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -867,45 +853,48 @@ class _BreathingExerciseScreenState
       case _Phase.roundTransition:
         final secsLeft     = 10 - _transitionElapsed;
         final isFinalRound = _round == _settings.rounds;
-        return GlassCard(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-          shape: LiquidRoundedSuperellipse(borderRadius: 20),
-          useOwnLayer: true,
-          quality: GlassQuality.standard,
-          clipBehavior: Clip.antiAlias,
-          settings: _hudGlass(blur: 3.0, glow: 0.88),
+        return _hudCard(
+          c,
+          blur: 3.0,
+          glow: 0.88,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (isFinalRound) ...[
-                const Text(
+                Text(
                   'EXHALE',
                   style: TextStyle(
-                    color: _kCyan,
+                    color: c.accent,
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 5,
-                    shadows: [Shadow(color: _kCyan, blurRadius: 10)],
+                    shadows: c.isLightMode
+                        ? null
+                        : [Shadow(color: c.accent, blurRadius: 10)],
                   ),
                   textAlign: TextAlign.center,
                 ),
               ] else ...[
                 Text(
                   'PREPARE FOR THE',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        letterSpacing: 2,
-                      ),
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 12,
+                    letterSpacing: 2,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 2),
-                const Text(
+                Text(
                   'NEXT ROUND',
                   style: TextStyle(
-                    color: _kCyan,
+                    color: c.accent,
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 3,
-                    shadows: [Shadow(color: _kCyan, blurRadius: 10)],
+                    shadows: c.isLightMode
+                        ? null
+                        : [Shadow(color: c.accent, blurRadius: 10)],
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -913,15 +902,15 @@ class _BreathingExerciseScreenState
               const SizedBox(height: 10),
               Text(
                 '${secsLeft}s',
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: c.textPrimary,
                   fontSize: 52,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 4,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                  shadows: [
-                    Shadow(color: _kCyan, blurRadius: 14),
-                  ],
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                  shadows: c.isLightMode
+                      ? null
+                      : [Shadow(color: c.accent, blurRadius: 14)],
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -931,19 +920,50 @@ class _BreathingExerciseScreenState
 
       // ── Complete (spinner while DB write finishes) ────────────
       case _Phase.complete:
-        return const Center(
-          child: CircularProgressIndicator(
-            color: SieTheme.accent,
-            strokeWidth: 1.5,
-          ),
+        return Consumer(
+          builder: (_, ref, _) {
+            final cc = ref.watch(sieColorsProvider);
+            return Center(
+              child: CircularProgressIndicator(
+                color: cc.accent,
+                strokeWidth: 1.5,
+              ),
+            );
+          },
         );
     }
+  }
+
+  // Helper: wraps content in GlassCard (cosmic) or flat Container (light/dark).
+  Widget _hudCard(
+    SieColors c, {
+    double blur = 3.0,
+    double glow = 0.88,
+    required Widget child,
+  }) {
+    if (c.isCosmicMode) {
+      return GlassCard(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        shape: LiquidRoundedSuperellipse(borderRadius: 20),
+        useOwnLayer: true,
+        quality: GlassQuality.standard,
+        clipBehavior: Clip.antiAlias,
+        settings: _hudGlass(blur: blur, glow: glow),
+        child: child,
+      );
+    }
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      decoration: c.flatCard(radius: 20),
+      child: child,
+    );
   }
 }
 
 // ── Top Bar ───────────────────────────────────────────────────
 
-class _TopBar extends StatelessWidget {
+class _TopBar extends ConsumerWidget {
   final _Phase phase;
   final int round;
   final int totalRounds;
@@ -959,110 +979,139 @@ class _TopBar extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final showRound =
-        phase != _Phase.idle && phase != _Phase.countdown && phase != _Phase.complete;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final showRound = phase != _Phase.idle &&
+        phase != _Phase.countdown &&
+        phase != _Phase.complete;
+
+    Widget circleBtn(IconData icon, VoidCallback onTap, {double alpha = 1.0}) {
+      return GestureDetector(
+        onTap: onTap,
+        child: c.isCosmicMode
+            ? GlassCard(
+                width: 36,
+                height: 36,
+                padding: EdgeInsets.zero,
+                shape: LiquidRoundedSuperellipse(borderRadius: 18),
+                useOwnLayer: true,
+                quality: GlassQuality.standard,
+                clipBehavior: Clip.antiAlias,
+                settings: _hudGlass(blur: 2.0, glow: 0.85),
+                child: Center(
+                  child: Icon(
+                    icon,
+                    color: c.textSecondary.withValues(alpha: alpha),
+                    size: 15,
+                  ),
+                ),
+              )
+            : Container(
+                width: 36,
+                height: 36,
+                decoration: c.flatCard(radius: 18),
+                child: Center(
+                  child: Icon(
+                    icon,
+                    color: c.textSecondary.withValues(alpha: alpha),
+                    size: 15,
+                  ),
+                ),
+              ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
       child: Row(
         children: [
-          // Back — glass circle matching the leaderboard back button.
-          GestureDetector(
-            onTap: onBack,
-            child: GlassCard(
-              width: 36,
-              height: 36,
-              padding: EdgeInsets.zero,
-              shape: LiquidRoundedSuperellipse(borderRadius: 18),
-              useOwnLayer: true,
-              quality: GlassQuality.standard,
-              clipBehavior: Clip.antiAlias,
-              settings: _hudGlass(blur: 2.0, glow: 0.85),
-              child: const Center(
-                child: Icon(
-                  Icons.arrow_back_ios_new,
-                  color: SieTheme.textSecondary,
-                  size: 15,
-                ),
-              ),
-            ),
-          ),
+          circleBtn(Icons.arrow_back_ios_new, onBack),
           const Spacer(),
           if (showRound)
-            GlassCard(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-              shape: LiquidRoundedSuperellipse(borderRadius: 16),
-              useOwnLayer: true,
-              quality: GlassQuality.standard,
-              clipBehavior: Clip.antiAlias,
-              settings: _hudGlass(blur: 2.5, glow: 0.88),
-              child: Text(
-                'ROUND $round / $totalRounds',
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
-            ),
+            c.isCosmicMode
+                ? GlassCard(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 7),
+                    shape: LiquidRoundedSuperellipse(borderRadius: 16),
+                    useOwnLayer: true,
+                    quality: GlassQuality.standard,
+                    clipBehavior: Clip.antiAlias,
+                    settings: _hudGlass(blur: 2.5, glow: 0.88),
+                    child: Text(
+                      'ROUND $round / $totalRounds',
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 11,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  )
+                : Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 7),
+                    decoration: c.flatCard(radius: 16),
+                    child: Text(
+                      'ROUND $round / $totalRounds',
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 11,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ),
           const Spacer(),
-          // Info — glass circle.
-          GestureDetector(
-            onTap: onInfo,
-            child: GlassCard(
-              width: 36,
-              height: 36,
-              padding: EdgeInsets.zero,
-              shape: LiquidRoundedSuperellipse(borderRadius: 18),
-              useOwnLayer: true,
-              quality: GlassQuality.standard,
-              clipBehavior: Clip.antiAlias,
-              settings: _hudGlass(blur: 2.0, glow: 0.82),
-              child: Center(
-                child: Icon(
-                  Icons.help_outline,
-                  color: SieTheme.textSecondary.withValues(alpha: 0.7),
-                  size: 18,
-                ),
-              ),
-            ),
-          ),
+          circleBtn(Icons.help_outline, onInfo, alpha: 0.7),
         ],
       ),
     );
   }
 }
 
-// ── Settings Button (idle phase, centered) ────────────────────
+// ── Settings Button ───────────────────────────────────────────
 
-class _SettingsButton extends StatelessWidget {
+class _SettingsButton extends ConsumerWidget {
   final VoidCallback onTap;
-
   const _SettingsButton({required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.tune, size: 20, color: c.textSecondary),
+        const SizedBox(width: 10),
+        Text(
+          'PROTOCOL SETTINGS',
+          style: TextStyle(
+            color: c.textSecondary,
+            fontSize: 12,
+            letterSpacing: 1.5,
+          ),
+        ),
+      ],
+    );
+
     return Center(
       child: GestureDetector(
         onTap: onTap,
-        child: GlassCard(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          shape: LiquidRoundedSuperellipse(borderRadius: 16),
-          useOwnLayer: true,
-          quality: GlassQuality.standard,
-          clipBehavior: Clip.antiAlias,
-          settings: _hudGlass(blur: 2.5, glow: 0.84),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.tune, size: 20, color: SieTheme.textSecondary),
-              const SizedBox(width: 10),
-              Text(
-                'PROTOCOL SETTINGS',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontSize: 12,
-                      letterSpacing: 1.5,
-                    ),
+        child: c.isCosmicMode
+            ? GlassCard(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 10),
+                shape: LiquidRoundedSuperellipse(borderRadius: 16),
+                useOwnLayer: true,
+                quality: GlassQuality.standard,
+                clipBehavior: Clip.antiAlias,
+                settings: _hudGlass(blur: 2.5, glow: 0.84),
+                child: content,
+              )
+            : Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 10),
+                decoration: c.flatCard(radius: 16),
+                child: content,
               ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -1070,17 +1119,17 @@ class _SettingsButton extends StatelessWidget {
 
 // ── Settings Sheet ────────────────────────────────────────────
 
-class _SettingsSheet extends StatefulWidget {
+class _SettingsSheet extends ConsumerStatefulWidget {
   final BreathingSettings settings;
   final ValueChanged<BreathingSettings> onChanged;
 
   const _SettingsSheet({required this.settings, required this.onChanged});
 
   @override
-  State<_SettingsSheet> createState() => _SettingsSheetState();
+  ConsumerState<_SettingsSheet> createState() => _SettingsSheetState();
 }
 
-class _SettingsSheetState extends State<_SettingsSheet> {
+class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
   late BreathingSettings _s;
 
   @override
@@ -1096,114 +1145,133 @@ class _SettingsSheetState extends State<_SettingsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                _kCyan.withValues(alpha: 0.04),
-                const Color(0xFF0A0E1A).withValues(alpha: 0.92),
-              ],
-            ),
-            border: Border(
-              top: BorderSide(
-                color: _kCyan.withValues(alpha: 0.30),
-                width: 1.0,
-              ),
-              left: BorderSide(
-                color: _kCyan.withValues(alpha: 0.12),
-                width: 1.0,
-              ),
-              right: BorderSide(
-                color: _kCyan.withValues(alpha: 0.12),
-                width: 1.0,
+    final c = ref.watch(sieColorsProvider);
+
+    final content = SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 3,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(2),
+                  color: c.isLightMode
+                      ? c.border
+                      : Colors.white.withValues(alpha: 0.20),
+                ),
               ),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: _kCyan.withValues(alpha: 0.08),
-                blurRadius: 60,
-                offset: const Offset(0, -10),
-              ),
-            ],
-          ),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 36,
-                      height: 3,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(2),
-                        color: Colors.white.withValues(alpha: 0.20),
-                      ),
-                    ),
+            Text(
+              'PROTOCOL SETTINGS',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: c.textPrimary,
                   ),
-                  Text(
-                    'PROTOCOL SETTINGS',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 24),
-                  _SettingRow(
-                    label: 'ROUNDS',
-                    value: _s.rounds,
-                    min: 1,
-                    max: 5,
-                    onChanged: (v) => _update(_s.copyWith(rounds: v)),
-                  ),
-                  _SettingRow(
-                    label: 'CYCLES / ROUND',
-                    value: _s.cyclesPerRound,
-                    min: 10,
-                    max: 40,
-                    step: 5,
-                    onChanged: (v) => _update(_s.copyWith(cyclesPerRound: v)),
-                  ),
-                  _SettingRow(
-                    label: 'INHALE  (SEC)',
-                    value: _s.inhaleSecs,
-                    min: 1,
-                    max: 5,
-                    onChanged: (v) => _update(_s.copyWith(inhaleSecs: v)),
-                  ),
-                  _SettingRow(
-                    label: 'EXHALE  (SEC)',
-                    value: _s.exhaleSecs,
-                    min: 1,
-                    max: 7,
-                    onChanged: (v) => _update(_s.copyWith(exhaleSecs: v)),
-                  ),
-                  _SettingRow(
-                    label: 'EXHALE RETENTION (SEC)',
-                    value: _s.exhaustRetentionSecs,
-                    min: 30,
-                    max: 180,
-                    step: 15,
-                    onChanged: (v) => _update(_s.copyWith(exhaustRetentionSecs: v)),
-                  ),
-                ],
-              ),
             ),
-          ),
+            const SizedBox(height: 24),
+            _SettingRow(
+              label: 'ROUNDS',
+              value: _s.rounds,
+              min: 1,
+              max: 5,
+              onChanged: (v) => _update(_s.copyWith(rounds: v)),
+            ),
+            _SettingRow(
+              label: 'CYCLES / ROUND',
+              value: _s.cyclesPerRound,
+              min: 10,
+              max: 40,
+              step: 5,
+              onChanged: (v) => _update(_s.copyWith(cyclesPerRound: v)),
+            ),
+            _SettingRow(
+              label: 'INHALE  (SEC)',
+              value: _s.inhaleSecs,
+              min: 1,
+              max: 5,
+              onChanged: (v) => _update(_s.copyWith(inhaleSecs: v)),
+            ),
+            _SettingRow(
+              label: 'EXHALE  (SEC)',
+              value: _s.exhaleSecs,
+              min: 1,
+              max: 7,
+              onChanged: (v) => _update(_s.copyWith(exhaleSecs: v)),
+            ),
+            _SettingRow(
+              label: 'EXHALE RETENTION (SEC)',
+              value: _s.exhaustRetentionSecs,
+              min: 30,
+              max: 180,
+              step: 15,
+              onChanged: (v) =>
+                  _update(_s.copyWith(exhaustRetentionSecs: v)),
+            ),
+          ],
         ),
       ),
+    );
+
+    final cosmicDecoration = BoxDecoration(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          c.accent.withValues(alpha: 0.04),
+          const Color(0xFF0A0E1A).withValues(alpha: 0.92),
+        ],
+      ),
+      border: Border(
+        top: BorderSide(color: c.accent.withValues(alpha: 0.30), width: 1.0),
+        left: BorderSide(color: c.accent.withValues(alpha: 0.12), width: 1.0),
+        right: BorderSide(color: c.accent.withValues(alpha: 0.12), width: 1.0),
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: c.accent.withValues(alpha: 0.08),
+          blurRadius: 60,
+          offset: const Offset(0, -10),
+        ),
+      ],
+    );
+
+    final lightDecoration = BoxDecoration(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      color: c.surface,
+      border: Border(top: BorderSide(color: c.border, width: 1.0)),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.06),
+          blurRadius: 20,
+          offset: const Offset(0, -4),
+        ),
+      ],
+    );
+
+    if (c.isCosmicMode) {
+      return ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
+          child: Container(decoration: cosmicDecoration, child: content),
+        ),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      child: Container(decoration: lightDecoration, child: content),
     );
   }
 }
 
-class _SettingRow extends StatelessWidget {
+class _SettingRow extends ConsumerWidget {
   final String label;
   final int value;
   final int min;
@@ -1221,13 +1289,17 @@ class _SettingRow extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
           Expanded(
-            child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
+            child: Text(
+              label,
+              style: TextStyle(color: c.textSecondary, fontSize: 12),
+            ),
           ),
           _StepBtn(
             icon: Icons.remove,
@@ -1242,8 +1314,8 @@ class _SettingRow extends StatelessWidget {
             child: Text(
               '$value',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: SieTheme.textPrimary,
+              style: TextStyle(
+                color: c.textPrimary,
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 1,
@@ -1264,7 +1336,7 @@ class _SettingRow extends StatelessWidget {
   }
 }
 
-class _StepBtn extends StatefulWidget {
+class _StepBtn extends ConsumerStatefulWidget {
   final IconData icon;
   final bool active;
   final VoidCallback? onTap;
@@ -1272,14 +1344,15 @@ class _StepBtn extends StatefulWidget {
   const _StepBtn({required this.icon, required this.active, this.onTap});
 
   @override
-  State<_StepBtn> createState() => _StepBtnState();
+  ConsumerState<_StepBtn> createState() => _StepBtnState();
 }
 
-class _StepBtnState extends State<_StepBtn> {
+class _StepBtnState extends ConsumerState<_StepBtn> {
   bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
     return GestureDetector(
       onTap: widget.onTap,
       onTapDown: widget.onTap != null
@@ -1304,19 +1377,19 @@ class _StepBtnState extends State<_StepBtn> {
             border: Border.all(
               color: widget.active
                   ? _pressed
-                      ? _kCyan
-                      : _kCyan.withValues(alpha: 0.65)
-                  : SieTheme.borderDefault,
+                      ? c.accent
+                      : c.accent.withValues(alpha: 0.65)
+                  : c.border,
               width: 1.0,
             ),
             borderRadius: BorderRadius.circular(4),
             color: widget.active && _pressed
-                ? _kCyan.withValues(alpha: 0.12)
+                ? c.accent.withValues(alpha: 0.12)
                 : Colors.transparent,
-            boxShadow: widget.active
+            boxShadow: widget.active && !c.isLightMode
                 ? [
                     BoxShadow(
-                      color: _kCyan.withValues(
+                      color: c.accent.withValues(
                         alpha: _pressed ? 0.28 : 0.10,
                       ),
                       blurRadius: _pressed ? 10 : 6,
@@ -1327,7 +1400,7 @@ class _StepBtnState extends State<_StepBtn> {
           child: Icon(
             widget.icon,
             size: 16,
-            color: widget.active ? _kCyan : SieTheme.textSecondary,
+            color: widget.active ? c.accent : c.textSecondary,
           ),
         ),
       ),
@@ -1337,37 +1410,45 @@ class _StepBtnState extends State<_StepBtn> {
 
 // ── Shared Button ─────────────────────────────────────────────
 
-class _SieButton extends StatelessWidget {
+class _SieButton extends ConsumerWidget {
   final String label;
   final VoidCallback onPressed;
 
   const _SieButton({required this.label, required this.onPressed});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Center(
       child: GestureDetector(
         onTap: onPressed,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 14),
           decoration: BoxDecoration(
-            border: Border.all(color: _kCyan.withValues(alpha: 0.85), width: 1.0),
+            border: Border.all(
+              color: c.accent.withValues(alpha: 0.85),
+              width: 1.0,
+            ),
             borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: _kCyan.withValues(alpha: 0.14),
-                blurRadius: 24,
-              ),
-            ],
+            boxShadow: c.isLightMode
+                ? null
+                : [
+                    BoxShadow(
+                      color: c.accent.withValues(alpha: 0.14),
+                      blurRadius: 24,
+                    ),
+                  ],
           ),
           child: Text(
             label,
-            style: const TextStyle(
-              color: _kCyan,
+            style: TextStyle(
+              color: c.accent,
               fontSize: 13,
               fontWeight: FontWeight.w700,
               letterSpacing: 2.5,
-              shadows: [Shadow(color: _kCyan, blurRadius: 8)],
+              shadows: c.isLightMode
+                  ? null
+                  : [Shadow(color: c.accent, blurRadius: 8)],
             ),
           ),
         ),
