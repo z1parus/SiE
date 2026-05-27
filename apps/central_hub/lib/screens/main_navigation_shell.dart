@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 
+import 'garage_screen.dart';
 import 'leaderboard_screen.dart';
 import 'operations_control_screen.dart';
 import 'profile_screen.dart';
@@ -56,7 +57,7 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
                     children: [
                       ProfileScreen(asTab: true),
                       OperationsControlScreen(asTab: true),
-                      const _GarageTab(),
+                      const GarageScreen(asTab: true),
                       LeaderboardScreen(asTab: true),
                     ],
                   ),
@@ -73,30 +74,6 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Garage placeholder
-// ─────────────────────────────────────────────────────────────────────────────
-class _GarageTab extends ConsumerWidget {
-  const _GarageTab();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c = ref.watch(sieColorsProvider);
-    return Center(
-      child: Text(
-        'GARAGE\nINITIALISING',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: c.textSecondary,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 2.5,
         ),
       ),
     );
