@@ -94,33 +94,7 @@ class _OnboardingOverlayState extends ConsumerState<OnboardingOverlay>
               padding: const EdgeInsets.symmetric(horizontal: 28),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          c.accent.withValues(alpha: 0.06),
-                          c.surface.withValues(alpha: 0.95),
-                        ],
-                      ),
-                      border: Border.all(
-                        color: c.accent.withValues(alpha: 0.38),
-                        width: 1.0,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: c.accent.withValues(alpha: 0.10),
-                          blurRadius: 40,
-                          spreadRadius: 0,
-                        ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.all(28),
-                    child: Column(
+                child: _buildCard(c, child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -351,11 +325,59 @@ class _OnboardingOverlayState extends ConsumerState<OnboardingOverlay>
                       ],
                     ),
                   ),
-                ),
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildCard(SieColors c, {required Widget child}) {
+    if (c.isLightMode) {
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: c.surface,
+          border: Border.all(color: c.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.07),
+              blurRadius: 24,
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(28),
+        child: child,
+      );
+    }
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              c.accent.withValues(alpha: 0.06),
+              c.surface.withValues(alpha: 0.95),
+            ],
+          ),
+          border: Border.all(
+            color: c.accent.withValues(alpha: 0.38),
+            width: 1.0,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: c.accent.withValues(alpha: 0.10),
+              blurRadius: 40,
+              spreadRadius: 0,
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(28),
+        child: child,
       ),
     );
   }

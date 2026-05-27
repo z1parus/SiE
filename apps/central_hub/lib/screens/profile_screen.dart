@@ -178,7 +178,8 @@ class _ProfileContent extends ConsumerWidget {
       styleId:      profile?.equippedStatStyleId,
     );
 
-    final frameDecoration = equipped.frame?.buildFrameDecoration() ??
+    final frameDecoration =
+        equipped.frame?.buildFrameDecoration(surfaceColor: c.surface, suppressGlow: c.isLightMode) ??
         BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(color: c.accent.withValues(alpha: 0.45), width: 1.5),
@@ -573,7 +574,7 @@ class _Chip extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Equipped stat-style card
 // ─────────────────────────────────────────────────────────────────────────────
-class _StatStyleCard extends StatelessWidget {
+class _StatStyleCard extends ConsumerWidget {
   const _StatStyleCard({
     required this.statStyle,
     required this.level,
@@ -584,15 +585,16 @@ class _StatStyleCard extends StatelessWidget {
   final int xp;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c       = ref.watch(sieColorsProvider);
     final accent  = statStyle.accentColor;
-    final glowCol = statStyle.styleGlowColor;
+    final glowCol = c.isLightMode ? null : statStyle.styleGlowColor;
     final glowRad = statStyle.styleGlowRadius;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-      decoration: statStyle.buildStatCardDecoration(),
+      decoration: statStyle.buildStatCardDecoration(surfaceColor: c.surface),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

@@ -60,8 +60,8 @@ class AchievementBadge extends ConsumerWidget {
   }
 }
 
-// ── Unlocked — gold Container. Gold colors are universal across all themes.
-class _UnlockedBadge extends StatelessWidget {
+// ── Unlocked — gold Container. Glow intensity adapts to light mode.
+class _UnlockedBadge extends ConsumerWidget {
   const _UnlockedBadge({
     required this.slug,
     required this.name,
@@ -74,20 +74,21 @@ class _UnlockedBadge extends StatelessWidget {
   final double fontSize;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
         color: _kAmber.withValues(alpha: 0.09),
         border: Border.all(
-          color: _kGold.withValues(alpha: 0.40),
+          color: _kGold.withValues(alpha: c.isLightMode ? 0.70 : 0.40),
           width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: _kGold.withValues(alpha: 0.20),
-            blurRadius: 14,
-            spreadRadius: 1,
+            color: _kGold.withValues(alpha: c.isLightMode ? 0.45 : 0.20),
+            blurRadius: c.isLightMode ? 20 : 14,
+            spreadRadius: c.isLightMode ? 2 : 1,
           ),
         ],
       ),

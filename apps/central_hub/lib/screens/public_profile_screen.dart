@@ -216,7 +216,7 @@ class _AvatarWithFrame extends ConsumerWidget {
     final letter = (profile.username?.isNotEmpty == true)
         ? profile.username![0].toUpperCase()
         : '?';
-    final decoration = frame?.buildFrameDecoration() ??
+    final decoration = frame?.buildFrameDecoration(surfaceColor: c.surface, suppressGlow: c.isLightMode) ??
         BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(color: c.accent.withValues(alpha: 0.6), width: 1.5),
@@ -412,7 +412,7 @@ class _StatCard extends StatelessWidget {
     if (statStyle != null) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-        decoration: statStyle!.buildStatCardDecoration(),
+        decoration: statStyle!.buildStatCardDecoration(surfaceColor: c.surface),
         child: _StatCardContent(
             icon: icon, value: value, label: label, valueColor: valueColor, c: c),
       );

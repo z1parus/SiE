@@ -691,9 +691,9 @@ class _BranchCarouselCard extends ConsumerWidget {
                         fontSize: 14,
                         letterSpacing: 1.8,
                         height: 1.1,
-                        shadows: const [
-                          Shadow(color: Color(0x99000000), blurRadius: 6),
-                        ],
+                        shadows: c.isLightMode
+                            ? null
+                            : const [Shadow(color: Color(0x99000000), blurRadius: 6)],
                       ),
                     ),
                     Row(
