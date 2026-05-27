@@ -729,7 +729,7 @@ class _Avatar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
     final decoration = frame != null
-        ? frame!.buildFrameDecoration()
+        ? frame!.buildFrameDecoration(surfaceColor: c.surface, suppressGlow: c.isLightMode)
         : BoxDecoration(
             shape: BoxShape.circle,
             color: c.surface,

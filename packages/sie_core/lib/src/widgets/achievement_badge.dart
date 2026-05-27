@@ -6,8 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/achievement.dart';
 import '../theme/sie_colors.dart';
 
-const _kGold  = Color(0xFFFFD700);
-const _kAmber = Color(0xFFFFB300);
+const _kGold     = Color(0xFFFFD700);
+const _kAmber    = Color(0xFFFFB300);
+const _kGoldDark = Color(0xFF7B4F00);
 
 const _lockedFilter = ColorFilter.matrix(<double>[
   0.2126, 0.7152, 0.0722, 0, 0,
@@ -75,7 +76,9 @@ class _UnlockedBadge extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c = ref.watch(sieColorsProvider);
+    final c         = ref.watch(sieColorsProvider);
+    final iconColor = c.isLightMode ? _kGoldDark : _kGold;
+    final textColor = c.isLightMode ? _kGoldDark : _kGold;
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
@@ -98,7 +101,7 @@ class _UnlockedBadge extends ConsumerWidget {
         children: [
           Icon(
             _iconForSlug(slug),
-            color: _kGold,
+            color: iconColor,
             size: iconSize,
             shadows: [
               Shadow(
@@ -111,7 +114,7 @@ class _UnlockedBadge extends ConsumerWidget {
           Text(
             name.toUpperCase(),
             style: TextStyle(
-              color: _kGold,
+              color: textColor,
               fontSize: fontSize,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.3,

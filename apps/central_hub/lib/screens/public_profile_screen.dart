@@ -412,7 +412,7 @@ class _StatCard extends StatelessWidget {
     if (statStyle != null) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-        decoration: statStyle!.buildStatCardDecoration(surfaceColor: c.surface),
+        decoration: statStyle!.buildStatCardDecoration(surfaceColor: c.surface, isLightMode: c.isLightMode),
         child: _StatCardContent(
             icon: icon, value: value, label: label, valueColor: valueColor, c: c),
       );

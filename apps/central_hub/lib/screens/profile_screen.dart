@@ -594,7 +594,7 @@ class _StatStyleCard extends ConsumerWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-      decoration: statStyle.buildStatCardDecoration(surfaceColor: c.surface),
+      decoration: statStyle.buildStatCardDecoration(surfaceColor: c.surface, isLightMode: c.isLightMode),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

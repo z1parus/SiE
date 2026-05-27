@@ -121,13 +121,15 @@ class CosmeticAsset {
   double get styleGlowRadius =>
       (styleConfig['glow_radius'] as num?)?.toDouble() ?? 0;
 
-  BoxDecoration buildStatCardDecoration({Color? surfaceColor}) {
+  BoxDecoration buildStatCardDecoration({Color? surfaceColor, bool isLightMode = false}) {
     final glow = styleGlowColor;
     return BoxDecoration(
       color: surfaceColor ?? SieTheme.surface,
-      border: Border.all(color: styleBorderColor),
+      border: Border.all(
+        color: isLightMode ? SieTheme.borderDefault : styleBorderColor,
+      ),
       borderRadius: BorderRadius.circular(4),
-      boxShadow: glow != null && styleGlowRadius > 0
+      boxShadow: (!isLightMode && glow != null && styleGlowRadius > 0)
           ? [BoxShadow(color: glow, blurRadius: styleGlowRadius)]
           : null,
     );

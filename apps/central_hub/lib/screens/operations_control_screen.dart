@@ -799,12 +799,12 @@ class _BreathSpherePreviewState extends ConsumerState<_BreathSpherePreview>
               gradient: c.isLightMode
                   ? RadialGradient(
                       colors: [
-                        const Color(0xFFCCF5F2),
+                        Colors.white,
+                        const Color(0xFFB8E8E2),
                         c.accent,
-                        c.accentSecondary,
-                        Colors.transparent,
+                        c.surface,
                       ],
-                      stops: const [0.0, 0.35, 0.70, 1.0],
+                      stops: const [0.0, 0.28, 0.65, 1.0],
                     )
                   : const RadialGradient(
                       colors: [
@@ -830,9 +830,9 @@ class _BreathSpherePreviewState extends ConsumerState<_BreathSpherePreview>
                     ]
                   : [
                       BoxShadow(
-                        color: c.accent.withValues(alpha: 0.20),
+                        color: c.accent.withValues(alpha: c.isLightMode ? 0.15 : 0.20),
                         blurRadius: 20,
-                        spreadRadius: 4,
+                        spreadRadius: c.isLightMode ? 2 : 4,
                       ),
                     ],
             ),
