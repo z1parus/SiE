@@ -25,6 +25,11 @@ class BreathingSettings {
   final int inhaleSecs;
   final int exhaleSecs;
   final int exhaustRetentionSecs;
+  final int recoveryHoldSecs;
+  final bool ambientEnabled;
+  final bool breathingSoundsEnabled;
+  final bool heartbeatEnabled;
+  final bool tickEnabled;
 
   const BreathingSettings({
     this.rounds = 3,
@@ -32,6 +37,11 @@ class BreathingSettings {
     this.inhaleSecs = 2,
     this.exhaleSecs = 2,
     this.exhaustRetentionSecs = 90,
+    this.recoveryHoldSecs = 15,
+    this.ambientEnabled = true,
+    this.breathingSoundsEnabled = true,
+    this.heartbeatEnabled = true,
+    this.tickEnabled = true,
   });
 
   BreathingSettings copyWith({
@@ -40,22 +50,30 @@ class BreathingSettings {
     int? inhaleSecs,
     int? exhaleSecs,
     int? exhaustRetentionSecs,
+    int? recoveryHoldSecs,
+    bool? ambientEnabled,
+    bool? breathingSoundsEnabled,
+    bool? heartbeatEnabled,
+    bool? tickEnabled,
   }) =>
       BreathingSettings(
         rounds: rounds ?? this.rounds,
         cyclesPerRound: cyclesPerRound ?? this.cyclesPerRound,
         inhaleSecs: inhaleSecs ?? this.inhaleSecs,
         exhaleSecs: exhaleSecs ?? this.exhaleSecs,
-        exhaustRetentionSecs:
-            exhaustRetentionSecs ?? this.exhaustRetentionSecs,
+        exhaustRetentionSecs: exhaustRetentionSecs ?? this.exhaustRetentionSecs,
+        recoveryHoldSecs: recoveryHoldSecs ?? this.recoveryHoldSecs,
+        ambientEnabled: ambientEnabled ?? this.ambientEnabled,
+        breathingSoundsEnabled:
+            breathingSoundsEnabled ?? this.breathingSoundsEnabled,
+        heartbeatEnabled: heartbeatEnabled ?? this.heartbeatEnabled,
+        tickEnabled: tickEnabled ?? this.tickEnabled,
       );
 }
 
 // ── Phase ─────────────────────────────────────────────────────
 
 enum _Phase { idle, countdown, active, retention, recovery, roundTransition, complete }
-
-const _recoveryHoldSecs = 15;
 
 // ── Screen ───────────────────────────────────────────────────
 
@@ -164,13 +182,30 @@ class _BreathingExerciseScreenState
     _startCountdown();
   }
 
+  void _restartSession() {
+    _cancelTimers();
+    _audio.stopAll();
+    _heartbeatStart = null;
+    _sessionStart = null;
+    setState(() {
+      _round = 1;
+      _cycle = 0;
+      _retentionElapsed = 0;
+      _recoveryElapsed = 0;
+      _transitionElapsed = 0;
+    });
+    _circleCtrl.value = 0.3;
+    _pulseCtrl.stop();
+    _startCountdown();
+  }
+
   void _startCountdown() {
     if (!mounted) return;
     setState(() {
       _phase = _Phase.countdown;
       _countdownValue = 5;
     });
-    _audio.startAmbient();
+    if (_settings.ambientEnabled) _audio.startAmbient();
     _breathTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) { t.cancel(); return; }
       final next = _countdownValue - 1;
@@ -205,7 +240,7 @@ class _BreathingExerciseScreenState
       return;
     }
     setState(() => _isInhaling = true);
-    _audio.playInhale(targetSecs: _settings.inhaleSecs);
+    if (_settings.breathingSoundsEnabled) _audio.playInhale(targetSecs: _settings.inhaleSecs);
     _circleCtrl.animateTo(
       1.0,
       duration: Duration(seconds: _settings.inhaleSecs),
@@ -214,7 +249,7 @@ class _BreathingExerciseScreenState
     _breathTimer = Timer(Duration(seconds: _settings.inhaleSecs), () {
       if (!mounted || _phase != _Phase.active) return;
       setState(() => _isInhaling = false);
-      _audio.playExhale(targetSecs: _settings.exhaleSecs);
+      if (_settings.breathingSoundsEnabled) _audio.playExhale(targetSecs: _settings.exhaleSecs);
       _circleCtrl.animateTo(
         0.3,
         duration: Duration(seconds: _settings.exhaleSecs),
@@ -268,7 +303,7 @@ class _BreathingExerciseScreenState
 
   void _scheduleNextHeartbeat() {
     if (_phase != _Phase.retention || _heartbeatStart == null) return;
-    _audio.playHeartbeat();
+    if (_settings.heartbeatEnabled) _audio.playHeartbeat();
     final elapsedMs = DateTime.now().difference(_heartbeatStart!).inMilliseconds;
     if (elapsedMs >= 30000) return;
     final t = (elapsedMs / 30000).clamp(0.0, 1.0);
@@ -285,7 +320,7 @@ class _BreathingExerciseScreenState
       _phase = _Phase.recovery;
       _recoveryElapsed = 0;
     });
-    _audio.playInhale(targetSecs: 3);
+    if (_settings.breathingSoundsEnabled) _audio.playInhale(targetSecs: 3);
     _circleCtrl.animateTo(
       1.0,
       duration: const Duration(seconds: 3),
@@ -293,10 +328,10 @@ class _BreathingExerciseScreenState
     );
     _breathTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) { t.cancel(); return; }
-      _audio.playTick();
+      if (_settings.tickEnabled) _audio.playTick();
       final next = _recoveryElapsed + 1;
       setState(() => _recoveryElapsed = next);
-      if (next >= _recoveryHoldSecs) {
+      if (next >= _settings.recoveryHoldSecs) {
         t.cancel();
         _startRoundTransitionPhase();
       }
@@ -312,7 +347,7 @@ class _BreathingExerciseScreenState
       _phase = _Phase.roundTransition;
       _transitionElapsed = 0;
     });
-    _audio.playExhale(targetSecs: 5);
+    if (_settings.breathingSoundsEnabled) _audio.playExhale(targetSecs: 5);
     _circleCtrl.animateTo(
       0.3,
       duration: const Duration(seconds: 5),
@@ -692,38 +727,45 @@ class _BreathingExerciseScreenState
       // ── Active ────────────────────────────────────────────────
       case _Phase.active:
         final activeColor = _isInhaling ? c.accent : c.accentSecondary;
-        return _hudCard(
-          c,
-          blur: 3.0,
-          glow: _isInhaling ? 0.92 : 0.84,
-          child: Column(
-            children: [
-              Text(
-                _isInhaling ? 'INHALE' : 'EXHALE',
-                style: TextStyle(
-                  color: activeColor,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 5,
-                  shadows: c.isLightMode
-                      ? null
-                      : [
-                          Shadow(
-                            color: activeColor.withValues(alpha: 0.70),
-                            blurRadius: 12,
-                          ),
-                        ],
-                ),
-                textAlign: TextAlign.center,
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _hudCard(
+              c,
+              blur: 3.0,
+              glow: _isInhaling ? 0.92 : 0.84,
+              child: Column(
+                children: [
+                  Text(
+                    _isInhaling ? 'INHALE' : 'EXHALE',
+                    style: TextStyle(
+                      color: activeColor,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 5,
+                      shadows: c.isLightMode
+                          ? null
+                          : [
+                              Shadow(
+                                color: activeColor.withValues(alpha: 0.70),
+                                blurRadius: 12,
+                              ),
+                            ],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'CYCLE ${_cycle + 1} / ${_settings.cyclesPerRound}',
+                    style: TextStyle(color: c.textSecondary, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              Text(
-                'CYCLE ${_cycle + 1} / ${_settings.cyclesPerRound}',
-                style: TextStyle(color: c.textSecondary, fontSize: 12),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 12),
+            _RestartButton(onTap: _restartSession),
+          ],
         );
 
       // ── Retention (breath hold) ───────────────────────────────
@@ -734,6 +776,7 @@ class _BreathingExerciseScreenState
           mainAxisSize: MainAxisSize.min,
           children: [
             _hudCard(
+
               c,
               blur: 3.5,
               glow: 0.92,
@@ -815,131 +858,147 @@ class _BreathingExerciseScreenState
             ),
             const SizedBox(height: 16),
             _SieButton(label: 'RELEASE', onPressed: _endRetention),
+            const SizedBox(height: 12),
+            _RestartButton(onTap: _restartSession),
           ],
         );
 
       // ── Recovery (inhale hold) ────────────────────────────────
       case _Phase.recovery:
-        final recovSecsLeft = _recoveryHoldSecs - _recoveryElapsed;
-        return _hudCard(
-          c,
-          blur: 3.5,
-          glow: 0.92,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'HOLD YOUR BREATH',
-                style: TextStyle(
-                  color: c.accent,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 4,
-                  shadows: c.isLightMode
-                      ? null
-                      : [Shadow(color: c.accent, blurRadius: 10)],
-                ),
-                textAlign: TextAlign.center,
+        final recovSecsLeft = _settings.recoveryHoldSecs - _recoveryElapsed;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _hudCard(
+              c,
+              blur: 3.5,
+              glow: 0.92,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'HOLD YOUR BREATH',
+                    style: TextStyle(
+                      color: c.accent,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 4,
+                      shadows: c.isLightMode
+                          ? null
+                          : [Shadow(color: c.accent, blurRadius: 10)],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '(INHALE)',
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 12,
+                      letterSpacing: 2,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '${recovSecsLeft}s',
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 52,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 4,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      shadows: c.isLightMode
+                          ? null
+                          : [
+                              Shadow(color: c.accent, blurRadius: 14),
+                              Shadow(color: c.accent, blurRadius: 42),
+                            ],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
-              const SizedBox(height: 2),
-              Text(
-                '(INHALE)',
-                style: TextStyle(
-                  color: c.textSecondary,
-                  fontSize: 12,
-                  letterSpacing: 2,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 10),
-              Text(
-                '${recovSecsLeft}s',
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 52,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 4,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                  shadows: c.isLightMode
-                      ? null
-                      : [
-                          Shadow(color: c.accent, blurRadius: 14),
-                          Shadow(color: c.accent, blurRadius: 42),
-                        ],
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 12),
+            _RestartButton(onTap: _restartSession),
+          ],
         );
 
       // ── Round Transition ──────────────────────────────────────
       case _Phase.roundTransition:
         final secsLeft     = 10 - _transitionElapsed;
         final isFinalRound = _round == _settings.rounds;
-        return _hudCard(
-          c,
-          blur: 3.0,
-          glow: 0.88,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isFinalRound) ...[
-                Text(
-                  'EXHALE',
-                  style: TextStyle(
-                    color: c.accent,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 5,
-                    shadows: c.isLightMode
-                        ? null
-                        : [Shadow(color: c.accent, blurRadius: 10)],
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _hudCard(
+              c,
+              blur: 3.0,
+              glow: 0.88,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isFinalRound) ...[
+                    Text(
+                      'EXHALE',
+                      style: TextStyle(
+                        color: c.accent,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 5,
+                        shadows: c.isLightMode
+                            ? null
+                            : [Shadow(color: c.accent, blurRadius: 10)],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ] else ...[
+                    Text(
+                      'PREPARE FOR THE',
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 12,
+                        letterSpacing: 2,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'NEXT ROUND',
+                      style: TextStyle(
+                        color: c.accent,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 3,
+                        shadows: c.isLightMode
+                            ? null
+                            : [Shadow(color: c.accent, blurRadius: 10)],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Text(
+                    '${secsLeft}s',
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 52,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 4,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      shadows: c.isLightMode
+                          ? null
+                          : [Shadow(color: c.accent, blurRadius: 14)],
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
-                ),
-              ] else ...[
-                Text(
-                  'PREPARE FOR THE',
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 12,
-                    letterSpacing: 2,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'NEXT ROUND',
-                  style: TextStyle(
-                    color: c.accent,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 3,
-                    shadows: c.isLightMode
-                        ? null
-                        : [Shadow(color: c.accent, blurRadius: 10)],
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              const SizedBox(height: 10),
-              Text(
-                '${secsLeft}s',
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 52,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 4,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                  shadows: c.isLightMode
-                      ? null
-                      : [Shadow(color: c.accent, blurRadius: 14)],
-                ),
-                textAlign: TextAlign.center,
+                ],
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 12),
+            _RestartButton(onTap: _restartSession),
+          ],
         );
 
       // ── Complete (spinner while DB write finishes) ────────────
@@ -1236,6 +1295,35 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
               onChanged: (v) =>
                   _update(_s.copyWith(exhaustRetentionSecs: v)),
             ),
+            _SettingRow(
+              label: 'RECOVERY HOLD (SEC)',
+              value: _s.recoveryHoldSecs,
+              min: 10,
+              max: 30,
+              onChanged: (v) => _update(_s.copyWith(recoveryHoldSecs: v)),
+            ),
+            const SizedBox(height: 8),
+            _ToggleRow(
+              label: 'AMBIENT MUSIC',
+              value: _s.ambientEnabled,
+              onChanged: (v) => _update(_s.copyWith(ambientEnabled: v)),
+            ),
+            _ToggleRow(
+              label: 'BREATHING SOUNDS',
+              value: _s.breathingSoundsEnabled,
+              onChanged: (v) =>
+                  _update(_s.copyWith(breathingSoundsEnabled: v)),
+            ),
+            _ToggleRow(
+              label: 'HEARTBEAT',
+              value: _s.heartbeatEnabled,
+              onChanged: (v) => _update(_s.copyWith(heartbeatEnabled: v)),
+            ),
+            _ToggleRow(
+              label: 'CLOCK TICKS',
+              value: _s.tickEnabled,
+              onChanged: (v) => _update(_s.copyWith(tickEnabled: v)),
+            ),
           ],
         ),
       ),
@@ -1360,6 +1448,37 @@ class _SettingRow extends ConsumerWidget {
   }
 }
 
+class _ToggleRow extends ConsumerWidget {
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _ToggleRow({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(color: c.textSecondary, fontSize: 12),
+            ),
+          ),
+          Switch(value: value, onChanged: onChanged, activeThumbColor: c.accent),
+        ],
+      ),
+    );
+  }
+}
+
 class _StepBtn extends ConsumerStatefulWidget {
   final IconData icon;
   final bool active;
@@ -1425,6 +1544,34 @@ class _StepBtnState extends ConsumerState<_StepBtn> {
             widget.icon,
             size: 16,
             color: widget.active ? c.accent : c.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Restart Button ────────────────────────────────────────────
+
+class _RestartButton extends ConsumerWidget {
+  final VoidCallback onTap;
+  const _RestartButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Center(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          child: Text(
+            'НАЧАТЬ ЗАНОВО',
+            style: TextStyle(
+              color: c.textSecondary.withValues(alpha: 0.55),
+              fontSize: 11,
+              letterSpacing: 2.0,
+            ),
           ),
         ),
       ),

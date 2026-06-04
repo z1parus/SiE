@@ -301,13 +301,30 @@ class AudioService {
     if (_tickId < 0) return;
     try {
       final sid = await _pool.play(_tickId);
-      if (sid > 0) await _pool.setVolume(soundId: _tickId, streamId: sid, volume: 0.45);
+      if (sid > 0) await _pool.setVolume(soundId: _tickId, streamId: sid, volume: 0.22);
     } catch (e) {
       debugPrint('SiE Audio: tick error — $e');
     }
   }
 
   // ── WAV synthesis ─────────────────────────────────────────
+
+  static List<double> _applyEcho(
+    List<double> samples, {
+    int delayMs = 80,
+    double gain = 0.22,
+    int sr = 44100,
+  }) {
+    final delaySamples = sr * delayMs ~/ 1000;
+    final tailSamples  = delaySamples + sr * 60 ~/ 1000;
+    final extended = List<double>.of(samples)
+      ..addAll(List<double>.filled(tailSamples, 0.0));
+    for (var i = delaySamples; i < extended.length; i++) {
+      final src = i - delaySamples;
+      if (src < samples.length) extended[i] += samples[src] * gain;
+    }
+    return extended;
+  }
 
   static Uint8List _buildWav(List<double> samples, {int sr = 44100}) {
     double maxA = 0;
@@ -338,53 +355,56 @@ class AudioService {
     return buf.buffer.asUint8List();
   }
 
-  // Lub-dub heartbeat: lub(80ms) + gap(80ms) + dub(60ms) + tail(80ms)
+  // Lub-dub heartbeat: deeper tone (45/90/180 Hz), longer decay, with echo
   static Uint8List _generateHeartbeat({int sr = 44100}) {
-    const lubMs = 80, gapMs = 80, dubMs = 60, tailMs = 80;
-    final totalSamples = sr * (lubMs + gapMs + dubMs + tailMs) ~/ 1000;
-    final samples = List<double>.filled(totalSamples, 0.0);
-
-    final nLub = sr * lubMs ~/ 1000;
-    final nGap = sr * gapMs ~/ 1000;
-    final nDub = sr * dubMs ~/ 1000;
-    final attackN = sr * 4 ~/ 1000; // 4 ms linear attack
+    const lubMs = 90, gapMs = 75, dubMs = 70, tailMs = 80;
+    final n = sr * (lubMs + gapMs + dubMs + tailMs) ~/ 1000;
+    final raw = List<double>.filled(n, 0.0);
+    final nLub    = sr * lubMs ~/ 1000;
+    final nGap    = sr * gapMs ~/ 1000;
+    final nDub    = sr * dubMs ~/ 1000;
+    final attackN = sr * 5 ~/ 1000; // 5 ms linear attack
 
     for (var i = 0; i < nLub; i++) {
       final t = i / sr;
       final attack = i < attackN ? i / attackN : 1.0;
-      final env = attack * math.exp(-i / (sr * 0.035));
-      samples[i] = env * (math.sin(2 * math.pi * 60 * t) * 0.60 +
-                          math.sin(2 * math.pi * 120 * t) * 0.28 +
-                          math.sin(2 * math.pi * 250 * t) * 0.12);
+      final env    = attack * math.exp(-i / (sr * 0.048));
+      raw[i] = env * (math.sin(2 * math.pi * 45  * t) * 0.60 +
+                      math.sin(2 * math.pi * 90  * t) * 0.28 +
+                      math.sin(2 * math.pi * 180 * t) * 0.12);
     }
 
     final dubStart = nLub + nGap;
     for (var i = 0; i < nDub; i++) {
       final t = i / sr;
       final attack = i < attackN ? i / attackN : 1.0;
-      final env = attack * math.exp(-i / (sr * 0.028)) * 0.6;
-      samples[dubStart + i] = env * (math.sin(2 * math.pi * 65 * t) * 0.60 +
-                                     math.sin(2 * math.pi * 130 * t) * 0.28 +
-                                     math.sin(2 * math.pi * 260 * t) * 0.12);
+      final env    = attack * math.exp(-i / (sr * 0.040)) * 0.6;
+      raw[dubStart + i] = env * (math.sin(2 * math.pi * 50  * t) * 0.60 +
+                                  math.sin(2 * math.pi * 100 * t) * 0.28 +
+                                  math.sin(2 * math.pi * 200 * t) * 0.12);
     }
 
-    return _buildWav(samples, sr: sr);
+    return _buildWav(_applyEcho(raw, delayMs: 70, gain: 0.22, sr: sr), sr: sr);
   }
 
-  // Short clock tick: ~35 ms high-freq click with fast exponential decay
+  // Mechanical clock tick: sharp click layer + body resonance layer, with echo
   static Uint8List _generateTick({int sr = 44100}) {
-    const durationMs = 35;
-    final n = sr * durationMs ~/ 1000;
+    const durationMs = 60;
+    final n       = sr * durationMs ~/ 1000;
     final attackN = sr * 1 ~/ 1000; // 1 ms attack
-    final samples = List<double>.generate(n, (i) {
-      final t = i / sr;
-      final attack = i < attackN ? i / attackN : 1.0;
-      final env = attack * math.exp(-i / (sr * 0.008));
-      return env * (math.sin(2 * math.pi * 3000 * t) * 0.55 +
-                    math.sin(2 * math.pi * 6000 * t) * 0.35 +
-                    math.sin(2 * math.pi * 1200 * t) * 0.10);
+    final raw = List<double>.generate(n, (i) {
+      final t        = i / sr;
+      final attack   = i < attackN ? i / attackN : 1.0;
+      final clickEnv = attack * math.exp(-i / (sr * 0.005)); // τ=5ms — sharp transient
+      final click    = clickEnv * (math.sin(2 * math.pi * 3200 * t) * 0.45 +
+                                    math.sin(2 * math.pi * 4800 * t) * 0.30);
+      final bodyEnv  = attack * math.exp(-i / (sr * 0.018)); // τ=18ms — body resonance
+      final body     = bodyEnv  * (math.sin(2 * math.pi * 800  * t) * 0.40 +
+                                    math.sin(2 * math.pi * 1400 * t) * 0.25 +
+                                    math.sin(2 * math.pi * 320  * t) * 0.15);
+      return click + body;
     });
-    return _buildWav(samples, sr: sr);
+    return _buildWav(_applyEcho(raw, delayMs: 55, gain: 0.18, sr: sr), sr: sr);
   }
 
   // ── Cleanup ────────────────────────────────────────────────
