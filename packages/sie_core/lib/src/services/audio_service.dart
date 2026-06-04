@@ -403,6 +403,18 @@ class AudioService {
                                   math.sin(2 * math.pi * 200 * t) * 0.12);
     }
 
+    final lubFadeN = sr * 12 ~/ 1000;
+    for (var i = 0; i < lubFadeN; i++) {
+      final w = 0.5 * (1 + math.cos(math.pi * i / (lubFadeN - 1)));
+      raw[nLub - lubFadeN + i] *= w;
+    }
+
+    final dubFadeN = sr * 12 ~/ 1000;
+    for (var i = 0; i < dubFadeN; i++) {
+      final w = 0.5 * (1 + math.cos(math.pi * i / (dubFadeN - 1)));
+      raw[dubStart + nDub - dubFadeN + i] *= w;
+    }
+
     return _buildWav(_applyEcho(raw, delayMs: 70, gain: 0.44, sr: sr), sr: sr);
   }
 
