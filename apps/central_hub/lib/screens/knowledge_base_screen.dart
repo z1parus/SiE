@@ -135,6 +135,7 @@ class _NeonSectionLabel extends ConsumerWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                fontSize: 12,
                 letterSpacing: 2,
                 color: c.accent.withValues(alpha: 0.9),
               ),
@@ -179,7 +180,7 @@ class _SystemHeader extends ConsumerWidget {
                 'SiE KNOWLEDGE MATRIX v1.0',
                 style: TextStyle(
                   color: c.accent,
-                  fontSize: 10,
+                  fontSize: 11,
                   letterSpacing: 2.5,
                   fontWeight: FontWeight.w700,
                   shadows: c.isCosmicMode
@@ -203,7 +204,7 @@ class _SystemHeader extends ConsumerWidget {
             'как максимизировать свой прогресс.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   height: 1.6,
-                  fontSize: 12,
+                  fontSize: 13,
                   color: c.textPrimary.withValues(alpha: 0.85),
                 ),
           ),
@@ -338,7 +339,7 @@ class _KbEntryState extends ConsumerState<_KbEntry>
                             widget.moduleTag,
                             style: TextStyle(
                               color: c.accent,
-                              fontSize: 9,
+                              fontSize: 10,
                               letterSpacing: 1.5,
                               fontWeight: FontWeight.w700,
                             ),
@@ -353,7 +354,7 @@ class _KbEntryState extends ConsumerState<_KbEntry>
                                 widget.label,
                                 style: TextStyle(
                                   color: c.textPrimary,
-                                  fontSize: 13,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 1.5,
                                 ),
@@ -363,7 +364,7 @@ class _KbEntryState extends ConsumerState<_KbEntry>
                                 widget.subtitle,
                                 style: TextStyle(
                                   color: c.textSecondary,
-                                  fontSize: 11,
+                                  fontSize: 12,
                                 ),
                               ),
                             ],
@@ -414,7 +415,7 @@ class _KbEntryState extends ConsumerState<_KbEntry>
                                 style: TextStyle(
                                   color: c.textPrimary,
                                   height: 1.7,
-                                  fontSize: 12,
+                                  fontSize: 13,
                                 ),
                               ),
                             ),
@@ -468,7 +469,7 @@ class _XpTable extends ConsumerWidget {
                     'АКТИВНОСТЬ',
                     style: TextStyle(
                       color: c.accent.withValues(alpha: 0.6),
-                      fontSize: 9,
+                      fontSize: 10,
                       letterSpacing: 2,
                     ),
                   ),
@@ -489,7 +490,7 @@ class _XpTable extends ConsumerWidget {
                     'МОДУЛЬ',
                     style: TextStyle(
                       color: c.accent.withValues(alpha: 0.6),
-                      fontSize: 9,
+                      fontSize: 10,
                       letterSpacing: 2,
                     ),
                   ),
@@ -507,7 +508,7 @@ class _XpTable extends ConsumerWidget {
               '1000 XP = LEVEL UP  ·  Уровень определяет ранг оперативника в иерархии SiE',
               style: TextStyle(
                 color: c.textSecondary.withValues(alpha: 0.7),
-                fontSize: 10,
+                fontSize: 11,
                 letterSpacing: 0.5,
               ),
               textAlign: TextAlign.center,
@@ -552,7 +553,7 @@ class _XpTableRow extends StatelessWidget {
             flex: 4,
             child: Text(
               row.activity,
-              style: TextStyle(color: c.textPrimary, fontSize: 11),
+              style: TextStyle(color: c.textPrimary, fontSize: 12),
             ),
           ),
           const SizedBox(width: 8),
@@ -560,7 +561,7 @@ class _XpTableRow extends StatelessWidget {
             row.reward,
             style: TextStyle(
               color: c.accent,
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.5,
             ),
@@ -572,7 +573,7 @@ class _XpTableRow extends StatelessWidget {
               row.module,
               style: TextStyle(
                 color: c.textSecondary,
-                fontSize: 10,
+                fontSize: 11,
                 letterSpacing: 0.3,
               ),
             ),
@@ -612,7 +613,7 @@ class _EthicsSection extends ConsumerWidget {
                     ? c.accent
                     : c.textPrimary.withValues(alpha: 0.85),
                 height: 1.7,
-                fontSize: 12,
+                fontSize: 13,
                 fontStyle: i == paragraphs.length - 1
                     ? FontStyle.italic
                     : FontStyle.normal,

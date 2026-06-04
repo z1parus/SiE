@@ -104,7 +104,7 @@ class _OperationsControlScreenState
               ),
             ),
           ),
-          const SizedBox(height: 96),
+          const SizedBox(height: 148),
         ],
       ),
     );
@@ -1049,52 +1049,53 @@ class _NoConnectionMessage extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Glass Bell Badge
+// Glass Header Button
 // ─────────────────────────────────────────────────────────────────────────────
-class _GlassBell extends ConsumerWidget {
-  const _GlassBell();
+class _GlassHeaderBtn extends ConsumerWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+  final double size;
+
+  const _GlassHeaderBtn({required this.icon, this.onTap, this.size = 18});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c    = ref.watch(sieColorsProvider);
-    final icon = Icon(
-      Icons.notifications_outlined,
-      color: c.textSecondary,
-      size: 18,
-    );
+    final c = ref.watch(sieColorsProvider);
+    final iconWidget = Icon(icon, color: c.textSecondary, size: size);
 
-    if (c.isCosmicMode) {
-      return GlassCard(
-        width: 38,
-        height: 38,
-        padding: EdgeInsets.zero,
-        shape: LiquidRoundedSuperellipse(borderRadius: 19),
-        useOwnLayer: true,
-        quality: GlassQuality.standard,
-        clipBehavior: Clip.antiAlias,
-        settings: LiquidGlassSettings(
-          blur: 2.0,
-          thickness: 20,
-          refractiveIndex: 1.45,
-          glassColor: const Color(0x0A0A0E1A),
-          lightAngle: GlassDefaults.lightAngle,
-          lightIntensity: 0.72,
-          glowIntensity: 0.85,
-          saturation: 1.4,
-          specularSharpness: GlassSpecularSharpness.sharp,
-          ambientStrength: 0.08,
-          chromaticAberration: 0.015,
-        ),
-        child: Center(child: icon),
-      );
-    }
+    final child = c.isCosmicMode
+        ? GlassCard(
+            width: 38,
+            height: 38,
+            padding: EdgeInsets.zero,
+            shape: LiquidRoundedSuperellipse(borderRadius: 19),
+            useOwnLayer: true,
+            quality: GlassQuality.standard,
+            clipBehavior: Clip.antiAlias,
+            settings: LiquidGlassSettings(
+              blur: 2.0,
+              thickness: 20,
+              refractiveIndex: 1.45,
+              glassColor: const Color(0x0A0A0E1A),
+              lightAngle: GlassDefaults.lightAngle,
+              lightIntensity: 0.72,
+              glowIntensity: 0.85,
+              saturation: 1.4,
+              specularSharpness: GlassSpecularSharpness.sharp,
+              ambientStrength: 0.08,
+              chromaticAberration: 0.015,
+            ),
+            child: Center(child: iconWidget),
+          )
+        : Container(
+            width: 38,
+            height: 38,
+            decoration: c.flatCard(radius: 19),
+            child: Center(child: iconWidget),
+          );
 
-    return Container(
-      width: 38,
-      height: 38,
-      decoration: c.flatCard(radius: 19),
-      child: Center(child: icon),
-    );
+    if (onTap == null) return child;
+    return GestureDetector(onTap: onTap, child: child);
   }
 }
 
@@ -1199,10 +1200,12 @@ class _ScreenHeader extends ConsumerWidget {
                 ],
               ),
             ),
-            const _GlassBell(),
-            const SizedBox(width: 4),
-            IconButton(
-              onPressed: () => Navigator.of(context).push(
+            const _GlassHeaderBtn(icon: Icons.notifications_outlined),
+            const SizedBox(width: 8),
+            _GlassHeaderBtn(
+              icon: Icons.search,
+              size: 20,
+              onTap: () => Navigator.of(context).push(
                 PageRouteBuilder(
                   pageBuilder: (_, _, _) => const UserSearchScreen(),
                   transitionsBuilder: (_, anim, _, child) =>
@@ -1210,13 +1213,12 @@ class _ScreenHeader extends ConsumerWidget {
                   transitionDuration: const Duration(milliseconds: 300),
                 ),
               ),
-              icon: Icon(Icons.search, color: c.textSecondary, size: 20),
-              tooltip: 'NETWORK SCAN',
             ),
-            IconButton(
-              onPressed: () async => SupabaseService.signOut(),
-              icon: Icon(Icons.logout, color: c.textSecondary, size: 20),
-              tooltip: 'SIGN OUT',
+            const SizedBox(width: 8),
+            _GlassHeaderBtn(
+              icon: Icons.logout,
+              size: 20,
+              onTap: () async => SupabaseService.signOut(),
             ),
           ],
         ),

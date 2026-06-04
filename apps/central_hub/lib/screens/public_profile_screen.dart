@@ -57,8 +57,6 @@ class PublicProfileScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _NameSection(profile: profile),
-                        const SizedBox(height: 24),
                         _StatsRow(
                             profile: profile, statStyle: equipped.statStyle),
                         const SizedBox(height: 16),
@@ -128,7 +126,7 @@ class _HeroSection extends ConsumerWidget {
     }
 
     return SizedBox(
-      height: 230,
+      height: 280,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -148,11 +146,57 @@ class _HeroSection extends ConsumerWidget {
             ),
           ),
           Positioned(
-            bottom: 16,
+            bottom: 60,
             left: 0,
             right: 0,
             child: Center(
               child: _AvatarWithFrame(profile: profile, frame: equipped.frame),
+            ),
+          ),
+          Positioned(
+            bottom: 12,
+            left: 16,
+            right: 16,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  profile.username?.toUpperCase() ?? 'UNKNOWN',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 3,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    border:
+                        Border.all(color: c.accent.withValues(alpha: 0.5)),
+                    borderRadius: BorderRadius.circular(6),
+                    boxShadow: c.isCosmicMode
+                        ? [
+                            BoxShadow(
+                              color: c.accent.withValues(alpha: 0.08),
+                              blurRadius: 8,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Text(
+                    'LEVEL ${profile.level}  ·  ${profile.totalXp} XP',
+                    style: TextStyle(
+                      color: c.accent,
+                      fontSize: 10,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -269,75 +313,6 @@ class _Initials extends ConsumerWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-// ── Name + Level ──────────────────────────────────────────────
-
-class _NameSection extends ConsumerWidget {
-  final PublicProfile profile;
-  const _NameSection({required this.profile});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c        = ref.watch(sieColorsProvider);
-    final username = profile.username?.toUpperCase() ?? 'UNKNOWN';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          username,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontSize: 20,
-                letterSpacing: 3,
-              ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            border: Border.all(color: c.accent.withValues(alpha: 0.5)),
-            borderRadius: BorderRadius.circular(6),
-            boxShadow: c.isCosmicMode
-                ? [
-                    BoxShadow(
-                      color: c.accent.withValues(alpha: 0.08),
-                      blurRadius: 8,
-                    ),
-                  ]
-                : null,
-          ),
-          child: Text(
-            'LEVEL ${profile.level}  ·  ${profile.totalXp} XP',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: c.accent,
-                  fontSize: 10,
-                  letterSpacing: 2,
-                ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.palette_outlined,
-                size: 11, color: c.dp.withValues(alpha: 0.85)),
-            const SizedBox(width: 4),
-            Text(
-              '${profile.designPoints} DP',
-              style: TextStyle(
-                color: c.dp,
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1.5,
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 }

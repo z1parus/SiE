@@ -477,20 +477,18 @@ class _GlassIconBtn extends ConsumerWidget {
   const _GlassIconBtn({
     required this.icon,
     required this.onTap,
-    this.color,
     this.size = 16,
   });
 
   final IconData icon;
   final VoidCallback onTap;
-  final Color? color;
   final double size;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sc    = ref.watch(sieColorsProvider);
     final child = Center(
-      child: Icon(icon, color: color ?? sc.textSecondary, size: size),
+      child: Icon(icon, color: sc.textSecondary, size: size),
     );
 
     if (sc.isCosmicMode) {
@@ -1759,7 +1757,7 @@ class HabitArchiveScreen extends ConsumerWidget {
                       strokeWidth: 1.5,
                     ),
                   ),
-                  error: (_, __) => const Center(
+                  error: (_, _) => const Center(
                     child: _NoConnectionMessage(),
                   ),
                   data: (habits) {

@@ -39,6 +39,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
             .from('habits')
             .select()
             .eq('user_id', userId)
+            .eq('is_archived', false)
             .order('created_at');
 
         final logsRaw = await client
@@ -515,9 +516,10 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         await db.enqueueSyncOp('archive_habit',
             jsonEncode({'id': habitId, 'user_id': userId}));
       }
-    } catch (e, st) {
-      state = AsyncData(prev);
-      Error.throwWithStackTrace(e, st);
+    } catch (e) {
+      await db.enqueueSyncOp('archive_habit',
+          jsonEncode({'id': habitId, 'user_id': userId}));
+      debugPrint('SiE archiveHabit: Supabase failed, queued — $e');
     }
   }
 
