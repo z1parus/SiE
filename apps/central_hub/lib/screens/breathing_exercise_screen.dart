@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 import 'mission_accomplished_screen.dart';
@@ -30,6 +32,10 @@ class BreathingSettings {
   final bool breathingSoundsEnabled;
   final bool heartbeatEnabled;
   final bool tickEnabled;
+  final double ambientVolume;
+  final double breathingVolume;
+  final double heartbeatVolume;
+  final double tickVolume;
 
   const BreathingSettings({
     this.rounds = 3,
@@ -42,6 +48,10 @@ class BreathingSettings {
     this.breathingSoundsEnabled = true,
     this.heartbeatEnabled = true,
     this.tickEnabled = true,
+    this.ambientVolume = 0.75,
+    this.breathingVolume = 0.75,
+    this.heartbeatVolume = 0.75,
+    this.tickVolume = 0.75,
   });
 
   BreathingSettings copyWith({
@@ -55,6 +65,10 @@ class BreathingSettings {
     bool? breathingSoundsEnabled,
     bool? heartbeatEnabled,
     bool? tickEnabled,
+    double? ambientVolume,
+    double? breathingVolume,
+    double? heartbeatVolume,
+    double? tickVolume,
   }) =>
       BreathingSettings(
         rounds: rounds ?? this.rounds,
@@ -68,6 +82,45 @@ class BreathingSettings {
             breathingSoundsEnabled ?? this.breathingSoundsEnabled,
         heartbeatEnabled: heartbeatEnabled ?? this.heartbeatEnabled,
         tickEnabled: tickEnabled ?? this.tickEnabled,
+        ambientVolume: ambientVolume ?? this.ambientVolume,
+        breathingVolume: breathingVolume ?? this.breathingVolume,
+        heartbeatVolume: heartbeatVolume ?? this.heartbeatVolume,
+        tickVolume: tickVolume ?? this.tickVolume,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'rounds': rounds,
+        'cyclesPerRound': cyclesPerRound,
+        'inhaleSecs': inhaleSecs,
+        'exhaleSecs': exhaleSecs,
+        'exhaustRetentionSecs': exhaustRetentionSecs,
+        'recoveryHoldSecs': recoveryHoldSecs,
+        'ambientEnabled': ambientEnabled,
+        'breathingSoundsEnabled': breathingSoundsEnabled,
+        'heartbeatEnabled': heartbeatEnabled,
+        'tickEnabled': tickEnabled,
+        'ambientVolume': ambientVolume,
+        'breathingVolume': breathingVolume,
+        'heartbeatVolume': heartbeatVolume,
+        'tickVolume': tickVolume,
+      };
+
+  factory BreathingSettings.fromJson(Map<String, dynamic> json) =>
+      BreathingSettings(
+        rounds: json['rounds'] as int? ?? 3,
+        cyclesPerRound: json['cyclesPerRound'] as int? ?? 30,
+        inhaleSecs: json['inhaleSecs'] as int? ?? 2,
+        exhaleSecs: json['exhaleSecs'] as int? ?? 2,
+        exhaustRetentionSecs: json['exhaustRetentionSecs'] as int? ?? 90,
+        recoveryHoldSecs: json['recoveryHoldSecs'] as int? ?? 15,
+        ambientEnabled: json['ambientEnabled'] as bool? ?? true,
+        breathingSoundsEnabled: json['breathingSoundsEnabled'] as bool? ?? true,
+        heartbeatEnabled: json['heartbeatEnabled'] as bool? ?? true,
+        tickEnabled: json['tickEnabled'] as bool? ?? true,
+        ambientVolume: (json['ambientVolume'] as num?)?.toDouble() ?? 0.75,
+        breathingVolume: (json['breathingVolume'] as num?)?.toDouble() ?? 0.75,
+        heartbeatVolume: (json['heartbeatVolume'] as num?)?.toDouble() ?? 0.75,
+        tickVolume: (json['tickVolume'] as num?)?.toDouble() ?? 0.75,
       );
 }
 
@@ -90,6 +143,7 @@ class _BreathingExerciseScreenState
     with TickerProviderStateMixin {
   late final AnimationController _circleCtrl;
   late final AnimationController _pulseCtrl;
+  late final AnimationController _breathColorCtrl;
   late final Animation<double> _pulseAnim;
   late final AudioService _audio;
 
@@ -120,6 +174,7 @@ class _BreathingExerciseScreenState
     super.initState();
     _audio = ref.read(audioServiceProvider);
     _circleCtrl = AnimationController(vsync: this, value: 0.3);
+    _breathColorCtrl = AnimationController(vsync: this, value: 0.0);
     _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 4),
@@ -134,6 +189,7 @@ class _BreathingExerciseScreenState
     _cancelTimers();
     _audio.stopAll();
     _circleCtrl.dispose();
+    _breathColorCtrl.dispose();
     _pulseCtrl.dispose();
     super.dispose();
   }
@@ -195,6 +251,7 @@ class _BreathingExerciseScreenState
       _transitionElapsed = 0;
     });
     _circleCtrl.value = 0.3;
+    _breathColorCtrl.value = 0.0;
     _pulseCtrl.stop();
     _startCountdown();
   }
@@ -205,7 +262,7 @@ class _BreathingExerciseScreenState
       _phase = _Phase.countdown;
       _countdownValue = 5;
     });
-    if (_settings.ambientEnabled) _audio.startAmbient();
+    if (_settings.ambientEnabled) _audio.startAmbient(volumeFactor: _settings.ambientVolume);
     _breathTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) { t.cancel(); return; }
       final next = _countdownValue - 1;
@@ -225,6 +282,7 @@ class _BreathingExerciseScreenState
   void _startActivePhase() {
     if (!mounted) return;
     _pulseCtrl.stop();
+    _breathColorCtrl.value = 0.0;
     setState(() {
       _phase = _Phase.active;
       _cycle = 0;
@@ -240,7 +298,8 @@ class _BreathingExerciseScreenState
       return;
     }
     setState(() => _isInhaling = true);
-    if (_settings.breathingSoundsEnabled) _audio.playInhale(targetSecs: _settings.inhaleSecs);
+    _breathColorCtrl.animateTo(0.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+    if (_settings.breathingSoundsEnabled) _audio.playInhale(targetSecs: _settings.inhaleSecs, volumeFactor: _settings.breathingVolume);
     _circleCtrl.animateTo(
       1.0,
       duration: Duration(seconds: _settings.inhaleSecs),
@@ -249,7 +308,8 @@ class _BreathingExerciseScreenState
     _breathTimer = Timer(Duration(seconds: _settings.inhaleSecs), () {
       if (!mounted || _phase != _Phase.active) return;
       setState(() => _isInhaling = false);
-      if (_settings.breathingSoundsEnabled) _audio.playExhale(targetSecs: _settings.exhaleSecs);
+      _breathColorCtrl.animateTo(1.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+      if (_settings.breathingSoundsEnabled) _audio.playExhale(targetSecs: _settings.exhaleSecs, volumeFactor: _settings.breathingVolume);
       _circleCtrl.animateTo(
         0.3,
         duration: Duration(seconds: _settings.exhaleSecs),
@@ -273,6 +333,7 @@ class _BreathingExerciseScreenState
       _retentionElapsed = 0;
     });
     _pulseCtrl.repeat(reverse: true);
+    _breathColorCtrl.animateTo(1.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
     if (_settings.exhaustRetentionSecs <= 30) _startHeartbeatSequence();
     _retentionTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) { t.cancel(); return; }
@@ -303,7 +364,7 @@ class _BreathingExerciseScreenState
 
   void _scheduleNextHeartbeat() {
     if (_phase != _Phase.retention || _heartbeatStart == null) return;
-    if (_settings.heartbeatEnabled) _audio.playHeartbeat();
+    if (_settings.heartbeatEnabled) _audio.playHeartbeat(volumeFactor: _settings.heartbeatVolume);
     final elapsedMs = DateTime.now().difference(_heartbeatStart!).inMilliseconds;
     if (elapsedMs >= 30000) return;
     final t = (elapsedMs / 30000).clamp(0.0, 1.0);
@@ -320,7 +381,8 @@ class _BreathingExerciseScreenState
       _phase = _Phase.recovery;
       _recoveryElapsed = 0;
     });
-    if (_settings.breathingSoundsEnabled) _audio.playInhale(targetSecs: 3);
+    _breathColorCtrl.animateTo(0.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+    if (_settings.breathingSoundsEnabled) _audio.playInhale(targetSecs: 3, volumeFactor: _settings.breathingVolume);
     _circleCtrl.animateTo(
       1.0,
       duration: const Duration(seconds: 3),
@@ -328,7 +390,7 @@ class _BreathingExerciseScreenState
     );
     _breathTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) { t.cancel(); return; }
-      if (_settings.tickEnabled) _audio.playTick();
+      if (_settings.tickEnabled) _audio.playTick(volumeFactor: _settings.tickVolume);
       final next = _recoveryElapsed + 1;
       setState(() => _recoveryElapsed = next);
       if (next >= _settings.recoveryHoldSecs) {
@@ -347,7 +409,8 @@ class _BreathingExerciseScreenState
       _phase = _Phase.roundTransition;
       _transitionElapsed = 0;
     });
-    if (_settings.breathingSoundsEnabled) _audio.playExhale(targetSecs: 5);
+    _breathColorCtrl.animateTo(1.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+    if (_settings.breathingSoundsEnabled) _audio.playExhale(targetSecs: 5, volumeFactor: _settings.breathingVolume);
     _circleCtrl.animateTo(
       0.3,
       duration: const Duration(seconds: 5),
@@ -418,6 +481,9 @@ class _BreathingExerciseScreenState
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.88,
+      ),
       builder: (_) => _SettingsSheet(
         settings: _settings,
         onChanged: (s) => setState(() => _settings = s),
@@ -539,32 +605,28 @@ class _BreathingExerciseScreenState
 
   Widget _buildCircle(SieColors c) {
     return AnimatedBuilder(
-      animation: Listenable.merge([_circleCtrl, _pulseAnim]),
+      animation: Listenable.merge([_circleCtrl, _pulseAnim, _breathColorCtrl]),
       builder: (_, _) {
-        final t     = _circleCtrl.value;
-        final pulse = (_phase == _Phase.retention) ? _pulseAnim.value : 1.0;
-        final size  = (130.0 + t * 130.0) * pulse;
+        final t      = _circleCtrl.value;
+        final pulse  = (_phase == _Phase.retention) ? _pulseAnim.value : 1.0;
+        final colorT = _breathColorCtrl.value; // 0 = accent, 1 = accentSecondary
+        final size   = (130.0 + t * 130.0) * pulse;
 
         final bool isRetention = _phase == _Phase.retention;
-        final bool isInhale    = _phase == _Phase.active && _isInhaling;
-        final bool isExhale    = _phase == _Phase.active && !_isInhaling;
 
-        final Color accent = (isRetention || isExhale) ? c.accentSecondary : c.accent;
+        final Color accent =
+            Color.lerp(c.accent, c.accentSecondary, colorT) ?? c.accent;
 
         final double blur = isRetention ? 4.5 : (2.0 + t * 3.5).clamp(2.0, 5.5);
         final double glow = isRetention
             ? 0.70 + (pulse - 0.92) * 3.5
-            : isInhale
-                ? 0.55 + t * 0.55
-                : 0.40 + t * 0.50;
+            : (0.55 + t * 0.55) * (1 - colorT) + (0.40 + t * 0.50) * colorT;
 
-        final Color glassColor = accent.withValues(
-          alpha: isRetention
-              ? 0.09
-              : isInhale
-                  ? 0.03 + t * 0.07
-                  : 0.04 + t * 0.04,
-        );
+        final double glassAlpha = isRetention
+            ? 0.09
+            : (0.03 + t * 0.07) * (1 - colorT) + (0.04 + t * 0.04) * colorT;
+
+        final Color glassColor = accent.withValues(alpha: glassAlpha);
 
         return Stack(
           alignment: Alignment.center,
@@ -798,60 +860,65 @@ class _BreathingExerciseScreenState
                         ),
                       ),
                     ),
-                  Column(
-                    children: [
-                      Text(
-                        'HOLD',
-                        style: TextStyle(
-                          color: c.accentSecondary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 5,
-                          shadows: c.isLightMode
-                              ? null
-                              : [
-                                  Shadow(
-                                    color: c.accentSecondary,
-                                    blurRadius: 10,
-                                  ),
-                                ],
+                  Align(
+                    alignment: Alignment.center,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          'HOLD',
+                          style: TextStyle(
+                            color: c.accentSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 5,
+                            shadows: c.isLightMode
+                                ? null
+                                : [
+                                    Shadow(
+                                      color: c.accentSecondary,
+                                      blurRadius: 10,
+                                    ),
+                                  ],
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}',
-                        style: TextStyle(
-                          color: c.textPrimary,
-                          fontSize: 52,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 6,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                          shadows: c.isLightMode
-                              ? null
-                              : [
-                                  Shadow(
-                                    color: c.accentSecondary,
-                                    blurRadius: 14,
-                                  ),
-                                  Shadow(
-                                    color: c.accentSecondary,
-                                    blurRadius: 42,
-                                  ),
-                                ],
+                        const SizedBox(height: 10),
+                        Text(
+                          '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}',
+                          style: TextStyle(
+                            color: c.textPrimary,
+                            fontSize: 52,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 6,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            shadows: c.isLightMode
+                                ? null
+                                : [
+                                    Shadow(
+                                      color: c.accentSecondary,
+                                      blurRadius: 14,
+                                    ),
+                                    Shadow(
+                                      color: c.accentSecondary,
+                                      blurRadius: 42,
+                                    ),
+                                  ],
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'MAX ${_settings.exhaustRetentionSecs ~/ 60}:${(_settings.exhaustRetentionSecs % 60).toString().padLeft(2, '0')}',
-                        style: TextStyle(
-                          color: c.textSecondary,
-                          fontSize: 11,
+                        const SizedBox(height: 6),
+                        Text(
+                          'MAX ${_settings.exhaustRetentionSecs ~/ 60}:${(_settings.exhaustRetentionSecs % 60).toString().padLeft(2, '0')}',
+                          style: TextStyle(
+                            color: c.textSecondary,
+                            fontSize: 11,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -875,6 +942,7 @@ class _BreathingExerciseScreenState
               glow: 0.92,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Text(
                     'HOLD YOUR BREATH',
@@ -1214,17 +1282,75 @@ class _SettingsSheet extends ConsumerStatefulWidget {
 
 class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
   late BreathingSettings _s;
+  final List<BreathingSettings?> _presets = [null, null, null];
 
   @override
   void initState() {
     super.initState();
     _s = widget.settings;
+    _loadPresetsFromPrefs();
   }
+
+  Future<void> _loadPresetsFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final loaded = <BreathingSettings?>[];
+    for (var i = 1; i <= 3; i++) {
+      final jsonStr = prefs.getString('breathing_preset_$i');
+      if (jsonStr == null) {
+        loaded.add(null);
+        continue;
+      }
+      try {
+        loaded.add(BreathingSettings.fromJson(
+            jsonDecode(jsonStr) as Map<String, dynamic>));
+      } catch (_) {
+        loaded.add(null);
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _presets
+        ..[0] = loaded[0]
+        ..[1] = loaded[1]
+        ..[2] = loaded[2];
+    });
+  }
+
+  Future<void> _savePreset(int zeroIndex) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        'breathing_preset_${zeroIndex + 1}', jsonEncode(_s.toJson()));
+    if (!mounted) return;
+    setState(() => _presets[zeroIndex] = _s);
+  }
+
+  void _loadPreset(int zeroIndex) {
+    final p = _presets[zeroIndex];
+    if (p != null) _update(p);
+  }
+
+  String _presetLabel(BreathingSettings? s) => s == null
+      ? 'ПУСТО'
+      : '${s.rounds}r · ${s.cyclesPerRound}c · ${s.exhaustRetentionSecs}s';
 
   void _update(BreathingSettings s) {
     setState(() => _s = s);
     widget.onChanged(s);
   }
+
+  Widget _sectionLabel(BuildContext context, SieColors c, String text) =>
+      Padding(
+        padding: const EdgeInsets.only(top: 4, bottom: 2),
+        child: Text(
+          text,
+          style: TextStyle(
+            color: c.textSecondary.withValues(alpha: 0.55),
+            fontSize: 10,
+            letterSpacing: 2.0,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -1232,99 +1358,136 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
 
     final content = SafeArea(
       top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 3,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(2),
-                  color: c.isLightMode
-                      ? c.border
-                      : Colors.white.withValues(alpha: 0.20),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 3,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(2),
+                    color: c.isLightMode
+                        ? c.border
+                        : Colors.white.withValues(alpha: 0.20),
+                  ),
                 ),
               ),
-            ),
-            Text(
-              'PROTOCOL SETTINGS',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: c.textPrimary,
-                  ),
-            ),
-            const SizedBox(height: 24),
-            _SettingRow(
-              label: 'ROUNDS',
-              value: _s.rounds,
-              min: 1,
-              max: 5,
-              onChanged: (v) => _update(_s.copyWith(rounds: v)),
-            ),
-            _SettingRow(
-              label: 'CYCLES / ROUND',
-              value: _s.cyclesPerRound,
-              min: 10,
-              max: 40,
-              step: 5,
-              onChanged: (v) => _update(_s.copyWith(cyclesPerRound: v)),
-            ),
-            _SettingRow(
-              label: 'INHALE  (SEC)',
-              value: _s.inhaleSecs,
-              min: 1,
-              max: 5,
-              onChanged: (v) => _update(_s.copyWith(inhaleSecs: v)),
-            ),
-            _SettingRow(
-              label: 'EXHALE  (SEC)',
-              value: _s.exhaleSecs,
-              min: 1,
-              max: 7,
-              onChanged: (v) => _update(_s.copyWith(exhaleSecs: v)),
-            ),
-            _SettingRow(
-              label: 'EXHALE RETENTION (SEC)',
-              value: _s.exhaustRetentionSecs,
-              min: 30,
-              max: 180,
-              step: 15,
-              onChanged: (v) =>
-                  _update(_s.copyWith(exhaustRetentionSecs: v)),
-            ),
-            _SettingRow(
-              label: 'RECOVERY HOLD (SEC)',
-              value: _s.recoveryHoldSecs,
-              min: 10,
-              max: 30,
-              onChanged: (v) => _update(_s.copyWith(recoveryHoldSecs: v)),
-            ),
-            const SizedBox(height: 8),
-            _ToggleRow(
-              label: 'AMBIENT MUSIC',
-              value: _s.ambientEnabled,
-              onChanged: (v) => _update(_s.copyWith(ambientEnabled: v)),
-            ),
-            _ToggleRow(
-              label: 'BREATHING SOUNDS',
-              value: _s.breathingSoundsEnabled,
-              onChanged: (v) =>
-                  _update(_s.copyWith(breathingSoundsEnabled: v)),
-            ),
-            _ToggleRow(
-              label: 'HEARTBEAT',
-              value: _s.heartbeatEnabled,
-              onChanged: (v) => _update(_s.copyWith(heartbeatEnabled: v)),
-            ),
-            _ToggleRow(
-              label: 'CLOCK TICKS',
-              value: _s.tickEnabled,
-              onChanged: (v) => _update(_s.copyWith(tickEnabled: v)),
-            ),
-          ],
+              Text(
+                'PROTOCOL SETTINGS',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: c.textPrimary,
+                    ),
+              ),
+              const SizedBox(height: 16),
+              _sectionLabel(context, c, 'PROTOCOL'),
+              _SettingRow(
+                label: 'ROUNDS',
+                value: _s.rounds,
+                min: 1,
+                max: 5,
+                onChanged: (v) => _update(_s.copyWith(rounds: v)),
+              ),
+              _SettingRow(
+                label: 'CYCLES / ROUND',
+                value: _s.cyclesPerRound,
+                min: 10,
+                max: 40,
+                step: 5,
+                onChanged: (v) => _update(_s.copyWith(cyclesPerRound: v)),
+              ),
+              _SettingRow(
+                label: 'INHALE  (SEC)',
+                value: _s.inhaleSecs,
+                min: 1,
+                max: 5,
+                onChanged: (v) => _update(_s.copyWith(inhaleSecs: v)),
+              ),
+              _SettingRow(
+                label: 'EXHALE  (SEC)',
+                value: _s.exhaleSecs,
+                min: 1,
+                max: 7,
+                onChanged: (v) => _update(_s.copyWith(exhaleSecs: v)),
+              ),
+              _SettingRow(
+                label: 'EXHALE RETENTION (SEC)',
+                value: _s.exhaustRetentionSecs,
+                min: 30,
+                max: 180,
+                step: 15,
+                onChanged: (v) =>
+                    _update(_s.copyWith(exhaustRetentionSecs: v)),
+              ),
+              _SettingRow(
+                label: 'RECOVERY HOLD (SEC)',
+                value: _s.recoveryHoldSecs,
+                min: 10,
+                max: 30,
+                onChanged: (v) => _update(_s.copyWith(recoveryHoldSecs: v)),
+              ),
+              const SizedBox(height: 12),
+              _sectionLabel(context, c, 'SOUND TOGGLES'),
+              _ToggleRow(
+                label: 'AMBIENT MUSIC',
+                value: _s.ambientEnabled,
+                onChanged: (v) => _update(_s.copyWith(ambientEnabled: v)),
+              ),
+              _ToggleRow(
+                label: 'BREATHING SOUNDS',
+                value: _s.breathingSoundsEnabled,
+                onChanged: (v) =>
+                    _update(_s.copyWith(breathingSoundsEnabled: v)),
+              ),
+              _ToggleRow(
+                label: 'HEARTBEAT',
+                value: _s.heartbeatEnabled,
+                onChanged: (v) => _update(_s.copyWith(heartbeatEnabled: v)),
+              ),
+              _ToggleRow(
+                label: 'CLOCK TICKS',
+                value: _s.tickEnabled,
+                onChanged: (v) => _update(_s.copyWith(tickEnabled: v)),
+              ),
+              const SizedBox(height: 12),
+              _sectionLabel(context, c, 'VOLUME'),
+              _VolumeRow(
+                label: 'AMBIENT MUSIC',
+                value: _s.ambientVolume,
+                onChanged: (v) => _update(_s.copyWith(ambientVolume: v)),
+              ),
+              _VolumeRow(
+                label: 'BREATHING',
+                value: _s.breathingVolume,
+                onChanged: (v) => _update(_s.copyWith(breathingVolume: v)),
+              ),
+              _VolumeRow(
+                label: 'HEARTBEAT',
+                value: _s.heartbeatVolume,
+                onChanged: (v) => _update(_s.copyWith(heartbeatVolume: v)),
+              ),
+              _VolumeRow(
+                label: 'CLOCK TICKS',
+                value: _s.tickVolume,
+                onChanged: (v) => _update(_s.copyWith(tickVolume: v)),
+              ),
+              const SizedBox(height: 12),
+              _sectionLabel(context, c, 'PRESETS'),
+              const SizedBox(height: 4),
+              for (var i = 0; i < 3; i++)
+                _PresetRow(
+                  slot: i + 1,
+                  label: _presetLabel(_presets[i]),
+                  hasData: _presets[i] != null,
+                  onLoad: _presets[i] != null ? () => _loadPreset(i) : null,
+                  onSave: () => _savePreset(i),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -1474,6 +1637,153 @@ class _ToggleRow extends ConsumerWidget {
           ),
           Switch(value: value, onChanged: onChanged, activeThumbColor: c.accent),
         ],
+      ),
+    );
+  }
+}
+
+class _VolumeRow extends ConsumerWidget {
+  final String label;
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  const _VolumeRow({required this.label, required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(label, style: TextStyle(color: c.textSecondary, fontSize: 12)),
+          ),
+          Expanded(
+            child: SliderTheme(
+              data: SliderThemeData(
+                activeTrackColor: c.accent,
+                thumbColor: c.accent,
+                inactiveTrackColor: c.border,
+                trackHeight: 2.0,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7.0),
+                overlayShape: SliderComponentShape.noOverlay,
+              ),
+              child: Slider(
+                value: value,
+                min: 0.0,
+                max: 1.0,
+                divisions: 20,
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 36,
+            child: Text(
+              '${(value * 100).round()}%',
+              textAlign: TextAlign.right,
+              style: TextStyle(color: c.textSecondary, fontSize: 11),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PresetRow extends ConsumerWidget {
+  final int slot;
+  final String label;
+  final bool hasData;
+  final VoidCallback? onLoad;
+  final VoidCallback onSave;
+
+  const _PresetRow({
+    required this.slot,
+    required this.label,
+    required this.hasData,
+    this.onLoad,
+    required this.onSave,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            decoration: BoxDecoration(
+              border: Border.all(color: c.accent.withValues(alpha: 0.50)),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Center(
+              child: Text(
+                '$slot',
+                style: TextStyle(color: c.accent, fontSize: 11, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: hasData ? c.textPrimary : c.textSecondary.withValues(alpha: 0.45),
+                fontSize: 12,
+              ),
+            ),
+          ),
+          if (onLoad != null) ...[
+            _PresetBtn(label: 'LOAD', onTap: onLoad!, c: c),
+            const SizedBox(width: 8),
+          ],
+          _PresetBtn(label: 'SAVE', onTap: onSave, c: c, isPrimary: true),
+        ],
+      ),
+    );
+  }
+}
+
+class _PresetBtn extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  final SieColors c;
+  final bool isPrimary;
+
+  const _PresetBtn({
+    required this.label,
+    required this.onTap,
+    required this.c,
+    this.isPrimary = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: isPrimary ? c.accent.withValues(alpha: 0.70) : c.border,
+          ),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isPrimary ? c.accent : c.textSecondary,
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.2,
+          ),
+        ),
       ),
     );
   }

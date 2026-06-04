@@ -9,22 +9,27 @@ import 'package:soundpool/soundpool.dart';
 import 'web_audio_helper.dart';
 
 // ── Ambient fade constants ─────────────────────────────────────
-const _ambientTargetVolume = 0.15;
+const _ambientMaxVolume      = 0.20;  // 100% volume; default 75% → 0.15
 const _ambientFadeDurationMs = 3000;
-const _ambientFadeStepMs = 100;
-const _ambientFadeSteps = _ambientFadeDurationMs ~/ _ambientFadeStepMs; // 30
+const _ambientFadeStepMs     = 100;
+const _ambientFadeSteps      = _ambientFadeDurationMs ~/ _ambientFadeStepMs; // 30
 
 // ── Cue soft-stop: 490 ms fade-out before end of each phase ───
-const _cueFadeMs = 490;
+const _cueFadeMs    = 490;
 const _cueFadeStepMs = 35;
-const _cueFadeSteps = _cueFadeMs ~/ _cueFadeStepMs; // 14
-const double _cueVolume = 0.6;
+const _cueFadeSteps  = _cueFadeMs ~/ _cueFadeStepMs; // 14
+
+// ── Volume maximums (at volumeFactor = 1.0; default 0.75 = current behaviour) ─
+const _cueMaxVolume       = 0.80;   // 0.60 / 0.75
+const _heartbeatMaxVolume = 0.73;   // 0.55 / 0.75
+const _tickMaxVolume      = 0.29;   // 0.22 / 0.75
 
 class AudioService {
   // ── Ambient — AudioPlayer on all platforms (looping long audio) ─
   final _ambient = AudioPlayer();
   Timer? _ambientFadeTimer;
   double _ambientVolume = 0.0;
+  double _ambientFadeTarget = _ambientMaxVolume * 0.75; // = 0.15, default
 
   // ── Short cues — Soundpool on all platforms ─────────────────
   // soundpool_web backs this with Web Audio API (AudioBufferSourceNode)
@@ -108,10 +113,11 @@ class AudioService {
 
   // ── Ambient ────────────────────────────────────────────────
 
-  Future<void> startAmbient() async {
+  Future<void> startAmbient({double volumeFactor = 0.75}) async {
     try {
       _ambientFadeTimer?.cancel();
       _ambientVolume = 0.0;
+      _ambientFadeTarget = (_ambientMaxVolume * volumeFactor).clamp(0.0, 1.0);
       await _ambient.setReleaseMode(ReleaseMode.loop);
       await _ambient.play(AssetSource('audio/ambient.mp3'), volume: 0.0);
       _startFadeIn();
@@ -127,8 +133,8 @@ class AudioService {
       const Duration(milliseconds: _ambientFadeStepMs),
       (t) {
         step++;
-        _ambientVolume = (step / _ambientFadeSteps * _ambientTargetVolume)
-            .clamp(0.0, _ambientTargetVolume);
+        _ambientVolume = (step / _ambientFadeSteps * _ambientFadeTarget)
+            .clamp(0.0, _ambientFadeTarget);
         _ambient.setVolume(_ambientVolume);
         if (step >= _ambientFadeSteps) t.cancel();
       },
@@ -180,18 +186,19 @@ class AudioService {
 
   // ── Cues ───────────────────────────────────────────────────
 
-  Future<void> playInhale({required int targetSecs}) async {
+  Future<void> playInhale({required int targetSecs, double volumeFactor = 0.75}) async {
     _cueFadeTimer?.cancel();
     if (_inhaleId < 0) return;
     try {
       _stopStream(_exhaleStream);
       _stopStream(_inhaleStream);
+      final vol = (_cueMaxVolume * volumeFactor).clamp(0.0, 1.0);
       _inhaleStream = await _pool.play(_inhaleId, rate: _rateFor(targetSecs.toDouble(), true));
-      await _applyVolume(_inhaleId, _inhaleStream, _cueVolume);
+      await _applyVolume(_inhaleId, _inhaleStream, vol);
       final sid = _inhaleStream;
       final iid = _inhaleId;
       _scheduleCueFadeOut(
-        targetSecs,
+        targetSecs, vol,
         (v) { if (sid > 0) _pool.setVolume(soundId: iid, streamId: sid, volume: v).ignore(); },
         () { _stopStream(sid); },
       );
@@ -200,18 +207,19 @@ class AudioService {
     }
   }
 
-  Future<void> playExhale({required int targetSecs}) async {
+  Future<void> playExhale({required int targetSecs, double volumeFactor = 0.75}) async {
     _cueFadeTimer?.cancel();
     if (_exhaleId < 0) return;
     try {
       _stopStream(_inhaleStream);
       _stopStream(_exhaleStream);
+      final vol = (_cueMaxVolume * volumeFactor).clamp(0.0, 1.0);
       _exhaleStream = await _pool.play(_exhaleId, rate: _rateFor(targetSecs.toDouble(), false));
-      await _applyVolume(_exhaleId, _exhaleStream, _cueVolume);
+      await _applyVolume(_exhaleId, _exhaleStream, vol);
       final sid = _exhaleStream;
       final eid = _exhaleId;
       _scheduleCueFadeOut(
-        targetSecs,
+        targetSecs, vol,
         (v) { if (sid > 0) _pool.setVolume(soundId: eid, streamId: sid, volume: v).ignore(); },
         () { _stopStream(sid); },
       );
@@ -233,6 +241,7 @@ class AudioService {
   // Soft-stop via callbacks so the same fade logic works for every cue.
   void _scheduleCueFadeOut(
     int targetSecs,
+    double startVolume,
     void Function(double volume) setVol,
     void Function() stop,
   ) {
@@ -243,7 +252,7 @@ class AudioService {
         const Duration(milliseconds: _cueFadeStepMs),
         (t) {
           step++;
-          final vol = (_cueVolume * (1.0 - step / _cueFadeSteps)).clamp(0.0, _cueVolume);
+          final vol = (startVolume * (1.0 - step / _cueFadeSteps)).clamp(0.0, startVolume);
           try { setVol(vol); } catch (_) {}
           if (step >= _cueFadeSteps) {
             t.cancel();
@@ -287,21 +296,31 @@ class AudioService {
 
   // ── Heartbeat & Tick ──────────────────────────────────────
 
-  Future<void> playHeartbeat() async {
+  Future<void> playHeartbeat({double volumeFactor = 0.75}) async {
     if (_heartbeatId < 0) return;
     try {
       final sid = await _pool.play(_heartbeatId);
-      if (sid > 0) await _pool.setVolume(soundId: _heartbeatId, streamId: sid, volume: 0.55);
+      if (sid > 0) {
+        await _pool.setVolume(
+          soundId: _heartbeatId, streamId: sid,
+          volume: (_heartbeatMaxVolume * volumeFactor).clamp(0.0, 1.0),
+        );
+      }
     } catch (e) {
       debugPrint('SiE Audio: heartbeat error — $e');
     }
   }
 
-  Future<void> playTick() async {
+  Future<void> playTick({double volumeFactor = 0.75}) async {
     if (_tickId < 0) return;
     try {
       final sid = await _pool.play(_tickId);
-      if (sid > 0) await _pool.setVolume(soundId: _tickId, streamId: sid, volume: 0.22);
+      if (sid > 0) {
+        await _pool.setVolume(
+          soundId: _tickId, streamId: sid,
+          volume: (_tickMaxVolume * volumeFactor).clamp(0.0, 1.0),
+        );
+      }
     } catch (e) {
       debugPrint('SiE Audio: tick error — $e');
     }
@@ -384,27 +403,28 @@ class AudioService {
                                   math.sin(2 * math.pi * 200 * t) * 0.12);
     }
 
-    return _buildWav(_applyEcho(raw, delayMs: 70, gain: 0.22, sr: sr), sr: sr);
+    return _buildWav(_applyEcho(raw, delayMs: 70, gain: 0.44, sr: sr), sr: sr);
   }
 
-  // Mechanical clock tick: sharp click layer + body resonance layer, with echo
+  // Light hi-hat: inharmonic metallic partials (4.8–13 kHz), fast click + sizzle tail
   static Uint8List _generateTick({int sr = 44100}) {
-    const durationMs = 60;
-    final n       = sr * durationMs ~/ 1000;
-    final attackN = sr * 1 ~/ 1000; // 1 ms attack
+    const durationMs = 90;
+    final n             = sr * durationMs ~/ 1000;
+    final attackSamples = sr ~/ 4000; // 0.25 ms attack
+    const freqs = [4800.0, 5670.0, 6100.0, 7100.0, 8350.0, 9800.0, 11200.0, 13100.0];
+    const amps  = [0.22,   0.18,   0.09,   0.16,   0.13,   0.10,   0.07,    0.05  ];
     final raw = List<double>.generate(n, (i) {
-      final t        = i / sr;
-      final attack   = i < attackN ? i / attackN : 1.0;
-      final clickEnv = attack * math.exp(-i / (sr * 0.005)); // τ=5ms — sharp transient
-      final click    = clickEnv * (math.sin(2 * math.pi * 3200 * t) * 0.45 +
-                                    math.sin(2 * math.pi * 4800 * t) * 0.30);
-      final bodyEnv  = attack * math.exp(-i / (sr * 0.018)); // τ=18ms — body resonance
-      final body     = bodyEnv  * (math.sin(2 * math.pi * 800  * t) * 0.40 +
-                                    math.sin(2 * math.pi * 1400 * t) * 0.25 +
-                                    math.sin(2 * math.pi * 320  * t) * 0.15);
-      return click + body;
+      final t      = i / sr;
+      final attack = i < attackSamples ? i / attackSamples : 1.0;
+      final env    = attack * (math.exp(-i / (sr * 0.007)) * 0.65 +  // τ=7ms  click
+                               math.exp(-i / (sr * 0.028)) * 0.35);  // τ=28ms sizzle
+      var s = 0.0;
+      for (var j = 0; j < freqs.length; j++) {
+        s += math.sin(2 * math.pi * freqs[j] * t) * amps[j];
+      }
+      return env * s;
     });
-    return _buildWav(_applyEcho(raw, delayMs: 55, gain: 0.18, sr: sr), sr: sr);
+    return _buildWav(_applyEcho(raw, delayMs: 25, gain: 0.36, sr: sr), sr: sr);
   }
 
   // ── Cleanup ────────────────────────────────────────────────
