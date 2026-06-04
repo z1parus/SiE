@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -32,9 +34,10 @@ class AudioService {
   // soundpool.play() has no volume parameter; call setVolume() after play().
   // Stream IDs are 1-based; 0 means play() failed.
   final _pool = Soundpool.fromOptions(
-    options: const SoundpoolOptions(streamType: StreamType.music, maxStreams: 4),
+    options: const SoundpoolOptions(streamType: StreamType.music, maxStreams: 6),
   );
   int _inhaleId = -1, _exhaleId = -1, _chimeId = -1;
+  int _heartbeatId = -1, _tickId = -1;
   int _inhaleStream = 0, _exhaleStream = 0;
 
   bool _initialized = false;
@@ -67,6 +70,8 @@ class AudioService {
       _inhaleId = results[0];
       _exhaleId = results[1];
       _chimeId = results[2];
+      _heartbeatId = await _pool.load(_generateHeartbeat().buffer.asByteData());
+      _tickId      = await _pool.load(_generateTick().buffer.asByteData());
 
       // Web: listen for page visibility changes so we can recover after
       // the browser suspends audio on screen-lock or tab-switch.
@@ -80,6 +85,8 @@ class AudioService {
           _pool.play(_inhaleId),
           _pool.play(_exhaleId),
           _pool.play(_chimeId),
+          _pool.play(_heartbeatId),
+          _pool.play(_tickId),
         ]);
         for (final s in streams) {
           if (s > 0) _pool.stop(s).ignore();
@@ -276,6 +283,108 @@ class AudioService {
         }
       }
     }
+  }
+
+  // ── Heartbeat & Tick ──────────────────────────────────────
+
+  Future<void> playHeartbeat() async {
+    if (_heartbeatId < 0) return;
+    try {
+      final sid = await _pool.play(_heartbeatId);
+      if (sid > 0) await _pool.setVolume(soundId: _heartbeatId, streamId: sid, volume: 0.55);
+    } catch (e) {
+      debugPrint('SiE Audio: heartbeat error — $e');
+    }
+  }
+
+  Future<void> playTick() async {
+    if (_tickId < 0) return;
+    try {
+      final sid = await _pool.play(_tickId);
+      if (sid > 0) await _pool.setVolume(soundId: _tickId, streamId: sid, volume: 0.45);
+    } catch (e) {
+      debugPrint('SiE Audio: tick error — $e');
+    }
+  }
+
+  // ── WAV synthesis ─────────────────────────────────────────
+
+  static Uint8List _buildWav(List<double> samples, {int sr = 44100}) {
+    double maxA = 0;
+    for (final s in samples) {
+      final a = s.abs();
+      if (a > maxA) maxA = a;
+    }
+    final scale = maxA > 0 ? 0.95 / maxA : 1.0;
+
+    final dataSize = samples.length * 2;
+    final buf = ByteData(44 + dataSize);
+    var o = 0;
+
+    void text(String t) { for (final code in t.codeUnits) { buf.setUint8(o++, code); } }
+    void u16(int v) { buf.setUint16(o, v, Endian.little); o += 2; }
+    void u32(int v) { buf.setUint32(o, v, Endian.little); o += 4; }
+
+    text('RIFF'); u32(36 + dataSize); text('WAVE');
+    text('fmt '); u32(16); u16(1); u16(1); u32(sr); u32(sr * 2); u16(2); u16(16);
+    text('data'); u32(dataSize);
+
+    for (final s in samples) {
+      final v = (s * scale * 32767).round().clamp(-32768, 32767);
+      buf.setInt16(o, v, Endian.little);
+      o += 2;
+    }
+
+    return buf.buffer.asUint8List();
+  }
+
+  // Lub-dub heartbeat: lub(80ms) + gap(80ms) + dub(60ms) + tail(80ms)
+  static Uint8List _generateHeartbeat({int sr = 44100}) {
+    const lubMs = 80, gapMs = 80, dubMs = 60, tailMs = 80;
+    final totalSamples = sr * (lubMs + gapMs + dubMs + tailMs) ~/ 1000;
+    final samples = List<double>.filled(totalSamples, 0.0);
+
+    final nLub = sr * lubMs ~/ 1000;
+    final nGap = sr * gapMs ~/ 1000;
+    final nDub = sr * dubMs ~/ 1000;
+    final attackN = sr * 4 ~/ 1000; // 4 ms linear attack
+
+    for (var i = 0; i < nLub; i++) {
+      final t = i / sr;
+      final attack = i < attackN ? i / attackN : 1.0;
+      final env = attack * math.exp(-i / (sr * 0.035));
+      samples[i] = env * (math.sin(2 * math.pi * 60 * t) * 0.60 +
+                          math.sin(2 * math.pi * 120 * t) * 0.28 +
+                          math.sin(2 * math.pi * 250 * t) * 0.12);
+    }
+
+    final dubStart = nLub + nGap;
+    for (var i = 0; i < nDub; i++) {
+      final t = i / sr;
+      final attack = i < attackN ? i / attackN : 1.0;
+      final env = attack * math.exp(-i / (sr * 0.028)) * 0.6;
+      samples[dubStart + i] = env * (math.sin(2 * math.pi * 65 * t) * 0.60 +
+                                     math.sin(2 * math.pi * 130 * t) * 0.28 +
+                                     math.sin(2 * math.pi * 260 * t) * 0.12);
+    }
+
+    return _buildWav(samples, sr: sr);
+  }
+
+  // Short clock tick: ~35 ms high-freq click with fast exponential decay
+  static Uint8List _generateTick({int sr = 44100}) {
+    const durationMs = 35;
+    final n = sr * durationMs ~/ 1000;
+    final attackN = sr * 1 ~/ 1000; // 1 ms attack
+    final samples = List<double>.generate(n, (i) {
+      final t = i / sr;
+      final attack = i < attackN ? i / attackN : 1.0;
+      final env = attack * math.exp(-i / (sr * 0.008));
+      return env * (math.sin(2 * math.pi * 3000 * t) * 0.55 +
+                    math.sin(2 * math.pi * 6000 * t) * 0.35 +
+                    math.sin(2 * math.pi * 1200 * t) * 0.10);
+    });
+    return _buildWav(samples, sr: sr);
   }
 
   // ── Cleanup ────────────────────────────────────────────────

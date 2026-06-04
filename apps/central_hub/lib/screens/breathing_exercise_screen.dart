@@ -93,7 +93,9 @@ class _BreathingExerciseScreenState
   Timer? _breathTimer;
   Timer? _retentionTimer;
   Timer? _transitionTimer;
+  Timer? _heartbeatTimer;
   DateTime? _sessionStart;
+  DateTime? _heartbeatStart;
 
   @override
   void initState() {
@@ -122,6 +124,7 @@ class _BreathingExerciseScreenState
     _breathTimer?.cancel();
     _retentionTimer?.cancel();
     _transitionTimer?.cancel();
+    _heartbeatTimer?.cancel();
   }
 
   // ── Back / Partial XP ────────────────────────────────────────
@@ -235,6 +238,7 @@ class _BreathingExerciseScreenState
       _retentionElapsed = 0;
     });
     _pulseCtrl.repeat(reverse: true);
+    if (_settings.exhaustRetentionSecs <= 30) _startHeartbeatSequence();
     _retentionTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) { t.cancel(); return; }
       final next = _retentionElapsed + 1;
@@ -244,14 +248,33 @@ class _BreathingExerciseScreenState
         _endRetention();
       } else {
         setState(() => _retentionElapsed = next);
+        if (next == _settings.exhaustRetentionSecs - 30) _startHeartbeatSequence();
       }
     });
   }
 
   void _endRetention() {
     _retentionTimer?.cancel();
+    _heartbeatTimer?.cancel();
+    _heartbeatStart = null;
     _pulseCtrl.stop();
     _startRecoveryPhase();
+  }
+
+  void _startHeartbeatSequence() {
+    _heartbeatStart = DateTime.now();
+    _scheduleNextHeartbeat();
+  }
+
+  void _scheduleNextHeartbeat() {
+    if (_phase != _Phase.retention || _heartbeatStart == null) return;
+    _audio.playHeartbeat();
+    final elapsedMs = DateTime.now().difference(_heartbeatStart!).inMilliseconds;
+    if (elapsedMs >= 30000) return;
+    final t = (elapsedMs / 30000).clamp(0.0, 1.0);
+    final bpm = 72.0 - 32.0 * t; // 72 BPM → 40 BPM over 30 s
+    final intervalMs = (60000 / bpm).round();
+    _heartbeatTimer = Timer(Duration(milliseconds: intervalMs), _scheduleNextHeartbeat);
   }
 
   // ── Phase: Recovery (Hold on Inhale) ─────────────────────
@@ -270,6 +293,7 @@ class _BreathingExerciseScreenState
     );
     _breathTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) { t.cancel(); return; }
+      _audio.playTick();
       final next = _recoveryElapsed + 1;
       setState(() => _recoveryElapsed = next);
       if (next >= _recoveryHoldSecs) {
