@@ -90,7 +90,7 @@ class _TopBar extends ConsumerWidget {
           Expanded(
             child: Text(
               'БАЗА ЗНАНИЙ',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     color: c.textPrimary,
                     letterSpacing: 3,
                     fontWeight: FontWeight.w700,

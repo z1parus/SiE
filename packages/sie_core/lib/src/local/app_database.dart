@@ -17,6 +17,8 @@ class LocalHabits extends Table {
   TextColumn get color => text().withDefault(const Constant('#00C8FF'))();
   BoolColumn get isPinned =>
       boolean().withDefault(const Constant(false))();
+  BoolColumn get isArchived =>
+      boolean().withDefault(const Constant(false))();
   IntColumn get createdAtMs => integer()();
   BoolColumn get deletedLocally =>
       boolean().withDefault(const Constant(false))();
@@ -106,14 +108,33 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.addColumn(localHabits, localHabits.isArchived);
+      }
+    },
+  );
 
   // ── Habits ───────────────────────────────────────────────────────────────
 
   Future<List<LocalHabit>> habitsForUser(String userId) =>
       (select(localHabits)
             ..where((t) =>
-                t.userId.equals(userId) & t.deletedLocally.equals(false)))
+                t.userId.equals(userId) &
+                t.deletedLocally.equals(false) &
+                t.isArchived.equals(false)))
+          .get();
+
+  Future<List<LocalHabit>> archivedHabitsForUser(String userId) =>
+      (select(localHabits)
+            ..where((t) =>
+                t.userId.equals(userId) &
+                t.deletedLocally.equals(false) &
+                t.isArchived.equals(true)))
           .get();
 
   Future<void> upsertHabit(LocalHabitsCompanion row) =>

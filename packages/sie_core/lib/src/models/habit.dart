@@ -5,6 +5,7 @@ class Habit {
   final String? description;
   final String color;
   final bool isPinned;
+  final bool isArchived;
   final DateTime createdAt;
 
   const Habit({
@@ -14,6 +15,7 @@ class Habit {
     this.description,
     this.color = '#00C8FF',
     this.isPinned = false,
+    this.isArchived = false,
     required this.createdAt,
   });
 
@@ -24,6 +26,7 @@ class Habit {
         description: map['description']?.toString(),
         color: map['color']?.toString() ?? '#00C8FF',
         isPinned: map['is_pinned'] == true,
+        isArchived: map['is_archived'] == true,
         createdAt:
             DateTime.tryParse(map['created_at']?.toString() ?? '') ??
                 DateTime.now(),
@@ -34,6 +37,7 @@ class Habit {
     String? description,
     String? color,
     bool? isPinned,
+    bool? isArchived,
   }) =>
       Habit(
         id: id,
@@ -42,6 +46,7 @@ class Habit {
         description: description ?? this.description,
         color: color ?? this.color,
         isPinned: isPinned ?? this.isPinned,
+        isArchived: isArchived ?? this.isArchived,
         createdAt: createdAt,
       );
 }

@@ -47,14 +47,15 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
             .eq('user_id', userId)
             .gte('completed_at', cutoff);
 
-        final habits = habitsRaw.map((r) => Habit.fromMap(r)).toList()
+        final allHabits = habitsRaw.map((r) => Habit.fromMap(r)).toList();
+        final habits = (allHabits.where((h) => !h.isArchived).toList())
           ..sort((a, b) {
             if (a.isPinned == b.isPinned) return 0;
             return a.isPinned ? -1 : 1;
           });
 
         // Mirror to local DB.
-        for (final h in habits) {
+        for (final h in allHabits) {
           await db.upsertHabit(LocalHabitsCompanion(
             id: Value(h.id),
             userId: Value(h.userId),
@@ -62,6 +63,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
             description: Value(h.description),
             color: Value(h.color),
             isPinned: Value(h.isPinned),
+            isArchived: Value(h.isArchived),
             createdAtMs: Value(h.createdAt.millisecondsSinceEpoch),
             synced: const Value(true),
           ));
@@ -104,6 +106,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
               description: h.description,
               color: h.color,
               isPinned: h.isPinned,
+              isArchived: h.isArchived,
               createdAt:
                   DateTime.fromMillisecondsSinceEpoch(h.createdAtMs),
             ))
@@ -465,12 +468,162 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       Error.throwWithStackTrace(e, st);
     }
   }
+
+  Future<void> archiveHabit(String habitId) async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final db = ref.read(appDatabaseProvider);
+    final prev = state.valueOrNull;
+    if (prev == null) return;
+
+    final habit = prev.habits.firstWhere((h) => h.id == habitId,
+        orElse: () => throw StateError('habit not found'));
+
+    final newHabits = prev.habits.where((h) => h.id != habitId).toList();
+    final newLogDates = Map<String, Set<String>>.from(prev.logDates)..remove(habitId);
+    final newStreaks   = Map<String, int>.from(prev.streaks)..remove(habitId);
+
+    state = AsyncData(HabitsState(
+      habits: newHabits,
+      logDates: newLogDates,
+      streaks: newStreaks,
+    ));
+
+    await db.upsertHabit(LocalHabitsCompanion(
+      id: Value(habitId),
+      userId: Value(userId),
+      title: Value(habit.title),
+      description: Value(habit.description),
+      color: Value(habit.color),
+      isPinned: Value(habit.isPinned),
+      isArchived: const Value(true),
+      createdAtMs: Value(habit.createdAt.millisecondsSinceEpoch),
+      synced: Value(isOnline),
+    ));
+
+    try {
+      if (isOnline) {
+        await client
+            .from('habits')
+            .update({'is_archived': true})
+            .eq('id', habitId)
+            .eq('user_id', userId);
+      } else {
+        await db.enqueueSyncOp('archive_habit',
+            jsonEncode({'id': habitId, 'user_id': userId}));
+      }
+    } catch (e, st) {
+      state = AsyncData(prev);
+      Error.throwWithStackTrace(e, st);
+    }
+  }
+
+  Future<void> restoreHabit(Habit habit) async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final db = ref.read(appDatabaseProvider);
+    final prev = state.valueOrNull;
+    if (prev == null) return;
+
+    final restored = habit.copyWith(isArchived: false);
+    final newHabits = [...prev.habits, restored]
+      ..sort((a, b) {
+        if (a.isPinned == b.isPinned) return 0;
+        return a.isPinned ? -1 : 1;
+      });
+
+    state = AsyncData(HabitsState(
+      habits: newHabits,
+      logDates: prev.logDates,
+      streaks: {...prev.streaks, habit.id: 0},
+    ));
+
+    await db.upsertHabit(LocalHabitsCompanion(
+      id: Value(habit.id),
+      userId: Value(userId),
+      title: Value(habit.title),
+      description: Value(habit.description),
+      color: Value(habit.color),
+      isPinned: Value(habit.isPinned),
+      isArchived: const Value(false),
+      createdAtMs: Value(habit.createdAt.millisecondsSinceEpoch),
+      synced: Value(isOnline),
+    ));
+
+    try {
+      if (isOnline) {
+        await client
+            .from('habits')
+            .update({'is_archived': false})
+            .eq('id', habit.id)
+            .eq('user_id', userId);
+      } else {
+        await db.enqueueSyncOp('restore_habit',
+            jsonEncode({'id': habit.id, 'user_id': userId}));
+      }
+    } catch (e, st) {
+      // Rollback — remove from active list
+      final rollback = prev.habits.where((h) => h.id != habit.id).toList();
+      state = AsyncData(HabitsState(
+        habits: rollback,
+        logDates: prev.logDates,
+        streaks: prev.streaks,
+      ));
+      Error.throwWithStackTrace(e, st);
+    }
+  }
 }
 
 final habitsProvider =
     AsyncNotifierProvider.autoDispose<HabitsNotifier, HabitsState>(
   HabitsNotifier.new,
 );
+
+final archivedHabitsProvider =
+    AutoDisposeFutureProvider<List<Habit>>((ref) async {
+  ref.watch(authStateProvider);
+  final client = Supabase.instance.client;
+  final session = client.auth.currentSession;
+  if (session == null) return [];
+
+  final userId = session.user.id;
+  final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+  final db = ref.read(appDatabaseProvider);
+
+  if (isOnline) {
+    try {
+      final rows = await client
+          .from('habits')
+          .select()
+          .eq('user_id', userId)
+          .eq('is_archived', true)
+          .order('created_at', ascending: false);
+      return rows.map((r) => Habit.fromMap(r)).toList();
+    } catch (_) {
+      // fall through to local
+    }
+  }
+
+  final local = await db.archivedHabitsForUser(userId);
+  return local
+      .map((h) => Habit(
+            id: h.id,
+            userId: h.userId,
+            title: h.title,
+            description: h.description,
+            color: h.color,
+            isPinned: h.isPinned,
+            isArchived: true,
+            createdAt: DateTime.fromMillisecondsSinceEpoch(h.createdAtMs),
+          ))
+      .toList();
+});
 
 Future<bool> _tryAwardFirstHabit(
     SupabaseClient client, String userId) async {

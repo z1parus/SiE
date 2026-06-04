@@ -396,8 +396,8 @@ class _ShopCardState extends State<_ShopCard>
     final canAfford = widget.dp >= widget.asset.priceDP;
     final isFree    = widget.asset.priceDP == 0;
 
-    // Cryo-freeze state for locked items
-    if (!widget.accessible) {
+    // Cryo-freeze only when truly can't afford (locked)
+    if (!widget.accessible && !canAfford) {
       return ColorFiltered(
         colorFilter: const ColorFilter.matrix(<double>[
           0.25, 0.60, 0.15, 0, 5,

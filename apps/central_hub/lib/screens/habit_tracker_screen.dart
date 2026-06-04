@@ -58,7 +58,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _CyberTopBar(
-            onAdd:  () => _showHabitDialog(null),
+            onArchive: _openArchive,
             onInfo: () => setState(() => _showOnboardingManual = true),
           ),
           Expanded(
@@ -75,18 +75,10 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                   return _EmptyState(onAdd: () => _showHabitDialog(null));
                 }
                 return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 80),
-                  itemCount: state.habits.length + 1,
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                  itemCount: state.habits.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (context, i) {
-                    if (i == state.habits.length) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: _AddButton(onTap: () => _showHabitDialog(null)),
-                        ),
-                      );
-                    }
                     final habit    = state.habits[i];
                     final logDates = state.logDates[habit.id] ?? {};
                     return _SwipeableHabitCard(
@@ -118,6 +110,19 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
     return SieBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
+        floatingActionButton: Consumer(
+          builder: (context, ref, _) {
+            final sc2 = ref.watch(sieColorsProvider);
+            return FloatingActionButton(
+              onPressed: () => _showHabitDialog(null),
+              backgroundColor: sc2.accent,
+              foregroundColor: Colors.black,
+              elevation: 4,
+              child: const Icon(Icons.add),
+            );
+          },
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
         body: Stack(
           children: [
             body,
@@ -148,6 +153,14 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
   }
 
   // ── Dialogs ───────────────────────────────────────────────────
+
+  void _openArchive() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const HabitArchiveScreen(),
+      ),
+    );
+  }
 
   void _showHabitDialog(Habit? existing) {
     final sc = ref.read(sieColorsProvider);
@@ -269,6 +282,17 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                     },
                   ),
                   _OptionTile(
+                    icon: Icons.inventory_2_outlined,
+                    label: 'ARCHIVE PROTOCOL',
+                    color: sc.accent,
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      ref
+                          .read(habitsProvider.notifier)
+                          .archiveHabit(habit.id);
+                    },
+                  ),
+                  _OptionTile(
                     icon: Icons.delete_outline,
                     label: 'DELETE PROTOCOL',
                     color: Colors.redAccent,
@@ -372,8 +396,8 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
 // Cyberpunk Top Bar
 // ─────────────────────────────────────────────────────────────────────────────
 class _CyberTopBar extends ConsumerWidget {
-  const _CyberTopBar({required this.onAdd, required this.onInfo});
-  final VoidCallback onAdd;
+  const _CyberTopBar({required this.onArchive, required this.onInfo});
+  final VoidCallback onArchive;
   final VoidCallback onInfo;
 
   @override
@@ -439,10 +463,9 @@ class _CyberTopBar extends ConsumerWidget {
           _GlassIconBtn(icon: Icons.help_outline, onTap: onInfo, size: 18),
           const SizedBox(width: 8),
           _GlassIconBtn(
-            icon: Icons.add,
-            onTap: onAdd,
-            color: sc.accent,
-            size: 20,
+            icon: Icons.inventory_2_outlined,
+            onTap: onArchive,
+            size: 18,
           ),
         ],
       ),
@@ -1302,7 +1325,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
                   ),
                 ],
               ),
-              padding: EdgeInsets.fromLTRB(24, 16, 24, 32 + keyboardBottom),
+              padding: EdgeInsets.fromLTRB(24, 14, 24, 20 + keyboardBottom),
               child: child,
             ),
           ),
@@ -1316,7 +1339,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
             child: Container(
               width: 36,
               height: 3,
-              margin: const EdgeInsets.only(bottom: 20),
+              margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(2),
                 color: Colors.white.withValues(alpha: 0.20),
@@ -1327,13 +1350,13 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
             isEdit ? 'EDIT PROTOCOL' : 'NEW PROTOCOL',
             style: Theme.of(context).textTheme.titleMedium,
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
           _GlowField(controller: _titleCtrl, label: 'TITLE'),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           _GlowField(
               controller: _descCtrl,
               label: 'DESCRIPTION (OPTIONAL)'),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           Consumer(builder: (_, ref2, _) {
             final sc2 = ref2.watch(sieColorsProvider);
             return Text(
@@ -1356,7 +1379,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
               );
             }).toList(),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           Consumer(builder: (_, ref2, _) {
             final sc2 = ref2.watch(sieColorsProvider);
             return Row(
@@ -1633,6 +1656,285 @@ class _OptionTileState extends State<_OptionTile> {
                   fontSize: 11,
                   letterSpacing: 1.5,
                   fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Habit Archive Screen
+// ─────────────────────────────────────────────────────────────────────────────
+
+class HabitArchiveScreen extends ConsumerWidget {
+  const HabitArchiveScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc       = ref.watch(sieColorsProvider);
+    final archived = ref.watch(archivedHabitsProvider);
+
+    return SieBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top bar
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 12, 4),
+                child: Row(
+                  children: [
+                    _GlassIconBtn(
+                      icon: Icons.arrow_back_ios_new,
+                      onTap: () => Navigator.of(context).pop(),
+                      size: 15,
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          RichText(
+                            text: TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: 'HABIT ',
+                                  style: TextStyle(
+                                    color: sc.accent,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.5,
+                                    shadows: sc.isCosmicMode
+                                        ? [
+                                            Shadow(
+                                                color: sc.accent,
+                                                blurRadius: 8),
+                                            Shadow(
+                                                color: sc.accent,
+                                                blurRadius: 22),
+                                          ]
+                                        : null,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: 'ARCHIVE',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineLarge
+                                      ?.copyWith(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 3.0,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'ЗАВЕРШЁННЫЕ НЕЙРОННЫЕ ПРОТОКОЛЫ',
+                            style: TextStyle(
+                              color: sc.textSecondary,
+                              fontSize: 10,
+                              letterSpacing: 1.8,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: archived.when(
+                  loading: () => Center(
+                    child: CircularProgressIndicator(
+                      color: sc.accent,
+                      strokeWidth: 1.5,
+                    ),
+                  ),
+                  error: (_, __) => const Center(
+                    child: _NoConnectionMessage(),
+                  ),
+                  data: (habits) {
+                    if (habits.isEmpty) {
+                      return _ArchiveEmptyState();
+                    }
+                    return ListView.separated(
+                      padding:
+                          const EdgeInsets.fromLTRB(20, 12, 20, 48),
+                      itemCount: habits.length,
+                      separatorBuilder: (_, _) =>
+                          const SizedBox(height: 10),
+                      itemBuilder: (context, i) => _ArchivedHabitCard(
+                        habit: habits[i],
+                        onRestore: () {
+                          ref
+                              .read(habitsProvider.notifier)
+                              .restoreHabit(habits[i]);
+                          ref.invalidate(archivedHabitsProvider);
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ArchiveEmptyState extends ConsumerWidget {
+  const _ArchiveEmptyState();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.inventory_2_outlined,
+              size: 48, color: sc.textSecondary.withValues(alpha: 0.4)),
+          const SizedBox(height: 16),
+          Text(
+            'АРХИВ ПУСТ',
+            style: TextStyle(
+              color: sc.textSecondary,
+              fontSize: 11,
+              letterSpacing: 2,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Архивируйте выполненные привычки,\nчтобы увидеть их здесь',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: sc.textSecondary.withValues(alpha: 0.6),
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ArchivedHabitCard extends ConsumerWidget {
+  final Habit habit;
+  final VoidCallback onRestore;
+
+  const _ArchivedHabitCard({required this.habit, required this.onRestore});
+
+  Color _toColor(String hex) {
+    final h = hex.replaceAll('#', '').padLeft(6, '0');
+    return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF00C8FF);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc         = ref.watch(sieColorsProvider);
+    final habitColor = _toColor(habit.color);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                habitColor.withValues(alpha: 0.06),
+                sc.isCosmicMode
+                    ? const Color(0xFF0A0E1A).withValues(alpha: 0.85)
+                    : sc.surface,
+              ],
+            ),
+            border: Border.all(
+              color: habitColor.withValues(alpha: 0.25),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 4,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: habitColor,
+                  borderRadius: BorderRadius.circular(2),
+                  boxShadow: sc.isCosmicMode
+                      ? [
+                          BoxShadow(
+                            color: habitColor.withValues(alpha: 0.4),
+                            blurRadius: 8,
+                          )
+                        ]
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      habit.title.toUpperCase(),
+                      style: TextStyle(
+                        color: sc.textPrimary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    if (habit.description != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        habit.description!,
+                        style: TextStyle(
+                          color: sc.textSecondary,
+                          fontSize: 10,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: onRestore,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                        color: sc.accent.withValues(alpha: 0.5)),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'ВОССТАНОВИТЬ',
+                    style: TextStyle(
+                      color: sc.accent,
+                      fontSize: 9,
+                      letterSpacing: 1,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ),
             ],

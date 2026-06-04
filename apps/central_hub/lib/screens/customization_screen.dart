@@ -60,10 +60,34 @@ class _CustomizationScreenState extends ConsumerState<CustomizationScreen>
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
+      final inventory = ref.read(inventoryProvider).valueOrNull ?? InventoryState.empty;
+      final frames      = ref.read(avatarFramesProvider).valueOrNull ?? [];
+      final backgrounds = ref.read(profileBackgroundsProvider).valueOrNull ?? [];
+      final styles      = ref.read(statStylesProvider).valueOrNull ?? [];
+
+      bool canApply(CosmeticAsset? asset) =>
+          asset != null && (inventory.owns(asset) || asset.priceDP == 0);
+
+      final safeFrameId = _frameId == null
+          ? _frameId
+          : canApply(frames.where((a) => a.id == _frameId).firstOrNull)
+              ? _frameId
+              : widget.profile.equippedFrameId;
+      final safeBgId = _backgroundId == null
+          ? _backgroundId
+          : canApply(backgrounds.where((a) => a.id == _backgroundId).firstOrNull)
+              ? _backgroundId
+              : widget.profile.equippedBackgroundId;
+      final safeStyleId = _styleId == null
+          ? _styleId
+          : canApply(styles.where((a) => a.id == _styleId).firstOrNull)
+              ? _styleId
+              : widget.profile.equippedStatStyleId;
+
       await applyCustomization(
-        frameId: _frameId,
-        backgroundId: _backgroundId,
-        styleId: _styleId,
+        frameId: safeFrameId,
+        backgroundId: safeBgId,
+        styleId: safeStyleId,
       );
       ref.invalidate(userProfileProvider);
       if (mounted) Navigator.of(context).pop();
@@ -526,9 +550,7 @@ class _AssetGrid extends ConsumerWidget {
             isSelected: isSelected,
             isActive: isActive,
             isOwned: isOwned,
-            onTap: isOwned
-                ? () => onSelect(isSelected ? null : asset.id)
-                : null,
+            onTap: () => onSelect(isSelected ? null : asset.id),
           ),
         );
       },
