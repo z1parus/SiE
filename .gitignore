@@ -30,3 +30,6 @@ Thumbs.db
 # Tools
 .claude/
 .obsidian/
+
+# Planning
+planningSources/
