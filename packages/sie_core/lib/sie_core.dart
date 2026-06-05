@@ -43,3 +43,4 @@ export 'src/providers/bootcamp_provider.dart';
 export 'src/models/habit_routine.dart';
 export 'src/providers/habit_routines_provider.dart';
 export 'src/utils/color_utils.dart';
+export 'src/providers/user_timezone_provider.dart';

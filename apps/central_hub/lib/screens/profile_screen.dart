@@ -3,9 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 
-import 'customization_screen.dart';
 import 'edit_profile_screen.dart';
-import 'interface_hub_screen.dart';
 import 'knowledge_base_screen.dart';
 import 'progress_analytics_screen.dart';
 
@@ -203,93 +201,61 @@ class _ProfileContent extends ConsumerWidget {
             ),
           ),
         RepaintBoundary(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _HeaderGlassCard(
-                  profile: profile,
-                  frameDecoration: frameDecoration,
-                ),
-                if (equipped.statStyle != null) ...[
-                  const SizedBox(height: 12),
-                  _StatStyleCard(
-                    statStyle: equipped.statStyle!,
-                    level: level,
-                    xp: xp,
+          child: RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(userProfileProvider);
+              ref.invalidate(userAchievementsProvider);
+              await ref.read(userProfileProvider.future);
+            },
+            color: c.accent,
+            backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _HeaderGlassCard(
+                    profile: profile,
+                    frameDecoration: frameDecoration,
                   ),
-                ],
-                const SizedBox(height: 20),
-                _NavButton(
-                  icon: Icons.analytics_outlined,
-                  title: 'PROGRESS HUB',
-                  subtitle: 'Activity matrix, XP growth & focus stats',
-                  iconColor: c.accent,
-                  onTap: () => Navigator.of(context).push(PageRouteBuilder(
-                    pageBuilder: (_, _, _) => const ProgressAnalyticsScreen(),
-                    transitionsBuilder: (_, a, _, ch) =>
-                        FadeTransition(opacity: a, child: ch),
-                    transitionDuration: const Duration(milliseconds: 400),
-                  )),
-                ),
-                const SizedBox(height: 10),
-                _NavButton(
-                  icon: Icons.menu_book_rounded,
-                  title: 'БАЗА ЗНАНИЙ',
-                  subtitle: 'Физиология, психология, XP-таблица и этика SiE',
-                  iconColor: c.accent,
-                  onTap: () => Navigator.of(context).push(PageRouteBuilder(
-                    pageBuilder: (_, _, _) => const KnowledgeBaseScreen(),
-                    transitionsBuilder: (_, a, _, ch) =>
-                        FadeTransition(opacity: a, child: ch),
-                    transitionDuration: const Duration(milliseconds: 400),
-                  )),
-                ),
-                const SizedBox(height: 10),
-                if (profile != null)
-                  _NavButton(
-                    icon: Icons.style_outlined,
-                    title: 'НАСТРОЙКА ОБЛИКА',
-                    subtitle: 'Рамки аватара, фоны профиля и стили статистики',
-                    iconColor: c.accent,
-                    onTap: () => Navigator.of(context).push(PageRouteBuilder(
-                      pageBuilder: (_, _, _) =>
-                          CustomizationScreen(profile: profile!),
-                      transitionsBuilder: (_, a, _, ch) =>
-                          FadeTransition(opacity: a, child: ch),
-                      transitionDuration: const Duration(milliseconds: 400),
-                    )),
+                  if (equipped.statStyle != null) ...[
+                    const SizedBox(height: 12),
+                    _StatStyleCard(
+                      statStyle: equipped.statStyle!,
+                      level: level,
+                      xp: xp,
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  // Progress Hub + База Знаний — square 2-column grid
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _SquareNavButton(
+                          icon: Icons.analytics_outlined,
+                          label: 'PROGRESS HUB',
+                          iconColor: c.accent,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const ProgressAnalyticsScreen()),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _SquareNavButton(
+                          icon: Icons.menu_book_rounded,
+                          label: 'БАЗА ЗНАНИЙ',
+                          iconColor: c.accent,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const KnowledgeBaseScreen()),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                const SizedBox(height: 10),
-                _NavButton(
-                  icon: Icons.storefront_outlined,
-                  title: 'ИНТЕРФЕЙС-ХАБ',
-                  subtitle: 'Рамки, фоны и стили за Design Points',
-                  iconColor: c.dp,
-                  highlightTitle: true,
-                  onTap: () => Navigator.of(context).push(PageRouteBuilder(
-                    pageBuilder: (_, _, _) => const InterfaceHubScreen(),
-                    transitionsBuilder: (_, a, _, ch) =>
-                        FadeTransition(opacity: a, child: ch),
-                    transitionDuration: const Duration(milliseconds: 400),
-                  )),
-                ),
-                const SizedBox(height: 28),
-                const SectionHeader(title: 'РЕЖИМ ИНТЕРФЕЙСА'),
-                const SizedBox(height: 4),
-                Text(
-                  'ГРАФИЧЕСКАЯ НАГРУЗКА И СТИЛЬ ОФОРМЛЕНИЯ',
-                  style: TextStyle(
-                    color: c.textSecondary.withValues(alpha: 0.55),
-                    fontSize: 9,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const _ThemeSwitcherSection(),
-                const SizedBox(height: 28),
-                const SectionHeader(title: 'MEDALS VAULT'),
+                  const SizedBox(height: 28),
+                  const SectionHeader(title: 'MEDALS VAULT'),
                 const SizedBox(height: 4),
                 Text(
                   'EARNED COMMENDATIONS & COMBAT DECORATIONS',
@@ -306,6 +272,7 @@ class _ProfileContent extends ConsumerWidget {
             ),
           ),
         ),
+      ),
       ],
     );
   }
@@ -619,71 +586,54 @@ class _StatStyleCard extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Nav Button
+// Square Nav Button — used for Progress Hub / База Знаний side-by-side pair
 // ─────────────────────────────────────────────────────────────────────────────
-class _NavButton extends ConsumerWidget {
-  const _NavButton({
+class _SquareNavButton extends ConsumerWidget {
+  const _SquareNavButton({
     required this.icon,
-    required this.title,
-    required this.subtitle,
+    required this.label,
     required this.iconColor,
     required this.onTap,
-    this.highlightTitle = false,
   });
   final IconData icon;
-  final String title;
-  final String subtitle;
+  final String label;
   final Color iconColor;
   final VoidCallback onTap;
-  final bool highlightTitle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        decoration: c.subtleContainer(radius: 20),
-        child: Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(8),
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: Container(
+          decoration: c.subtleContainer(radius: 20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
               ),
-              child: Icon(icon, color: iconColor, size: 16),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: highlightTitle ? iconColor : null,
-                        ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontSize: 11,
-                          color: c.textSecondary,
-                        ),
-                  ),
-                ],
+              const SizedBox(height: 12),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
               ),
-            ),
-            Icon(
-              Icons.chevron_right,
-              color: iconColor.withValues(alpha: 0.5),
-              size: 16,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -741,195 +691,6 @@ class _MedalsVault extends ConsumerWidget {
               AchievementBadge(userAchievement: achievements[i]),
         );
       },
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Theme Mode Switcher
-// ─────────────────────────────────────────────────────────────────────────────
-class _ThemeSwitcherSection extends ConsumerWidget {
-  const _ThemeSwitcherSection();
-
-  static const _options = [
-    (
-      mode: SieThemeMode.cosmicLiquidGlass,
-      label: 'COSMIC LIQUID GLASS',
-      description: 'Звёздное поле, стеклянные шейдеры',
-      bgColor: Color(0xFF0A0E1A),
-      accentColor: Color(0xFF00E5FF),
-    ),
-    (
-      mode: SieThemeMode.classicDark,
-      label: 'CLASSIC DARK',
-      description: 'Антрацит + золото, без шейдеров',
-      bgColor: Color(0xFF1C1C22),
-      accentColor: Color(0xFFC8A84B),
-    ),
-    (
-      mode: SieThemeMode.classicLight,
-      label: 'CLASSIC LIGHT',
-      description: 'Светлый фон + бирюза, без шейдеров',
-      bgColor: Color(0xFFF5F6FA),
-      accentColor: Color(0xFF5AADA0),
-    ),
-  ];
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c          = ref.watch(sieColorsProvider);
-    final themeAsync = ref.watch(sieThemeModeProvider);
-    final current    = themeAsync.valueOrNull ?? SieThemeMode.cosmicLiquidGlass;
-
-    return Column(
-      children: [
-        for (int i = 0; i < _options.length; i++) ...[
-          if (i > 0) const SizedBox(height: 8),
-          _ThemeOptionTile(
-            label: _options[i].label,
-            description: _options[i].description,
-            bgColor: _options[i].bgColor,
-            accentColor: _options[i].accentColor,
-            isActive: current == _options[i].mode,
-            c: c,
-            onTap: current == _options[i].mode
-                ? null
-                : () => ref
-                    .read(sieThemeModeProvider.notifier)
-                    .setMode(_options[i].mode),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _ThemeOptionTile extends StatelessWidget {
-  const _ThemeOptionTile({
-    required this.label,
-    required this.description,
-    required this.bgColor,
-    required this.accentColor,
-    required this.isActive,
-    required this.c,
-    this.onTap,
-  });
-
-  final String label;
-  final String description;
-  final Color bgColor;
-  final Color accentColor;
-  final bool isActive;
-  final SieColors c;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-        decoration: BoxDecoration(
-          color: isActive
-              ? accentColor.withValues(alpha: 0.07)
-              : (c.isLightMode
-                  ? const Color(0x0A000000)
-                  : Colors.white.withValues(alpha: 0.04)),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isActive
-                ? accentColor.withValues(alpha: 0.50)
-                : (c.isLightMode
-                    ? c.border
-                    : Colors.white.withValues(alpha: 0.08)),
-            width: isActive ? 1.0 : 0.8,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: bgColor,
-                borderRadius: BorderRadius.circular(9),
-                border: Border.all(
-                  color: accentColor.withValues(alpha: 0.55),
-                  width: 1.5,
-                ),
-              ),
-              child: Center(
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: accentColor,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: accentColor.withValues(alpha: 0.65),
-                        blurRadius: 8,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: isActive ? accentColor : c.textPrimary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.4,
-                      shadows: isActive && c.isCosmicMode
-                          ? [
-                              Shadow(
-                                color: accentColor.withValues(alpha: 0.35),
-                                blurRadius: 8,
-                              ),
-                            ]
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    description,
-                    style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 250),
-              child: isActive
-                  ? Icon(
-                      Icons.check_circle_rounded,
-                      key: const ValueKey(true),
-                      color: accentColor,
-                      size: 18,
-                    )
-                  : Icon(
-                      Icons.radio_button_unchecked_rounded,
-                      key: const ValueKey(false),
-                      color: c.textSecondary.withValues(alpha: 0.35),
-                      size: 18,
-                    ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

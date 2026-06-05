@@ -5,6 +5,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 
+import 'customization_screen.dart';
+import 'interface_hub_screen.dart';
+
 LiquidGlassSettings _glassSettings({double glowIntensity = 0.88}) =>
     LiquidGlassSettings(
       blur: 3.5,
@@ -229,6 +232,54 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 32),
+          const SectionHeader(title: 'CUSTOMIZATION'),
+          const SizedBox(height: 16),
+          _NavRow(
+            icon: Icons.style_outlined,
+            label: 'НАСТРОЙКА ОБЛИКА',
+            subtitle: 'Рамки аватара, фоны профиля и стили статистики',
+            onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => CustomizationScreen(profile: profile)),
+                ),
+          ),
+          const SizedBox(height: 10),
+          _NavRow(
+            icon: Icons.storefront_outlined,
+            label: 'ИНТЕРФЕЙС-ХАБ',
+            subtitle: 'Рамки, фоны и стили за Design Points',
+            accentColor: c.dp,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const InterfaceHubScreen()),
+            ),
+          ),
+          const SizedBox(height: 32),
+          const SectionHeader(title: 'РЕЖИМ ИНТЕРФЕЙСА'),
+          const SizedBox(height: 4),
+          Text(
+            'ГРАФИЧЕСКАЯ НАГРУЗКА И СТИЛЬ ОФОРМЛЕНИЯ',
+            style: TextStyle(
+              color: c.textSecondary.withValues(alpha: 0.55),
+              fontSize: 9,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const _ThemeSwitcherSection(),
+          const SizedBox(height: 32),
+          const SectionHeader(title: 'ЧАСОВОЙ ПОЯС'),
+          const SizedBox(height: 4),
+          Text(
+            'НАСТРОЙКА ВРЕМЕНИ ДЛЯ СУТОЧНОГО АВАНГАРДА',
+            style: TextStyle(
+              color: c.textSecondary.withValues(alpha: 0.55),
+              fontSize: 9,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const _TimezonePicker(),
           if (_isSaving) ...[
             const SizedBox(height: 32),
             Center(
@@ -1029,6 +1080,477 @@ class _PressButtonState extends ConsumerState<_PressButton>
           );
         },
         child: widget.child,
+      ),
+    );
+  }
+}
+
+// ── Nav Row (for Настройка облика / Интерфейс-Хаб) ────────────────────────
+
+class _NavRow extends ConsumerWidget {
+  const _NavRow({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.onTap,
+    this.accentColor,
+  });
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final VoidCallback? onTap;
+  final Color? accentColor;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c     = ref.watch(sieColorsProvider);
+    final color = accentColor ?? c.accent;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        decoration: c.subtleContainer(radius: 20),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: color, size: 16),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: accentColor != null ? color : c.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(color: c.textSecondary, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right,
+                color: color.withValues(alpha: 0.5), size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Theme Switcher (moved from ProfileScreen) ─────────────────────────────
+
+class _ThemeSwitcherSection extends ConsumerWidget {
+  const _ThemeSwitcherSection();
+
+  static const _options = [
+    (
+      mode: SieThemeMode.cosmicLiquidGlass,
+      label: 'COSMIC LIQUID GLASS',
+      description: 'Звёздное поле, стеклянные шейдеры',
+      bgColor: Color(0xFF0A0E1A),
+      accentColor: Color(0xFF00E5FF),
+    ),
+    (
+      mode: SieThemeMode.classicDark,
+      label: 'CLASSIC DARK',
+      description: 'Антрацит + золото, без шейдеров',
+      bgColor: Color(0xFF1C1C22),
+      accentColor: Color(0xFFC8A84B),
+    ),
+    (
+      mode: SieThemeMode.classicLight,
+      label: 'CLASSIC LIGHT',
+      description: 'Светлый фон + бирюза, без шейдеров',
+      bgColor: Color(0xFFF5F6FA),
+      accentColor: Color(0xFF5AADA0),
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c       = ref.watch(sieColorsProvider);
+    final current = ref.watch(sieThemeModeProvider).valueOrNull
+        ?? SieThemeMode.cosmicLiquidGlass;
+
+    return Column(
+      children: [
+        for (int i = 0; i < _options.length; i++) ...[
+          if (i > 0) const SizedBox(height: 8),
+          _ThemeOptionTile(
+            label:       _options[i].label,
+            description: _options[i].description,
+            bgColor:     _options[i].bgColor,
+            accentColor: _options[i].accentColor,
+            isActive:    current == _options[i].mode,
+            c:           c,
+            onTap: current == _options[i].mode
+                ? null
+                : () => ref
+                    .read(sieThemeModeProvider.notifier)
+                    .setMode(_options[i].mode),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ThemeOptionTile extends StatelessWidget {
+  const _ThemeOptionTile({
+    required this.label,
+    required this.description,
+    required this.bgColor,
+    required this.accentColor,
+    required this.isActive,
+    required this.c,
+    this.onTap,
+  });
+  final String label;
+  final String description;
+  final Color bgColor;
+  final Color accentColor;
+  final bool isActive;
+  final SieColors c;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+        decoration: BoxDecoration(
+          color: isActive
+              ? accentColor.withValues(alpha: 0.07)
+              : (c.isLightMode
+                  ? const Color(0x0A000000)
+                  : Colors.white.withValues(alpha: 0.04)),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isActive
+                ? accentColor.withValues(alpha: 0.50)
+                : (c.isLightMode ? c.border : Colors.white.withValues(alpha: 0.08)),
+            width: isActive ? 1.0 : 0.8,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(
+                    color: accentColor.withValues(alpha: 0.55), width: 1.5),
+              ),
+              child: Center(
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: accentColor,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: accentColor.withValues(alpha: 0.65),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: isActive ? accentColor : c.textPrimary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.4,
+                      shadows: isActive && c.isCosmicMode
+                          ? [Shadow(
+                              color: accentColor.withValues(alpha: 0.35),
+                              blurRadius: 8,
+                            )]
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(description,
+                      style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                ],
+              ),
+            ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: isActive
+                  ? Icon(Icons.check_circle_rounded,
+                      key: const ValueKey(true), color: accentColor, size: 18)
+                  : Icon(Icons.radio_button_unchecked_rounded,
+                      key: const ValueKey(false),
+                      color: c.textSecondary.withValues(alpha: 0.35),
+                      size: 18),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Timezone Picker ───────────────────────────────────────────────────────
+
+class _TimezonePicker extends ConsumerWidget {
+  const _TimezonePicker();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c         = ref.watch(sieColorsProvider);
+    final tzAsync   = ref.watch(userTimezoneProvider);
+    final currentTz = tzAsync.valueOrNull ?? DateTime.now().timeZoneOffset;
+
+    return GestureDetector(
+      onTap: () => _showSheet(context, ref, currentTz),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        decoration: c.subtleContainer(radius: 20),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: c.accent.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.public, color: c.accent, size: 16),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    formatUtcOffset(currentTz),
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _cityForOffset(currentTz.inMinutes),
+                    style: TextStyle(color: c.textSecondary, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.expand_more,
+                color: c.textSecondary.withValues(alpha: 0.6), size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _cityForOffset(int minutes) {
+    for (final opt in kTimezoneOptions) {
+      if (opt.$1 == minutes) return opt.$3;
+    }
+    return 'Пользовательский пояс';
+  }
+
+  void _showSheet(BuildContext context, WidgetRef ref, Duration current) {
+    final c = ref.read(sieColorsProvider);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      isDismissible: true,
+      backgroundColor: c.isCosmicMode ? const Color(0xFF0B1E30) : c.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _TimezoneSheet(
+        currentMinutes: current.inMinutes,
+        onSelect: (minutes) {
+          ref
+              .read(userTimezoneProvider.notifier)
+              .setOffset(Duration(minutes: minutes));
+          Navigator.of(context).pop();
+        },
+      ),
+    );
+  }
+}
+
+class _TimezoneSheet extends ConsumerStatefulWidget {
+  const _TimezoneSheet(
+      {required this.currentMinutes, required this.onSelect});
+  final int currentMinutes;
+  final ValueChanged<int> onSelect;
+
+  @override
+  ConsumerState<_TimezoneSheet> createState() => _TimezoneSheetState();
+}
+
+class _TimezoneSheetState extends ConsumerState<_TimezoneSheet> {
+  late final ScrollController _scroll;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll = ScrollController();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrent());
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _scrollToCurrent() {
+    final idx = kTimezoneOptions
+        .indexWhere((opt) => opt.$1 == widget.currentMinutes);
+    if (idx < 0 || !_scroll.hasClients) return;
+    final target = idx * 64.0;
+    _scroll.animateTo(
+      target.clamp(0.0, _scroll.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
+    return DraggableScrollableSheet(
+      initialChildSize: 0.65,
+      minChildSize: 0.35,
+      maxChildSize: 0.92,
+      expand: false,
+      builder: (_, scrollCtrl) => Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 4),
+            child: Center(
+              child: Container(
+                width: 36,
+                height: 3,
+                decoration: BoxDecoration(
+                  color: c.isLightMode ? c.border : SieTheme.borderAccent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Text(
+              'ВЫБЕРИТЕ ЧАСОВОЙ ПОЯС',
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              controller: scrollCtrl,
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+              itemCount: kTimezoneOptions.length,
+              itemExtent: 64,
+              itemBuilder: (_, i) {
+                final opt      = kTimezoneOptions[i];
+                final isActive = opt.$1 == widget.currentMinutes;
+                return GestureDetector(
+                  onTap: () => widget.onSelect(opt.$1),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? c.accent.withValues(alpha: 0.08)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isActive
+                            ? c.accent.withValues(alpha: 0.45)
+                            : (c.isLightMode
+                                ? c.border
+                                : Colors.white.withValues(alpha: 0.07)),
+                        width: isActive ? 1.0 : 0.7,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                opt.$2,
+                                style: TextStyle(
+                                  color: isActive ? c.accent : c.textPrimary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                opt.$3,
+                                style: TextStyle(
+                                    color: c.textSecondary, fontSize: 11),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (isActive)
+                          Icon(Icons.check_circle_rounded,
+                              color: c.accent, size: 18),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -258,6 +259,7 @@ class SieTheme {
         ),
       ),
       extensions: [SieSpaceEffects.dark],
+      pageTransitionsTheme: _cupertinoTransitions,
     );
   }
 
@@ -340,6 +342,7 @@ class SieTheme {
             letterSpacing: 1.5,
           ),
         ),
+        pageTransitionsTheme: _cupertinoTransitions,
       );
 
   // ── Classic Light theme ────────────────────────────────────────────────────
@@ -421,5 +424,19 @@ class SieTheme {
             letterSpacing: 1.5,
           ),
         ),
+        pageTransitionsTheme: _cupertinoTransitions,
       );
 }
+
+// Cupertino-style page transitions for all platforms — enables swipe-back
+// gesture on Android (and keeps the familiar iOS slide on iOS).
+final _cupertinoTransitions = const PageTransitionsTheme(
+  builders: {
+    TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.iOS:     CupertinoPageTransitionsBuilder(),
+    TargetPlatform.macOS:   CupertinoPageTransitionsBuilder(),
+    TargetPlatform.linux:   CupertinoPageTransitionsBuilder(),
+    TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.fuchsia: CupertinoPageTransitionsBuilder(),
+  },
+);

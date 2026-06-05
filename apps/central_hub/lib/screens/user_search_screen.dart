@@ -359,12 +359,7 @@ class _UserTileState extends ConsumerState<_UserTile>
   void _navigate() {
     final profile = widget.profile;
     Navigator.of(context).push(
-      PageRouteBuilder(
-        pageBuilder: (_, _, _) => PublicProfileScreen(profile: profile),
-        transitionsBuilder: (_, anim, _, child) =>
-            FadeTransition(opacity: anim, child: child),
-        transitionDuration: const Duration(milliseconds: 300),
-      ),
+      MaterialPageRoute(builder: (_) => PublicProfileScreen(profile: profile)),
     );
   }
 

@@ -307,12 +307,7 @@ void _onBranchTap(BuildContext context, Branch branch) {
 
   if (screen != null) {
     Navigator.of(context).push(
-      PageRouteBuilder(
-        pageBuilder: (_, _, _) => screen!,
-        transitionsBuilder: (_, anim, _, child) =>
-            FadeTransition(opacity: anim, child: child),
-        transitionDuration: const Duration(milliseconds: 400),
-      ),
+      MaterialPageRoute(builder: (_) => screen!),
     );
     return;
   }
@@ -349,19 +344,9 @@ class _FloatingNavBar extends ConsumerWidget {
     }
     switch (index) {
       case 0:
-        nav.push(PageRouteBuilder(
-          pageBuilder: (_, _, _) => const ProfileScreen(),
-          transitionsBuilder: (_, a, _, c) =>
-              FadeTransition(opacity: a, child: c),
-          transitionDuration: const Duration(milliseconds: 350),
-        ));
+        nav.push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
       case 3:
-        nav.push(PageRouteBuilder(
-          pageBuilder: (_, _, _) => const LeaderboardScreen(),
-          transitionsBuilder: (_, a, _, c) =>
-              FadeTransition(opacity: a, child: c),
-          transitionDuration: const Duration(milliseconds: 350),
-        ));
+        nav.push(MaterialPageRoute(builder: (_) => const LeaderboardScreen()));
       default:
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -545,12 +530,7 @@ class _LeaderboardTile extends StatelessWidget {
     return SieGlassCard(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       onTap: () => Navigator.of(context).push(
-        PageRouteBuilder(
-          pageBuilder: (_, _, _) => const LeaderboardScreen(),
-          transitionsBuilder: (_, anim, _, child) =>
-              FadeTransition(opacity: anim, child: child),
-          transitionDuration: const Duration(milliseconds: 350),
-        ),
+        MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
       ),
       child: Row(
         children: [
@@ -1183,12 +1163,7 @@ class _ScreenHeader extends ConsumerWidget {
                   const SizedBox(height: 6),
                   GestureDetector(
                     onTap: () => Navigator.of(context).push(
-                      PageRouteBuilder(
-                        pageBuilder: (_, _, _) => const ProfileScreen(),
-                        transitionsBuilder: (_, anim, _, child) =>
-                            FadeTransition(opacity: anim, child: child),
-                        transitionDuration: const Duration(milliseconds: 350),
-                      ),
+                      MaterialPageRoute(builder: (_) => const ProfileScreen()),
                     ),
                     child: Row(
                       children: [
@@ -1217,12 +1192,7 @@ class _ScreenHeader extends ConsumerWidget {
               icon: Icons.search,
               size: 20,
               onTap: () => Navigator.of(context).push(
-                PageRouteBuilder(
-                  pageBuilder: (_, _, _) => const UserSearchScreen(),
-                  transitionsBuilder: (_, anim, _, child) =>
-                      FadeTransition(opacity: anim, child: child),
-                  transitionDuration: const Duration(milliseconds: 300),
-                ),
+                MaterialPageRoute(builder: (_) => const UserSearchScreen()),
               ),
             ),
             const SizedBox(width: 8),

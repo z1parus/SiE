@@ -464,15 +464,12 @@ class _BreathingExerciseScreenState
 
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        pageBuilder: (_, _, _) => MissionAccomplishedScreen(
+      MaterialPageRoute(
+        builder: (_) => MissionAccomplishedScreen(
           xpGained: result.xpGained,
           dpGained: result.dpGained,
           achievement: result.newAchievement,
         ),
-        transitionsBuilder: (_, anim, _, child) =>
-            FadeTransition(opacity: anim, child: child),
-        transitionDuration: const Duration(milliseconds: 700),
       ),
     );
   }

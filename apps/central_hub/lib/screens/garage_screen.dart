@@ -39,12 +39,7 @@ class _GarageScreenState extends ConsumerState<GarageScreen> {
       BootcampTaskDestination.habitArchive => const HabitTrackerScreen(),
     };
     final nav = Navigator.of(ctx);
-    await nav.push(PageRouteBuilder(
-      pageBuilder: (_, _, _) => screen,
-      transitionsBuilder: (_, anim, _, child) =>
-          FadeTransition(opacity: anim, child: child),
-      transitionDuration: const Duration(milliseconds: 380),
-    ));
+    await nav.push(MaterialPageRoute(builder: (_) => screen));
     if (mounted) ref.invalidate(bootcampDailyActivityProvider);
   }
 
@@ -110,7 +105,16 @@ class _GarageScreenState extends ConsumerState<GarageScreen> {
 
               // ── Scrollable Day Content ───────────────────────────────────
               Expanded(
-                child: SingleChildScrollView(
+                child: RefreshIndicator(
+                  onRefresh: () async {
+                    ref.invalidate(bootcampProgressProvider);
+                    ref.invalidate(bootcampDailyActivityProvider);
+                    await ref.read(bootcampProgressProvider.future);
+                  },
+                  color: c.accent,
+                  backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+                  child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
                   child: progress.courseComplete &&
                           selectedDay == progress.activeDay
@@ -137,6 +141,7 @@ class _GarageScreenState extends ConsumerState<GarageScreen> {
                             }
                           },
                         ),
+                ),
                 ),
               ),
             ],

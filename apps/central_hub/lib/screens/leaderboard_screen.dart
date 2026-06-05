@@ -651,12 +651,7 @@ class _LeaderRow extends ConsumerWidget {
       totalXp: entry.totalXp,
     );
     Navigator.of(context).push(
-      PageRouteBuilder(
-        pageBuilder: (_, _, _) => PublicProfileScreen(profile: profile),
-        transitionsBuilder: (_, anim, _, child) =>
-            FadeTransition(opacity: anim, child: child),
-        transitionDuration: const Duration(milliseconds: 350),
-      ),
+      MaterialPageRoute(builder: (_) => PublicProfileScreen(profile: profile)),
     );
   }
 }
