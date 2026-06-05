@@ -66,7 +66,15 @@ class SyncService {
             await client.from('habit_logs').upsert({
               ...payload,
               'xp_awarded': 50,
-            }, onConflict: 'habit_id,completed_at');
+            }, onConflict: 'user_id,habit_id,completed_at');
+          case 'update_habit_log':
+            await client.from('habit_logs').update({
+              'note': payload['note'],
+              'emoji': payload['emoji'],
+            })
+                .eq('habit_id', payload['habit_id'] as String)
+                .eq('user_id', userId)
+                .eq('completed_at', payload['completed_at'] as String);
           case 'delete_habit_log':
             await client
                 .from('habit_logs')
@@ -125,12 +133,14 @@ class SyncService {
     try {
       await client.from('habit_logs').upsert(
         logs.map((log) => {
-          'habit_id':    log.habitId,
-          'user_id':     log.userId,
+          'habit_id':     log.habitId,
+          'user_id':      log.userId,
           'completed_at': log.completedAt,
-          'xp_awarded':  50,
+          'xp_awarded':   50,
+          if (log.note  != null) 'note':  log.note,
+          if (log.emoji != null) 'emoji': log.emoji,
         }).toList(),
-        onConflict: 'habit_id,completed_at',
+        onConflict: 'user_id,habit_id,completed_at',
       );
       for (final log in logs) {
         await _db.markHabitLogSynced(log.habitId, log.userId, log.completedAt);

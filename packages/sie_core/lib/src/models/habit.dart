@@ -1,3 +1,5 @@
+import 'habit_log_entry.dart';
+
 class Habit {
   final String id;
   final String userId;
@@ -60,11 +62,16 @@ class HabitsState {
   /// habitId → consecutive-day streak count (ending today)
   final Map<String, int> streaks;
 
+  /// habitId → list of log entries (with note/emoji), newest first
+  final Map<String, List<HabitLogEntry>> logEntries;
+
   const HabitsState({
     required this.habits,
     required this.logDates,
     required this.streaks,
+    this.logEntries = const {},
   });
 
-  static const empty = HabitsState(habits: [], logDates: {}, streaks: {});
+  static const empty =
+      HabitsState(habits: [], logDates: {}, streaks: {});
 }

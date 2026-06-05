@@ -33,6 +33,8 @@ class LocalHabitLogs extends Table {
   TextColumn get habitId => text()();
   TextColumn get userId => text()();
   TextColumn get completedAt => text()();
+  TextColumn get note => text().nullable()();
+  TextColumn get emoji => text().nullable()();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
 
   @override
@@ -134,7 +136,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -145,6 +147,10 @@ class AppDatabase extends _$AppDatabase {
       if (from < 3) {
         await m.createTable(localRoutines);
         await m.createTable(localRoutineMembers);
+      }
+      if (from < 4) {
+        await m.addColumn(localHabitLogs, localHabitLogs.note);
+        await m.addColumn(localHabitLogs, localHabitLogs.emoji);
       }
     },
   );
@@ -218,6 +224,33 @@ class AppDatabase extends _$AppDatabase {
                 t.userId.equals(userId) &
                 t.completedAt.equals(completedAt)))
           .write(const LocalHabitLogsCompanion(synced: Value(true)));
+
+  Future<void> updateHabitLogNote({
+    required String habitId,
+    required String userId,
+    required String completedAt,
+    String? note,
+    String? emoji,
+  }) =>
+      (update(localHabitLogs)
+            ..where((t) =>
+                t.habitId.equals(habitId) &
+                t.userId.equals(userId) &
+                t.completedAt.equals(completedAt)))
+          .write(LocalHabitLogsCompanion(
+            note: Value(note),
+            emoji: Value(emoji),
+            synced: const Value(false),
+          ));
+
+  Future<List<LocalHabitLog>> habitLogsForHabit(
+          String habitId, String userId) =>
+      (select(localHabitLogs)
+            ..where((t) =>
+                t.habitId.equals(habitId) & t.userId.equals(userId))
+            ..orderBy([(t) => OrderingTerm(
+                expression: t.completedAt, mode: OrderingMode.desc)]))
+          .get();
 
   // ── Focus Sessions ─────────────────────────────────────────────────────────
 

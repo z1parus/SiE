@@ -41,6 +41,7 @@ export 'src/providers/leaderboard_provider.dart';
 export 'src/models/bootcamp.dart';
 export 'src/providers/bootcamp_provider.dart';
 export 'src/models/habit_routine.dart';
+export 'src/models/habit_log_entry.dart';
 export 'src/providers/habit_routines_provider.dart';
 export 'src/utils/color_utils.dart';
 export 'src/providers/user_timezone_provider.dart';

@@ -108,16 +108,21 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                   itemBuilder: (context, i) {
                     final habit    = state.habits[i];
                     final logDates = state.logDates[habit.id] ?? {};
+                    final entries  = state.logEntries[habit.id] ?? [];
+                    final todayEntry = entries.cast<HabitLogEntry?>()
+                        .firstWhere((e) => e?.completedAt == today,
+                            orElse: () => null);
                     return _SwipeableHabitCard(
                       key: ValueKey(habit.id),
                       habit: habit,
                       completedToday: logDates.contains(today),
                       streak: state.streaks[habit.id] ?? 0,
                       allLogDates: logDates,
+                      todayEmoji: todayEntry?.emoji,
                       onToggle: () => ref
                           .read(habitsProvider.notifier)
                           .toggleHabit(habit.id, DateTime.now()),
-                      onLongPress: () => _showHabitOptions(habit),
+                      onLongPress: () => _onHabitLongPress(habit, state),
                       onDelete: () => ref
                           .read(habitsProvider.notifier)
                           .deleteHabit(habit.id),
@@ -180,6 +185,29 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
   }
 
   // ── Dialogs ───────────────────────────────────────────────────
+
+  void _onHabitLongPress(Habit habit, HabitsState state) {
+    final today = _fmt(DateTime.now());
+    final entries = state.logEntries[habit.id] ?? [];
+    final existing = entries.cast<HabitLogEntry?>()
+        .firstWhere((e) => e?.completedAt == today, orElse: () => null);
+    _showReflectionSheet(habit, today, existing);
+  }
+
+  void _showReflectionSheet(
+      Habit habit, String dateStr, HabitLogEntry? existing) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _ReflectionSheet(
+        habit: habit,
+        dateStr: dateStr,
+        existing: existing,
+        onMoreOptions: () => _showHabitOptions(habit),
+      ),
+    );
+  }
 
   void _openArchive() {
     Navigator.of(context).push(
@@ -559,6 +587,7 @@ class _SwipeableHabitCard extends StatefulWidget {
   final VoidCallback? onLongPress;
   final Future<void> Function() onDelete;
   final VoidCallback onTogglePin;
+  final String? todayEmoji;
 
   const _SwipeableHabitCard({
     super.key,
@@ -570,6 +599,7 @@ class _SwipeableHabitCard extends StatefulWidget {
     this.onLongPress,
     required this.onDelete,
     required this.onTogglePin,
+    this.todayEmoji,
   });
 
   @override
@@ -698,6 +728,7 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
                     allLogDates: widget.allLogDates,
                     onToggle: widget.onToggle,
                     onLongPress: widget.onLongPress,
+                    todayEmoji: widget.todayEmoji,
                   ),
                 ),
               ),
@@ -789,13 +820,14 @@ class _SwipeDeleteBg extends ConsumerWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Habit Matrix Card
 // ─────────────────────────────────────────────────────────────────────────────
-class _HabitMatrixCard extends ConsumerWidget {
+class _HabitMatrixCard extends ConsumerStatefulWidget {
   final Habit habit;
   final bool completedToday;
   final int streak;
   final Set<String> allLogDates;
   final VoidCallback onToggle;
   final VoidCallback? onLongPress;
+  final String? todayEmoji;
 
   const _HabitMatrixCard({
     required this.habit,
@@ -804,26 +836,57 @@ class _HabitMatrixCard extends ConsumerWidget {
     required this.allLogDates,
     required this.onToggle,
     this.onLongPress,
+    this.todayEmoji,
   });
+
+  @override
+  ConsumerState<_HabitMatrixCard> createState() => _HabitMatrixCardState();
+}
+
+class _HabitMatrixCardState extends ConsumerState<_HabitMatrixCard> {
+  Timer? _hintTimer;
+  bool _showHint = false;
 
   static String _fmtDate(DateTime dt) =>
       '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void dispose() {
+    _hintTimer?.cancel();
+    super.dispose();
+  }
+
+  void _handleToggle() {
+    widget.onToggle();
+    if (!widget.completedToday) {
+      // Toggling ON — show ephemeral hint for 4 seconds.
+      setState(() => _showHint = true);
+      _hintTimer?.cancel();
+      _hintTimer = Timer(const Duration(seconds: 4), () {
+        if (mounted) setState(() => _showHint = false);
+      });
+    } else {
+      // Toggling OFF — hide hint.
+      _hintTimer?.cancel();
+      setState(() => _showHint = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final sc          = ref.watch(sieColorsProvider);
-    final accentColor = hexToColor(habit.color);
+    final accentColor = hexToColor(widget.habit.color);
     final now         = DateTime.now();
 
     final days = List.generate(7, (i) => now.subtract(Duration(days: 6 - i)));
     final logsThisWeek =
-        days.where((d) => allLogDates.contains(_fmtDate(d))).length;
+        days.where((d) => widget.allLogDates.contains(_fmtDate(d))).length;
 
-    return SieGlassCard(
-      onTap: onToggle,
+    final card = SieGlassCard(
+      onTap: _handleToggle,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: GestureDetector(
-        onLongPress: onLongPress,
+        onLongPress: widget.onLongPress,
         behavior: HitTestBehavior.translucent,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -851,7 +914,7 @@ class _HabitMatrixCard extends ConsumerWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    habit.title.toUpperCase(),
+                    widget.habit.title.toUpperCase(),
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: sc.textPrimary,
@@ -862,7 +925,7 @@ class _HabitMatrixCard extends ConsumerWidget {
                     ),
                   ),
                 ),
-                if (habit.isPinned) ...[
+                if (widget.habit.isPinned) ...[
                   const SizedBox(width: 8),
                   Icon(
                     Icons.push_pin,
@@ -870,19 +933,19 @@ class _HabitMatrixCard extends ConsumerWidget {
                     size: 11,
                   ),
                 ],
-                if (streak > 0) ...[
+                if (widget.streak > 0) ...[
                   const SizedBox(width: 8),
-                  _StreakBadge(streak: streak, color: accentColor),
+                  _StreakBadge(streak: widget.streak, color: accentColor),
                 ],
               ],
             ),
-            if (habit.description != null &&
-                habit.description!.isNotEmpty) ...[
+            if (widget.habit.description != null &&
+                widget.habit.description!.isNotEmpty) ...[
               const SizedBox(height: 5),
               Padding(
                 padding: const EdgeInsets.only(left: 17),
                 child: Text(
-                  habit.description!,
+                  widget.habit.description!,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -925,7 +988,8 @@ class _HabitMatrixCard extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: days.asMap().entries.map((e) {
                 final isToday     = e.key == 6;
-                final isCompleted = allLogDates.contains(_fmtDate(e.value));
+                final isCompleted =
+                    widget.allLogDates.contains(_fmtDate(e.value));
                 return _DayNode(
                   date: e.value,
                   isCompleted: isCompleted,
@@ -934,10 +998,71 @@ class _HabitMatrixCard extends ConsumerWidget {
                 );
               }).toList(),
             ),
+            // Ephemeral hint after toggling ON.
+            AnimatedOpacity(
+              opacity: _showHint ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 300),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.edit_outlined,
+                      size: 9,
+                      color: sc.textSecondary.withValues(alpha: 0.45),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'HOLD TO ADD NOTE',
+                      style: TextStyle(
+                        color: sc.textSecondary.withValues(alpha: 0.45),
+                        fontSize: 8,
+                        letterSpacing: 1.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
+
+    // Wrap in Stack to overlay emoji badge (top-right) when present.
+    if (widget.completedToday && widget.todayEmoji != null) {
+      return Stack(
+        clipBehavior: Clip.none,
+        children: [
+          card,
+          Positioned(
+            top: 6,
+            right: 6,
+            child: Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: accentColor.withValues(alpha: 0.12),
+                border: Border.all(
+                  color: accentColor.withValues(alpha: 0.35),
+                  width: 1,
+                ),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                widget.todayEmoji!,
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return card;
   }
 }
 
@@ -1678,6 +1803,347 @@ class _OptionTileState extends State<_OptionTile> {
                   letterSpacing: 1.5,
                   fontWeight: FontWeight.w600,
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reflection Sheet
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ReflectionSheet extends ConsumerStatefulWidget {
+  final Habit habit;
+  final String dateStr;
+  final HabitLogEntry? existing;
+  final VoidCallback? onMoreOptions;
+
+  const _ReflectionSheet({
+    required this.habit,
+    required this.dateStr,
+    this.existing,
+    this.onMoreOptions,
+  });
+
+  @override
+  ConsumerState<_ReflectionSheet> createState() => _ReflectionSheetState();
+}
+
+class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
+  late final TextEditingController _noteCtrl;
+  String? _selectedEmoji;
+  bool _saving = false;
+
+  static const _emojis = ['🔥', '🧘', '😴', '🎯', '💧', '📈', '📉'];
+
+  static Color _habitColor(String hex) {
+    final h = hex.replaceAll('#', '').padLeft(6, '0');
+    return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF00C8FF);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _noteCtrl = TextEditingController(text: widget.existing?.note ?? '');
+    _selectedEmoji = widget.existing?.emoji;
+  }
+
+  @override
+  void dispose() {
+    _noteCtrl.dispose();
+    super.dispose();
+  }
+
+  bool get _hasContent =>
+      _selectedEmoji != null || _noteCtrl.text.trim().isNotEmpty;
+
+  Future<void> _handleSave() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      final notifier = ref.read(habitsProvider.notifier);
+      final date     = DateTime.parse(widget.dateStr);
+      final habitsState = ref.read(habitsProvider).valueOrNull;
+      final alreadyDone = habitsState?.logDates[widget.habit.id]
+              ?.contains(widget.dateStr) ??
+          false;
+
+      // If this habit isn't logged yet, create the log entry first.
+      if (!alreadyDone) {
+        await notifier.toggleHabit(widget.habit.id, date);
+      }
+
+      await notifier.updateHabitLog(
+        habitId: widget.habit.id,
+        date: date,
+        note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+        emoji: _selectedEmoji,
+      );
+
+      if (mounted) Navigator.of(context).pop();
+    } catch (_) {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _handleRemove() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      await ref.read(habitsProvider.notifier).updateHabitLog(
+            habitId: widget.habit.id,
+            date: DateTime.parse(widget.dateStr),
+            note: null,
+            emoji: null,
+          );
+      if (mounted) Navigator.of(context).pop();
+    } catch (_) {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sc          = ref.watch(sieColorsProvider);
+    final accentColor = _habitColor(widget.habit.color);
+    final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
+    final isEdit = widget.existing != null;
+
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                accentColor.withValues(alpha: 0.08),
+                sc.isCosmicMode
+                    ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
+                    : sc.surface,
+              ],
+            ),
+            border: Border(
+              top: BorderSide(
+                color: accentColor.withValues(alpha: 0.50),
+                width: 1.0,
+              ),
+              left: BorderSide(
+                color: accentColor.withValues(alpha: 0.18),
+                width: 1.0,
+              ),
+              right: BorderSide(
+                color: accentColor.withValues(alpha: 0.18),
+                width: 1.0,
+              ),
+            ),
+          ),
+          padding: EdgeInsets.fromLTRB(24, 14, 24, 20 + keyboardBottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Handle bar
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 3,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(2),
+                    color: Colors.white.withValues(alpha: 0.20),
+                  ),
+                ),
+              ),
+              // Title row with optional ⋯ more button
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.habit.title.toUpperCase(),
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: accentColor,
+                            fontSize: 11,
+                            letterSpacing: 2,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          isEdit ? 'UPDATE JOURNAL ENTRY' : 'ADD REFLECTION',
+                          style: TextStyle(
+                            color: sc.textSecondary.withValues(alpha: 0.6),
+                            fontSize: 9,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Navigate to journal timeline
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              HabitDetailScreen(habit: widget.habit),
+                        ),
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Icon(
+                        Icons.history,
+                        color: sc.textSecondary.withValues(alpha: 0.5),
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                  if (isEdit && widget.onMoreOptions != null)
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        widget.onMoreOptions!();
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Icon(
+                          Icons.more_horiz,
+                          color: sc.textSecondary.withValues(alpha: 0.5),
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Emoji selector row
+              Text(
+                'MOOD',
+                style: TextStyle(
+                  color: sc.textSecondary.withValues(alpha: 0.5),
+                  fontSize: 9,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                children: _emojis.map((e) {
+                  final selected = _selectedEmoji == e;
+                  return GestureDetector(
+                    onTap: () => setState(
+                        () => _selectedEmoji = selected ? null : e),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: selected
+                            ? accentColor.withValues(alpha: 0.18)
+                            : Colors.transparent,
+                        border: Border.all(
+                          color: selected
+                              ? accentColor.withValues(alpha: 0.55)
+                              : sc.textSecondary.withValues(alpha: 0.15),
+                          width: 1,
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(e,
+                          style: TextStyle(
+                              fontSize: selected ? 20 : 18)),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+              // Note field
+              Text(
+                'NOTE',
+                style: TextStyle(
+                  color: sc.textSecondary.withValues(alpha: 0.5),
+                  fontSize: 9,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: accentColor.withValues(alpha: 0.25),
+                  ),
+                  color: accentColor.withValues(alpha: 0.04),
+                ),
+                child: TextField(
+                  controller: _noteCtrl,
+                  maxLength: 150,
+                  maxLines: 3,
+                  onChanged: (_) => setState(() {}),
+                  style: TextStyle(
+                    color: sc.textPrimary,
+                    fontSize: 12,
+                    letterSpacing: 0.3,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Как всё прошло? Оставьте заметку...',
+                    hintStyle: TextStyle(
+                      color: sc.textSecondary.withValues(alpha: 0.4),
+                      fontSize: 12,
+                    ),
+                    counterStyle: TextStyle(
+                      color: sc.textSecondary.withValues(alpha: 0.35),
+                      fontSize: 9,
+                    ),
+                    contentPadding: const EdgeInsets.all(12),
+                    border: InputBorder.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Button row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (isEdit)
+                    _SheetTextBtn(
+                      label: 'REMOVE NOTE',
+                      color: sc.textSecondary.withValues(alpha: 0.55),
+                      onTap: _saving ? () {} : _handleRemove,
+                    ),
+                  if (!isEdit)
+                    _SheetTextBtn(
+                      label: 'CANCEL',
+                      color: sc.textSecondary,
+                      onTap: () => Navigator.of(context).pop(),
+                    ),
+                  const SizedBox(width: 8),
+                  _SheetTextBtn(
+                    label: _saving
+                        ? '...'
+                        : (isEdit ? 'UPDATE' : 'SAVE'),
+                    color: _hasContent && !_saving
+                        ? accentColor
+                        : sc.textSecondary.withValues(alpha: 0.35),
+                    onTap: _hasContent && !_saving ? _handleSave : () {},
+                  ),
+                ],
               ),
             ],
           ),
@@ -2660,6 +3126,345 @@ class _CarouselAddSlide extends ConsumerWidget {
                 fontSize: 10,
                 letterSpacing: 1.5,
                 fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Habit Detail Screen (Journal Timeline)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class HabitDetailScreen extends ConsumerWidget {
+  final Habit habit;
+  const HabitDetailScreen({super.key, required this.habit});
+
+  static Color _habitColor(String hex) {
+    final h = hex.replaceAll('#', '').padLeft(6, '0');
+    return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF00C8FF);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc           = ref.watch(sieColorsProvider);
+    final accentColor  = _habitColor(habit.color);
+    final entriesAsync = ref.watch(habitLogEntriesProvider(habit.id));
+
+    return SieBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Top bar ───────────────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 12, 4),
+                child: Row(
+                  children: [
+                    _GlassIconBtn(
+                      icon: Icons.arrow_back_ios_new,
+                      onTap: () => Navigator.of(context).pop(),
+                      size: 15,
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          RichText(
+                            text: TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: 'HABIT ',
+                                  style: TextStyle(
+                                    color: sc.accent,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.5,
+                                    shadows: sc.isCosmicMode
+                                        ? [
+                                            Shadow(
+                                              color: sc.accent,
+                                              blurRadius: 8,
+                                            ),
+                                            Shadow(
+                                              color: sc.accent,
+                                              blurRadius: 22,
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: 'JOURNAL',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineLarge
+                                      ?.copyWith(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 3.0,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'ХРОНИКА · ${habit.title.toUpperCase()}',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: sc.textSecondary,
+                              fontSize: 10,
+                              letterSpacing: 1.8,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // ── Content ──────────────────────────────────────────────────
+              Expanded(
+                child: entriesAsync.when(
+                  loading: () => Center(
+                    child: CircularProgressIndicator(
+                      color: accentColor,
+                      strokeWidth: 1.5,
+                    ),
+                  ),
+                  error: (_, _) => Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Text(
+                        'ОШИБКА ЗАГРУЗКИ',
+                        style: TextStyle(
+                          color: sc.textSecondary,
+                          fontSize: 11,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                  data: (entries) {
+                    final journaled = entries
+                        .where((e) =>
+                            (e.note?.isNotEmpty ?? false) || e.emoji != null)
+                        .toList();
+
+                    if (journaled.isEmpty) {
+                      return _EmptyJournal(accentColor: accentColor);
+                    }
+
+                    return ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+                      itemCount: journaled.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
+                      itemBuilder: (ctx, i) => _JournalEntryTile(
+                        entry: journaled[i],
+                        habit: habit,
+                        accentColor: accentColor,
+                        onEdit: () {
+                          showModalBottomSheet<void>(
+                            context: ctx,
+                            backgroundColor: Colors.transparent,
+                            isScrollControlled: true,
+                            builder: (_) => _ReflectionSheet(
+                              habit: habit,
+                              dateStr: journaled[i].completedAt,
+                              existing: journaled[i],
+                            ),
+                          ).then((_) {
+                            ref.invalidate(habitLogEntriesProvider(habit.id));
+                          });
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Journal Entry Tile
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _JournalEntryTile extends ConsumerWidget {
+  final HabitLogEntry entry;
+  final Habit habit;
+  final Color accentColor;
+  final VoidCallback onEdit;
+
+  const _JournalEntryTile({
+    required this.entry,
+    required this.habit,
+    required this.accentColor,
+    required this.onEdit,
+  });
+
+  static String _fmtDisplay(String dateStr) {
+    try {
+      final parts = dateStr.split('-');
+      if (parts.length != 3) return dateStr;
+      return '${parts[2]}.${parts[1]}.${parts[0]}';
+    } catch (_) {
+      return dateStr;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Timeline column: date + node dot
+        SizedBox(
+          width: 52,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  _fmtDisplay(entry.completedAt),
+                  style: TextStyle(
+                    color: sc.textSecondary.withValues(alpha: 0.55),
+                    fontSize: 8,
+                    letterSpacing: 0.5,
+                    fontWeight: FontWeight.w500,
+                    height: 1.2,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accentColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: accentColor.withValues(alpha: 0.6),
+                      blurRadius: 6,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        // Entry card
+        Expanded(
+          child: SieGlassCard(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (entry.emoji != null) ...[
+                      Text(entry.emoji!,
+                          style: const TextStyle(fontSize: 22)),
+                      const SizedBox(width: 10),
+                    ],
+                    if (entry.note?.isNotEmpty == true)
+                      Expanded(
+                        child: Text(
+                          entry.note!,
+                          style: TextStyle(
+                            color: sc.textPrimary.withValues(alpha: 0.85),
+                            fontSize: 12,
+                            letterSpacing: 0.2,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: GestureDetector(
+                    onTap: onEdit,
+                    child: Text(
+                      'EDIT',
+                      style: TextStyle(
+                        color: accentColor.withValues(alpha: 0.7),
+                        fontSize: 9,
+                        letterSpacing: 1.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Empty Journal State
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _EmptyJournal extends ConsumerWidget {
+  final Color accentColor;
+  const _EmptyJournal({required this.accentColor});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.auto_stories_outlined,
+              color: accentColor.withValues(alpha: 0.35),
+              size: 40,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'ЖУРНАЛ ПУСТ',
+              style: TextStyle(
+                color: sc.textSecondary.withValues(alpha: 0.6),
+                fontSize: 11,
+                letterSpacing: 2,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Удерживайте карточку привычки\nчтобы добавить рефлексию',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: sc.textSecondary.withValues(alpha: 0.4),
+                fontSize: 10,
+                letterSpacing: 0.5,
+                height: 1.5,
               ),
             ),
           ],
