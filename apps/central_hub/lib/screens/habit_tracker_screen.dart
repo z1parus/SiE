@@ -117,12 +117,12 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                       habit: habit,
                       completedToday: logDates.contains(today),
                       streak: state.streaks[habit.id] ?? 0,
-                      allLogDates: logDates,
                       todayEmoji: todayEntry?.emoji,
-                      onToggle: () => ref
-                          .read(habitsProvider.notifier)
-                          .toggleHabit(habit.id, DateTime.now()),
-                      onLongPress: () => _onHabitLongPress(habit, state),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => HabitDetailScreen(habit: habit),
+                        ),
+                      ),
                       onDelete: () => ref
                           .read(habitsProvider.notifier)
                           .deleteHabit(habit.id),
@@ -142,19 +142,6 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
     return SieBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        floatingActionButton: Consumer(
-          builder: (context, ref, _) {
-            final sc2 = ref.watch(sieColorsProvider);
-            return FloatingActionButton(
-              onPressed: () => _showHabitDialog(null),
-              backgroundColor: sc2.accent,
-              foregroundColor: Colors.black,
-              elevation: 4,
-              child: const Icon(Icons.add),
-            );
-          },
-        ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
         body: Stack(
           children: [
             body,
@@ -178,6 +165,26 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                 },
               ),
             ),
+            Positioned(
+              bottom: 24,
+              left: 24,
+              right: 24,
+              child: _BottomActionBar(
+                onAdd: () => _showHabitDialog(null),
+                onMorning: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        const RoutineEditorScreen(routineType: 'morning'),
+                  ),
+                ),
+                onEvening: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        const RoutineEditorScreen(routineType: 'evening'),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -185,29 +192,6 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
   }
 
   // ── Dialogs ───────────────────────────────────────────────────
-
-  void _onHabitLongPress(Habit habit, HabitsState state) {
-    final today = _fmt(DateTime.now());
-    final entries = state.logEntries[habit.id] ?? [];
-    final existing = entries.cast<HabitLogEntry?>()
-        .firstWhere((e) => e?.completedAt == today, orElse: () => null);
-    _showReflectionSheet(habit, today, existing);
-  }
-
-  void _showReflectionSheet(
-      Habit habit, String dateStr, HabitLogEntry? existing) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => _ReflectionSheet(
-        habit: habit,
-        dateStr: dateStr,
-        existing: existing,
-        onMoreOptions: () => _showHabitOptions(habit),
-      ),
-    );
-  }
 
   void _openArchive() {
     Navigator.of(context).push(
@@ -284,167 +268,6 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
     );
   }
 
-  void _showHabitOptions(Habit habit) {
-    final sc = ref.read(sieColorsProvider);
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    sc.accent.withValues(alpha: 0.05),
-                    sc.isCosmicMode
-                        ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
-                        : sc.surface,
-                  ],
-                ),
-                border: Border.all(
-                  color: sc.accent.withValues(alpha: 0.25),
-                ),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 14),
-                    child: Text(
-                      habit.title.toUpperCase(),
-                      style: TextStyle(
-                        color: sc.textSecondary.withValues(alpha: 0.80),
-                        fontSize: 10,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ),
-                  Divider(color: sc.accent.withValues(alpha: 0.15), height: 1),
-                  _OptionTile(
-                    icon: Icons.edit_outlined,
-                    label: 'EDIT PROTOCOL',
-                    color: sc.textPrimary,
-                    onTap: () {
-                      Navigator.of(ctx).pop();
-                      _showHabitDialog(habit);
-                    },
-                  ),
-                  _OptionTile(
-                    icon: Icons.inventory_2_outlined,
-                    label: 'ARCHIVE PROTOCOL',
-                    color: sc.accent,
-                    onTap: () {
-                      Navigator.of(ctx).pop();
-                      ref
-                          .read(habitsProvider.notifier)
-                          .archiveHabit(habit.id);
-                    },
-                  ),
-                  _OptionTile(
-                    icon: Icons.delete_outline,
-                    label: 'DELETE PROTOCOL',
-                    color: Colors.redAccent,
-                    onTap: () {
-                      Navigator.of(ctx).pop();
-                      _confirmDelete(habit);
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _confirmDelete(Habit habit) {
-    final sc = ref.read(sieColorsProvider);
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.redAccent.withValues(alpha: 0.06),
-                    sc.isCosmicMode
-                        ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
-                        : sc.surface,
-                  ],
-                ),
-                border: Border.all(
-                  color: Colors.redAccent.withValues(alpha: 0.35),
-                ),
-              ),
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'CONFIRM DELETION',
-                    style: TextStyle(
-                      color: sc.textPrimary,
-                      fontSize: 12,
-                      letterSpacing: 2,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Delete "${habit.title}"? All log history will be erased.',
-                    style: TextStyle(
-                      color: sc.textSecondary,
-                      fontSize: 12,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      _SheetTextBtn(
-                        label: 'CANCEL',
-                        color: sc.textSecondary,
-                        onTap: () => Navigator.of(ctx).pop(),
-                      ),
-                      const SizedBox(width: 8),
-                      _SheetTextBtn(
-                        label: 'DELETE',
-                        color: Colors.redAccent,
-                        onTap: () {
-                          Navigator.of(ctx).pop();
-                          ref
-                              .read(habitsProvider.notifier)
-                              .deleteHabit(habit.id);
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -576,27 +399,132 @@ class _GlassIconBtn extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Bottom Action Bar
+// ─────────────────────────────────────────────────────────────────────────────
+class _BottomActionBar extends ConsumerWidget {
+  final VoidCallback onAdd;
+  final VoidCallback onMorning;
+  final VoidCallback onEvening;
+
+  const _BottomActionBar({
+    required this.onAdd,
+    required this.onMorning,
+    required this.onEvening,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+
+    Widget sideBtn(IconData icon, VoidCallback onTap) {
+      final child = Center(
+        child: Icon(icon, color: sc.textSecondary, size: 20),
+      );
+      if (sc.isCosmicMode) {
+        return GestureDetector(
+          onTap: onTap,
+          child: GlassCard(
+            width: 48,
+            height: 48,
+            padding: EdgeInsets.zero,
+            shape: LiquidRoundedSuperellipse(borderRadius: 24),
+            useOwnLayer: true,
+            quality: GlassQuality.standard,
+            clipBehavior: Clip.antiAlias,
+            settings: _glassSettings(blur: 2.5, glowIntensity: 0.85),
+            child: child,
+          ),
+        );
+      }
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: sc.flatCard(radius: 24),
+          child: child,
+        ),
+      );
+    }
+
+    Widget centerBtn() {
+      final child = Center(
+        child: Icon(Icons.add, color: Colors.black, size: 24),
+      );
+      if (sc.isCosmicMode) {
+        return GestureDetector(
+          onTap: onAdd,
+          child: GlassCard(
+            width: 56,
+            height: 56,
+            padding: EdgeInsets.zero,
+            shape: LiquidRoundedSuperellipse(borderRadius: 28),
+            useOwnLayer: true,
+            quality: GlassQuality.standard,
+            clipBehavior: Clip.antiAlias,
+            settings: _glassSettings(blur: 3.0, glowIntensity: 0.95),
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: sc.accent,
+              ),
+              child: child,
+            ),
+          ),
+        );
+      }
+      return GestureDetector(
+        onTap: onAdd,
+        child: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: sc.accent,
+            boxShadow: [
+              BoxShadow(
+                color: sc.accent.withValues(alpha: 0.45),
+                blurRadius: 12,
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: child,
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        sideBtn(Icons.wb_sunny_outlined, onMorning),
+        const SizedBox(width: 20),
+        centerBtn(),
+        const SizedBox(width: 20),
+        sideBtn(Icons.nightlight_round, onEvening),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Swipeable Habit Card
 // ─────────────────────────────────────────────────────────────────────────────
 class _SwipeableHabitCard extends StatefulWidget {
   final Habit habit;
   final bool completedToday;
   final int streak;
-  final Set<String> allLogDates;
-  final VoidCallback onToggle;
-  final VoidCallback? onLongPress;
+  final String? todayEmoji;
+  final VoidCallback onTap;
   final Future<void> Function() onDelete;
   final VoidCallback onTogglePin;
-  final String? todayEmoji;
 
   const _SwipeableHabitCard({
     super.key,
     required this.habit,
     required this.completedToday,
     required this.streak,
-    required this.allLogDates,
-    required this.onToggle,
-    this.onLongPress,
+    required this.onTap,
     required this.onDelete,
     required this.onTogglePin,
     this.todayEmoji,
@@ -725,9 +653,7 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
                     habit: widget.habit,
                     completedToday: widget.completedToday,
                     streak: widget.streak,
-                    allLogDates: widget.allLogDates,
-                    onToggle: widget.onToggle,
-                    onLongPress: widget.onLongPress,
+                    onTap: widget.onTap,
                     todayEmoji: widget.todayEmoji,
                   ),
                 ),
@@ -820,219 +746,110 @@ class _SwipeDeleteBg extends ConsumerWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Habit Matrix Card
 // ─────────────────────────────────────────────────────────────────────────────
-class _HabitMatrixCard extends ConsumerStatefulWidget {
+class _HabitMatrixCard extends ConsumerWidget {
   final Habit habit;
   final bool completedToday;
   final int streak;
-  final Set<String> allLogDates;
-  final VoidCallback onToggle;
-  final VoidCallback? onLongPress;
   final String? todayEmoji;
+  final VoidCallback onTap;
 
   const _HabitMatrixCard({
     required this.habit,
     required this.completedToday,
     required this.streak,
-    required this.allLogDates,
-    required this.onToggle,
-    this.onLongPress,
+    required this.onTap,
     this.todayEmoji,
   });
 
   @override
-  ConsumerState<_HabitMatrixCard> createState() => _HabitMatrixCardState();
-}
-
-class _HabitMatrixCardState extends ConsumerState<_HabitMatrixCard> {
-  Timer? _hintTimer;
-  bool _showHint = false;
-
-  static String _fmtDate(DateTime dt) =>
-      '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
-
-  @override
-  void dispose() {
-    _hintTimer?.cancel();
-    super.dispose();
-  }
-
-  void _handleToggle() {
-    widget.onToggle();
-    if (!widget.completedToday) {
-      // Toggling ON — show ephemeral hint for 4 seconds.
-      setState(() => _showHint = true);
-      _hintTimer?.cancel();
-      _hintTimer = Timer(const Duration(seconds: 4), () {
-        if (mounted) setState(() => _showHint = false);
-      });
-    } else {
-      // Toggling OFF — hide hint.
-      _hintTimer?.cancel();
-      setState(() => _showHint = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final sc          = ref.watch(sieColorsProvider);
-    final accentColor = hexToColor(widget.habit.color);
-    final now         = DateTime.now();
-
-    final days = List.generate(7, (i) => now.subtract(Duration(days: 6 - i)));
-    final logsThisWeek =
-        days.where((d) => widget.allLogDates.contains(_fmtDate(d))).length;
+    final accentColor = hexToColor(habit.color);
 
     final card = SieGlassCard(
-      onTap: _handleToggle,
+      onTap: onTap,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      child: GestureDetector(
-        onLongPress: widget.onLongPress,
-        behavior: HitTestBehavior.translucent,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: accentColor,
-                    boxShadow: sc.isCosmicMode
-                        ? [
-                            BoxShadow(
-                              color: accentColor.withValues(alpha: 0.85),
-                              blurRadius: 7,
-                              spreadRadius: 1,
-                            ),
-                          ]
-                        : null,
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accentColor,
+                  boxShadow: sc.isCosmicMode
+                      ? [
+                          BoxShadow(
+                            color: accentColor.withValues(alpha: 0.85),
+                            blurRadius: 7,
+                            spreadRadius: 1,
+                          ),
+                        ]
+                      : null,
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    widget.habit.title.toUpperCase(),
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: sc.textPrimary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.5,
-                      height: 1.1,
-                    ),
-                  ),
-                ),
-                if (widget.habit.isPinned) ...[
-                  const SizedBox(width: 8),
-                  Icon(
-                    Icons.push_pin,
-                    color: sc.textSecondary.withValues(alpha: 0.45),
-                    size: 11,
-                  ),
-                ],
-                if (widget.streak > 0) ...[
-                  const SizedBox(width: 8),
-                  _StreakBadge(streak: widget.streak, color: accentColor),
-                ],
-              ],
-            ),
-            if (widget.habit.description != null &&
-                widget.habit.description!.isNotEmpty) ...[
-              const SizedBox(height: 5),
-              Padding(
-                padding: const EdgeInsets.only(left: 17),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
                 child: Text(
-                  widget.habit.description!,
-                  maxLines: 1,
+                  habit.title.toUpperCase(),
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: sc.textSecondary.withValues(alpha: 0.7),
-                    fontSize: 10.5,
-                    letterSpacing: 0.3,
-                    height: 1.2,
+                    color: sc.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                    height: 1.1,
                   ),
                 ),
               ),
-            ],
-            const SizedBox(height: 14),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '7-DAY SYNC',
-                  style: TextStyle(
-                    color: sc.textSecondary.withValues(alpha: 0.5),
-                    fontSize: 9,
-                    letterSpacing: 2,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  '$logsThisWeek / 7',
-                  style: TextStyle(
-                    color: accentColor.withValues(alpha: 0.85),
-                    fontSize: 9,
-                    letterSpacing: 1.5,
-                    fontWeight: FontWeight.w700,
-                    height: 1.1,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
+              if (habit.isPinned) ...[
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.push_pin,
+                  color: sc.textSecondary.withValues(alpha: 0.45),
+                  size: 11,
                 ),
               ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: days.asMap().entries.map((e) {
-                final isToday     = e.key == 6;
-                final isCompleted =
-                    widget.allLogDates.contains(_fmtDate(e.value));
-                return _DayNode(
-                  date: e.value,
-                  isCompleted: isCompleted,
-                  isToday: isToday,
-                  accentColor: accentColor,
-                );
-              }).toList(),
-            ),
-            // Ephemeral hint after toggling ON.
-            AnimatedOpacity(
-              opacity: _showHint ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 300),
-              child: Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.edit_outlined,
-                      size: 9,
-                      color: sc.textSecondary.withValues(alpha: 0.45),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'HOLD TO ADD NOTE',
-                      style: TextStyle(
-                        color: sc.textSecondary.withValues(alpha: 0.45),
-                        fontSize: 8,
-                        letterSpacing: 1.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+              if (streak > 0) ...[
+                const SizedBox(width: 8),
+                _StreakBadge(streak: streak, color: accentColor),
+              ],
+              if (completedToday) ...[
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.check_circle_outline,
+                  color: accentColor.withValues(alpha: 0.80),
+                  size: 14,
+                ),
+              ],
+            ],
+          ),
+          if (habit.description != null && habit.description!.isNotEmpty) ...[
+            const SizedBox(height: 5),
+            Padding(
+              padding: const EdgeInsets.only(left: 17),
+              child: Text(
+                habit.description!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: sc.textSecondary.withValues(alpha: 0.7),
+                  fontSize: 10.5,
+                  letterSpacing: 0.3,
+                  height: 1.2,
                 ),
               ),
             ),
           ],
-        ),
+        ],
       ),
     );
 
-    // Wrap in Stack to overlay emoji badge (top-right) when present.
-    if (widget.completedToday && widget.todayEmoji != null) {
+    if (completedToday && todayEmoji != null) {
       return Stack(
         clipBehavior: Clip.none,
         children: [
@@ -1053,7 +870,7 @@ class _HabitMatrixCardState extends ConsumerState<_HabitMatrixCard> {
               ),
               alignment: Alignment.center,
               child: Text(
-                widget.todayEmoji!,
+                todayEmoji!,
                 style: const TextStyle(fontSize: 13),
               ),
             ),
@@ -1820,13 +1637,11 @@ class _ReflectionSheet extends ConsumerStatefulWidget {
   final Habit habit;
   final String dateStr;
   final HabitLogEntry? existing;
-  final VoidCallback? onMoreOptions;
 
   const _ReflectionSheet({
     required this.habit,
     required this.dateStr,
     this.existing,
-    this.onMoreOptions,
   });
 
   @override
@@ -2014,21 +1829,6 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
                       ),
                     ),
                   ),
-                  if (isEdit && widget.onMoreOptions != null)
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        widget.onMoreOptions!();
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Icon(
-                          Icons.more_horiz,
-                          color: sc.textSecondary.withValues(alpha: 0.5),
-                          size: 20,
-                        ),
-                      ),
-                    ),
                 ],
               ),
               const SizedBox(height: 16),
@@ -2651,132 +2451,13 @@ class _RoutineBlockState extends ConsumerState<_RoutineBlock> {
     final sc      = ref.watch(sieColorsProvider);
     final routine = widget.routine;
 
-    if (routine == null) return _buildAddCard(sc);
-
-    if (!_isActive) return _buildInactiveCard(sc, routine);
+    if (!_isActive || routine == null) return const SizedBox.shrink();
 
     if (!_carouselActive && !_anyCompletedToday) {
       return _buildStartCard(sc, routine);
     }
 
     return _buildCarousel(sc, routine);
-  }
-
-  // ── No routine ────────────────────────────────────────────────
-
-  Widget _buildAddCard(SieColors sc) {
-    final addLabel = widget.type == 'morning'
-        ? 'ДОБАВИТЬ УТРЕННЮЮ РУТИНУ'
-        : 'ДОБАВИТЬ ВЕЧЕРНЮЮ РУТИНУ';
-    return GestureDetector(
-      onTap: _openEditor,
-      child: SieGlassCard(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                    color: sc.accent.withValues(alpha: 0.45)),
-                color: sc.accent.withValues(alpha: 0.07),
-              ),
-              child: Icon(Icons.add, color: sc.accent, size: 13),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              addLabel,
-              style: TextStyle(
-                color: sc.textSecondary.withValues(alpha: 0.65),
-                fontSize: 11,
-                letterSpacing: 1.5,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Outside active time window ────────────────────────────────
-
-  Widget _buildInactiveCard(SieColors sc, HabitRoutine routine) {
-    final title     = widget.type == 'morning'
-        ? 'УТРЕННЯЯ РУТИНА'
-        : 'ВЕЧЕРНЯЯ РУТИНА';
-    final timeLabel = widget.type == 'morning'
-        ? '03:00 – 11:59'
-        : '17:00 – 22:59';
-    return GestureDetector(
-      onLongPress: _showLongPressMenu,
-      child: Opacity(
-        opacity: 0.48,
-        child: SieGlassCard(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: sc.textPrimary,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.8,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    timeLabel,
-                    style: TextStyle(
-                      color: sc.textSecondary,
-                      fontSize: 9,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                ],
-              ),
-              if (routine.habits.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: routine.habits.take(5).map((h) {
-                    final c = hexToColor(h.color);
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(3),
-                        color: c.withValues(alpha: 0.12),
-                        border: Border.all(
-                            color: c.withValues(alpha: 0.28)),
-                      ),
-                      child: Text(
-                        h.title.toUpperCase(),
-                        style: TextStyle(
-                          color: c,
-                          fontSize: 8.5,
-                          letterSpacing: 1,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   // ── Active, not yet started ───────────────────────────────────
@@ -3142,20 +2823,236 @@ class _CarouselAddSlide extends ConsumerWidget {
 // Habit Detail Screen (Journal Timeline)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class HabitDetailScreen extends ConsumerWidget {
+class HabitDetailScreen extends ConsumerStatefulWidget {
   final Habit habit;
   const HabitDetailScreen({super.key, required this.habit});
+
+  @override
+  ConsumerState<HabitDetailScreen> createState() => _HabitDetailScreenState();
+}
+
+class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
+  static String _fmt(DateTime dt) =>
+      '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
 
   static Color _habitColor(String hex) {
     final h = hex.replaceAll('#', '').padLeft(6, '0');
     return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF00C8FF);
   }
 
+  void _editHabit() {
+    final sc = ref.read(sieColorsProvider);
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    sc.accent.withValues(alpha: 0.05),
+                    sc.isCosmicMode
+                        ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
+                        : sc.surface,
+                  ],
+                ),
+                border: Border.all(
+                  color: sc.accent.withValues(alpha: 0.25),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 14),
+                    child: Text(
+                      widget.habit.title.toUpperCase(),
+                      style: TextStyle(
+                        color: sc.textSecondary.withValues(alpha: 0.80),
+                        fontSize: 10,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ),
+                  Divider(
+                      color: sc.accent.withValues(alpha: 0.15), height: 1),
+                  _OptionTile(
+                    icon: Icons.edit_outlined,
+                    label: 'EDIT PROTOCOL',
+                    color: sc.textPrimary,
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      showModalBottomSheet<void>(
+                        context: context,
+                        backgroundColor: Colors.transparent,
+                        isScrollControlled: true,
+                        builder: (_) => _HabitDialog(
+                          existing: widget.habit,
+                          onSave: (title, description, color) {
+                            ref.read(habitsProvider.notifier).updateHabit(
+                                  habitId: widget.habit.id,
+                                  title: title,
+                                  description: description,
+                                  color: color,
+                                );
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                  _OptionTile(
+                    icon: Icons.inventory_2_outlined,
+                    label: 'ARCHIVE PROTOCOL',
+                    color: sc.accent,
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      ref
+                          .read(habitsProvider.notifier)
+                          .archiveHabit(widget.habit.id);
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                  _OptionTile(
+                    icon: Icons.delete_outline,
+                    label: 'DELETE PROTOCOL',
+                    color: Colors.redAccent,
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _confirmDeleteHabit();
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _confirmDeleteHabit() {
+    final sc = ref.read(sieColorsProvider);
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.redAccent.withValues(alpha: 0.06),
+                    sc.isCosmicMode
+                        ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
+                        : sc.surface,
+                  ],
+                ),
+                border: Border.all(
+                    color: Colors.redAccent.withValues(alpha: 0.35)),
+              ),
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'CONFIRM DELETION',
+                    style: TextStyle(
+                      color: sc.textPrimary,
+                      fontSize: 12,
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Delete "${widget.habit.title}"? All log history will be erased.',
+                    style: TextStyle(
+                      color: sc.textSecondary,
+                      fontSize: 12,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      _SheetTextBtn(
+                        label: 'CANCEL',
+                        color: sc.textSecondary,
+                        onTap: () => Navigator.of(ctx).pop(),
+                      ),
+                      const SizedBox(width: 8),
+                      _SheetTextBtn(
+                        label: 'DELETE',
+                        color: Colors.redAccent,
+                        onTap: () {
+                          Navigator.of(ctx).pop();
+                          ref
+                              .read(habitsProvider.notifier)
+                              .deleteHabit(widget.habit.id);
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openReflection(
+      String dateStr, HabitLogEntry? existing, Color accentColor) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _ReflectionSheet(
+        habit: widget.habit,
+        dateStr: dateStr,
+        existing: existing,
+      ),
+    ).then((_) {
+      ref.invalidate(habitLogEntriesProvider(widget.habit.id));
+    });
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final sc           = ref.watch(sieColorsProvider);
-    final accentColor  = _habitColor(habit.color);
-    final entriesAsync = ref.watch(habitLogEntriesProvider(habit.id));
+  Widget build(BuildContext context) {
+    final sc          = ref.watch(sieColorsProvider);
+    final accentColor = _habitColor(widget.habit.color);
+    final habitsState = ref.watch(habitsProvider).valueOrNull;
+    final entriesAsync = ref.watch(habitLogEntriesProvider(widget.habit.id));
+
+    final today       = _fmt(DateTime.now());
+    final logDates    = habitsState?.logDates[widget.habit.id] ?? {};
+    final streak      = habitsState?.streaks[widget.habit.id] ?? 0;
+    final logEntries  = habitsState?.logEntries[widget.habit.id] ?? [];
+    final completedToday = logDates.contains(today);
+    final todayEntry  = logEntries.cast<HabitLogEntry?>()
+        .firstWhere((e) => e?.completedAt == today, orElse: () => null);
+    final totalDone   = logDates.length;
+
+    final now  = DateTime.now();
+    final days = List.generate(7, (i) => now.subtract(Duration(days: 6 - i)));
 
     return SieBackground(
       child: Scaffold(
@@ -3164,7 +3061,7 @@ class HabitDetailScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Top bar ───────────────────────────────────────────────────
+              // ── Top bar ──────────────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 12, 4),
                 child: Row(
@@ -3204,7 +3101,7 @@ class HabitDetailScreen extends ConsumerWidget {
                                   ),
                                 ),
                                 TextSpan(
-                                  text: 'JOURNAL',
+                                  text: 'DETAIL',
                                   style: Theme.of(context)
                                       .textTheme
                                       .headlineLarge
@@ -3219,21 +3116,133 @@ class HabitDetailScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'ХРОНИКА · ${habit.title.toUpperCase()}',
+                            widget.habit.title.toUpperCase(),
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: sc.textSecondary,
+                              color: accentColor,
                               fontSize: 10,
                               letterSpacing: 1.8,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
                       ),
                     ),
+                    _GlassIconBtn(
+                      icon: Icons.settings_outlined,
+                      onTap: _editHabit,
+                      size: 18,
+                    ),
                   ],
                 ),
               ),
-              // ── Content ──────────────────────────────────────────────────
+              // ── Stats strip ──────────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                child: Row(
+                  children: [
+                    _StatChip(
+                      label: 'STREAK',
+                      value: '$streak',
+                      accentColor: accentColor,
+                    ),
+                    const SizedBox(width: 10),
+                    _StatChip(
+                      label: 'СЕГОДНЯ',
+                      value: completedToday ? 'ДА' : 'НЕТ',
+                      accentColor: completedToday
+                          ? accentColor
+                          : sc.textSecondary.withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(width: 10),
+                    _StatChip(
+                      label: 'ВСЕГО',
+                      value: '$totalDone',
+                      accentColor: accentColor,
+                    ),
+                  ],
+                ),
+              ),
+              // ── Today card ───────────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                child: SieGlassCard(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 7-day graph
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: days.asMap().entries.map((e) {
+                          final isToday    = e.key == 6;
+                          final isComplete = logDates.contains(_fmt(e.value));
+                          return _DayNode(
+                            date: e.value,
+                            isCompleted: isComplete,
+                            isToday: isToday,
+                            accentColor: accentColor,
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                      // Action buttons
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _DetailActionBtn(
+                              label: completedToday
+                                  ? 'ОТМЕНИТЬ'
+                                  : 'ОТМЕТИТЬ',
+                              icon: completedToday
+                                  ? Icons.remove_circle_outline
+                                  : Icons.check_circle_outline,
+                              accentColor: completedToday
+                                  ? sc.textSecondary.withValues(alpha: 0.6)
+                                  : accentColor,
+                              onTap: () => ref
+                                  .read(habitsProvider.notifier)
+                                  .toggleHabit(
+                                      widget.habit.id, DateTime.now()),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _DetailActionBtn(
+                              label: todayEntry?.note != null ||
+                                      todayEntry?.emoji != null
+                                  ? 'ЗАМЕТКА ✎'
+                                  : '+ ЗАМЕТКА',
+                              icon: Icons.edit_outlined,
+                              accentColor: completedToday
+                                  ? accentColor
+                                  : sc.textSecondary.withValues(alpha: 0.35),
+                              onTap: completedToday
+                                  ? () => _openReflection(
+                                      today, todayEntry, accentColor)
+                                  : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // ── Journal header ───────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                child: Text(
+                  'ЖУРНАЛ',
+                  style: TextStyle(
+                    color: sc.textSecondary.withValues(alpha: 0.55),
+                    fontSize: 9,
+                    letterSpacing: 2.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              // ── Journal timeline ─────────────────────────────────────────
               Expanded(
                 child: entriesAsync.when(
                   loading: () => Center(
@@ -3266,27 +3275,18 @@ class HabitDetailScreen extends ConsumerWidget {
                     }
 
                     return ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
                       itemCount: journaled.length,
                       separatorBuilder: (_, _) => const SizedBox(height: 10),
                       itemBuilder: (ctx, i) => _JournalEntryTile(
                         entry: journaled[i],
-                        habit: habit,
+                        habit: widget.habit,
                         accentColor: accentColor,
-                        onEdit: () {
-                          showModalBottomSheet<void>(
-                            context: ctx,
-                            backgroundColor: Colors.transparent,
-                            isScrollControlled: true,
-                            builder: (_) => _ReflectionSheet(
-                              habit: habit,
-                              dateStr: journaled[i].completedAt,
-                              existing: journaled[i],
-                            ),
-                          ).then((_) {
-                            ref.invalidate(habitLogEntriesProvider(habit.id));
-                          });
-                        },
+                        onEdit: () => _openReflection(
+                          journaled[i].completedAt,
+                          journaled[i],
+                          accentColor,
+                        ),
                       ),
                     );
                   },
@@ -3294,6 +3294,121 @@ class HabitDetailScreen extends ConsumerWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stat Chip
+// ─────────────────────────────────────────────────────────────────────────────
+class _StatChip extends ConsumerWidget {
+  final String label;
+  final String value;
+  final Color accentColor;
+
+  const _StatChip({
+    required this.label,
+    required this.value,
+    required this.accentColor,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+    return Expanded(
+      child: SieGlassCard(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              value,
+              style: TextStyle(
+                color: accentColor,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.0,
+                height: 1.0,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: sc.textSecondary.withValues(alpha: 0.55),
+                fontSize: 8,
+                letterSpacing: 1.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Detail Action Button
+// ─────────────────────────────────────────────────────────────────────────────
+class _DetailActionBtn extends ConsumerWidget {
+  final String label;
+  final IconData icon;
+  final Color accentColor;
+  final VoidCallback? onTap;
+
+  const _DetailActionBtn({
+    required this.label,
+    required this.icon,
+    required this.accentColor,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: onTap != null
+              ? accentColor.withValues(alpha: 0.10)
+              : sc.textSecondary.withValues(alpha: 0.04),
+          border: Border.all(
+            color: onTap != null
+                ? accentColor.withValues(alpha: 0.30)
+                : sc.textSecondary.withValues(alpha: 0.12),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 13,
+              color: onTap != null
+                  ? accentColor
+                  : sc.textSecondary.withValues(alpha: 0.35),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: onTap != null
+                    ? accentColor
+                    : sc.textSecondary.withValues(alpha: 0.35),
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -3461,7 +3576,7 @@ class _EmptyJournal extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Удерживайте карточку привычки\nчтобы добавить рефлексию',
+              'Отметьте выполнение и добавьте\nзаметку через кнопку "+ ЗАМЕТКА"',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: sc.textSecondary.withValues(alpha: 0.4),
