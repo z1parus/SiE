@@ -2,8 +2,11 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../local/app_database.dart';
 import '../providers/user_profile_provider.dart';
+
+const _uuid = Uuid();
 
 class SyncService {
   final AppDatabase _db;
@@ -72,6 +75,35 @@ class SyncService {
                 .eq('user_id', userId)
                 .eq('completed_at',
                     payload['completed_at'] as String);
+          case 'insert_routine':
+            await client
+                .from('habit_routines')
+                .upsert(payload, onConflict: 'id');
+          case 'sync_routine_members':
+            final routineId = payload['routine_id'] as String;
+            await client
+                .from('habit_routine_members')
+                .delete()
+                .eq('routine_id', routineId);
+            final members =
+                (payload['members'] as List).cast<Map<String, dynamic>>();
+            if (members.isNotEmpty) {
+              await client.from('habit_routine_members').insert([
+                for (var i = 0; i < members.length; i++)
+                  {
+                    'id': _uuid.v4(),
+                    'routine_id': routineId,
+                    'habit_id': members[i]['habit_id'] as String,
+                    'position': members[i]['position'] as int,
+                  }
+              ]);
+            }
+          case 'delete_routine':
+            await client
+                .from('habit_routines')
+                .delete()
+                .eq('id', payload['id'] as String)
+                .eq('user_id', userId);
           default:
             debugPrint(
                 'SiE Sync: unknown op ${op.operationType}');

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
+import 'routine_editor_screen.dart';
 
 LiquidGlassSettings _glassSettings({
   double blur = 3.0,
@@ -43,10 +44,11 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final sc           = ref.watch(sieColorsProvider);
-    final habitsAsync  = ref.watch(habitsProvider);
-    final today        = _fmt(DateTime.now());
-    final profile      = ref.watch(userProfileProvider).valueOrNull;
+    final sc            = ref.watch(sieColorsProvider);
+    final habitsAsync   = ref.watch(habitsProvider);
+    final routinesAsync = ref.watch(habitRoutinesProvider);
+    final today         = _fmt(DateTime.now());
+    final profile       = ref.watch(userProfileProvider).valueOrNull;
     final showOnboarding = _showOnboardingManual ||
         (!_onboardingDismissed &&
             profile != null &&
@@ -60,6 +62,31 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
           _CyberTopBar(
             onArchive: _openArchive,
             onInfo: () => setState(() => _showOnboardingManual = true),
+          ),
+          // ── Routine Blocks ──────────────────────────────────────
+          routinesAsync.when(
+            data: (routines) => Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _RoutineBlock(
+                    type: 'morning',
+                    routine: routines.morning,
+                    habitsState: habitsAsync.valueOrNull,
+                  ),
+                  const SizedBox(height: 8),
+                  _RoutineBlock(
+                    type: 'evening',
+                    routine: routines.evening,
+                    habitsState: habitsAsync.valueOrNull,
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ),
+            ),
+            loading: () => const SizedBox(height: 8),
+            error: (_, _) => const SizedBox(height: 8),
           ),
           Expanded(
             child: habitsAsync.when(
@@ -1982,6 +2009,655 @@ class _NoConnectionMessage extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Routine Block
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _RoutineBlock extends ConsumerStatefulWidget {
+  const _RoutineBlock({
+    required this.type,
+    this.routine,
+    this.habitsState,
+  });
+
+  final String type; // 'morning' | 'evening'
+  final HabitRoutine? routine;
+  final HabitsState? habitsState;
+
+  @override
+  ConsumerState<_RoutineBlock> createState() => _RoutineBlockState();
+}
+
+class _RoutineBlockState extends ConsumerState<_RoutineBlock> {
+  final PageController _pageCtrl = PageController();
+  bool _carouselActive = false;
+
+  static String _today() {
+    final now = DateTime.now();
+    return '${now.year}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+  }
+
+  static Color _hexToColor(String hex) {
+    final h = hex.replaceAll('#', '').padLeft(6, '0');
+    return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF00C8FF);
+  }
+
+  bool get _isActive {
+    final h = DateTime.now().hour;
+    return widget.type == 'morning' ? (h >= 3 && h < 12) : (h >= 17 && h < 23);
+  }
+
+  bool _isCompleted(Habit h) =>
+      widget.habitsState?.logDates[h.id]?.contains(_today()) ?? false;
+
+  bool _isUnlocked(int index) {
+    if (index == 0) return true;
+    final habits = widget.routine?.habits ?? [];
+    for (var i = 0; i < index; i++) {
+      if (!_isCompleted(habits[i])) return false;
+    }
+    return true;
+  }
+
+  bool get _anyCompletedToday =>
+      (widget.routine?.habits ?? []).any(_isCompleted);
+
+  bool get _allCompletedToday {
+    final habits = widget.routine?.habits ?? [];
+    if (habits.isEmpty) return false;
+    return habits.every(_isCompleted);
+  }
+
+  void _openEditor() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => RoutineEditorScreen(routineType: widget.type),
+      ),
+    );
+  }
+
+  void _showLongPressMenu() {
+    final sc         = ref.read(sieColorsProvider);
+    final editLabel  = widget.type == 'morning'
+        ? 'ИЗМЕНИТЬ УТРЕННЮЮ РУТИНУ'
+        : 'ИЗМЕНИТЬ ВЕЧЕРНЮЮ РУТИНУ';
+    final deleteLabel = widget.type == 'morning'
+        ? 'УДАЛИТЬ УТРЕННЮЮ РУТИНУ'
+        : 'УДАЛИТЬ ВЕЧЕРНЮЮ РУТИНУ';
+    final headerLabel = widget.type == 'morning'
+        ? 'УТРЕННЯЯ РУТИНА'
+        : 'ВЕЧЕРНЯЯ РУТИНА';
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    sc.accent.withValues(alpha: 0.05),
+                    sc.isCosmicMode
+                        ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
+                        : sc.surface,
+                  ],
+                ),
+                border: Border.all(
+                    color: sc.accent.withValues(alpha: 0.25)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 14),
+                    child: Text(
+                      headerLabel,
+                      style: TextStyle(
+                        color: sc.textSecondary.withValues(alpha: 0.80),
+                        fontSize: 10,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ),
+                  Divider(
+                      color: sc.accent.withValues(alpha: 0.15),
+                      height: 1),
+                  _OptionTile(
+                    icon: Icons.edit_outlined,
+                    label: editLabel,
+                    color: sc.textPrimary,
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _openEditor();
+                    },
+                  ),
+                  if (widget.routine != null)
+                    _OptionTile(
+                      icon: Icons.delete_outline,
+                      label: deleteLabel,
+                      color: Colors.redAccent,
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        ref
+                            .read(habitRoutinesProvider.notifier)
+                            .deleteRoutine(widget.routine!.id);
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pageCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sc      = ref.watch(sieColorsProvider);
+    final routine = widget.routine;
+
+    if (routine == null) return _buildAddCard(sc);
+
+    if (!_isActive) return _buildInactiveCard(sc, routine);
+
+    if (!_carouselActive && !_anyCompletedToday) {
+      return _buildStartCard(sc, routine);
+    }
+
+    return _buildCarousel(sc, routine);
+  }
+
+  // ── No routine ────────────────────────────────────────────────
+
+  Widget _buildAddCard(SieColors sc) {
+    final addLabel = widget.type == 'morning'
+        ? 'ДОБАВИТЬ УТРЕННЮЮ РУТИНУ'
+        : 'ДОБАВИТЬ ВЕЧЕРНЮЮ РУТИНУ';
+    return GestureDetector(
+      onTap: _openEditor,
+      child: SieGlassCard(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                    color: sc.accent.withValues(alpha: 0.45)),
+                color: sc.accent.withValues(alpha: 0.07),
+              ),
+              child: Icon(Icons.add, color: sc.accent, size: 13),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              addLabel,
+              style: TextStyle(
+                color: sc.textSecondary.withValues(alpha: 0.65),
+                fontSize: 11,
+                letterSpacing: 1.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Outside active time window ────────────────────────────────
+
+  Widget _buildInactiveCard(SieColors sc, HabitRoutine routine) {
+    final title     = widget.type == 'morning'
+        ? 'УТРЕННЯЯ РУТИНА'
+        : 'ВЕЧЕРНЯЯ РУТИНА';
+    final timeLabel = widget.type == 'morning'
+        ? '03:00 – 11:59'
+        : '17:00 – 22:59';
+    return GestureDetector(
+      onLongPress: _showLongPressMenu,
+      child: Opacity(
+        opacity: 0.48,
+        child: SieGlassCard(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: sc.textPrimary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.8,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    timeLabel,
+                    style: TextStyle(
+                      color: sc.textSecondary,
+                      fontSize: 9,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ],
+              ),
+              if (routine.habits.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: routine.habits.take(5).map((h) {
+                    final c = _hexToColor(h.color);
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(3),
+                        color: c.withValues(alpha: 0.12),
+                        border: Border.all(
+                            color: c.withValues(alpha: 0.28)),
+                      ),
+                      child: Text(
+                        h.title.toUpperCase(),
+                        style: TextStyle(
+                          color: c,
+                          fontSize: 8.5,
+                          letterSpacing: 1,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Active, not yet started ───────────────────────────────────
+
+  Widget _buildStartCard(SieColors sc, HabitRoutine routine) {
+    final title      = widget.type == 'morning'
+        ? 'УТРЕННЯЯ РУТИНА'
+        : 'ВЕЧЕРНЯЯ РУТИНА';
+    final startLabel = widget.type == 'morning'
+        ? 'НАЧАТЬ УТРЕННЮЮ РУТИНУ'
+        : 'НАЧАТЬ ВЕЧЕРНЮЮ РУТИНУ';
+
+    return GestureDetector(
+      onLongPress: _showLongPressMenu,
+      child: SieGlassCard(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                color: sc.accent,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.8,
+                shadows: sc.isCosmicMode
+                    ? [Shadow(color: sc.accent, blurRadius: 8)]
+                    : null,
+              ),
+            ),
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: () {
+                if (routine.habits.isEmpty) {
+                  _openEditor();
+                } else {
+                  setState(() => _carouselActive = true);
+                }
+              },
+              child: Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                  color: sc.accent.withValues(alpha: 0.10),
+                  border: Border.all(
+                      color: sc.accent.withValues(alpha: 0.40)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.play_arrow,
+                        color: sc.accent, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      routine.habits.isEmpty
+                          ? 'ДОБАВИТЬ ПРИВЫЧКИ'
+                          : startLabel,
+                      style: TextStyle(
+                        color: sc.accent,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Carousel ──────────────────────────────────────────────────
+
+  Widget _buildCarousel(SieColors sc, HabitRoutine routine) {
+    final habits    = routine.habits;
+    final itemCount = habits.length + 1; // +1 for add-habit slide
+    final allDone   = _allCompletedToday;
+
+    return GestureDetector(
+      onLongPress: _showLongPressMenu,
+      child: SieGlassCard(
+        height: 148,
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: [
+            Expanded(
+              child: PageView.builder(
+                controller: _pageCtrl,
+                itemCount: itemCount,
+                itemBuilder: (ctx, i) {
+                  if (i == habits.length) {
+                    return _CarouselAddSlide(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => RoutineEditorScreen(
+                              routineType: widget.type),
+                        ),
+                      ),
+                    );
+                  }
+                  final h          = habits[i];
+                  final completed  = _isCompleted(h);
+                  final unlocked   = _isUnlocked(i);
+                  final habitColor = _hexToColor(h.color);
+                  return _CarouselHabitSlide(
+                    habit:       h,
+                    habitColor:  habitColor,
+                    isCompleted: completed,
+                    isUnlocked:  unlocked,
+                    allDone:     allDone,
+                    onComplete:  (unlocked && !completed)
+                        ? () => ref
+                            .read(habitsProvider.notifier)
+                            .toggleHabit(h.id, DateTime.now())
+                        : null,
+                  );
+                },
+              ),
+            ),
+            // Page indicator dots
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: AnimatedBuilder(
+                animation: _pageCtrl,
+                builder: (_, _) {
+                  final page = _pageCtrl.hasClients
+                      ? (_pageCtrl.page ?? 0).round()
+                      : 0;
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(itemCount, (i) {
+                      final active = i == page;
+                      return AnimatedContainer(
+                        duration:
+                            const Duration(milliseconds: 200),
+                        width:  active ? 14 : 6,
+                        height: 4,
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 2),
+                        decoration: BoxDecoration(
+                          borderRadius:
+                              BorderRadius.circular(2),
+                          color: active
+                              ? sc.accent
+                              : sc.textSecondary
+                                  .withValues(alpha: 0.28),
+                        ),
+                      );
+                    }),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Carousel — Habit Slide
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CarouselHabitSlide extends ConsumerWidget {
+  const _CarouselHabitSlide({
+    required this.habit,
+    required this.habitColor,
+    required this.isCompleted,
+    required this.isUnlocked,
+    required this.allDone,
+    this.onComplete,
+  });
+
+  final Habit habit;
+  final Color habitColor;
+  final bool isCompleted;
+  final bool isUnlocked;
+  final bool allDone;
+  final VoidCallback? onComplete;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+
+    return Opacity(
+      opacity: isUnlocked ? 1.0 : 0.40,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: habitColor,
+                    boxShadow: sc.isCosmicMode
+                        ? [
+                            BoxShadow(
+                              color:
+                                  habitColor.withValues(alpha: 0.80),
+                              blurRadius: 6,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : null,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    habit.title.toUpperCase(),
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: sc.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                ),
+                if (isCompleted)
+                  Icon(Icons.check_circle,
+                      color: habitColor, size: 18),
+              ],
+            ),
+            const Spacer(),
+            if (isCompleted)
+              Center(
+                child: Text(
+                  allDone ? 'РУТИНА ВЫПОЛНЕНА ✓' : 'ВЫПОЛНЕНО ✓',
+                  style: TextStyle(
+                    color: habitColor,
+                    fontSize: 10,
+                    letterSpacing: 1.5,
+                    fontWeight: FontWeight.w700,
+                    shadows: sc.isCosmicMode
+                        ? [
+                            Shadow(
+                                color: habitColor.withValues(alpha: 0.6),
+                                blurRadius: 8)
+                          ]
+                        : null,
+                  ),
+                ),
+              )
+            else if (isUnlocked)
+              GestureDetector(
+                onTap: onComplete,
+                child: Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(6),
+                    color: habitColor.withValues(alpha: 0.12),
+                    border: Border.all(
+                        color: habitColor.withValues(alpha: 0.45)),
+                  ),
+                  child: Center(
+                    child: Text(
+                      'ВЫПОЛНЕНО',
+                      style: TextStyle(
+                        color: habitColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            else
+              Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.lock_outline,
+                        color:
+                            sc.textSecondary.withValues(alpha: 0.50),
+                        size: 12),
+                    const SizedBox(width: 6),
+                    Text(
+                      'ЗАВЕРШИТЕ ПРЕДЫДУЩЕЕ',
+                      style: TextStyle(
+                        color:
+                            sc.textSecondary.withValues(alpha: 0.50),
+                        fontSize: 9,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 4),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Carousel — Add Habit Slide
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CarouselAddSlide extends ConsumerWidget {
+  const _CarouselAddSlide({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+    return GestureDetector(
+      onTap: onTap,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                    color: sc.accent.withValues(alpha: 0.45)),
+                color: sc.accent.withValues(alpha: 0.07),
+              ),
+              child: Icon(Icons.add, color: sc.accent, size: 18),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'ДОБАВИТЬ ПРИВЫЧКУ',
+              style: TextStyle(
+                color: sc.textSecondary.withValues(alpha: 0.65),
+                fontSize: 10,
+                letterSpacing: 1.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

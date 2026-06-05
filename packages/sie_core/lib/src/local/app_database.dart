@@ -83,6 +83,30 @@ class LocalProfiles extends Table {
   Set<Column> get primaryKey => {userId};
 }
 
+@DataClassName('LocalRoutine')
+class LocalRoutines extends Table {
+  TextColumn get id          => text()();
+  TextColumn get userId      => text()();
+  TextColumn get routineType => text()(); // 'morning' | 'evening'
+  IntColumn  get createdAtMs => integer()();
+  BoolColumn get synced      => boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('LocalRoutineMember')
+class LocalRoutineMembers extends Table {
+  TextColumn get id        => text()();
+  TextColumn get routineId => text()();
+  TextColumn get habitId   => text()();
+  IntColumn  get position  => integer().withDefault(const Constant(0))();
+  BoolColumn get synced    => boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 @DataClassName('PendingSyncOp')
 class PendingSyncOps extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -102,19 +126,25 @@ class PendingSyncOps extends Table {
   LocalFocusSessions,
   LocalBreathingSessions,
   LocalProfiles,
+  LocalRoutines,
+  LocalRoutineMembers,
   PendingSyncOps,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: (m, from, to) async {
       if (from < 2) {
         await m.addColumn(localHabits, localHabits.isArchived);
+      }
+      if (from < 3) {
+        await m.createTable(localRoutines);
+        await m.createTable(localRoutineMembers);
       }
     },
   );
@@ -285,6 +315,31 @@ class AppDatabase extends _$AppDatabase {
         pendingXp: Value(0),
         pendingDp: Value(0),
       ));
+
+  // ── Routines ──────────────────────────────────────────────────────────────
+
+  Future<List<LocalRoutine>> routinesForUser(String userId) =>
+      (select(localRoutines)..where((t) => t.userId.equals(userId))).get();
+
+  Future<List<LocalRoutineMember>> routineMembersForRoutine(String routineId) =>
+      (select(localRoutineMembers)
+            ..where((t) => t.routineId.equals(routineId))
+            ..orderBy([(t) => OrderingTerm(expression: t.position)]))
+          .get();
+
+  Future<void> upsertRoutine(LocalRoutinesCompanion row) =>
+      into(localRoutines).insertOnConflictUpdate(row);
+
+  Future<void> upsertRoutineMember(LocalRoutineMembersCompanion row) =>
+      into(localRoutineMembers).insertOnConflictUpdate(row);
+
+  Future<void> deleteRoutineMembers(String routineId) =>
+      (delete(localRoutineMembers)
+            ..where((t) => t.routineId.equals(routineId)))
+          .go();
+
+  Future<void> deleteRoutine(String routineId) =>
+      (delete(localRoutines)..where((t) => t.id.equals(routineId))).go();
 
   // ── Sync Ops ──────────────────────────────────────────────────────────────
 

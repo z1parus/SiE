@@ -40,3 +40,5 @@ export 'src/models/leaderboard_entry.dart';
 export 'src/providers/leaderboard_provider.dart';
 export 'src/models/bootcamp.dart';
 export 'src/providers/bootcamp_provider.dart';
+export 'src/models/habit_routine.dart';
+export 'src/providers/habit_routines_provider.dart';
