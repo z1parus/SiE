@@ -16,6 +16,9 @@ String _fmt(DateTime dt) =>
 const _uuid = Uuid();
 
 class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
+  // Guards against concurrent toggles for the same habit+date (double-tap).
+  final _inProgress = <String>{};
+
   @override
   Future<HabitsState> build() async {
     ref.watch(authStateProvider);
@@ -31,7 +34,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     final userId = session.user.id;
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     final db = ref.read(appDatabaseProvider);
-    final cutoff = _fmt(DateTime.now().subtract(const Duration(days: 30)));
+    final cutoff = _fmt(DateTime.now().subtract(const Duration(days: 366)));
 
     if (isOnline) {
       try {
@@ -392,8 +395,15 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     if (userId == null) return;
 
     final dateStr = _fmt(date);
+    final toggleKey = '$habitId-$dateStr';
+    if (_inProgress.contains(toggleKey)) return;
+    _inProgress.add(toggleKey);
+
     final prev = state.valueOrNull;
-    if (prev == null) return;
+    if (prev == null) {
+      _inProgress.remove(toggleKey);
+      return;
+    }
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     final db = ref.read(appDatabaseProvider);
@@ -447,12 +457,19 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         }
       } else {
         if (isOnline) {
-          await client.from('habit_logs').insert({
-            'habit_id': habitId,
-            'user_id': userId,
-            'completed_at': dateStr,
-            'xp_awarded': 50,
-          });
+          try {
+            await client.from('habit_logs').insert({
+              'habit_id': habitId,
+              'user_id': userId,
+              'completed_at': dateStr,
+              'xp_awarded': 50,
+            });
+          } on PostgrestException catch (e) {
+            // 23505 = unique_violation: log already exists, treat as no-op.
+            if (e.code != '23505') rethrow;
+            _inProgress.remove(toggleKey);
+            return;
+          }
           await Future.wait([
             client.rpc('increment_xp',
                 params: {'p_user_id': userId, 'p_amount': 50}),
@@ -473,8 +490,10 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       }
     } catch (e, st) {
       state = AsyncData(prev);
+      _inProgress.remove(toggleKey);
       Error.throwWithStackTrace(e, st);
     }
+    _inProgress.remove(toggleKey);
   }
 
   Future<void> archiveHabit(String habitId) async {

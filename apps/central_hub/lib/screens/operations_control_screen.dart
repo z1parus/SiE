@@ -1199,7 +1199,12 @@ class _ScreenHeader extends ConsumerWidget {
             _GlassHeaderBtn(
               icon: Icons.logout,
               size: 20,
-              onTap: () async => SupabaseService.signOut(),
+              onTap: () async {
+                await SupabaseService.signOut();
+                ref.invalidate(userProfileProvider);
+                ref.invalidate(habitsProvider);
+                ref.invalidate(branchesProvider);
+              },
             ),
           ],
         ),
