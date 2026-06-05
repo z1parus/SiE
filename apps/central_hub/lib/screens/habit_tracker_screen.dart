@@ -69,7 +69,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                   strokeWidth: 1.5,
                 ),
               ),
-              error: (e, _) => const Center(child: _NoConnectionMessage()),
+              error: (e, _) => Center(child: _NoConnectionMessage(error: e)),
               data: (state) {
                 if (state.habits.isEmpty) {
                   return _EmptyState(onAdd: () => _showHabitDialog(null));
@@ -1757,8 +1757,8 @@ class HabitArchiveScreen extends ConsumerWidget {
                       strokeWidth: 1.5,
                     ),
                   ),
-                  error: (_, _) => const Center(
-                    child: _NoConnectionMessage(),
+                  error: (e, _) => Center(
+                    child: _NoConnectionMessage(error: e),
                   ),
                   data: (habits) {
                     if (habits.isEmpty) {
@@ -1944,18 +1944,36 @@ class _ArchivedHabitCard extends ConsumerWidget {
 }
 
 class _NoConnectionMessage extends ConsumerWidget {
-  const _NoConnectionMessage();
+  final Object? error;
+  const _NoConnectionMessage({this.error});
+
+  static bool _isNetworkError(Object? e) {
+    if (e == null) return false;
+    final msg = e.toString().toLowerCase();
+    return msg.contains('socketexception') ||
+        msg.contains('connection') ||
+        msg.contains('network') ||
+        msg.contains('unreachable') ||
+        msg.contains('failed host lookup');
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sc = ref.watch(sieColorsProvider);
+    final isNetwork = _isNetworkError(error);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.wifi_off_outlined, color: sc.iconMuted, size: 36),
+        Icon(
+          isNetwork ? Icons.wifi_off_outlined : Icons.error_outline,
+          color: sc.iconMuted,
+          size: 36,
+        ),
         const SizedBox(height: 12),
         Text(
-          'Подключение к интернету отсутствует',
+          isNetwork
+              ? 'Подключение к интернету отсутствует'
+              : 'Не удалось загрузить данные',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: sc.iconMuted,

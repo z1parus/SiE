@@ -104,7 +104,12 @@ class _OperationsControlScreenState
               ),
             ),
           ),
-          const SizedBox(height: 148),
+          Builder(
+            builder: (context) {
+              final bottomInset = MediaQuery.of(context).padding.bottom;
+              return SizedBox(height: 68 + math.max(bottomInset, 16) + 16);
+            },
+          ),
         ],
       ),
     );
@@ -336,16 +341,22 @@ class _FloatingNavBar extends ConsumerWidget {
   static const _activeIndex = 1;
 
   void _onItemTap(BuildContext context, int index) {
+    final nav = Navigator.of(context);
+    // Prevent stacking the same route on rapid taps
+    if (nav.canPop()) {
+      final route = ModalRoute.of(context);
+      if (route != null && !route.isCurrent) return;
+    }
     switch (index) {
       case 0:
-        Navigator.of(context).push(PageRouteBuilder(
+        nav.push(PageRouteBuilder(
           pageBuilder: (_, _, _) => const ProfileScreen(),
           transitionsBuilder: (_, a, _, c) =>
               FadeTransition(opacity: a, child: c),
           transitionDuration: const Duration(milliseconds: 350),
         ));
       case 3:
-        Navigator.of(context).push(PageRouteBuilder(
+        nav.push(PageRouteBuilder(
           pageBuilder: (_, _, _) => const LeaderboardScreen(),
           transitionsBuilder: (_, a, _, c) =>
               FadeTransition(opacity: a, child: c),

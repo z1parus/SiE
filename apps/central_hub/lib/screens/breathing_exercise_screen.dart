@@ -107,20 +107,20 @@ class BreathingSettings {
 
   factory BreathingSettings.fromJson(Map<String, dynamic> json) =>
       BreathingSettings(
-        rounds: json['rounds'] as int? ?? 3,
-        cyclesPerRound: json['cyclesPerRound'] as int? ?? 30,
-        inhaleSecs: json['inhaleSecs'] as int? ?? 2,
-        exhaleSecs: json['exhaleSecs'] as int? ?? 2,
-        exhaustRetentionSecs: json['exhaustRetentionSecs'] as int? ?? 90,
-        recoveryHoldSecs: json['recoveryHoldSecs'] as int? ?? 15,
+        rounds: (json['rounds'] as int? ?? 3).clamp(1, 10),
+        cyclesPerRound: (json['cyclesPerRound'] as int? ?? 30).clamp(5, 60),
+        inhaleSecs: (json['inhaleSecs'] as int? ?? 2).clamp(1, 10),
+        exhaleSecs: (json['exhaleSecs'] as int? ?? 2).clamp(1, 10),
+        exhaustRetentionSecs: (json['exhaustRetentionSecs'] as int? ?? 90).clamp(10, 300),
+        recoveryHoldSecs: (json['recoveryHoldSecs'] as int? ?? 15).clamp(5, 60),
         ambientEnabled: json['ambientEnabled'] as bool? ?? true,
         breathingSoundsEnabled: json['breathingSoundsEnabled'] as bool? ?? true,
         heartbeatEnabled: json['heartbeatEnabled'] as bool? ?? true,
         tickEnabled: json['tickEnabled'] as bool? ?? true,
-        ambientVolume: (json['ambientVolume'] as num?)?.toDouble() ?? 0.75,
-        breathingVolume: (json['breathingVolume'] as num?)?.toDouble() ?? 0.75,
-        heartbeatVolume: (json['heartbeatVolume'] as num?)?.toDouble() ?? 0.75,
-        tickVolume: (json['tickVolume'] as num?)?.toDouble() ?? 0.75,
+        ambientVolume: ((json['ambientVolume'] as num?)?.toDouble() ?? 0.75).clamp(0.0, 1.0),
+        breathingVolume: ((json['breathingVolume'] as num?)?.toDouble() ?? 0.75).clamp(0.0, 1.0),
+        heartbeatVolume: ((json['heartbeatVolume'] as num?)?.toDouble() ?? 0.75).clamp(0.0, 1.0),
+        tickVolume: ((json['tickVolume'] as num?)?.toDouble() ?? 0.75).clamp(0.0, 1.0),
       );
 }
 
@@ -203,11 +203,11 @@ class _BreathingExerciseScreenState
 
   // ── Back / Partial XP ────────────────────────────────────────
 
-  void _onBack() {
+  Future<void> _onBack() async {
     _cancelTimers();
     _audio.stopAll();
-    _awardPartialXpIfEligible();
-    Navigator.of(context).pop();
+    await _awardPartialXpIfEligible();
+    if (mounted) Navigator.of(context).pop();
   }
 
   void _onSphereTap() {
@@ -250,9 +250,11 @@ class _BreathingExerciseScreenState
       _recoveryElapsed = 0;
       _transitionElapsed = 0;
     });
+    _circleCtrl.stop();
+    _breathColorCtrl.stop();
+    _pulseCtrl.stop();
     _circleCtrl.value = 0.3;
     _breathColorCtrl.value = 0.0;
-    _pulseCtrl.stop();
     _startCountdown();
   }
 
@@ -358,6 +360,7 @@ class _BreathingExerciseScreenState
   }
 
   void _startHeartbeatSequence() {
+    _heartbeatTimer?.cancel();
     _heartbeatStart = DateTime.now();
     _scheduleNextHeartbeat();
   }
