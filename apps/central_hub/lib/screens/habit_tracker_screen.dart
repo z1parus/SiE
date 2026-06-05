@@ -600,6 +600,7 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
 
   @override
   void dispose() {
+    _snapCtrl.removeStatusListener(_onSnapComplete);
     _snapCtrl.dispose();
     super.dispose();
   }
@@ -805,18 +806,13 @@ class _HabitMatrixCard extends ConsumerWidget {
     this.onLongPress,
   });
 
-  static Color _hexToColor(String hex) {
-    final h = hex.replaceAll('#', '').padLeft(6, '0');
-    return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF00C8FF);
-  }
-
   static String _fmtDate(DateTime dt) =>
       '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sc          = ref.watch(sieColorsProvider);
-    final accentColor = _hexToColor(habit.color);
+    final accentColor = hexToColor(habit.color);
     final now         = DateTime.now();
 
     final days = List.generate(7, (i) => now.subtract(Duration(days: 6 - i)));
@@ -2043,11 +2039,6 @@ class _RoutineBlockState extends ConsumerState<_RoutineBlock> {
         '${now.day.toString().padLeft(2, '0')}';
   }
 
-  static Color _hexToColor(String hex) {
-    final h = hex.replaceAll('#', '').padLeft(6, '0');
-    return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF00C8FF);
-  }
-
   bool get _isActive {
     final h = DateTime.now().hour;
     return widget.type == 'morning' ? (h >= 3 && h < 12) : (h >= 17 && h < 23);
@@ -2167,6 +2158,20 @@ class _RoutineBlockState extends ConsumerState<_RoutineBlock> {
   }
 
   @override
+  void didUpdateWidget(_RoutineBlock old) {
+    super.didUpdateWidget(old);
+    if (old.routine != null && widget.routine == null) {
+      _carouselActive = false;
+    }
+    final newCount = (widget.routine?.habits.length ?? 0) + 1;
+    if (_pageCtrl.hasClients && (_pageCtrl.page ?? 0).round() >= newCount) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_pageCtrl.hasClients) _pageCtrl.jumpToPage(0);
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _pageCtrl.dispose();
     super.dispose();
@@ -2275,7 +2280,7 @@ class _RoutineBlockState extends ConsumerState<_RoutineBlock> {
                   spacing: 6,
                   runSpacing: 4,
                   children: routine.habits.take(5).map((h) {
-                    final c = _hexToColor(h.color);
+                    final c = hexToColor(h.color);
                     return Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
@@ -2413,7 +2418,7 @@ class _RoutineBlockState extends ConsumerState<_RoutineBlock> {
                   final h          = habits[i];
                   final completed  = _isCompleted(h);
                   final unlocked   = _isUnlocked(i);
-                  final habitColor = _hexToColor(h.color);
+                  final habitColor = hexToColor(h.color);
                   return _CarouselHabitSlide(
                     habit:       h,
                     habitColor:  habitColor,
@@ -2432,7 +2437,8 @@ class _RoutineBlockState extends ConsumerState<_RoutineBlock> {
             // Page indicator dots
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: AnimatedBuilder(
+              child: RepaintBoundary(
+                child: AnimatedBuilder(
                 animation: _pageCtrl,
                 builder: (_, _) {
                   final page = _pageCtrl.hasClients
@@ -2461,6 +2467,7 @@ class _RoutineBlockState extends ConsumerState<_RoutineBlock> {
                     }),
                   );
                 },
+                ),
               ),
             ),
           ],

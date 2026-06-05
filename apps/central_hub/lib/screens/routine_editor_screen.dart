@@ -236,15 +236,10 @@ class _RoutineMemberTile extends ConsumerWidget {
   final Habit habit;
   final VoidCallback? onRemove;
 
-  static Color _hexToColor(String hex) {
-    final h = hex.replaceAll('#', '').padLeft(6, '0');
-    return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF00C8FF);
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sc    = ref.watch(sieColorsProvider);
-    final color = _hexToColor(habit.color);
+    final color = hexToColor(habit.color);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -506,15 +501,10 @@ class _HabitPickerTile extends ConsumerWidget {
   final Habit habit;
   final VoidCallback onTap;
 
-  static Color _hexToColor(String hex) {
-    final h = hex.replaceAll('#', '').padLeft(6, '0');
-    return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF00C8FF);
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sc    = ref.watch(sieColorsProvider);
-    final color = _hexToColor(habit.color);
+    final color = hexToColor(habit.color);
 
     return GestureDetector(
       onTap: onTap,

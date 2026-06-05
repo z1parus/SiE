@@ -80,23 +80,24 @@ class SyncService {
                 .from('habit_routines')
                 .upsert(payload, onConflict: 'id');
           case 'sync_routine_members':
+            // Bug 2: payload now includes stable IDs; upsert to handle re-sync safely.
             final routineId = payload['routine_id'] as String;
+            final members =
+                (payload['members'] as List).cast<Map<String, dynamic>>();
             await client
                 .from('habit_routine_members')
                 .delete()
                 .eq('routine_id', routineId);
-            final members =
-                (payload['members'] as List).cast<Map<String, dynamic>>();
             if (members.isNotEmpty) {
-              await client.from('habit_routine_members').insert([
-                for (var i = 0; i < members.length; i++)
+              await client.from('habit_routine_members').upsert([
+                for (final m in members)
                   {
-                    'id': _uuid.v4(),
+                    'id': m['id'] as String? ?? _uuid.v4(),
                     'routine_id': routineId,
-                    'habit_id': members[i]['habit_id'] as String,
-                    'position': members[i]['position'] as int,
+                    'habit_id': m['habit_id'] as String,
+                    'position': m['position'] as int,
                   }
-              ]);
+              ], onConflict: 'id');
             }
           case 'delete_routine':
             await client
@@ -116,22 +117,26 @@ class SyncService {
     }
   }
 
+  // O3: single batch upsert instead of N round-trips.
   Future<void> _syncHabitLogs(
       SupabaseClient client, String userId) async {
     final logs = await _db.unsyncedHabitLogs(userId);
-    for (final log in logs) {
-      try {
-        await client.from('habit_logs').upsert({
-          'habit_id': log.habitId,
-          'user_id': log.userId,
+    if (logs.isEmpty) return;
+    try {
+      await client.from('habit_logs').upsert(
+        logs.map((log) => {
+          'habit_id':    log.habitId,
+          'user_id':     log.userId,
           'completed_at': log.completedAt,
-          'xp_awarded': 50,
-        }, onConflict: 'habit_id,completed_at');
-        await _db.markHabitLogSynced(
-            log.habitId, log.userId, log.completedAt);
-      } catch (e) {
-        debugPrint('SiE Sync: habit_log sync failed — $e');
+          'xp_awarded':  50,
+        }).toList(),
+        onConflict: 'habit_id,completed_at',
+      );
+      for (final log in logs) {
+        await _db.markHabitLogSynced(log.habitId, log.userId, log.completedAt);
       }
+    } catch (e) {
+      debugPrint('SiE Sync: habit_log batch sync failed — $e');
     }
   }
 

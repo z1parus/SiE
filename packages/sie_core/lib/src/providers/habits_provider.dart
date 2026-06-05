@@ -212,6 +212,8 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       return false;
     } catch (e, st) {
       if (prev != null) state = AsyncData(prev);
+      // Clean up orphaned local record so it doesn't linger unsynced.
+      await db.markHabitDeleted(habitId);
       Error.throwWithStackTrace(e, st);
     }
   }
@@ -397,7 +399,19 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     final db = ref.read(appDatabaseProvider);
     final isDone = prev.logDates[habitId]?.contains(dateStr) ?? false;
 
-    // Optimistic update.
+    // Write to local DB first to prevent race condition on rapid double-tap.
+    if (isDone) {
+      await db.deleteHabitLog(habitId, userId, dateStr);
+    } else {
+      await db.upsertHabitLog(LocalHabitLogsCompanion(
+        habitId: Value(habitId),
+        userId: Value(userId),
+        completedAt: Value(dateStr),
+        synced: Value(isOnline),
+      ));
+    }
+
+    // Optimistic UI update (now consistent with local DB).
     final newLogDates = {
       for (final e in prev.logDates.entries)
         e.key: Set<String>.from(e.value),
@@ -417,7 +431,6 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
 
     try {
       if (isDone) {
-        await db.deleteHabitLog(habitId, userId, dateStr);
         if (isOnline) {
           await client
               .from('habit_logs')
@@ -433,12 +446,6 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           }));
         }
       } else {
-        await db.upsertHabitLog(LocalHabitLogsCompanion(
-          habitId: Value(habitId),
-          userId: Value(userId),
-          completedAt: Value(dateStr),
-          synced: Value(isOnline),
-        ));
         if (isOnline) {
           await client.from('habit_logs').insert({
             'habit_id': habitId,

@@ -34,16 +34,18 @@ class HabitRoutinesNotifier
 
     if (isOnline) {
       try {
-        // Fetch routines with nested members + habits in one query.
+        // O2: single nested query instead of N+1 round-trips.
         final routinesRaw = await client
             .from('habit_routines')
-            .select('id, routine_type, created_at')
+            .select(
+              'id, routine_type, created_at, '
+              'habit_routine_members(id, habit_id, position, habits(*))',
+            )
             .eq('user_id', userId);
 
         HabitRoutine? morning;
         HabitRoutine? evening;
 
-        // Mirror routines to local DB.
         for (final row in routinesRaw) {
           final rId   = row['id'] as String;
           final rType = row['routine_type'] as String;
@@ -57,12 +59,11 @@ class HabitRoutinesNotifier
             synced:      const Value(true),
           ));
 
-          // Fetch ordered members with full habit data.
-          final membersRaw = await client
-              .from('habit_routine_members')
-              .select('id, habit_id, position, habits(*)')
-              .eq('routine_id', rId)
-              .order('position');
+          // Sort members by position client-side (nested select has no order).
+          final membersRaw = (row['habit_routine_members'] as List<dynamic>)
+              .cast<Map<String, dynamic>>()
+            ..sort((a, b) =>
+                (a['position'] as int).compareTo(b['position'] as int));
 
           final habits = <Habit>[];
           for (final m in membersRaw) {
@@ -105,19 +106,16 @@ class HabitRoutinesNotifier
     final localRoutines = await db.routinesForUser(userId);
     final allHabits     = await db.habitsForUser(userId);
 
+    // O1: O(1) map lookup instead of O(n) firstWhere per member.
+    final habitById = {for (final h in allHabits) h.id: h};
+
     HabitRoutine? morning;
     HabitRoutine? evening;
 
     for (final lr in localRoutines) {
       final members = await db.routineMembersForRoutine(lr.id);
       final habits = members
-          .map((m) {
-            try {
-              return allHabits.firstWhere((h) => h.id == m.habitId);
-            } catch (_) {
-              return null;
-            }
-          })
+          .map((m) => habitById[m.habitId])
           .whereType<LocalHabit>()
           .map((lh) => Habit(
                 id:          lh.id,
@@ -245,10 +243,7 @@ class HabitRoutinesNotifier
           synced: const Value(true),
         ));
       } else {
-        await _enqueueMembersSync(db, routineId, userId, routine.habits
-            .map((h) => h.id)
-            .toList()
-          ..add(habitId));
+        await _enqueueMembersSync(db, routineId, userId);
       }
     } catch (e) {
       debugPrint('SiE Routines: addHabitToRoutine failed — $e');
@@ -268,20 +263,24 @@ class HabitRoutinesNotifier
     final routine = prev.morning?.id == routineId ? prev.morning : prev.evening;
     if (routine == null) return;
 
-    // Remove from local DB and rebuild positions.
-    await db.deleteRoutineMembers(routineId);
-    final remaining = routine.habits
-        .where((h) => h.id != habitId)
-        .toList();
-    for (var i = 0; i < remaining.length; i++) {
-      await db.upsertRoutineMember(LocalRoutineMembersCompanion(
-        id:        Value(_uuid.v4()),
-        routineId: Value(routineId),
-        habitId:   Value(remaining[i].id),
-        position:  Value(i),
-        synced:    Value(isOnline),
-      ));
-    }
+    // Bug 1+3: atomic delete+reinsert and preserve existing member IDs.
+    final existingMembers = await db.routineMembersForRoutine(routineId);
+    final memberIdMap = {for (final m in existingMembers) m.habitId: m.id};
+    final remaining = routine.habits.where((h) => h.id != habitId).toList();
+
+    await db.transaction(() async {
+      await db.deleteRoutineMembers(routineId);
+      for (var i = 0; i < remaining.length; i++) {
+        final hid = remaining[i].id;
+        await db.upsertRoutineMember(LocalRoutineMembersCompanion(
+          id:        Value(memberIdMap[hid] ?? _uuid.v4()),
+          routineId: Value(routineId),
+          habitId:   Value(hid),
+          position:  Value(i),
+          synced:    Value(isOnline),
+        ));
+      }
+    });
 
     state = AsyncData(await _load());
 
@@ -301,8 +300,7 @@ class HabitRoutinesNotifier
               .eq('habit_id', remaining[i].id);
         }
       } else {
-        await _enqueueMembersSync(
-            db, routineId, userId, remaining.map((h) => h.id).toList());
+        await _enqueueMembersSync(db, routineId, userId);
       }
     } catch (e) {
       debugPrint('SiE Routines: removeHabitFromRoutine failed — $e');
@@ -319,17 +317,23 @@ class HabitRoutinesNotifier
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     final db       = ref.read(appDatabaseProvider);
 
-    // Rewrite local members with new positions.
-    await db.deleteRoutineMembers(routineId);
-    for (var i = 0; i < habitIdsInOrder.length; i++) {
-      await db.upsertRoutineMember(LocalRoutineMembersCompanion(
-        id:        Value(_uuid.v4()),
-        routineId: Value(routineId),
-        habitId:   Value(habitIdsInOrder[i]),
-        position:  Value(i),
-        synced:    Value(isOnline),
-      ));
-    }
+    // Bug 1+3: atomic rewrite and preserve existing member IDs.
+    final existingMembers = await db.routineMembersForRoutine(routineId);
+    final memberIdMap = {for (final m in existingMembers) m.habitId: m.id};
+
+    await db.transaction(() async {
+      await db.deleteRoutineMembers(routineId);
+      for (var i = 0; i < habitIdsInOrder.length; i++) {
+        final hid = habitIdsInOrder[i];
+        await db.upsertRoutineMember(LocalRoutineMembersCompanion(
+          id:        Value(memberIdMap[hid] ?? _uuid.v4()),
+          routineId: Value(routineId),
+          habitId:   Value(hid),
+          position:  Value(i),
+          synced:    Value(isOnline),
+        ));
+      }
+    });
 
     state = AsyncData(await _load());
 
@@ -352,7 +356,7 @@ class HabitRoutinesNotifier
           ]);
         }
       } else {
-        await _enqueueMembersSync(db, routineId, userId, habitIdsInOrder);
+        await _enqueueMembersSync(db, routineId, userId);
       }
     } catch (e) {
       debugPrint('SiE Routines: reorderMembers failed — $e');
@@ -394,18 +398,19 @@ class HabitRoutinesNotifier
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
+  // Bug 2: reads IDs from local DB so re-syncs upsert instead of creating duplicates.
   Future<void> _enqueueMembersSync(
     AppDatabase db,
     String routineId,
     String userId,
-    List<String> habitIds,
   ) async {
+    final members = await db.routineMembersForRoutine(routineId);
     await db.enqueueSyncOp('sync_routine_members', jsonEncode({
       'routine_id': routineId,
       'user_id':    userId,
       'members': [
-        for (var i = 0; i < habitIds.length; i++)
-          {'habit_id': habitIds[i], 'position': i},
+        for (final m in members)
+          {'id': m.id, 'habit_id': m.habitId, 'position': m.position},
       ],
     }));
   }
