@@ -630,21 +630,34 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       list.add(updated);
     }
 
+    // If this is a brand-new entry (e.g. toggleHabit failed remotely but wrote
+    // to local DB), also mark the date in logDates so the card shows completed.
+    final updatedLogDates = {
+      for (final e in prev.logDates.entries)
+        e.key: Set<String>.from(e.value),
+    };
+    if (idx < 0) {
+      updatedLogDates.putIfAbsent(habitId, () => {}).add(dateStr);
+    }
+
     state = AsyncData(HabitsState(
       habits: prev.habits,
-      logDates: prev.logDates,
-      streaks: prev.streaks,
+      logDates: updatedLogDates,
+      streaks: idx < 0
+          ? {...prev.streaks, habitId: _streak(updatedLogDates[habitId] ?? {})}
+          : prev.streaks,
       logEntries: updatedEntries,
     ));
 
-    // Write to local DB (marks synced = false).
-    await db.updateHabitLogNote(
-      habitId: habitId,
-      userId: userId,
-      completedAt: dateStr,
-      note: note,
-      emoji: emoji,
-    );
+    // Upsert to local DB so note/emoji persist even if the remote call fails.
+    await db.upsertHabitLog(LocalHabitLogsCompanion(
+      habitId: Value(habitId),
+      userId: Value(userId),
+      completedAt: Value(dateStr),
+      note: Value(note),
+      emoji: Value(emoji),
+      synced: const Value(false),
+    ));
 
     try {
       if (isOnline) {
@@ -664,9 +677,20 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
               'emoji': emoji,
             }));
       }
-    } catch (e, st) {
-      state = AsyncData(prev);
-      Error.throwWithStackTrace(e, st);
+    } catch (e) {
+      // Remote sync failed — data is safe in local DB, queue for later.
+      debugPrint('SiE updateHabitLog: sync failed, queuing — $e');
+      try {
+        await db.enqueueSyncOp(
+            'update_habit_log',
+            jsonEncode({
+              'habit_id': habitId,
+              'user_id': userId,
+              'completed_at': dateStr,
+              'note': note,
+              'emoji': emoji,
+            }));
+      } catch (_) {}
     }
   }
 

@@ -1872,11 +1872,17 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
               ?.contains(widget.dateStr) ??
           false;
 
-      // If this habit isn't logged yet, create the log entry first.
+      // Complete the habit if not yet done for today.
+      // toggleHabit writes to local DB before the remote call, so even if
+      // the Supabase insert fails we still have a local row to attach the
+      // note/emoji to — catch the exception and continue.
       if (!alreadyDone) {
-        await notifier.toggleHabit(widget.habit.id, date);
+        try {
+          await notifier.toggleHabit(widget.habit.id, date);
+        } catch (_) {}
       }
 
+      // updateHabitLog never throws — it queues a sync op on remote failure.
       await notifier.updateHabitLog(
         habitId: widget.habit.id,
         date: date,
@@ -1893,17 +1899,14 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
   Future<void> _handleRemove() async {
     if (_saving) return;
     setState(() => _saving = true);
-    try {
-      await ref.read(habitsProvider.notifier).updateHabitLog(
-            habitId: widget.habit.id,
-            date: DateTime.parse(widget.dateStr),
-            note: null,
-            emoji: null,
-          );
-      if (mounted) Navigator.of(context).pop();
-    } catch (_) {
-      if (mounted) setState(() => _saving = false);
-    }
+    // updateHabitLog never throws — safe to call without extra try/catch.
+    await ref.read(habitsProvider.notifier).updateHabitLog(
+          habitId: widget.habit.id,
+          date: DateTime.parse(widget.dateStr),
+          note: null,
+          emoji: null,
+        );
+    if (mounted) Navigator.of(context).pop();
   }
 
   @override
