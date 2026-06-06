@@ -87,11 +87,11 @@ class AudioService {
       // first real sound to prime its internal buffer pipeline.
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
         final streams = await Future.wait([
-          _pool.play(_inhaleId),
-          _pool.play(_exhaleId),
-          _pool.play(_chimeId),
-          _pool.play(_heartbeatId),
-          _pool.play(_tickId),
+          _pool.play(_inhaleId,    volumeLeft: 0, volumeRight: 0),
+          _pool.play(_exhaleId,    volumeLeft: 0, volumeRight: 0),
+          _pool.play(_chimeId,     volumeLeft: 0, volumeRight: 0),
+          _pool.play(_heartbeatId, volumeLeft: 0, volumeRight: 0),
+          _pool.play(_tickId,      volumeLeft: 0, volumeRight: 0),
         ]);
         for (final s in streams) {
           if (s > 0) _pool.stop(s).ignore();

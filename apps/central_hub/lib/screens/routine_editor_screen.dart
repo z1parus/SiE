@@ -121,6 +121,9 @@ class RoutineEditorScreen extends ConsumerWidget {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.of(context).size.width - 40,
+      ),
       builder: (_) => _HabitPickerSheet(
         routineType: routineType,
         currentRoutineId: routine?.id,

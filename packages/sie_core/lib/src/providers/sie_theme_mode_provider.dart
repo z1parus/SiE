@@ -16,7 +16,7 @@ class SieThemeModeNotifier extends AsyncNotifier<SieThemeMode> {
     final saved = prefs.getString(_prefsKey);
     return SieThemeMode.values.firstWhere(
       (m) => m.name == saved,
-      orElse: () => SieThemeMode.cosmicLiquidGlass,
+      orElse: () => SieThemeMode.classicDark,
     );
   }
 

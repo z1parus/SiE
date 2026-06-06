@@ -33,9 +33,6 @@ export 'src/widgets/starry_sky_background.dart';
 export 'src/widgets/onboarding_overlay.dart';
 export 'src/widgets/audio_init_overlay.dart';
 export 'src/widgets/sie_glass_card.dart';
-export 'src/widgets/sie_space_background.dart';
-export 'package:liquid_glass_widgets/liquid_glass_widgets.dart'
-    show GlassPage, GlassStatusBarStyle;
 export 'src/models/leaderboard_entry.dart';
 export 'src/providers/leaderboard_provider.dart';
 export 'src/models/bootcamp.dart';

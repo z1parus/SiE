@@ -3,27 +3,8 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 import 'routine_editor_screen.dart';
-
-LiquidGlassSettings _glassSettings({
-  double blur = 3.0,
-  double glowIntensity = 0.88,
-}) =>
-    LiquidGlassSettings(
-      blur: blur,
-      thickness: 24,
-      refractiveIndex: 1.45,
-      glassColor: const Color(0x0A0A0E1A),
-      lightAngle: GlassDefaults.lightAngle,
-      lightIntensity: 0.72,
-      glowIntensity: glowIntensity,
-      saturation: 1.4,
-      specularSharpness: GlassSpecularSharpness.sharp,
-      ambientStrength: 0.08,
-      chromaticAberration: 0.015,
-    );
 
 enum HabitViewMode { today, week, allTime }
 
@@ -53,6 +34,16 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
     final routinesAsync = ref.watch(habitRoutinesProvider);
     final today         = _fmt(DateTime.now());
     final profile       = ref.watch(userProfileProvider).valueOrNull;
+
+    final habitsData   = habitsAsync.valueOrNull;
+    final routineData  = routinesAsync.valueOrNull;
+    final isListEmpty  = habitsData != null && () {
+      final routineIds = {
+        ...?routineData?.morning?.habits.map((h) => h.id),
+        ...?routineData?.evening?.habits.map((h) => h.id),
+      };
+      return habitsData.habits.where((h) => !routineIds.contains(h.id)).isEmpty;
+    }();
     final showOnboarding = _showOnboardingManual ||
         (!_onboardingDismissed &&
             profile != null &&
@@ -204,6 +195,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
               right: 24,
               child: _BottomActionBar(
                 onAdd: () => _showHabitDialog(null),
+                isEmpty: isListEmpty,
                 onMorning: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) =>
@@ -240,6 +232,9 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.of(context).size.width - 40,
+      ),
       builder: (_) => _HabitDialog(
         existing: existing,
         onSave: (title, description, color, icon) {
@@ -340,12 +335,7 @@ class _CyberTopBar extends ConsumerWidget {
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 1.5,
-                          shadows: sc.isCosmicMode
-                              ? [
-                                  Shadow(color: sc.accent, blurRadius: 8),
-                                  Shadow(color: sc.accent, blurRadius: 22),
-                                ]
-                              : null,
+                          shadows: null,
                         ),
                       ),
                       TextSpan(
@@ -402,23 +392,6 @@ class _GlassIconBtn extends ConsumerWidget {
     final child = Center(
       child: Icon(icon, color: sc.textSecondary, size: size),
     );
-
-    if (sc.isCosmicMode) {
-      return GestureDetector(
-        onTap: onTap,
-        child: GlassCard(
-          width: 36,
-          height: 36,
-          padding: EdgeInsets.zero,
-          shape: LiquidRoundedSuperellipse(borderRadius: 18),
-          useOwnLayer: true,
-          quality: GlassQuality.standard,
-          clipBehavior: Clip.antiAlias,
-          settings: _glassSettings(blur: 2.0, glowIntensity: 0.85),
-          child: child,
-        ),
-      );
-    }
 
     return GestureDetector(
       onTap: onTap,
@@ -583,9 +556,7 @@ class _WeekViewHabitCard extends ConsumerWidget {
                         border: isToday
                             ? Border.all(color: accentColor.withValues(alpha: 0.70), width: 1)
                             : null,
-                        boxShadow: done && sc.isCosmicMode
-                            ? [BoxShadow(color: accentColor.withValues(alpha: 0.45), blurRadius: 5)]
-                            : null,
+                        boxShadow: null,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -702,9 +673,7 @@ class _AllTimeHabitCard extends ConsumerWidget {
                           color: done
                               ? accentColor.withValues(alpha: 0.75)
                               : sc.border.withValues(alpha: 0.20),
-                          boxShadow: done && sc.isCosmicMode
-                              ? [BoxShadow(color: accentColor.withValues(alpha: 0.40), blurRadius: 3)]
-                              : null,
+                          boxShadow: null,
                         ),
                       );
                     }),
@@ -724,11 +693,13 @@ class _BottomActionBar extends ConsumerWidget {
   final VoidCallback onAdd;
   final VoidCallback onMorning;
   final VoidCallback onEvening;
+  final bool isEmpty;
 
   const _BottomActionBar({
     required this.onAdd,
     required this.onMorning,
     required this.onEvening,
+    this.isEmpty = false,
   });
 
   @override
@@ -739,22 +710,6 @@ class _BottomActionBar extends ConsumerWidget {
       final child = Center(
         child: Icon(icon, color: sc.textSecondary, size: 20),
       );
-      if (sc.isCosmicMode) {
-        return GestureDetector(
-          onTap: onTap,
-          child: GlassCard(
-            width: 48,
-            height: 48,
-            padding: EdgeInsets.zero,
-            shape: LiquidRoundedSuperellipse(borderRadius: 24),
-            useOwnLayer: true,
-            quality: GlassQuality.standard,
-            clipBehavior: Clip.antiAlias,
-            settings: _glassSettings(blur: 2.5, glowIntensity: 0.85),
-            child: child,
-          ),
-        );
-      }
       return GestureDetector(
         onTap: onTap,
         child: Container(
@@ -767,31 +722,10 @@ class _BottomActionBar extends ConsumerWidget {
     }
 
     Widget centerBtn() {
+      if (isEmpty) return _AddButton(onTap: onAdd);
       final child = Center(
         child: Icon(Icons.add, color: Colors.black, size: 24),
       );
-      if (sc.isCosmicMode) {
-        return GestureDetector(
-          onTap: onAdd,
-          child: GlassCard(
-            width: 56,
-            height: 56,
-            padding: EdgeInsets.zero,
-            shape: LiquidRoundedSuperellipse(borderRadius: 28),
-            useOwnLayer: true,
-            quality: GlassQuality.standard,
-            clipBehavior: Clip.antiAlias,
-            settings: _glassSettings(blur: 3.0, glowIntensity: 0.95),
-            child: Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: sc.accent,
-              ),
-              child: child,
-            ),
-          ),
-        );
-      }
       return GestureDetector(
         onTap: onAdd,
         child: Container(
@@ -1409,8 +1343,6 @@ class _EmptyState extends ConsumerWidget {
               letterSpacing: 1.5,
             ),
           ),
-          const SizedBox(height: 32),
-          _AddButton(onTap: onAdd),
         ],
       ),
     );
@@ -1582,9 +1514,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
                   end: Alignment.bottomRight,
                   colors: [
                     habitColor.withValues(alpha: 0.08),
-                    sc.isCosmicMode
-                        ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
-                        : sc.surface,
+                    sc.surface,
                   ],
                 ),
                 border: Border(
@@ -2806,9 +2736,7 @@ class _RoutineBlockState extends ConsumerState<_RoutineBlock> {
                   end: Alignment.bottomRight,
                   colors: [
                     sc.accent.withValues(alpha: 0.05),
-                    sc.isCosmicMode
-                        ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
-                        : sc.surface,
+                    sc.surface,
                   ],
                 ),
                 border: Border.all(
@@ -3294,9 +3222,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                   end: Alignment.bottomRight,
                   colors: [
                     sc.accent.withValues(alpha: 0.05),
-                    sc.isCosmicMode
-                        ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
-                        : sc.surface,
+                    sc.surface,
                   ],
                 ),
                 border: Border.all(
@@ -3393,9 +3319,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                   end: Alignment.bottomRight,
                   colors: [
                     Colors.redAccent.withValues(alpha: 0.06),
-                    sc.isCosmicMode
-                        ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
-                        : sc.surface,
+                    sc.surface,
                   ],
                 ),
                 border: Border.all(
