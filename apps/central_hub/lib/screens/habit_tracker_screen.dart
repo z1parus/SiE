@@ -859,6 +859,7 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
   Animation<double>? _snapAnim;
   double _dragOffset = 0.0;
   bool _isSnapping = false;
+  bool _isSystemGestureZone = false;
 
   static const _triggerFraction = 0.38;
 
@@ -882,9 +883,20 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
     super.dispose();
   }
 
+  void _onDragStart(DragStartDetails d) {
+    if (Platform.isAndroid) {
+      final insets = MediaQuery.of(context).systemGestureInsets;
+      final sw = _screenWidth;
+      final x = d.globalPosition.dx;
+      _isSystemGestureZone = x < insets.left || x > sw - insets.right;
+    } else {
+      _isSystemGestureZone = false;
+    }
+  }
+
   void _onDragUpdate(DragUpdateDetails d) {
     if (_isSnapping) return;
-    if (Platform.isAndroid) return;
+    if (_isSystemGestureZone) return;
     setState(() {
       _dragOffset = (_dragOffset + d.delta.dx)
           .clamp(-_screenWidth * 0.65, _screenWidth * 0.65);
@@ -893,7 +905,7 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
 
   Future<void> _onDragEnd(DragEndDetails d) async {
     if (_isSnapping) return;
-    if (Platform.isAndroid) return;
+    if (_isSystemGestureZone) return;
     final trigger = _triggerDist;
 
     if (_dragOffset.abs() >= trigger) {
@@ -940,6 +952,7 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      onHorizontalDragStart: _onDragStart,
       onHorizontalDragUpdate: _onDragUpdate,
       onHorizontalDragEnd: _onDragEnd,
       child: AnimatedBuilder(

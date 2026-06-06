@@ -225,7 +225,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           if (description != null && description.isNotEmpty)
             'description': description,
           'color': color,
-          'icon': icon,
+          if (icon != null) 'icon': icon,
         });
         state = AsyncData(await _load());
         if (isFirstHabit) {
@@ -240,7 +240,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           if (description != null && description.isNotEmpty)
             'description': description,
           'color': color,
-          'icon': icon,
+          if (icon != null) 'icon': icon,
         }));
         state = AsyncData(await _load());
       }
@@ -310,7 +310,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           else
             'description': null,
           'color': color,
-          'icon': resolvedIcon,
+          if (resolvedIcon != null) 'icon': resolvedIcon,
         }).eq('id', habitId).eq('user_id', userId);
       } else {
         await db.enqueueSyncOp('update_habit', jsonEncode({
@@ -319,7 +319,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           'description':
               description?.isNotEmpty == true ? description : null,
           'color': color,
-          'icon': resolvedIcon,
+          if (resolvedIcon != null) 'icon': resolvedIcon,
         }));
       }
     } catch (e, st) {
