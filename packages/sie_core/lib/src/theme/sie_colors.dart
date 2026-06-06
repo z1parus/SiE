@@ -30,8 +30,7 @@ class SieColors {
   final Color iconMuted;
   final Color dp;
 
-  bool get isCosmicMode => mode == SieThemeMode.cosmicLiquidGlass;
-  bool get isLightMode  => mode == SieThemeMode.classicLight;
+  bool get isLightMode => mode == SieThemeMode.classicLight;
 
   BoxDecoration flatCard({double radius = 16}) {
     if (isLightMode) {
@@ -73,23 +72,9 @@ class SieColors {
   }
 
   static SieColors forMode(SieThemeMode mode) => switch (mode) {
-    SieThemeMode.cosmicLiquidGlass => _cosmic,
-    SieThemeMode.classicDark       => _dark,
-    SieThemeMode.classicLight      => _light,
+    SieThemeMode.classicDark  => _dark,
+    SieThemeMode.classicLight => _light,
   };
-
-  static const _cosmic = SieColors(
-    mode: SieThemeMode.cosmicLiquidGlass,
-    background: Color(0xFF0A0E1A),
-    surface: Color(0xFF0B1E30),
-    accent: Color(0xFF00E5FF),
-    accentSecondary: Color(0xFF7000FF),
-    textPrimary: Color(0xFFC8DCF0),
-    textSecondary: Color(0xFF90A4AE),
-    border: Color(0xFF1A3A5C),
-    iconMuted: Color(0xFF90A4AE),
-    dp: Color(0xFF9D50BB),
-  );
 
   static const _dark = SieColors(
     mode: SieThemeMode.classicDark,
@@ -120,6 +105,6 @@ class SieColors {
 
 final sieColorsProvider = Provider<SieColors>((ref) {
   final mode = ref.watch(sieThemeModeProvider).valueOrNull
-      ?? SieThemeMode.cosmicLiquidGlass;
+      ?? SieThemeMode.classicDark;
   return SieColors.forMode(mode);
 });

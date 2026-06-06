@@ -64,24 +64,21 @@ class _SieSplashScreenState extends ConsumerState<SieSplashScreen>
   @override
   Widget build(BuildContext context) {
     final sieMode =
-        ref.watch(sieThemeModeProvider).valueOrNull ?? SieThemeMode.cosmicLiquidGlass;
+        ref.watch(sieThemeModeProvider).valueOrNull ?? SieThemeMode.classicDark;
 
     final bgColor = switch (sieMode) {
-      SieThemeMode.cosmicLiquidGlass => const Color(0xFF0A0E1A),
-      SieThemeMode.classicDark       => SieTheme.cdBackground,
-      SieThemeMode.classicLight      => SieTheme.clBackground,
+      SieThemeMode.classicDark  => SieTheme.cdBackground,
+      SieThemeMode.classicLight => SieTheme.clBackground,
     };
 
     final textColor = switch (sieMode) {
-      SieThemeMode.cosmicLiquidGlass => const Color(0xFFF0FAFF),
-      SieThemeMode.classicDark       => SieTheme.cdTextPrimary,
-      SieThemeMode.classicLight      => SieTheme.clTextPrimary,
+      SieThemeMode.classicDark  => SieTheme.cdTextPrimary,
+      SieThemeMode.classicLight => SieTheme.clTextPrimary,
     };
 
     final glowColor = switch (sieMode) {
-      SieThemeMode.cosmicLiquidGlass => const Color(0xFF00E5FF),
-      SieThemeMode.classicDark       => SieTheme.cdAccent,
-      SieThemeMode.classicLight      => SieTheme.clAccent,
+      SieThemeMode.classicDark  => SieTheme.cdAccent,
+      SieThemeMode.classicLight => SieTheme.clAccent,
     };
 
     return AnimatedBuilder(
@@ -91,54 +88,28 @@ class _SieSplashScreenState extends ConsumerState<SieSplashScreen>
           opacity: _screenOpacity.value,
           child: Scaffold(
             backgroundColor: bgColor,
-            body: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (sieMode == SieThemeMode.cosmicLiquidGlass)
-                  const SieSpaceBackground(),
-                Center(
-                  child: FadeTransition(
-                    opacity: _textOpacity,
-                    child: ScaleTransition(
-                      scale: _textScale,
-                      child: Text(
-                        'SiE',
-                        style: TextStyle(
-                          fontSize: 80,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 12,
-                          color: textColor,
-                          shadows: sieMode == SieThemeMode.cosmicLiquidGlass
-                              ? [
-                                  Shadow(
-                                    color: glowColor.withAlpha(230),
-                                    blurRadius: 12,
-                                  ),
-                                  Shadow(
-                                    color: glowColor.withAlpha(160),
-                                    blurRadius: 32,
-                                  ),
-                                  Shadow(
-                                    color: glowColor.withAlpha(80),
-                                    blurRadius: 72,
-                                  ),
-                                  Shadow(
-                                    color: const Color(0xFF7C3AED).withAlpha(100),
-                                    blurRadius: 120,
-                                  ),
-                                ]
-                              : [
-                                  Shadow(
-                                    color: glowColor.withAlpha(100),
-                                    blurRadius: 20,
-                                  ),
-                                ],
+            body: Center(
+              child: FadeTransition(
+                opacity: _textOpacity,
+                child: ScaleTransition(
+                  scale: _textScale,
+                  child: Text(
+                    'SiE',
+                    style: TextStyle(
+                      fontSize: 80,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 12,
+                      color: textColor,
+                      shadows: [
+                        Shadow(
+                          color: glowColor.withAlpha(100),
+                          blurRadius: 20,
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         );

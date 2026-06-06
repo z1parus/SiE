@@ -321,12 +321,7 @@ class _CyberTopBar extends ConsumerWidget {
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 1.5,
-                          shadows: sc.isCosmicMode
-                              ? [
-                                  Shadow(color: sc.accent, blurRadius: 8),
-                                  Shadow(color: sc.accent, blurRadius: 22),
-                                ]
-                              : null,
+                          shadows: null,
                         ),
                       ),
                       TextSpan(
@@ -547,9 +542,7 @@ class _WeekViewHabitCard extends ConsumerWidget {
                         border: isToday
                             ? Border.all(color: accentColor.withValues(alpha: 0.70), width: 1)
                             : null,
-                        boxShadow: done && sc.isCosmicMode
-                            ? [BoxShadow(color: accentColor.withValues(alpha: 0.45), blurRadius: 5)]
-                            : null,
+                        boxShadow: null,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -666,9 +659,7 @@ class _AllTimeHabitCard extends ConsumerWidget {
                           color: done
                               ? accentColor.withValues(alpha: 0.75)
                               : sc.border.withValues(alpha: 0.20),
-                          boxShadow: done && sc.isCosmicMode
-                              ? [BoxShadow(color: accentColor.withValues(alpha: 0.40), blurRadius: 3)]
-                              : null,
+                          boxShadow: null,
                         ),
                       );
                     }),
@@ -1480,9 +1471,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
                   end: Alignment.bottomRight,
                   colors: [
                     habitColor.withValues(alpha: 0.08),
-                    sc.isCosmicMode
-                        ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
-                        : sc.surface,
+                    sc.surface,
                   ],
                 ),
                 border: Border(
@@ -2684,9 +2673,7 @@ class _RoutineBlockState extends ConsumerState<_RoutineBlock> {
                   end: Alignment.bottomRight,
                   colors: [
                     sc.accent.withValues(alpha: 0.05),
-                    sc.isCosmicMode
-                        ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
-                        : sc.surface,
+                    sc.surface,
                   ],
                 ),
                 border: Border.all(
@@ -3155,9 +3142,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                   end: Alignment.bottomRight,
                   colors: [
                     sc.accent.withValues(alpha: 0.05),
-                    sc.isCosmicMode
-                        ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
-                        : sc.surface,
+                    sc.surface,
                   ],
                 ),
                 border: Border.all(
@@ -3254,9 +3239,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                   end: Alignment.bottomRight,
                   colors: [
                     Colors.redAccent.withValues(alpha: 0.06),
-                    sc.isCosmicMode
-                        ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
-                        : sc.surface,
+                    sc.surface,
                   ],
                 ),
                 border: Border.all(
