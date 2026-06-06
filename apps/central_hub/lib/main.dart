@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 import 'screens/auth_screen.dart';
 import 'screens/main_navigation_shell.dart';
@@ -20,16 +19,7 @@ void main() async {
     url: 'https://bvqlqvzcqfgojzxztvrm.supabase.co',
     anonKey: 'sb_publishable_x54jsqL5s9ohcOJoyOTklw_5G8lbd9l',
   );
-  // Pre-warms liquid-glass shaders. GlassCard/GlassPage only render when the
-  // operative is in cosmicLiquidGlass mode, so the shaders stay dormant in
-  // flat modes — initialize cost is minimal compared to first-frame jank.
-  await LiquidGlassWidgets.initialize();
-  runApp(
-    LiquidGlassWidgets.wrap(
-      child: const ProviderScope(child: SieApp()),
-      adaptiveQuality: true,
-    ),
-  );
+  runApp(const ProviderScope(child: SieApp()));
 }
 
 class SieApp extends ConsumerStatefulWidget {
@@ -45,7 +35,7 @@ class _SieAppState extends ConsumerState<SieApp> {
   @override
   Widget build(BuildContext context) {
     final sieMode = ref.watch(sieThemeModeProvider).valueOrNull
-        ?? SieThemeMode.cosmicLiquidGlass;
+        ?? SieThemeMode.classicDark;
 
     return MaterialApp(
       title: 'SiE',

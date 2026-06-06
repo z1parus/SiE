@@ -154,9 +154,9 @@ class _MedalWidget extends ConsumerWidget {
         border: Border.all(color: c.accent, width: 2),
         boxShadow: [
           BoxShadow(
-            color: c.accent.withValues(alpha: c.isCosmicMode ? 0.45 : 0.20),
-            blurRadius: c.isCosmicMode ? 40 : 20,
-            spreadRadius: c.isCosmicMode ? 6 : 2,
+            color: c.accent.withValues(alpha: 0.20),
+            blurRadius: 20,
+            spreadRadius: 2,
           ),
         ],
       ),

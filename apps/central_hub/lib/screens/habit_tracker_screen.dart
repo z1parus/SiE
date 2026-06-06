@@ -3,27 +3,8 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 import 'routine_editor_screen.dart';
-
-LiquidGlassSettings _glassSettings({
-  double blur = 3.0,
-  double glowIntensity = 0.88,
-}) =>
-    LiquidGlassSettings(
-      blur: blur,
-      thickness: 24,
-      refractiveIndex: 1.45,
-      glassColor: const Color(0x0A0A0E1A),
-      lightAngle: GlassDefaults.lightAngle,
-      lightIntensity: 0.72,
-      glowIntensity: glowIntensity,
-      saturation: 1.4,
-      specularSharpness: GlassSpecularSharpness.sharp,
-      ambientStrength: 0.08,
-      chromaticAberration: 0.015,
-    );
 
 enum HabitViewMode { today, week, allTime }
 
@@ -403,23 +384,6 @@ class _GlassIconBtn extends ConsumerWidget {
       child: Icon(icon, color: sc.textSecondary, size: size),
     );
 
-    if (sc.isCosmicMode) {
-      return GestureDetector(
-        onTap: onTap,
-        child: GlassCard(
-          width: 36,
-          height: 36,
-          padding: EdgeInsets.zero,
-          shape: LiquidRoundedSuperellipse(borderRadius: 18),
-          useOwnLayer: true,
-          quality: GlassQuality.standard,
-          clipBehavior: Clip.antiAlias,
-          settings: _glassSettings(blur: 2.0, glowIntensity: 0.85),
-          child: child,
-        ),
-      );
-    }
-
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -739,22 +703,6 @@ class _BottomActionBar extends ConsumerWidget {
       final child = Center(
         child: Icon(icon, color: sc.textSecondary, size: 20),
       );
-      if (sc.isCosmicMode) {
-        return GestureDetector(
-          onTap: onTap,
-          child: GlassCard(
-            width: 48,
-            height: 48,
-            padding: EdgeInsets.zero,
-            shape: LiquidRoundedSuperellipse(borderRadius: 24),
-            useOwnLayer: true,
-            quality: GlassQuality.standard,
-            clipBehavior: Clip.antiAlias,
-            settings: _glassSettings(blur: 2.5, glowIntensity: 0.85),
-            child: child,
-          ),
-        );
-      }
       return GestureDetector(
         onTap: onTap,
         child: Container(
@@ -770,28 +718,6 @@ class _BottomActionBar extends ConsumerWidget {
       final child = Center(
         child: Icon(Icons.add, color: Colors.black, size: 24),
       );
-      if (sc.isCosmicMode) {
-        return GestureDetector(
-          onTap: onAdd,
-          child: GlassCard(
-            width: 56,
-            height: 56,
-            padding: EdgeInsets.zero,
-            shape: LiquidRoundedSuperellipse(borderRadius: 28),
-            useOwnLayer: true,
-            quality: GlassQuality.standard,
-            clipBehavior: Clip.antiAlias,
-            settings: _glassSettings(blur: 3.0, glowIntensity: 0.95),
-            child: Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: sc.accent,
-              ),
-              child: child,
-            ),
-          ),
-        );
-      }
       return GestureDetector(
         onTap: onAdd,
         child: Container(
@@ -1119,15 +1045,7 @@ class _HabitMatrixCard extends ConsumerWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: accentColor,
-                    boxShadow: sc.isCosmicMode
-                        ? [
-                            BoxShadow(
-                              color: accentColor.withValues(alpha: 0.85),
-                              blurRadius: 7,
-                              spreadRadius: 1,
-                            ),
-                          ]
-                        : null,
+                    boxShadow: null,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -1248,9 +1166,7 @@ class _DayNode extends ConsumerWidget {
                   border: Border.all(
                     color: isToday
                         ? accentColor.withValues(alpha: 0.60)
-                        : (sc.isCosmicMode
-                            ? Colors.white.withValues(alpha: 0.13)
-                            : sc.border),
+                        : sc.border,
                     width: 1.5,
                   ),
                   color: isToday
@@ -1267,14 +1183,7 @@ class _DayNode extends ConsumerWidget {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: accentColor.withValues(alpha: 0.80),
-                          boxShadow: sc.isCosmicMode
-                              ? [
-                                  BoxShadow(
-                                    color: accentColor.withValues(alpha: 0.50),
-                                    blurRadius: 5,
-                                  ),
-                                ]
-                              : null,
+                          boxShadow: null,
                         ),
                       ),
                     )
@@ -1288,9 +1197,7 @@ class _DayNode extends ConsumerWidget {
                 ? accentColor.withValues(alpha: 0.90)
                 : isToday
                     ? accentColor.withValues(alpha: 0.65)
-                    : (sc.isCosmicMode
-                        ? Colors.white.withValues(alpha: 0.22)
-                        : sc.textSecondary.withValues(alpha: 0.4)),
+                    : sc.textSecondary.withValues(alpha: 0.4),
             fontSize: 8,
             height: 1.0,
             letterSpacing: 0.5,
@@ -1373,19 +1280,10 @@ class _EmptyState extends ConsumerWidget {
                     border: Border.all(
                       color: lit
                           ? sc.accent.withValues(alpha: 0.40)
-                          : (sc.isCosmicMode
-                              ? Colors.white.withValues(alpha: 0.09)
-                              : sc.border),
+                          : sc.border,
                       width: 1.2,
                     ),
-                    boxShadow: lit && sc.isCosmicMode
-                        ? [
-                            BoxShadow(
-                              color: sc.accent.withValues(alpha: 0.28),
-                              blurRadius: 7,
-                            ),
-                          ]
-                        : null,
+                    boxShadow: null,
                   ),
                 );
               }),
@@ -2165,9 +2063,7 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
               end: Alignment.bottomRight,
               colors: [
                 accentColor.withValues(alpha: 0.08),
-                sc.isCosmicMode
-                    ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
-                    : sc.surface,
+                sc.surface,
               ],
             ),
             border: Border(
@@ -2422,16 +2318,7 @@ class HabitArchiveScreen extends ConsumerWidget {
                                     fontSize: 20,
                                     fontWeight: FontWeight.w900,
                                     letterSpacing: 1.5,
-                                    shadows: sc.isCosmicMode
-                                        ? [
-                                            Shadow(
-                                                color: sc.accent,
-                                                blurRadius: 8),
-                                            Shadow(
-                                                color: sc.accent,
-                                                blurRadius: 22),
-                                          ]
-                                        : null,
+                                    shadows: null,
                                   ),
                                 ),
                                 TextSpan(
@@ -2578,9 +2465,7 @@ class _ArchivedHabitCardState extends ConsumerState<_ArchivedHabitCard> {
               end: Alignment.bottomRight,
               colors: [
                 habitColor.withValues(alpha: 0.06),
-                sc.isCosmicMode
-                    ? const Color(0xFF0A0E1A).withValues(alpha: 0.85)
-                    : sc.surface,
+                sc.surface,
               ],
             ),
             border: Border.all(
@@ -2595,14 +2480,7 @@ class _ArchivedHabitCardState extends ConsumerState<_ArchivedHabitCard> {
                 decoration: BoxDecoration(
                   color: habitColor,
                   borderRadius: BorderRadius.circular(2),
-                  boxShadow: sc.isCosmicMode
-                      ? [
-                          BoxShadow(
-                            color: habitColor.withValues(alpha: 0.4),
-                            blurRadius: 8,
-                          )
-                        ]
-                      : null,
+                  boxShadow: null,
                 ),
               ),
               const SizedBox(width: 12),
@@ -2921,9 +2799,7 @@ class _RoutineBlockState extends ConsumerState<_RoutineBlock> {
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.8,
-                shadows: sc.isCosmicMode
-                    ? [Shadow(color: sc.accent, blurRadius: 8)]
-                    : null,
+                shadows: null,
               ),
             ),
             const SizedBox(height: 10),
@@ -3104,16 +2980,7 @@ class _CarouselHabitSlide extends ConsumerWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: habitColor,
-                    boxShadow: sc.isCosmicMode
-                        ? [
-                            BoxShadow(
-                              color:
-                                  habitColor.withValues(alpha: 0.80),
-                              blurRadius: 6,
-                              spreadRadius: 1,
-                            ),
-                          ]
-                        : null,
+                    boxShadow: null,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -3144,13 +3011,7 @@ class _CarouselHabitSlide extends ConsumerWidget {
                     fontSize: 10,
                     letterSpacing: 1.5,
                     fontWeight: FontWeight.w700,
-                    shadows: sc.isCosmicMode
-                        ? [
-                            Shadow(
-                                color: habitColor.withValues(alpha: 0.6),
-                                blurRadius: 8)
-                          ]
-                        : null,
+                    shadows: null,
                   ),
                 ),
               )
@@ -3523,18 +3384,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                                     fontSize: 20,
                                     fontWeight: FontWeight.w900,
                                     letterSpacing: 1.5,
-                                    shadows: sc.isCosmicMode
-                                        ? [
-                                            Shadow(
-                                              color: sc.accent,
-                                              blurRadius: 8,
-                                            ),
-                                            Shadow(
-                                              color: sc.accent,
-                                              blurRadius: 22,
-                                            ),
-                                          ]
-                                        : null,
+                                    shadows: null,
                                   ),
                                 ),
                                 TextSpan(

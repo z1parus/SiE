@@ -121,14 +121,7 @@ class _NeonSectionLabel extends ConsumerWidget {
           height: 12,
           decoration: BoxDecoration(
             color: c.accent,
-            boxShadow: c.isCosmicMode
-                ? [
-                    BoxShadow(
-                      color: c.accent.withValues(alpha: 0.7),
-                      blurRadius: 6,
-                    ),
-                  ]
-                : null,
+            boxShadow: null,
           ),
         ),
         const SizedBox(width: 8),
@@ -165,14 +158,7 @@ class _SystemHeader extends ConsumerWidget {
                 height: 14,
                 decoration: BoxDecoration(
                   color: c.accent,
-                  boxShadow: c.isCosmicMode
-                      ? [
-                          BoxShadow(
-                            color: c.accent.withValues(alpha: 0.7),
-                            blurRadius: 8,
-                          ),
-                        ]
-                      : null,
+                  boxShadow: null,
                 ),
               ),
               const SizedBox(width: 10),
@@ -183,14 +169,7 @@ class _SystemHeader extends ConsumerWidget {
                   fontSize: 11,
                   letterSpacing: 2.5,
                   fontWeight: FontWeight.w700,
-                  shadows: c.isCosmicMode
-                      ? [
-                          Shadow(
-                            color: c.accent.withValues(alpha: 0.6),
-                            blurRadius: 8,
-                          ),
-                        ]
-                      : null,
+                  shadows: null,
                 ),
               ),
             ],
@@ -326,14 +305,7 @@ class _KbEntryState extends ConsumerState<_KbEntry>
                               color: c.accent.withValues(alpha: 0.6),
                             ),
                             borderRadius: BorderRadius.circular(4),
-                            boxShadow: c.isCosmicMode
-                                ? [
-                                    BoxShadow(
-                                      color: c.accent.withValues(alpha: 0.2),
-                                      blurRadius: 6,
-                                    ),
-                                  ]
-                                : null,
+                            boxShadow: null,
                           ),
                           child: Text(
                             widget.moduleTag,
@@ -617,14 +589,7 @@ class _EthicsSection extends ConsumerWidget {
                 fontStyle: i == paragraphs.length - 1
                     ? FontStyle.italic
                     : FontStyle.normal,
-                shadows: (i == paragraphs.length - 1 && c.isCosmicMode)
-                    ? [
-                        Shadow(
-                          color: c.accent.withValues(alpha: 0.4),
-                          blurRadius: 8,
-                        ),
-                      ]
-                    : null,
+                shadows: null,
               ),
             ),
           ],

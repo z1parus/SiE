@@ -1,22 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
-
-LiquidGlassSettings _glassSettings({double glowIntensity = 0.88}) =>
-    LiquidGlassSettings(
-      blur: 3.5,
-      thickness: 24,
-      refractiveIndex: 1.45,
-      glassColor: const Color(0x0A0A0E1A),
-      lightAngle: GlassDefaults.lightAngle,
-      lightIntensity: 0.72,
-      glowIntensity: glowIntensity,
-      saturation: 1.4,
-      specularSharpness: GlassSpecularSharpness.sharp,
-      ambientStrength: 0.08,
-      chromaticAberration: 0.015,
-    );
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PublicProfileScreen
@@ -178,14 +162,7 @@ class _HeroSection extends ConsumerWidget {
                     border:
                         Border.all(color: c.accent.withValues(alpha: 0.5)),
                     borderRadius: BorderRadius.circular(6),
-                    boxShadow: c.isCosmicMode
-                        ? [
-                            BoxShadow(
-                              color: c.accent.withValues(alpha: 0.08),
-                              blurRadius: 8,
-                            ),
-                          ]
-                        : null,
+                    boxShadow: null,
                   ),
                   child: Text(
                     'LEVEL ${profile.level}  ·  ${profile.totalXp} XP',
@@ -265,15 +242,7 @@ class _AvatarWithFrame extends ConsumerWidget {
           shape: BoxShape.circle,
           border: Border.all(color: c.accent.withValues(alpha: 0.6), width: 1.5),
           color: c.surface,
-          boxShadow: c.isCosmicMode
-              ? [
-                  BoxShadow(
-                    color: c.accent.withValues(alpha: 0.2),
-                    blurRadius: 16,
-                    spreadRadius: 2,
-                  ),
-                ]
-              : null,
+          boxShadow: null,
         );
 
     return Container(
@@ -393,19 +362,6 @@ class _StatCard extends StatelessWidget {
       );
     }
 
-    if (c.isCosmicMode) {
-      return GlassCard(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-        shape: LiquidRoundedSuperellipse(borderRadius: 14),
-        useOwnLayer: true,
-        quality: GlassQuality.standard,
-        clipBehavior: Clip.antiAlias,
-        settings: _glassSettings(),
-        child: _StatCardContent(
-            icon: icon, value: value, label: label, valueColor: valueColor, c: c),
-      );
-    }
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
       decoration: c.flatCard(radius: 14),
@@ -516,18 +472,6 @@ class _XpPanel extends ConsumerWidget {
         ),
       ],
     );
-
-    if (c.isCosmicMode) {
-      return GlassCard(
-        padding: const EdgeInsets.all(16),
-        shape: LiquidRoundedSuperellipse(borderRadius: 16),
-        useOwnLayer: true,
-        quality: GlassQuality.standard,
-        clipBehavior: Clip.antiAlias,
-        settings: _glassSettings(),
-        child: inner,
-      );
-    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -649,13 +593,7 @@ class _AchievementSheet extends ConsumerWidget {
                 color: earned ? c.accent : c.border,
                 width: earned ? 1.5 : 1,
               ),
-              boxShadow: earned && c.isCosmicMode
-                  ? [
-                      BoxShadow(
-                          color: c.accent.withValues(alpha: 0.25),
-                          blurRadius: 16)
-                    ]
-                  : null,
+              boxShadow: null,
             ),
             child: Icon(
               _icon(ach.slug),

@@ -1,26 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
-
-LiquidGlassSettings _glassSettings({
-  double blur = 3.0,
-  double glowIntensity = 0.88,
-}) =>
-    LiquidGlassSettings(
-      blur: blur,
-      thickness: 24,
-      refractiveIndex: 1.45,
-      glassColor: const Color(0x0A0A0E1A),
-      lightAngle: GlassDefaults.lightAngle,
-      lightIntensity: 0.72,
-      glowIntensity: glowIntensity,
-      saturation: 1.4,
-      specularSharpness: GlassSpecularSharpness.sharp,
-      ambientStrength: 0.08,
-      chromaticAberration: 0.015,
-    );
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CustomizationScreen
@@ -130,24 +111,14 @@ class _CustomizationScreenState extends ConsumerState<CustomizationScreen>
               // Live preview panel
               _Preview(profile: widget.profile, equipped: equipped),
               // Tab bar
-              c.isCosmicMode
-                  ? GlassCard(
-                      height: 44,
-                      padding: EdgeInsets.zero,
-                      shape: LiquidRoundedSuperellipse(borderRadius: 0),
-                      useOwnLayer: true,
-                      quality: GlassQuality.standard,
-                      settings: _glassSettings(blur: 2.5, glowIntensity: 0.75),
-                      child: _buildTabBar(c),
-                    )
-                  : Container(
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: c.surface,
-                        border: Border(bottom: BorderSide(color: c.border)),
-                      ),
-                      child: _buildTabBar(c),
-                    ),
+              Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  color: c.surface,
+                  border: Border(bottom: BorderSide(color: c.border)),
+                ),
+                child: _buildTabBar(c),
+              ),
               // Grid
               Expanded(
                 child: TabBarView(
@@ -389,14 +360,7 @@ class _Preview extends ConsumerWidget {
                         border: Border.all(
                             color: c.accent.withValues(alpha: 0.6), width: 1.5),
                         color: c.surface,
-                        boxShadow: c.isCosmicMode
-                            ? [
-                                BoxShadow(
-                                  color: c.accent.withValues(alpha: 0.15),
-                                  blurRadius: 10,
-                                ),
-                              ]
-                            : null,
+                        boxShadow: null,
                       ),
                   child: ClipOval(
                     child: profile.avatarUrl != null
@@ -609,12 +573,6 @@ class _AssetCardState extends ConsumerState<_AssetCard>
   @override
   Widget build(BuildContext context) {
     final c = ref.watch(sieColorsProvider);
-    final glowIntensity = widget.isSelected
-        ? 1.1 + 0.15 * _ctrl.value
-        : widget.isActive
-            ? 1.0
-            : 0.82 + 0.22 * _ctrl.value;
-
     final borderColor = widget.isActive
         ? c.accentSecondary
         : widget.isSelected
@@ -637,21 +595,11 @@ class _AssetCardState extends ConsumerState<_AssetCard>
           scale: 1.0 - (widget.onTap != null ? 0.03 * _ctrl.value : 0),
           child: Stack(
             children: [
-              c.isCosmicMode
-                  ? GlassCard(
-                      padding: const EdgeInsets.fromLTRB(10, 14, 10, 8),
-                      shape: LiquidRoundedSuperellipse(borderRadius: 14),
-                      useOwnLayer: true,
-                      quality: GlassQuality.standard,
-                      clipBehavior: Clip.antiAlias,
-                      settings: _glassSettings(glowIntensity: glowIntensity),
-                      child: child!,
-                    )
-                  : Container(
-                      padding: const EdgeInsets.fromLTRB(10, 14, 10, 8),
-                      decoration: c.flatCard(radius: 14),
-                      child: child!,
-                    ),
+              Container(
+                padding: const EdgeInsets.fromLTRB(10, 14, 10, 8),
+                decoration: c.flatCard(radius: 14),
+                child: child!,
+              ),
               // Neon border overlay
               if (widget.isSelected || widget.isActive)
                 Positioned.fill(

@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 
@@ -370,42 +369,12 @@ class _FloatingNavBar extends ConsumerWidget {
           icon: item.icon,
           label: item.label,
           isActive: i == _activeIndex,
-          isCosmicMode: c.isCosmicMode,
           activeColor: c.accent,
-          accentSecondary: c.accentSecondary,
           inactiveColor: c.iconMuted,
           onTap: () => _onItemTap(context, i),
         );
       }),
     );
-
-    if (c.isCosmicMode) {
-      return Padding(
-        padding: EdgeInsets.fromLTRB(16, 0, 16, math.max(bottomInset, 16)),
-        child: GlassCard(
-          height: 68,
-          padding: EdgeInsets.zero,
-          shape: LiquidRoundedSuperellipse(borderRadius: 28),
-          useOwnLayer: true,
-          quality: GlassQuality.standard,
-          clipBehavior: Clip.antiAlias,
-          settings: LiquidGlassSettings(
-            blur: 3.5,
-            thickness: 24,
-            refractiveIndex: 1.45,
-            glassColor: const Color(0x0A0A0E1A),
-            lightAngle: GlassDefaults.lightAngle,
-            lightIntensity: 0.72,
-            glowIntensity: 0.92,
-            saturation: 1.4,
-            specularSharpness: GlassSpecularSharpness.sharp,
-            ambientStrength: 0.08,
-            chromaticAberration: 0.015,
-          ),
-          child: navContent,
-        ),
-      );
-    }
 
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 0, 16, math.max(bottomInset, 16)),
@@ -426,9 +395,7 @@ class _NavItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool isActive;
-  final bool isCosmicMode;
   final Color activeColor;
-  final Color accentSecondary;
   final Color inactiveColor;
   final VoidCallback onTap;
 
@@ -436,9 +403,7 @@ class _NavItem extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.isActive,
-    required this.isCosmicMode,
     required this.activeColor,
-    required this.accentSecondary,
     required this.inactiveColor,
     required this.onTap,
   });
@@ -453,66 +418,33 @@ class _NavItem extends StatelessWidget {
       child: SizedBox(
         width: 72,
         height: 68,
-        child: Stack(
-          alignment: Alignment.center,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (isActive && isCosmicMode)
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: RadialGradient(
-                      center: const Alignment(0, -0.3),
-                      radius: 1.1,
-                      colors: [
-                        activeColor.withValues(alpha: 0.14),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
+            if (isActive)
+              Container(
+                width: 28,
+                height: 2,
+                margin: const EdgeInsets.only(bottom: 4),
+                decoration: BoxDecoration(
+                  color: activeColor,
+                  borderRadius: BorderRadius.circular(1),
                 ),
+              )
+            else
+              const SizedBox(height: 6),
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 9,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
+                letterSpacing: 0.5,
               ),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (isActive)
-                  Container(
-                    width: 28,
-                    height: 2,
-                    margin: const EdgeInsets.only(bottom: 4),
-                    decoration: BoxDecoration(
-                      gradient: isCosmicMode
-                          ? LinearGradient(
-                              colors: [activeColor, accentSecondary])
-                          : null,
-                      color: isCosmicMode ? null : activeColor,
-                      borderRadius: BorderRadius.circular(1),
-                      boxShadow: isCosmicMode
-                          ? [
-                              BoxShadow(
-                                color: activeColor.withValues(alpha: 0.7),
-                                blurRadius: 8,
-                                spreadRadius: 1,
-                              ),
-                            ]
-                          : null,
-                    ),
-                  )
-                else
-                  const SizedBox(height: 6),
-                Icon(icon, color: color, size: 22),
-                const SizedBox(height: 3),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 9,
-                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
-                    letterSpacing: 0.5,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -650,15 +582,6 @@ class _BranchCarouselCard extends ConsumerWidget {
               flex: 5,
               child: Container(
                 width: double.infinity,
-                decoration: c.isCosmicMode
-                    ? const BoxDecoration(
-                        gradient: RadialGradient(
-                          center: Alignment.center,
-                          radius: 0.85,
-                          colors: [Color(0x0F00E5FF), Colors.transparent],
-                        ),
-                      )
-                    : null,
                 child: _preview(),
               ),
             ),
@@ -695,15 +618,7 @@ class _BranchCarouselCard extends ConsumerWidget {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: c.accent,
-                            boxShadow: c.isCosmicMode
-                                ? [
-                                    BoxShadow(
-                                      color: c.accent.withValues(alpha: 0.8),
-                                      blurRadius: 6,
-                                      spreadRadius: 2,
-                                    ),
-                                  ]
-                                : null,
+                            boxShadow: null,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -715,9 +630,7 @@ class _BranchCarouselCard extends ConsumerWidget {
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.2,
                             height: 1.1,
-                            shadows: c.isCosmicMode
-                                ? [Shadow(color: c.accent, blurRadius: 8)]
-                                : null,
+                            shadows: null,
                           ),
                         ),
                         const Spacer(),
@@ -806,26 +719,13 @@ class _BreathSpherePreviewState extends ConsumerState<_BreathSpherePreview>
                       ],
                       stops: [0.0, 0.28, 0.68, 1.0],
                     ),
-              boxShadow: c.isCosmicMode
-                  ? [
-                      BoxShadow(
-                        color: c.accent.withValues(alpha: 0.35),
-                        blurRadius: 40,
-                        spreadRadius: 12,
-                      ),
-                      BoxShadow(
-                        color: c.accentSecondary.withValues(alpha: 0.2),
-                        blurRadius: 70,
-                        spreadRadius: 24,
-                      ),
-                    ]
-                  : [
-                      BoxShadow(
-                        color: c.accent.withValues(alpha: c.isLightMode ? 0.15 : 0.20),
-                        blurRadius: 20,
-                        spreadRadius: c.isLightMode ? 2 : 4,
-                      ),
-                    ],
+              boxShadow: [
+                BoxShadow(
+                  color: c.accent.withValues(alpha: c.isLightMode ? 0.15 : 0.20),
+                  blurRadius: 20,
+                  spreadRadius: c.isLightMode ? 2 : 4,
+                ),
+              ],
             ),
           ),
         ),
@@ -865,15 +765,7 @@ class _HabitMatrixPreview extends ConsumerWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: glow ? c.accent : c.border,
-                    boxShadow: glow && c.isCosmicMode
-                        ? [
-                            BoxShadow(
-                              color: c.accent.withValues(alpha: 0.75),
-                              blurRadius: 10,
-                              spreadRadius: 2,
-                            ),
-                          ]
-                        : null,
+                    boxShadow: null,
                   ),
                 );
               }),
@@ -905,8 +797,6 @@ class _FocusRingPreview extends ConsumerWidget {
                 trackColor: c.border,
                 arcStart: c.accent,
                 arcEnd: c.accentSecondary,
-                tipColor: c.accent,
-                isCosmicMode: c.isCosmicMode,
               ),
             ),
             Column(
@@ -946,16 +836,12 @@ class _ArcPainter extends CustomPainter {
   final Color trackColor;
   final Color arcStart;
   final Color arcEnd;
-  final Color tipColor;
-  final bool isCosmicMode;
 
   const _ArcPainter({
     required this.progress,
     required this.trackColor,
     required this.arcStart,
     required this.arcEnd,
-    required this.tipColor,
-    required this.isCosmicMode,
   });
 
   @override
@@ -989,19 +875,6 @@ class _ArcPainter extends CustomPainter {
         ..strokeWidth = 7
         ..strokeCap = StrokeCap.round,
     );
-
-    if (progress > 0.01 && isCosmicMode) {
-      final tipAngle = -math.pi / 2 + sweepAngle;
-      final tipX = center.dx + radius * math.cos(tipAngle);
-      final tipY = center.dy + radius * math.sin(tipAngle);
-      canvas.drawCircle(
-        Offset(tipX, tipY),
-        5,
-        Paint()
-          ..color = tipColor
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-      );
-    }
   }
 
   @override
@@ -1054,36 +927,12 @@ class _GlassHeaderBtn extends ConsumerWidget {
     final c = ref.watch(sieColorsProvider);
     final iconWidget = Icon(icon, color: c.textSecondary, size: size);
 
-    final child = c.isCosmicMode
-        ? GlassCard(
-            width: 38,
-            height: 38,
-            padding: EdgeInsets.zero,
-            shape: LiquidRoundedSuperellipse(borderRadius: 19),
-            useOwnLayer: true,
-            quality: GlassQuality.standard,
-            clipBehavior: Clip.antiAlias,
-            settings: LiquidGlassSettings(
-              blur: 2.0,
-              thickness: 20,
-              refractiveIndex: 1.45,
-              glassColor: const Color(0x0A0A0E1A),
-              lightAngle: GlassDefaults.lightAngle,
-              lightIntensity: 0.72,
-              glowIntensity: 0.85,
-              saturation: 1.4,
-              specularSharpness: GlassSpecularSharpness.sharp,
-              ambientStrength: 0.08,
-              chromaticAberration: 0.015,
-            ),
-            child: Center(child: iconWidget),
-          )
-        : Container(
-            width: 38,
-            height: 38,
-            decoration: c.flatCard(radius: 19),
-            child: Center(child: iconWidget),
-          );
+    final child = Container(
+      width: 38,
+      height: 38,
+      decoration: c.flatCard(radius: 19),
+      child: Center(child: iconWidget),
+    );
 
     if (onTap == null) return child;
     return GestureDetector(onTap: onTap, child: child);
@@ -1109,10 +958,7 @@ class _ScreenHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c              = ref.watch(sieColorsProvider);
     final theme          = Theme.of(context);
-    final spaceEffects   = theme.extension<SieSpaceEffects>();
-    final gradientColors = c.isCosmicMode
-        ? (spaceEffects?.primaryGradient ?? [c.accent, c.dp])
-        : [c.accent, c.accentSecondary];
+    final gradientColors = [c.accent, c.accentSecondary];
 
     final operative = profileAsync.when(
       data: (p) => p?.username?.toUpperCase() ?? 'UNIDENTIFIED',
@@ -1141,12 +987,7 @@ class _ScreenHeader extends ConsumerWidget {
                             fontSize: 22,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 1.5,
-                            shadows: c.isCosmicMode
-                                ? [
-                                    Shadow(color: c.accent, blurRadius: 8),
-                                    Shadow(color: c.accent, blurRadius: 20),
-                                  ]
-                                : null,
+                            shadows: null,
                           ),
                         ),
                         TextSpan(

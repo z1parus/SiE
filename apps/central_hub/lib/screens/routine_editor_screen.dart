@@ -1,7 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 import 'habit_tracker_screen.dart' show HabitDetailScreen;
 
@@ -190,34 +189,6 @@ class _EditorIconBtn extends ConsumerWidget {
     final child = Center(
       child: Icon(icon, color: sc.textSecondary, size: size),
     );
-    if (sc.isCosmicMode) {
-      return GestureDetector(
-        onTap: onTap,
-        child: GlassCard(
-          width: 36,
-          height: 36,
-          padding: EdgeInsets.zero,
-          shape: LiquidRoundedSuperellipse(borderRadius: 18),
-          useOwnLayer: true,
-          quality: GlassQuality.standard,
-          clipBehavior: Clip.antiAlias,
-          settings: LiquidGlassSettings(
-            blur: 2.0,
-            thickness: 24,
-            refractiveIndex: 1.45,
-            glassColor: const Color(0x0A0A0E1A),
-            lightAngle: GlassDefaults.lightAngle,
-            lightIntensity: 0.72,
-            glowIntensity: 0.85,
-            saturation: 1.4,
-            specularSharpness: GlassSpecularSharpness.sharp,
-            ambientStrength: 0.08,
-            chromaticAberration: 0.015,
-          ),
-          child: child,
-        ),
-      );
-    }
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -263,15 +234,7 @@ class _RoutineMemberTile extends ConsumerWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: color,
-                boxShadow: sc.isCosmicMode
-                    ? [
-                        BoxShadow(
-                          color: color.withValues(alpha: 0.70),
-                          blurRadius: 6,
-                          spreadRadius: 1,
-                        ),
-                      ]
-                    : null,
+                boxShadow: null,
               ),
             ),
             const SizedBox(width: 12),
@@ -382,9 +345,7 @@ class _HabitPickerSheet extends ConsumerWidget {
               end: Alignment.bottomRight,
               colors: [
                 sc.accent.withValues(alpha: 0.05),
-                sc.isCosmicMode
-                    ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
-                    : sc.surface,
+                sc.surface,
               ],
             ),
             border: Border(

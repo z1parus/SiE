@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 
 import 'edit_profile_screen.dart';
@@ -112,35 +111,6 @@ class _GlassCircleButton extends ConsumerWidget {
       child: Icon(icon, color: c.textSecondary, size: 15),
     );
 
-    if (c.isCosmicMode) {
-      return GestureDetector(
-        onTap: onTap,
-        child: GlassCard(
-          width: 36,
-          height: 36,
-          padding: EdgeInsets.zero,
-          shape: LiquidRoundedSuperellipse(borderRadius: 18),
-          useOwnLayer: true,
-          quality: GlassQuality.standard,
-          clipBehavior: Clip.antiAlias,
-          settings: LiquidGlassSettings(
-            blur: 2.0,
-            thickness: 20,
-            refractiveIndex: 1.45,
-            glassColor: const Color(0x0A0A0E1A),
-            lightAngle: GlassDefaults.lightAngle,
-            lightIntensity: 0.72,
-            glowIntensity: 0.85,
-            saturation: 1.4,
-            specularSharpness: GlassSpecularSharpness.sharp,
-            ambientStrength: 0.08,
-            chromaticAberration: 0.015,
-          ),
-          child: child,
-        ),
-      );
-    }
-
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -189,17 +159,6 @@ class _ProfileContent extends ConsumerWidget {
 
     return Stack(
       children: [
-        if (equipped.background?.backgroundGradient != null && c.isCosmicMode)
-          Positioned.fill(
-            child: Opacity(
-              opacity: 0.28,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: equipped.background!.backgroundGradient,
-                ),
-              ),
-            ),
-          ),
         RepaintBoundary(
           child: RefreshIndicator(
             onRefresh: () async {
@@ -339,14 +298,7 @@ class _HeaderGlassCard extends ConsumerWidget {
                         .headlineMedium
                         ?.copyWith(
                           fontSize: 18,
-                          shadows: c.isCosmicMode
-                              ? [
-                                  Shadow(
-                                    color: c.accent.withValues(alpha: 0.35),
-                                    blurRadius: 10,
-                                  ),
-                                ]
-                              : null,
+                          shadows: null,
                         ),
                   ),
                   const SizedBox(height: 8),
@@ -398,12 +350,7 @@ class _HeaderGlassCard extends ConsumerWidget {
           borderRadius: BorderRadius.circular(3),
           child: Stack(
             children: [
-              Container(
-                height: 6,
-                color: c.isCosmicMode
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : c.border,
-              ),
+              Container(height: 6, color: c.border),
               FractionallySizedBox(
                 widthFactor: progress,
                 child: Container(
@@ -412,15 +359,7 @@ class _HeaderGlassCard extends ConsumerWidget {
                     gradient: LinearGradient(
                       colors: [c.accent, c.accentSecondary],
                     ),
-                    boxShadow: c.isCosmicMode
-                        ? [
-                            BoxShadow(
-                              color: c.accent.withValues(alpha: 0.27),
-                              blurRadius: 8,
-                              spreadRadius: 1,
-                            ),
-                          ]
-                        : null,
+                    boxShadow: null,
                   ),
                 ),
               ),
@@ -440,30 +379,6 @@ class _HeaderGlassCard extends ConsumerWidget {
         ),
       ],
     );
-
-    if (c.isCosmicMode) {
-      return GlassCard(
-        padding: const EdgeInsets.all(20),
-        shape: LiquidRoundedSuperellipse(borderRadius: 24),
-        useOwnLayer: false,
-        quality: GlassQuality.standard,
-        clipBehavior: Clip.antiAlias,
-        settings: LiquidGlassSettings(
-          blur: 3.5,
-          thickness: 28,
-          refractiveIndex: 1.45,
-          glassColor: const Color(0x0A0A0E1A),
-          lightAngle: GlassDefaults.lightAngle,
-          lightIntensity: 0.72,
-          glowIntensity: 0.92,
-          saturation: 1.4,
-          specularSharpness: GlassSpecularSharpness.sharp,
-          ambientStrength: 0.08,
-          chromaticAberration: 0.015,
-        ),
-        child: inner,
-      );
-    }
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -487,9 +402,7 @@ class _AvatarLetter extends ConsumerWidget {
           color: c.accent,
           fontSize: 28,
           fontWeight: FontWeight.w200,
-          shadows: c.isCosmicMode
-              ? [Shadow(color: c.accent.withValues(alpha: 0.6), blurRadius: 12)]
-              : null,
+          shadows: null,
         ),
       ),
     );

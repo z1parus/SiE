@@ -106,14 +106,7 @@ class _OnboardingOverlayState extends ConsumerState<OnboardingOverlay>
                               height: 14,
                               decoration: BoxDecoration(
                                 color: c.accent,
-                                boxShadow: c.isCosmicMode
-                                    ? [
-                                        BoxShadow(
-                                          color: c.accent.withValues(alpha: 0.60),
-                                          blurRadius: 8,
-                                        ),
-                                      ]
-                                    : null,
+                                boxShadow: null,
                               ),
                             ),
                             const SizedBox(width: 10),
@@ -124,14 +117,7 @@ class _OnboardingOverlayState extends ConsumerState<OnboardingOverlay>
                                 fontSize: 10,
                                 letterSpacing: 2.5,
                                 fontWeight: FontWeight.w600,
-                                shadows: c.isCosmicMode
-                                    ? [
-                                        Shadow(
-                                          color: c.accent.withValues(alpha: 0.55),
-                                          blurRadius: 8,
-                                        ),
-                                      ]
-                                    : null,
+                                shadows: null,
                               ),
                             ),
                           ],
@@ -156,9 +142,7 @@ class _OnboardingOverlayState extends ConsumerState<OnboardingOverlay>
                             fontSize: 13,
                             letterSpacing: 0.4,
                             height: 1.5,
-                            shadows: c.isCosmicMode
-                                ? [Shadow(color: c.accent, blurRadius: 6)]
-                                : null,
+                            shadows: null,
                           ),
                         ),
                         const SizedBox(height: 20),
@@ -174,18 +158,7 @@ class _OnboardingOverlayState extends ConsumerState<OnboardingOverlay>
                                 color: c.accent,
                                 fontSize: 10,
                                 height: 1.6,
-                                shadows: c.isCosmicMode
-                                    ? [
-                                        Shadow(
-                                          color: c.accent.withValues(alpha: 0.80),
-                                          blurRadius: 10,
-                                        ),
-                                        Shadow(
-                                          color: c.accent.withValues(alpha: 0.40),
-                                          blurRadius: 20,
-                                        ),
-                                      ]
-                                    : null,
+                                shadows: null,
                               ),
                             ),
                             const SizedBox(width: 10),
@@ -223,14 +196,7 @@ class _OnboardingOverlayState extends ConsumerState<OnboardingOverlay>
                                   style: TextStyle(
                                     color: c.accent.withValues(alpha: 0.70),
                                     fontSize: 9,
-                                    shadows: c.isCosmicMode
-                                        ? [
-                                            Shadow(
-                                              color: c.accent,
-                                              blurRadius: 8,
-                                            ),
-                                          ]
-                                        : null,
+                                    shadows: null,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -250,12 +216,7 @@ class _OnboardingOverlayState extends ConsumerState<OnboardingOverlay>
                                     fontSize: 15,
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: 1.5,
-                                    shadows: c.isCosmicMode
-                                        ? [
-                                            Shadow(color: c.accent, blurRadius: 10),
-                                            Shadow(color: c.accent, blurRadius: 24),
-                                          ]
-                                        : null,
+                                    shadows: null,
                                   ),
                                 ),
                               ],
@@ -312,11 +273,7 @@ class _OnboardingOverlayState extends ConsumerState<OnboardingOverlay>
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 2.5,
-                                  shadows: c.isCosmicMode
-                                      ? [
-                                          Shadow(color: c.accent, blurRadius: 8),
-                                        ]
-                                      : null,
+                                  shadows: null,
                                 ),
                               ),
                             ),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 import 'public_profile_screen.dart';
 
@@ -8,25 +7,6 @@ import 'public_profile_screen.dart';
 const _kGold   = Color(0xFFFFD700);
 const _kSilver = Color(0xFFC0C0C0);
 const _kBronze = Color(0xFFCD7F32);
-
-// Shared GlassCard settings factory
-LiquidGlassSettings _glassSettings({
-  double blur = 3.0,
-  double glowIntensity = 0.88,
-}) =>
-    LiquidGlassSettings(
-      blur: blur,
-      thickness: 24,
-      refractiveIndex: 1.45,
-      glassColor: const Color(0x0A0A0E1A),
-      lightAngle: GlassDefaults.lightAngle,
-      lightIntensity: 0.72,
-      glowIntensity: glowIntensity,
-      saturation: 1.4,
-      specularSharpness: GlassSpecularSharpness.sharp,
-      ambientStrength: 0.08,
-      chromaticAberration: 0.015,
-    );
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LeaderboardScreen
@@ -152,36 +132,18 @@ class _Header extends ConsumerWidget {
           if (showBackButton)
             GestureDetector(
               onTap: () => Navigator.of(context).pop(),
-              child: c.isCosmicMode
-                  ? GlassCard(
-                      width: 36,
-                      height: 36,
-                      padding: EdgeInsets.zero,
-                      shape: LiquidRoundedSuperellipse(borderRadius: 18),
-                      useOwnLayer: true,
-                      quality: GlassQuality.standard,
-                      clipBehavior: Clip.antiAlias,
-                      settings: _glassSettings(blur: 2.0, glowIntensity: 0.85),
-                      child: Center(
-                        child: Icon(
-                          Icons.arrow_back_ios_new,
-                          color: c.textSecondary,
-                          size: 15,
-                        ),
-                      ),
-                    )
-                  : Container(
-                      width: 36,
-                      height: 36,
-                      decoration: c.flatCard(radius: 18),
-                      child: Center(
-                        child: Icon(
-                          Icons.arrow_back_ios_new,
-                          color: c.textSecondary,
-                          size: 15,
-                        ),
-                      ),
-                    ),
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: c.flatCard(radius: 18),
+                child: Center(
+                  child: Icon(
+                    Icons.arrow_back_ios_new,
+                    color: c.textSecondary,
+                    size: 15,
+                  ),
+                ),
+              ),
             )
           else
             const SizedBox(width: 36),
@@ -215,25 +177,7 @@ class _CountdownPanel extends ConsumerWidget {
     final timerColor =
         isUrgent ? const Color(0xFFFF4D00) : c.accent;
 
-    final cardContent = Stack(
-      children: [
-        // Ambient colour bloom (cosmic only — feeds into glass refraction)
-        if (c.isCosmicMode)
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: const Alignment(0.9, 0),
-                  radius: 1.0,
-                  colors: [
-                    timerColor.withValues(alpha: 0.10),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-        Row(
+    final cardContent = Row(
           children: [
             Icon(Icons.timer_outlined, color: timerColor, size: 16),
             const SizedBox(width: 12),
@@ -286,29 +230,15 @@ class _CountdownPanel extends ConsumerWidget {
               ),
             ),
           ],
-        ),
-      ],
-    );
+        );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: c.isCosmicMode
-          ? GlassCard(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-              shape: LiquidRoundedSuperellipse(borderRadius: 20),
-              useOwnLayer: true,
-              quality: GlassQuality.standard,
-              clipBehavior: Clip.antiAlias,
-              settings: _glassSettings(blur: 3.5, glowIntensity: 0.92),
-              child: cardContent,
-            )
-          : Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-              decoration: c.flatCard(radius: 20),
-              child: cardContent,
-            ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        decoration: c.flatCard(radius: 20),
+        child: cardContent,
+      ),
     );
   }
 
@@ -386,12 +316,6 @@ class _LeaderRow extends ConsumerWidget {
     final isTopThree = entry.rank <= 3;
     final rankColor  = _rankColor(entry.rank);
 
-    final bloomColor = isSelf
-        ? c.accent
-        : isTopThree
-            ? rankColor
-            : null;
-
     // XP accent: rank color for top 3, accentSecondary for others, accent for self
     final xpColor = isSelf
         ? c.accent
@@ -399,50 +323,25 @@ class _LeaderRow extends ConsumerWidget {
             ? rankColor
             : c.accentSecondary;
 
-    final decoration = c.isCosmicMode
-        ? BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                (isSelf
-                        ? c.accent
-                        : isTopThree
-                            ? rankColor
-                            : Colors.white)
-                    .withValues(alpha: isTopThree || isSelf ? 0.09 : 0.05),
-                Colors.white.withValues(alpha: 0.02),
-              ],
-            ),
-            border: Border.all(
-              color: isSelf
-                  ? c.accent.withValues(alpha: 0.35)
-                  : isTopThree
-                      ? rankColor.withValues(alpha: 0.30)
-                      : Colors.white.withValues(alpha: 0.09),
-              width: 0.8,
-            ),
-          )
-        : BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: c.surface,
-            border: Border.all(
-              color: isSelf
-                  ? c.accent.withValues(alpha: 0.35)
-                  : isTopThree
-                      ? rankColor.withValues(alpha: 0.30)
-                      : c.border,
-              width: 0.8,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          );
+    final decoration = BoxDecoration(
+      borderRadius: BorderRadius.circular(16),
+      color: c.surface,
+      border: Border.all(
+        color: isSelf
+            ? c.accent.withValues(alpha: 0.35)
+            : isTopThree
+                ? rankColor.withValues(alpha: 0.30)
+                : c.border,
+        width: 0.8,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.04),
+          blurRadius: 6,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    );
 
     return GestureDetector(
       onTap: () => _openProfile(context, entry),
@@ -453,25 +352,6 @@ class _LeaderRow extends ConsumerWidget {
           clipBehavior: Clip.antiAlias,
           child: Stack(
             children: [
-              // Bloom (cosmic only)
-              if (c.isCosmicMode && bloomColor != null)
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: RadialGradient(
-                        center: const Alignment(-0.75, 0),
-                        radius: 1.3,
-                        colors: [
-                          bloomColor.withValues(
-                            alpha: isTopThree ? 0.18 : 0.10,
-                          ),
-                          Colors.transparent,
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,

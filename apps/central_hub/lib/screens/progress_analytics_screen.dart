@@ -160,9 +160,7 @@ class _SectionLabel extends ConsumerWidget {
           height: 12,
           decoration: BoxDecoration(
             color: c.accent,
-            boxShadow: c.isCosmicMode
-                ? [BoxShadow(color: c.accent.withValues(alpha: 0.7), blurRadius: 6)]
-                : null,
+            boxShadow: null,
           ),
         ),
         const SizedBox(width: 8),
@@ -266,9 +264,7 @@ class _StatCard extends StatelessWidget {
               fontWeight: FontWeight.w700,
               letterSpacing: 1,
               height: 1,
-              shadows: c.isCosmicMode
-                  ? [Shadow(color: color.withValues(alpha: 0.6), blurRadius: 8)]
-                  : null,
+              shadows: null,
             ),
           ),
           const SizedBox(height: 4),
@@ -306,11 +302,7 @@ class _HeatMap extends ConsumerWidget {
       return c.accent;
     }
 
-    BoxShadow? cellGlow(int count) {
-      if (!c.isCosmicMode || count <= 3) return null;
-      final alpha = count <= 5 ? 0.4 : 0.8;
-      return BoxShadow(color: c.accent.withValues(alpha: alpha), blurRadius: 4);
-    }
+    BoxShadow? cellGlow(int count) => null;
 
     final today = DateTime.now();
     final todayNorm = DateTime(today.year, today.month, today.day);
@@ -537,12 +529,7 @@ class _XpLineChart extends ConsumerWidget {
                 colors: [c.accent, c.accentSecondary],
               ),
               barWidth: 2,
-              shadow: c.isCosmicMode
-                  ? Shadow(
-                      color: c.accent.withValues(alpha: 0.5),
-                      blurRadius: 6,
-                    )
-                  : const Shadow(color: Colors.transparent),
+              shadow: const Shadow(color: Colors.transparent),
               dotData: FlDotData(
                 show: true,
                 getDotPainter: (_, _, _, _) => FlDotCirclePainter(

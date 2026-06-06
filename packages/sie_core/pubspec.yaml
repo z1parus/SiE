@@ -15,7 +15,6 @@ dependencies:
   audioplayers: ^6.1.0
   soundpool: 2.3.0
   web: ^1.1.0
-  liquid_glass_widgets: ^0.12.2
   drift: ^2.20.0
   drift_sqflite: ^2.0.1
   connectivity_plus: ^6.0.5
