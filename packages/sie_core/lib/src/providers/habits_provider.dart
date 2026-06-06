@@ -15,10 +15,13 @@ String _fmt(DateTime dt) =>
     '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
 
 const _uuid = Uuid();
+const _noChange = Object();
 
 class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
   // Guards against concurrent toggles for the same habit+date (double-tap).
   final _inProgress = <String>{};
+  // Guards against concurrent restores for the same habit (rapid tap).
+  final _inProgressRestore = <String>{};
 
   @override
   Future<HabitsState> build() async {
@@ -67,6 +70,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
             title: Value(h.title),
             description: Value(h.description),
             color: Value(h.color),
+            icon: Value(h.icon),
             isPinned: Value(h.isPinned),
             isArchived: Value(h.isArchived),
             createdAtMs: Value(h.createdAt.millisecondsSinceEpoch),
@@ -118,6 +122,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
               title: h.title,
               description: h.description,
               color: h.color,
+              icon: h.icon,
               isPinned: h.isPinned,
               isArchived: h.isArchived,
               createdAt:
@@ -167,6 +172,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     required String title,
     String? description,
     String color = '#00C8FF',
+    String? icon,
   }) async {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
@@ -186,6 +192,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       title: title,
       description: description,
       color: color,
+      icon: icon,
       createdAt: now,
     );
     if (prev != null) {
@@ -204,6 +211,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       title: Value(title),
       description: Value(description),
       color: Value(color),
+      icon: Value(icon),
       createdAtMs: Value(now.millisecondsSinceEpoch),
       synced: Value(isOnline),
     ));
@@ -217,6 +225,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           if (description != null && description.isNotEmpty)
             'description': description,
           'color': color,
+          'icon': icon,
         });
         state = AsyncData(await _load());
         if (isFirstHabit) {
@@ -231,6 +240,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           if (description != null && description.isNotEmpty)
             'description': description,
           'color': color,
+          'icon': icon,
         }));
         state = AsyncData(await _load());
       }
@@ -248,6 +258,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     required String title,
     String? description,
     required String color,
+    Object? icon = _noChange,
   }) async {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
@@ -265,6 +276,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       title: title,
       description: description,
       color: color,
+      icon: icon,
     );
     final newHabits = [...prev.habits]..[idx] = updated;
 
@@ -275,6 +287,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       logEntries: prev.logEntries,
     ));
 
+    final resolvedIcon = icon == _noChange ? updated.icon : icon as String?;
     // Update local DB.
     await db.upsertHabit(LocalHabitsCompanion(
       id: Value(habitId),
@@ -282,6 +295,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       title: Value(title),
       description: Value(description?.isNotEmpty == true ? description : null),
       color: Value(color),
+      icon: Value(resolvedIcon),
       createdAtMs: Value(
           prev.habits[idx].createdAt.millisecondsSinceEpoch),
       synced: Value(isOnline),
@@ -296,6 +310,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           else
             'description': null,
           'color': color,
+          'icon': resolvedIcon,
         }).eq('id', habitId).eq('user_id', userId);
       } else {
         await db.enqueueSyncOp('update_habit', jsonEncode({
@@ -304,6 +319,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           'description':
               description?.isNotEmpty == true ? description : null,
           'color': color,
+          'icon': resolvedIcon,
         }));
       }
     } catch (e, st) {
@@ -392,6 +408,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       title: Value(prev.habits[idx].title),
       description: Value(prev.habits[idx].description),
       color: Value(prev.habits[idx].color),
+      icon: Value(prev.habits[idx].icon),
       isPinned: Value(newPinned),
       createdAtMs:
           Value(prev.habits[idx].createdAt.millisecondsSinceEpoch),
@@ -570,6 +587,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       title: Value(habit.title),
       description: Value(habit.description),
       color: Value(habit.color),
+      icon: Value(habit.icon),
       isPinned: Value(habit.isPinned),
       isArchived: const Value(true),
       createdAtMs: Value(habit.createdAt.millisecondsSinceEpoch),
@@ -695,6 +713,9 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
   }
 
   Future<void> restoreHabit(Habit habit) async {
+    if (_inProgressRestore.contains(habit.id)) return;
+    _inProgressRestore.add(habit.id);
+    try {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
     if (userId == null) return;
@@ -724,6 +745,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       title: Value(habit.title),
       description: Value(habit.description),
       color: Value(habit.color),
+      icon: Value(habit.icon),
       isPinned: Value(habit.isPinned),
       isArchived: const Value(false),
       createdAtMs: Value(habit.createdAt.millisecondsSinceEpoch),
@@ -751,6 +773,9 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         logEntries: prev.logEntries,
       ));
       Error.throwWithStackTrace(e, st);
+    }
+    } finally {
+      _inProgressRestore.remove(habit.id);
     }
   }
 }
@@ -793,6 +818,7 @@ final archivedHabitsProvider =
             title: h.title,
             description: h.description,
             color: h.color,
+            icon: h.icon,
             isPinned: h.isPinned,
             isArchived: true,
             createdAt: DateTime.fromMillisecondsSinceEpoch(h.createdAtMs),

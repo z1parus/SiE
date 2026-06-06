@@ -6,6 +6,7 @@ class Habit {
   final String title;
   final String? description;
   final String color;
+  final String? icon;
   final bool isPinned;
   final bool isArchived;
   final DateTime createdAt;
@@ -16,6 +17,7 @@ class Habit {
     required this.title,
     this.description,
     this.color = '#00C8FF',
+    this.icon,
     this.isPinned = false,
     this.isArchived = false,
     required this.createdAt,
@@ -27,6 +29,7 @@ class Habit {
         title: map['title']?.toString() ?? '',
         description: map['description']?.toString(),
         color: map['color']?.toString() ?? '#00C8FF',
+        icon: map['icon']?.toString(),
         isPinned: map['is_pinned'] == true,
         isArchived: map['is_archived'] == true,
         createdAt:
@@ -38,6 +41,7 @@ class Habit {
     String? title,
     String? description,
     String? color,
+    Object? icon = _sentinel,
     bool? isPinned,
     bool? isArchived,
   }) =>
@@ -47,11 +51,14 @@ class Habit {
         title: title ?? this.title,
         description: description ?? this.description,
         color: color ?? this.color,
+        icon: icon == _sentinel ? this.icon : icon as String?,
         isPinned: isPinned ?? this.isPinned,
         isArchived: isArchived ?? this.isArchived,
         createdAt: createdAt,
       );
 }
+
+const _sentinel = Object();
 
 class HabitsState {
   final List<Habit> habits;

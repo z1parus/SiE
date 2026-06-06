@@ -15,6 +15,7 @@ class LocalHabits extends Table {
   TextColumn get title => text()();
   TextColumn get description => text().nullable()();
   TextColumn get color => text().withDefault(const Constant('#00C8FF'))();
+  TextColumn get icon => text().nullable()();
   BoolColumn get isPinned =>
       boolean().withDefault(const Constant(false))();
   BoolColumn get isArchived =>
@@ -136,7 +137,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -151,6 +152,9 @@ class AppDatabase extends _$AppDatabase {
       if (from < 4) {
         await m.addColumn(localHabitLogs, localHabitLogs.note);
         await m.addColumn(localHabitLogs, localHabitLogs.emoji);
+      }
+      if (from < 5) {
+        await m.addColumn(localHabits, localHabits.icon);
       }
     },
   );

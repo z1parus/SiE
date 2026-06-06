@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,6 +25,8 @@ LiquidGlassSettings _glassSettings({
       chromaticAberration: 0.015,
     );
 
+enum HabitViewMode { today, week, allTime }
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HabitTrackerScreen
 // ─────────────────────────────────────────────────────────────────────────────
@@ -38,6 +41,7 @@ class HabitTrackerScreen extends ConsumerStatefulWidget {
 class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
   bool _onboardingDismissed = false;
   bool _showOnboardingManual = false;
+  HabitViewMode _viewMode = HabitViewMode.today;
 
   static String _fmt(DateTime dt) =>
       '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
@@ -88,6 +92,10 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
             loading: () => const SizedBox(height: 8),
             error: (_, _) => const SizedBox(height: 8),
           ),
+          _ViewModeToggle(
+            current: _viewMode,
+            onChange: (m) => setState(() => _viewMode = m),
+          ),
           Expanded(
             child: habitsAsync.when(
               loading: () => Center(
@@ -98,31 +106,56 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
               ),
               error: (e, _) => Center(child: _NoConnectionMessage(error: e)),
               data: (state) {
-                if (state.habits.isEmpty) {
+                final routineHabitIds = {
+                  ...?routinesAsync.valueOrNull?.morning?.habits.map((h) => h.id),
+                  ...?routinesAsync.valueOrNull?.evening?.habits.map((h) => h.id),
+                };
+                final visibleHabits = state.habits
+                    .where((h) => !routineHabitIds.contains(h.id))
+                    .toList();
+                if (visibleHabits.isEmpty) {
                   return _EmptyState(onAdd: () => _showHabitDialog(null));
                 }
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-                  itemCount: state.habits.length,
+                  itemCount: visibleHabits.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (context, i) {
-                    final habit    = state.habits[i];
+                    final habit    = visibleHabits[i];
                     final logDates = state.logDates[habit.id] ?? {};
                     final entries  = state.logEntries[habit.id] ?? [];
                     final todayEntry = entries.cast<HabitLogEntry?>()
                         .firstWhere((e) => e?.completedAt == today,
                             orElse: () => null);
+                    void onTapDetail() => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => HabitDetailScreen(habit: habit),
+                      ),
+                    );
+                    if (_viewMode == HabitViewMode.week) {
+                      return _WeekViewHabitCard(
+                        key: ValueKey('w_${habit.id}'),
+                        habit: habit,
+                        logDates: logDates,
+                        streak: state.streaks[habit.id] ?? 0,
+                        onTap: onTapDetail,
+                      );
+                    }
+                    if (_viewMode == HabitViewMode.allTime) {
+                      return _AllTimeHabitCard(
+                        key: ValueKey('a_${habit.id}'),
+                        habit: habit,
+                        logDates: logDates,
+                        onTap: onTapDetail,
+                      );
+                    }
                     return _SwipeableHabitCard(
                       key: ValueKey(habit.id),
                       habit: habit,
                       completedToday: logDates.contains(today),
                       streak: state.streaks[habit.id] ?? 0,
                       todayEmoji: todayEntry?.emoji,
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => HabitDetailScreen(habit: habit),
-                        ),
-                      ),
+                      onTap: onTapDetail,
                       onDelete: () => ref
                           .read(habitsProvider.notifier)
                           .deleteHabit(habit.id),
@@ -209,11 +242,11 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
       isScrollControlled: true,
       builder: (_) => _HabitDialog(
         existing: existing,
-        onSave: (title, description, color) {
+        onSave: (title, description, color, icon) {
           if (existing == null) {
             ref
                 .read(habitsProvider.notifier)
-                .addHabit(title: title, description: description, color: color)
+                .addHabit(title: title, description: description, color: color, icon: icon)
                 .then((awarded) {
               if (awarded && mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -261,6 +294,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                   title: title,
                   description: description,
                   color: color,
+                  icon: icon,
                 );
           }
         },
@@ -400,6 +434,291 @@ class _GlassIconBtn extends ConsumerWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Bottom Action Bar
+// ─────────────────────────────────────────────────────────────────────────────
+// View Mode Toggle
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ViewModeToggle extends ConsumerWidget {
+  final HabitViewMode current;
+  final void Function(HabitViewMode) onChange;
+
+  const _ViewModeToggle({required this.current, required this.onChange});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+    const modes = [
+      (HabitViewMode.today, 'СЕГОДНЯ'),
+      (HabitViewMode.week, 'НЕДЕЛЯ'),
+      (HabitViewMode.allTime, 'ВСЁ ВРЕМЯ'),
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+      child: Row(
+        children: modes.map((m) {
+          final (mode, label) = m;
+          final active = current == mode;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => onChange(mode),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                  color: active
+                      ? sc.accent.withValues(alpha: 0.18)
+                      : Colors.transparent,
+                  border: Border.all(
+                    color: active
+                        ? sc.accent.withValues(alpha: 0.55)
+                        : sc.border.withValues(alpha: 0.30),
+                    width: 1,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: active ? sc.accent : sc.textSecondary,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Week View Habit Card
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _WeekViewHabitCard extends ConsumerWidget {
+  final Habit habit;
+  final Set<String> logDates;
+  final int streak;
+  final VoidCallback onTap;
+
+  const _WeekViewHabitCard({
+    super.key,
+    required this.habit,
+    required this.logDates,
+    required this.streak,
+    required this.onTap,
+  });
+
+  static String _fmt(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+    final accentColor = hexToColor(habit.color);
+    final today = DateTime.now();
+    final days = List.generate(7, (i) => today.subtract(Duration(days: 6 - i)));
+
+    return SieGlassCard(
+      onTap: onTap,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              if (habit.icon != null) ...[
+                Text(habit.icon!, style: const TextStyle(fontSize: 14)),
+                const SizedBox(width: 8),
+              ] else ...[
+                Container(
+                  width: 7, height: 7,
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: accentColor),
+                ),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                child: Text(
+                  habit.title.toUpperCase(),
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: sc.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+              ),
+              if (streak > 0) ...[
+                const SizedBox(width: 6),
+                _StreakBadge(streak: streak, color: accentColor),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: days.map((d) {
+              final label = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'][d.weekday - 1];
+              final done = logDates.contains(_fmt(d));
+              final isToday = _fmt(d) == _fmt(today);
+              return Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      height: 20,
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(4),
+                        color: done
+                            ? accentColor.withValues(alpha: 0.80)
+                            : sc.border.withValues(alpha: 0.25),
+                        border: isToday
+                            ? Border.all(color: accentColor.withValues(alpha: 0.70), width: 1)
+                            : null,
+                        boxShadow: done && sc.isCosmicMode
+                            ? [BoxShadow(color: accentColor.withValues(alpha: 0.45), blurRadius: 5)]
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: isToday ? sc.accent : sc.textSecondary.withValues(alpha: 0.5),
+                        fontSize: 7.5,
+                        fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// All-Time Habit Card (compact heat map)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AllTimeHabitCard extends ConsumerWidget {
+  final Habit habit;
+  final Set<String> logDates;
+  final VoidCallback onTap;
+
+  const _AllTimeHabitCard({
+    super.key,
+    required this.habit,
+    required this.logDates,
+    required this.onTap,
+  });
+
+  static String _fmt(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+    final accentColor = hexToColor(habit.color);
+
+    final today = DateTime.now();
+    final todayNorm = DateTime(today.year, today.month, today.day);
+    final daysSinceMonday = (todayNorm.weekday - 1) % 7;
+    final gridEnd = todayNorm.add(Duration(days: 6 - daysSinceMonday));
+    final gridStart = gridEnd.subtract(const Duration(days: 7 * 13 - 1));
+
+    const cols = 13;
+    const rows = 7;
+    const cellSize = 10.0;
+    const gap = 2.0;
+
+    return SieGlassCard(
+      onTap: onTap,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              if (habit.icon != null) ...[
+                Text(habit.icon!, style: const TextStyle(fontSize: 14)),
+                const SizedBox(width: 8),
+              ] else ...[
+                Container(
+                  width: 7, height: 7,
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: accentColor),
+                ),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                child: Text(
+                  habit.title.toUpperCase(),
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: sc.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: rows * (cellSize + gap) - gap,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: List.generate(cols, (col) {
+                final firstDay = gridStart.add(Duration(days: col * 7));
+                return Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: List.generate(rows, (row) {
+                      final d = firstDay.add(Duration(days: row));
+                      final done = logDates.contains(_fmt(d));
+                      return Container(
+                        width: double.infinity,
+                        height: cellSize,
+                        margin: EdgeInsets.only(
+                          bottom: row < rows - 1 ? gap : 0,
+                          right: col < cols - 1 ? gap : 0,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(2),
+                          color: done
+                              ? accentColor.withValues(alpha: 0.75)
+                              : sc.border.withValues(alpha: 0.20),
+                          boxShadow: done && sc.isCosmicMode
+                              ? [BoxShadow(color: accentColor.withValues(alpha: 0.40), blurRadius: 3)]
+                              : null,
+                        ),
+                      );
+                    }),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 class _BottomActionBar extends ConsumerWidget {
   final VoidCallback onAdd;
@@ -565,6 +884,7 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
 
   void _onDragUpdate(DragUpdateDetails d) {
     if (_isSnapping) return;
+    if (Platform.isAndroid) return;
     setState(() {
       _dragOffset = (_dragOffset + d.delta.dx)
           .clamp(-_screenWidth * 0.65, _screenWidth * 0.65);
@@ -573,6 +893,7 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
 
   Future<void> _onDragEnd(DragEndDetails d) async {
     if (_isSnapping) return;
+    if (Platform.isAndroid) return;
     final trigger = _triggerDist;
 
     if (_dragOffset.abs() >= trigger) {
@@ -775,24 +1096,29 @@ class _HabitMatrixCard extends ConsumerWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: 7,
-                height: 7,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: accentColor,
-                  boxShadow: sc.isCosmicMode
-                      ? [
-                          BoxShadow(
-                            color: accentColor.withValues(alpha: 0.85),
-                            blurRadius: 7,
-                            spreadRadius: 1,
-                          ),
-                        ]
-                      : null,
+              if (habit.icon != null) ...[
+                Text(habit.icon!, style: const TextStyle(fontSize: 16)),
+                const SizedBox(width: 8),
+              ] else ...[
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: accentColor,
+                    boxShadow: sc.isCosmicMode
+                        ? [
+                            BoxShadow(
+                              color: accentColor.withValues(alpha: 0.85),
+                              blurRadius: 7,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : null,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
+                const SizedBox(width: 10),
+              ],
               Expanded(
                 child: Text(
                   habit.title.toUpperCase(),
@@ -813,6 +1139,10 @@ class _HabitMatrixCard extends ConsumerWidget {
                   color: sc.textSecondary.withValues(alpha: 0.45),
                   size: 11,
                 ),
+              ],
+              if (todayEmoji != null) ...[
+                const SizedBox(width: 6),
+                Text(todayEmoji!, style: const TextStyle(fontSize: 13)),
               ],
               if (streak > 0) ...[
                 const SizedBox(width: 8),
@@ -848,36 +1178,6 @@ class _HabitMatrixCard extends ConsumerWidget {
         ],
       ),
     );
-
-    if (completedToday && todayEmoji != null) {
-      return Stack(
-        clipBehavior: Clip.none,
-        children: [
-          card,
-          Positioned(
-            top: 6,
-            right: 6,
-            child: Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: accentColor.withValues(alpha: 0.12),
-                border: Border.all(
-                  color: accentColor.withValues(alpha: 0.35),
-                  width: 1,
-                ),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                todayEmoji!,
-                style: const TextStyle(fontSize: 13),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
 
     return card;
   }
@@ -1194,7 +1494,7 @@ class _AddButtonState extends ConsumerState<_AddButton>
 // ─────────────────────────────────────────────────────────────────────────────
 class _HabitDialog extends ConsumerStatefulWidget {
   final Habit? existing;
-  final void Function(String title, String? description, String color) onSave;
+  final void Function(String title, String? description, String color, String? icon) onSave;
 
   const _HabitDialog({this.existing, required this.onSave});
 
@@ -1206,12 +1506,19 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
   late final TextEditingController _titleCtrl;
   late final TextEditingController _descCtrl;
   late String _selectedColor;
+  String? _selectedIcon;
 
   static const _colorOptions = [
     '#00C8FF',
     '#00E5A0',
     '#A78BFA',
     '#F59E0B',
+  ];
+
+  static const _iconOptions = [
+    '🏃', '🧘', '📚', '💪', '🥗', '💧', '😴', '🎯',
+    '🧠', '✍️', '🎨', '🎸', '🚴', '🏊', '🌱', '🔥',
+    '⚡', '🌙', '☀️', '💊',
   ];
 
   Color _toColor(String hex) {
@@ -1225,6 +1532,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
     _titleCtrl = TextEditingController(text: widget.existing?.title ?? '');
     _descCtrl  = TextEditingController(text: widget.existing?.description ?? '');
     _selectedColor = widget.existing?.color ?? '#00C8FF';
+    _selectedIcon  = widget.existing?.icon;
   }
 
   @override
@@ -1342,6 +1650,25 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
               );
             }).toList(),
           ),
+          const SizedBox(height: 10),
+          Consumer(builder: (_, ref2, _) {
+            final sc2 = ref2.watch(sieColorsProvider);
+            return Text(
+              'ICON',
+              style: TextStyle(
+                color: sc2.textSecondary,
+                fontSize: 10,
+                letterSpacing: 1.5,
+              ),
+            );
+          }),
+          const SizedBox(height: 8),
+          _IconPicker(
+            options: _iconOptions,
+            selected: _selectedIcon,
+            accentColor: _toColor(_selectedColor),
+            onSelect: (v) => setState(() => _selectedIcon = v),
+          ),
           const SizedBox(height: 16),
           Consumer(builder: (_, ref2, _) {
             final sc2 = ref2.watch(sieColorsProvider);
@@ -1366,6 +1693,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
                           ? null
                           : _descCtrl.text.trim(),
                       _selectedColor,
+                      _selectedIcon,
                     );
                     Navigator.of(context).pop();
                   },
@@ -1516,6 +1844,87 @@ class _ColorLensState extends State<_ColorLens> {
                 : null,
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Icon Picker ───────────────────────────────────────────────
+
+class _IconPicker extends ConsumerWidget {
+  final List<String> options;
+  final String? selected;
+  final Color accentColor;
+  final void Function(String? value) onSelect;
+
+  const _IconPicker({
+    required this.options,
+    required this.selected,
+    required this.accentColor,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+    return SizedBox(
+      height: 38,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          GestureDetector(
+            onTap: () => onSelect(null),
+            child: Container(
+              width: 34,
+              height: 34,
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected == null
+                      ? accentColor
+                      : sc.textSecondary.withValues(alpha: 0.25),
+                  width: selected == null ? 2 : 1,
+                ),
+                color: selected == null
+                    ? accentColor.withValues(alpha: 0.15)
+                    : Colors.transparent,
+              ),
+              child: Icon(
+                Icons.block,
+                size: 14,
+                color: selected == null
+                    ? accentColor
+                    : sc.textSecondary.withValues(alpha: 0.4),
+              ),
+            ),
+          ),
+          ...options.map((emoji) {
+            final isSelected = selected == emoji;
+            return GestureDetector(
+              onTap: () => onSelect(emoji),
+              child: Container(
+                width: 34,
+                height: 34,
+                margin: const EdgeInsets.only(right: 6),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isSelected
+                        ? accentColor
+                        : sc.textSecondary.withValues(alpha: 0.20),
+                    width: isSelected ? 2 : 1,
+                  ),
+                  color: isSelected
+                      ? accentColor.withValues(alpha: 0.15)
+                      : Colors.transparent,
+                ),
+                alignment: Alignment.center,
+                child: Text(emoji, style: const TextStyle(fontSize: 17)),
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
@@ -2120,11 +2529,18 @@ class _ArchiveEmptyState extends ConsumerWidget {
   }
 }
 
-class _ArchivedHabitCard extends ConsumerWidget {
+class _ArchivedHabitCard extends ConsumerStatefulWidget {
   final Habit habit;
   final VoidCallback onRestore;
 
   const _ArchivedHabitCard({required this.habit, required this.onRestore});
+
+  @override
+  ConsumerState<_ArchivedHabitCard> createState() => _ArchivedHabitCardState();
+}
+
+class _ArchivedHabitCardState extends ConsumerState<_ArchivedHabitCard> {
+  bool _restoring = false;
 
   Color _toColor(String hex) {
     final h = hex.replaceAll('#', '').padLeft(6, '0');
@@ -2132,9 +2548,9 @@ class _ArchivedHabitCard extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final sc         = ref.watch(sieColorsProvider);
-    final habitColor = _toColor(habit.color);
+    final habitColor = _toColor(widget.habit.color);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
@@ -2182,7 +2598,7 @@ class _ArchivedHabitCard extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      habit.title.toUpperCase(),
+                      widget.habit.title.toUpperCase(),
                       style: TextStyle(
                         color: sc.textPrimary,
                         fontSize: 12,
@@ -2190,10 +2606,10 @@ class _ArchivedHabitCard extends ConsumerWidget {
                         letterSpacing: 1.2,
                       ),
                     ),
-                    if (habit.description != null) ...[
+                    if (widget.habit.description != null) ...[
                       const SizedBox(height: 2),
                       Text(
-                        habit.description!,
+                        widget.habit.description!,
                         style: TextStyle(
                           color: sc.textSecondary,
                           fontSize: 10,
@@ -2207,22 +2623,29 @@ class _ArchivedHabitCard extends ConsumerWidget {
               ),
               const SizedBox(width: 8),
               GestureDetector(
-                onTap: onRestore,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                        color: sc.accent.withValues(alpha: 0.5)),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    'ВОССТАНОВИТЬ',
-                    style: TextStyle(
-                      color: sc.accent,
-                      fontSize: 9,
-                      letterSpacing: 1,
-                      fontWeight: FontWeight.w700,
+                onTap: _restoring ? null : () {
+                  setState(() => _restoring = true);
+                  widget.onRestore();
+                },
+                child: AnimatedOpacity(
+                  opacity: _restoring ? 0.4 : 1.0,
+                  duration: const Duration(milliseconds: 150),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                          color: sc.accent.withValues(alpha: 0.5)),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      _restoring ? 'ВОССТАНОВЛЕНИЕ...' : 'ВОССТАНОВИТЬ',
+                      style: TextStyle(
+                        color: sc.accent,
+                        fontSize: 9,
+                        letterSpacing: 1,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
@@ -2546,7 +2969,7 @@ class _RoutineBlockState extends ConsumerState<_RoutineBlock> {
     return GestureDetector(
       onLongPress: _showLongPressMenu,
       child: SieGlassCard(
-        height: 148,
+        height: 110,
         padding: EdgeInsets.zero,
         child: Column(
           children: [
@@ -2655,7 +3078,7 @@ class _CarouselHabitSlide extends ConsumerWidget {
     return Opacity(
       opacity: isUnlocked ? 1.0 : 0.40,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -2896,12 +3319,13 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                         isScrollControlled: true,
                         builder: (_) => _HabitDialog(
                           existing: widget.habit,
-                          onSave: (title, description, color) {
+                          onSave: (title, description, color, icon) {
                             ref.read(habitsProvider.notifier).updateHabit(
                                   habitId: widget.habit.id,
                                   title: title,
                                   description: description,
                                   color: color,
+                                  icon: icon,
                                 );
                           },
                         ),

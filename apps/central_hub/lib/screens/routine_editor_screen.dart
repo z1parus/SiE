@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
+import 'habit_tracker_screen.dart' show HabitDetailScreen;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RoutineEditorScreen
@@ -92,6 +93,12 @@ class RoutineEditorScreen extends ConsumerWidget {
                                   .read(habitRoutinesProvider.notifier)
                                   .removeHabitFromRoutine(
                                       routine.id, habits[i].id),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  HabitDetailScreen(habit: habits[i]),
+                            ),
+                          ),
                         ),
                       ),
               ),
@@ -232,9 +239,11 @@ class _RoutineMemberTile extends ConsumerWidget {
     super.key,
     required this.habit,
     this.onRemove,
+    this.onTap,
   });
   final Habit habit;
   final VoidCallback? onRemove;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -244,6 +253,7 @@ class _RoutineMemberTile extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: SieGlassCard(
+        onTap: onTap,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [

@@ -123,6 +123,7 @@ class HabitRoutinesNotifier
                 title:       lh.title,
                 description: lh.description,
                 color:       lh.color,
+                icon:        lh.icon,
                 isPinned:    lh.isPinned,
                 isArchived:  lh.isArchived,
                 createdAt:   DateTime.fromMillisecondsSinceEpoch(lh.createdAtMs),
