@@ -332,6 +332,477 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         'update_goal_status', jsonEncode({'id': id, 'status': newStatus}));
   }
 
+  // ── State helper ──────────────────────────────────────────────────────────
+
+  void _updateGoalInState(String goalId, Goal Function(Goal) updater) {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    state = AsyncData(current.copyWith(
+      goals: current.goals
+          .map((g) => g.id == goalId ? updater(g) : g)
+          .toList(),
+    ));
+  }
+
+  // ── Add Sub-goal ──────────────────────────────────────────────────────────
+
+  Future<void> addSubGoal(String goalId, String name,
+      {int orderIndex = 0}) async {
+    final client = Supabase.instance.client;
+    final session = client.auth.currentSession;
+    if (session == null) return;
+
+    final db = ref.read(appDatabaseProvider);
+    final now = DateTime.now();
+    final id = _uuid.v4();
+
+    final newSg = SubGoal(
+      id: id,
+      goalId: goalId,
+      parentSubGoalId: null,
+      name: name,
+      isCompleted: false,
+      orderIndex: orderIndex,
+      tasks: const [],
+      createdAt: now,
+    );
+
+    _updateGoalInState(goalId,
+        (g) => g.copyWith(subGoals: [...g.subGoals, newSg]));
+
+    await db.upsertSubGoal(LocalSubGoalsCompanion(
+      id: Value(id),
+      goalId: Value(goalId),
+      name: Value(name),
+      orderIndex: Value(orderIndex),
+      synced: const Value(false),
+      createdAtMs: Value(now.millisecondsSinceEpoch),
+    ));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client.from('sub_goals').insert({
+          'id': id,
+          'goal_id': goalId,
+          'name': name,
+          'order_index': orderIndex,
+          'created_at': now.toIso8601String(),
+        });
+        await db.upsertSubGoal(
+            LocalSubGoalsCompanion(id: Value(id), synced: const Value(true)));
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp(
+        'insert_sub_goal',
+        jsonEncode(
+            {'id': id, 'goal_id': goalId, 'name': name, 'order_index': orderIndex}));
+  }
+
+  // ── Delete Sub-goal ───────────────────────────────────────────────────────
+
+  Future<void> deleteSubGoal(String subGoalId, String goalId) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+
+    _updateGoalInState(goalId,
+        (g) => g.copyWith(
+            subGoals: g.subGoals.where((sg) => sg.id != subGoalId).toList()));
+
+    await db.deleteSubGoalLocally(subGoalId);
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client.from('sub_goals').delete().eq('id', subGoalId);
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp(
+        'delete_sub_goal', jsonEncode({'id': subGoalId, 'goal_id': goalId}));
+  }
+
+  // ── Complete Sub-goal ─────────────────────────────────────────────────────
+
+  Future<void> completeSubGoal(String subGoalId, String goalId) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+
+    _updateGoalInState(
+        goalId,
+        (g) => g.copyWith(
+            subGoals: g.subGoals
+                .map((sg) =>
+                    sg.id == subGoalId ? sg.copyWith(isCompleted: true) : sg)
+                .toList()));
+
+    await db.upsertSubGoal(LocalSubGoalsCompanion(
+        id: Value(subGoalId),
+        isCompleted: const Value(true),
+        synced: const Value(false)));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client
+            .from('sub_goals')
+            .update({'is_completed': true}).eq('id', subGoalId);
+        await db.upsertSubGoal(LocalSubGoalsCompanion(
+            id: Value(subGoalId), synced: const Value(true)));
+      } catch (_) {}
+    } else {
+      await db.enqueueSyncOp('complete_sub_goal',
+          jsonEncode({'id': subGoalId, 'goal_id': goalId}));
+    }
+    await _awardXp(150, 0);
+  }
+
+  // ── Add Task ──────────────────────────────────────────────────────────────
+
+  Future<void> addTask({
+    required String goalId,
+    required String subGoalId,
+    required String name,
+    int weight = 1,
+    DateTime? dueDate,
+  }) async {
+    final client = Supabase.instance.client;
+    final session = client.auth.currentSession;
+    if (session == null) return;
+
+    final db = ref.read(appDatabaseProvider);
+    final now = DateTime.now();
+    final id = _uuid.v4();
+    final userId = session.user.id;
+
+    final newTask = PlanningTask(
+      id: id,
+      subGoalId: subGoalId,
+      userId: userId,
+      name: name,
+      weight: weight,
+      isCompleted: false,
+      completedAt: null,
+      dueDate: dueDate,
+      createdAt: now,
+    );
+
+    _updateGoalInState(
+        goalId,
+        (g) => g.copyWith(
+            subGoals: g.subGoals
+                .map((sg) => sg.id == subGoalId
+                    ? sg.copyWith(tasks: [...sg.tasks, newTask])
+                    : sg)
+                .toList()));
+
+    await db.upsertPlanningTask(LocalPlanningTasksCompanion(
+      id: Value(id),
+      subGoalId: Value(subGoalId),
+      userId: Value(userId),
+      name: Value(name),
+      weight: Value(weight),
+      dueDateMs: Value(dueDate?.millisecondsSinceEpoch),
+      synced: const Value(false),
+      createdAtMs: Value(now.millisecondsSinceEpoch),
+    ));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client.from('planning_tasks').insert({
+          'id': id,
+          'sub_goal_id': subGoalId,
+          'user_id': userId,
+          'name': name,
+          'weight': weight,
+          'due_date': dueDate?.toIso8601String(),
+          'created_at': now.toIso8601String(),
+        });
+        await db.upsertPlanningTask(
+            LocalPlanningTasksCompanion(id: Value(id), synced: const Value(true)));
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp(
+        'insert_task',
+        jsonEncode({
+          'id': id,
+          'sub_goal_id': subGoalId,
+          'user_id': userId,
+          'name': name,
+          'weight': weight,
+        }));
+  }
+
+  // ── Delete Task ───────────────────────────────────────────────────────────
+
+  Future<void> deleteTask(
+      String taskId, String subGoalId, String goalId) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+
+    _updateGoalInState(
+        goalId,
+        (g) => g.copyWith(
+            subGoals: g.subGoals
+                .map((sg) => sg.id == subGoalId
+                    ? sg.copyWith(
+                        tasks: sg.tasks.where((t) => t.id != taskId).toList())
+                    : sg)
+                .toList()));
+
+    await db.deletePlanningTaskLocally(taskId);
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client.from('planning_tasks').delete().eq('id', taskId);
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('delete_task',
+        jsonEncode({'id': taskId, 'sub_goal_id': subGoalId, 'goal_id': goalId}));
+  }
+
+  // ── Toggle Task ───────────────────────────────────────────────────────────
+
+  Future<void> toggleTask(
+      String taskId, String subGoalId, String goalId) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+    final current = state.valueOrNull;
+    if (current == null) return;
+
+    final goal = current.goals.firstWhere((g) => g.id == goalId,
+        orElse: () => throw StateError('goal not found'));
+    final sg = goal.subGoals.firstWhere((s) => s.id == subGoalId,
+        orElse: () => throw StateError('subgoal not found'));
+    final task = sg.tasks.firstWhere((t) => t.id == taskId,
+        orElse: () => throw StateError('task not found'));
+
+    final nowCompleted = !task.isCompleted;
+    final completedAt = nowCompleted ? DateTime.now() : null;
+
+    _updateGoalInState(
+        goalId,
+        (g) => g.copyWith(
+            subGoals: g.subGoals
+                .map((s) => s.id == subGoalId
+                    ? s.copyWith(
+                        tasks: s.tasks
+                            .map((t) => t.id == taskId
+                                ? t.copyWith(
+                                    isCompleted: nowCompleted,
+                                    completedAt: completedAt)
+                                : t)
+                            .toList())
+                    : s)
+                .toList()));
+
+    await db.upsertPlanningTask(LocalPlanningTasksCompanion(
+      id: Value(taskId),
+      isCompleted: Value(nowCompleted),
+      completedAtMs: Value(completedAt?.millisecondsSinceEpoch),
+      synced: const Value(false),
+    ));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client.from('planning_tasks').update({
+          'is_completed': nowCompleted,
+          'completed_at': completedAt?.toIso8601String(),
+        }).eq('id', taskId);
+        await db.upsertPlanningTask(
+            LocalPlanningTasksCompanion(id: Value(taskId), synced: const Value(true)));
+      } catch (_) {}
+    } else {
+      await db.enqueueSyncOp('toggle_task',
+          jsonEncode({'id': taskId, 'is_completed': nowCompleted}));
+    }
+
+    if (nowCompleted) await _awardXp(taskXp(task.weight), 0);
+  }
+
+  // ── Add Milestone ─────────────────────────────────────────────────────────
+
+  Future<void> addMilestone(String goalId, String name,
+      {DateTime? targetDate}) async {
+    final client = Supabase.instance.client;
+    final session = client.auth.currentSession;
+    if (session == null) return;
+
+    final db = ref.read(appDatabaseProvider);
+    final now = DateTime.now();
+    final id = _uuid.v4();
+
+    final newMs = Milestone(
+      id: id,
+      goalId: goalId,
+      name: name,
+      targetDate: targetDate,
+      isCompleted: false,
+      createdAt: now,
+    );
+
+    _updateGoalInState(goalId,
+        (g) => g.copyWith(milestones: [...g.milestones, newMs]));
+
+    await db.upsertMilestone(LocalMilestonesCompanion(
+      id: Value(id),
+      goalId: Value(goalId),
+      name: Value(name),
+      targetDateMs: Value(targetDate?.millisecondsSinceEpoch),
+      synced: const Value(false),
+      createdAtMs: Value(now.millisecondsSinceEpoch),
+    ));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client.from('milestones').insert({
+          'id': id,
+          'goal_id': goalId,
+          'name': name,
+          'target_date': targetDate?.toIso8601String(),
+          'created_at': now.toIso8601String(),
+        });
+        await db.upsertMilestone(
+            LocalMilestonesCompanion(id: Value(id), synced: const Value(true)));
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('insert_milestone',
+        jsonEncode({'id': id, 'goal_id': goalId, 'name': name}));
+  }
+
+  // ── Delete Milestone ──────────────────────────────────────────────────────
+
+  Future<void> deleteMilestone(String milestoneId, String goalId) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+
+    _updateGoalInState(goalId,
+        (g) => g.copyWith(
+            milestones:
+                g.milestones.where((m) => m.id != milestoneId).toList()));
+
+    await db.deleteMilestoneLocally(milestoneId);
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client.from('milestones').delete().eq('id', milestoneId);
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('delete_milestone',
+        jsonEncode({'id': milestoneId, 'goal_id': goalId}));
+  }
+
+  // ── Complete Milestone ────────────────────────────────────────────────────
+
+  Future<void> completeMilestone(String milestoneId, String goalId) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+
+    _updateGoalInState(
+        goalId,
+        (g) => g.copyWith(
+            milestones: g.milestones
+                .map((m) =>
+                    m.id == milestoneId ? m.copyWith(isCompleted: true) : m)
+                .toList()));
+
+    await db.upsertMilestone(LocalMilestonesCompanion(
+        id: Value(milestoneId),
+        isCompleted: const Value(true),
+        synced: const Value(false)));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client
+            .from('milestones')
+            .update({'is_completed': true}).eq('id', milestoneId);
+        await db.upsertMilestone(LocalMilestonesCompanion(
+            id: Value(milestoneId), synced: const Value(true)));
+      } catch (_) {}
+    } else {
+      await db.enqueueSyncOp('complete_milestone',
+          jsonEncode({'id': milestoneId, 'goal_id': goalId}));
+    }
+    await _awardXp(500, 0);
+  }
+
+  // ── Link Habit ────────────────────────────────────────────────────────────
+
+  Future<void> linkHabit(String goalId, String habitId) async {
+    final client = Supabase.instance.client;
+    final session = client.auth.currentSession;
+    if (session == null) return;
+
+    final db = ref.read(appDatabaseProvider);
+    final now = DateTime.now();
+    final id = _uuid.v4();
+
+    final newLink = GoalHabitLink(
+        id: id, goalId: goalId, habitId: habitId, createdAt: now);
+
+    _updateGoalInState(goalId,
+        (g) => g.copyWith(habitLinks: [...g.habitLinks, newLink]));
+
+    await db.upsertGoalHabitLink(LocalGoalHabitLinksCompanion(
+      id: Value(id),
+      goalId: Value(goalId),
+      habitId: Value(habitId),
+      synced: const Value(false),
+      createdAtMs: Value(now.millisecondsSinceEpoch),
+    ));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client.from('goal_habit_links').insert({
+          'id': id,
+          'goal_id': goalId,
+          'habit_id': habitId,
+          'created_at': now.toIso8601String(),
+        });
+        await db.upsertGoalHabitLink(LocalGoalHabitLinksCompanion(
+            id: Value(id), synced: const Value(true)));
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('insert_habit_link',
+        jsonEncode({'id': id, 'goal_id': goalId, 'habit_id': habitId}));
+  }
+
+  // ── Unlink Habit ──────────────────────────────────────────────────────────
+
+  Future<void> unlinkHabit(String linkId, String goalId) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+
+    _updateGoalInState(goalId,
+        (g) => g.copyWith(
+            habitLinks: g.habitLinks.where((l) => l.id != linkId).toList()));
+
+    await db.deleteGoalHabitLinkLocally(linkId);
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client.from('goal_habit_links').delete().eq('id', linkId);
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('delete_habit_link',
+        jsonEncode({'id': linkId, 'goal_id': goalId}));
+  }
+
   // ── XP helper ─────────────────────────────────────────────────────────────
 
   Future<void> _awardXp(int xp, int dp) async {

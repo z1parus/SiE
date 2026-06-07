@@ -549,6 +549,22 @@ class AppDatabase extends _$AppDatabase {
   Future<void> deleteGoalLocally(String id) =>
       (update(localGoals)..where((t) => t.id.equals(id)))
           .write(const LocalGoalsCompanion(deletedLocally: Value(true)));
+
+  Future<void> deleteSubGoalLocally(String id) =>
+      (update(localSubGoals)..where((t) => t.id.equals(id)))
+          .write(const LocalSubGoalsCompanion(deletedLocally: Value(true)));
+
+  Future<void> deletePlanningTaskLocally(String id) =>
+      (update(localPlanningTasks)..where((t) => t.id.equals(id)))
+          .write(const LocalPlanningTasksCompanion(deletedLocally: Value(true)));
+
+  Future<void> deleteMilestoneLocally(String id) =>
+      (update(localMilestones)..where((t) => t.id.equals(id)))
+          .write(const LocalMilestonesCompanion(deletedLocally: Value(true)));
+
+  Future<void> deleteGoalHabitLinkLocally(String id) =>
+      (update(localGoalHabitLinks)..where((t) => t.id.equals(id)))
+          .write(const LocalGoalHabitLinksCompanion(deletedLocally: Value(true)));
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────

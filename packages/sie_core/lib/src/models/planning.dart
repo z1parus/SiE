@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+const _unset = Object();
+
 // ─── Task ─────────────────────────────────────────────────────────────────────
 
 class PlanningTask {
@@ -28,7 +30,7 @@ class PlanningTask {
   PlanningTask copyWith({
     String? name,
     bool? isCompleted,
-    DateTime? completedAt,
+    Object? completedAt = _unset,
     DateTime? dueDate,
   }) =>
       PlanningTask(
@@ -38,7 +40,8 @@ class PlanningTask {
         name: name ?? this.name,
         weight: weight,
         isCompleted: isCompleted ?? this.isCompleted,
-        completedAt: completedAt ?? this.completedAt,
+        completedAt:
+            completedAt == _unset ? this.completedAt : completedAt as DateTime?,
         dueDate: dueDate ?? this.dueDate,
         createdAt: createdAt,
       );

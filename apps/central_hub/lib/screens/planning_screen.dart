@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
+import 'mission_detail_screen.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -293,11 +294,10 @@ class _GoalCard extends ConsumerWidget {
     final totalSubGoals = goal.subGoals.length;
 
     return GestureDetector(
-      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Mission Detail — в разработке'),
-          duration: Duration(seconds: 2),
-        ),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => MissionDetailScreen(goal: goal)),
       ),
       onLongPress: onLongPress,
       child: Container(
