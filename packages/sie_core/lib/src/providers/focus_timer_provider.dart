@@ -1,14 +1,20 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:drift/drift.dart' show Value;
+import 'package:uuid/uuid.dart';
+import '../local/app_database.dart';
 import '../models/achievement.dart';
 import '../services/audio_service.dart';
+import 'connectivity_provider.dart';
 import 'user_profile_provider.dart';
 
 const _focusXp = 100;
 const _focusDp = 50;
 const _omit = Object();
+const _uuid = Uuid();
 
 typedef FocusSessionResult = ({int xpGained, int dpGained, Achievement? newAchievement});
 
@@ -99,6 +105,19 @@ class FocusTimerState {
       );
 }
 
+// ── Persistence keys ──────────────────────────────────────────
+
+const _kFocusPhase           = 'focus_phase';
+const _kFocusPhaseStartMs    = 'focus_phase_start_ms';
+const _kFocusSecsRemaining   = 'focus_secs_remaining';
+const _kFocusIsRunning       = 'focus_is_running';
+const _kFocusTotalDurSecs    = 'focus_total_duration_secs';
+const _kFocusWorkMinutes     = 'focus_work_minutes';
+const _kFocusBreakMinutes    = 'focus_break_minutes';
+const _kFocusWorkMusic       = 'focus_work_music_enabled';
+const _kFocusBreakMusic      = 'focus_break_music_enabled';
+const _kFocusCompletedSess   = 'focus_completed_sessions';
+
 // ── Notifier ──────────────────────────────────────────────────
 
 class FocusTimerNotifier extends Notifier<FocusTimerState> {
@@ -110,7 +129,93 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
   bool _ambientActive = false;
 
   @override
-  FocusTimerState build() => const FocusTimerState();
+  FocusTimerState build() {
+    Future.microtask(_restoreFromPrefs);
+    return const FocusTimerState();
+  }
+
+  Future<void> _restoreFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final phaseStr = prefs.getString(_kFocusPhase);
+    if (phaseStr == null) return;
+
+    final phase = phaseStr == 'work' ? FocusPhase.work : FocusPhase.breakTime;
+    final totalDurSecs   = prefs.getInt(_kFocusTotalDurSecs)   ?? 25 * 60;
+    final workMinutes    = prefs.getInt(_kFocusWorkMinutes)     ?? 25;
+    final breakMinutes   = prefs.getInt(_kFocusBreakMinutes)    ?? 5;
+    final workMusic      = prefs.getBool(_kFocusWorkMusic)      ?? true;
+    final breakMusic     = prefs.getBool(_kFocusBreakMusic)     ?? true;
+    final completedSess  = prefs.getInt(_kFocusCompletedSess)   ?? 0;
+    final wasRunning     = prefs.getBool(_kFocusIsRunning)      ?? false;
+
+    int remaining;
+    if (wasRunning) {
+      final phaseStartMs = prefs.getInt(_kFocusPhaseStartMs);
+      if (phaseStartMs != null) {
+        final phaseStart = DateTime.fromMillisecondsSinceEpoch(phaseStartMs);
+        final elapsed = DateTime.now().difference(phaseStart).inSeconds;
+        remaining = (totalDurSecs - elapsed).clamp(0, totalDurSecs);
+      } else {
+        remaining = prefs.getInt(_kFocusSecsRemaining) ?? totalDurSecs;
+      }
+    } else {
+      remaining = prefs.getInt(_kFocusSecsRemaining) ?? totalDurSecs;
+    }
+
+    if (remaining <= 0) {
+      await _clearSession();
+      return;
+    }
+
+    final settings = FocusSettings(
+      workMinutes: workMinutes,
+      breakMinutes: breakMinutes,
+      isWorkMusicEnabled: workMusic,
+      isBreakMusicEnabled: breakMusic,
+    );
+
+    state = FocusTimerState(
+      settings: settings,
+      phase: phase,
+      secondsRemaining: remaining,
+      isRunning: false,
+      completedSessions: completedSess,
+      totalDurationSecs: totalDurSecs,
+    );
+  }
+
+  Future<void> _saveSession() async {
+    if (state.phase == FocusPhase.idle) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kFocusPhase,
+        state.phase == FocusPhase.work ? 'work' : 'break');
+    await prefs.setInt(_kFocusTotalDurSecs, state.totalDurationSecs);
+    await prefs.setInt(_kFocusSecsRemaining, state.secondsRemaining);
+    await prefs.setBool(_kFocusIsRunning, state.isRunning);
+    await prefs.setInt(_kFocusWorkMinutes, state.settings.workMinutes);
+    await prefs.setInt(_kFocusBreakMinutes, state.settings.breakMinutes);
+    await prefs.setBool(_kFocusWorkMusic, state.settings.isWorkMusicEnabled);
+    await prefs.setBool(_kFocusBreakMusic, state.settings.isBreakMusicEnabled);
+    await prefs.setInt(_kFocusCompletedSess, state.completedSessions);
+    if (state.isRunning && _phaseStartedAt != null) {
+      await prefs.setInt(
+          _kFocusPhaseStartMs, _phaseStartedAt!.millisecondsSinceEpoch);
+    } else {
+      await prefs.remove(_kFocusPhaseStartMs);
+    }
+  }
+
+  Future<void> _clearSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final key in [
+      _kFocusPhase, _kFocusPhaseStartMs, _kFocusSecsRemaining,
+      _kFocusIsRunning, _kFocusTotalDurSecs, _kFocusWorkMinutes,
+      _kFocusBreakMinutes, _kFocusWorkMusic, _kFocusBreakMusic,
+      _kFocusCompletedSess,
+    ]) {
+      await prefs.remove(key);
+    }
+  }
 
   void updateSettings(FocusSettings newSettings) {
     if (state.phase == FocusPhase.idle) {
@@ -186,6 +291,7 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
       Duration(seconds: state.totalDurationSecs - state.secondsRemaining),
     );
     _startTicker();
+    _saveSession();
   }
 
   void pause() {
@@ -194,6 +300,7 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
     state = state.copyWith(isRunning: false);
     // Ambient is intentionally left playing during pause so the user can
     // return to the session without an abrupt silence.
+    _saveSession();
   }
 
   void reset() {
@@ -206,6 +313,7 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
       secondsRemaining: state.settings.workSecs,
       totalDurationSecs: state.settings.workSecs,
     );
+    _clearSession();
   }
 
   void clearResult() {
@@ -258,7 +366,6 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
 
     if (state.phase == FocusPhase.work) {
       final result = await _saveWorkSession(settings: settings);
-      ref.invalidate(userProfileProvider);
       state = FocusTimerState(
         settings: settings,
         phase: FocusPhase.breakTime,
@@ -269,6 +376,7 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
         pendingResult: result,
       );
       _phaseStartedAt = null;
+      _saveSession();
     } else if (state.phase == FocusPhase.breakTime) {
       state = FocusTimerState(
         settings: settings,
@@ -279,6 +387,7 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
         totalDurationSecs: settings.workSecs,
       );
       _phaseStartedAt = null;
+      _clearSession();
     }
   }
 
@@ -289,50 +398,86 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
     final userId = client.auth.currentUser?.id;
     if (userId == null) return (xpGained: 0, dpGained: 0, newAchievement: null);
 
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final db = ref.read(appDatabaseProvider);
+    final sessionId = _uuid.v4();
+
+    // Always record locally.
+    await db.insertFocusSession(LocalFocusSessionsCompanion(
+      id: Value(sessionId),
+      userId: Value(userId),
+      durationSeconds: Value(settings.workSecs),
+      completedAtMs: Value(DateTime.now().millisecondsSinceEpoch),
+      xpAwarded: const Value(_focusXp),
+      dpAwarded: const Value(_focusDp),
+      synced: Value(isOnline),
+    ));
+
+    Achievement? earned;
+
     try {
-      await client.from('focus_sessions').insert({
-        'user_id': userId,
-        'duration_seconds': settings.workSecs,
-        'is_completed': true,
-        'xp_gained': _focusXp,
-      });
+      if (isOnline) {
+        await client.from('focus_sessions').insert({
+          'id': sessionId,
+          'user_id': userId,
+          'duration_seconds': settings.workSecs,
+          'is_completed': true,
+          'xp_gained': _focusXp,
+        });
 
-      await Future.wait([
-        client.rpc('increment_xp', params: {
-          'p_user_id': userId,
-          'p_amount': _focusXp,
-        }),
-        addDesignPoints(_focusDp),
-      ]);
+        await Future.wait([
+          client.rpc('increment_xp', params: {
+            'p_user_id': userId,
+            'p_amount': _focusXp,
+          }),
+          client.rpc('add_design_points', params: {'p_amount': _focusDp}),
+        ]);
 
-      Achievement? earned;
-      final achRow = await client
-          .from('achievements')
-          .select()
-          .eq('slug', 'deep_focus_initiated')
-          .maybeSingle();
-
-      if (achRow != null) {
-        final alreadyHas = await client
-            .from('user_achievements')
-            .select('id')
-            .eq('user_id', userId)
-            .eq('achievement_id', achRow['id'] as String)
+        final achRow = await client
+            .from('achievements')
+            .select()
+            .eq('slug', 'deep_focus_initiated')
             .maybeSingle();
 
-        if (alreadyHas == null) {
-          await client.from('user_achievements').insert({
-            'user_id': userId,
-            'achievement_id': achRow['id'],
-          });
-          earned = Achievement.fromMap(achRow);
+        if (achRow != null) {
+          final alreadyHas = await client
+              .from('user_achievements')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('achievement_id', achRow['id'] as String)
+              .maybeSingle();
+
+          if (alreadyHas == null) {
+            await client.from('user_achievements').insert({
+              'user_id': userId,
+              'achievement_id': achRow['id'],
+            });
+            earned = Achievement.fromMap(achRow);
+          }
         }
       }
 
-      return (xpGained: _focusXp, dpGained: _focusDp, newAchievement: earned);
+      // Apply local XP delta for immediate UI update.
+      await ref
+          .read(userProfileProvider.notifier)
+          .applyLocalXpDelta(_focusXp, _focusDp);
+
+      return (
+        xpGained: _focusXp,
+        dpGained: _focusDp,
+        newAchievement: earned
+      );
     } catch (e) {
       debugPrint('SiE FocusTimer: save error — $e');
-      return (xpGained: 0, dpGained: 0, newAchievement: null);
+      // Still apply local delta so UI is not stuck.
+      await ref
+          .read(userProfileProvider.notifier)
+          .applyLocalXpDelta(_focusXp, _focusDp);
+      return (
+        xpGained: _focusXp,
+        dpGained: _focusDp,
+        newAchievement: null
+      );
     }
   }
 }

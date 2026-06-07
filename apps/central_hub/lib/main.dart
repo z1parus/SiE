@@ -4,11 +4,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 import 'screens/auth_screen.dart';
-import 'screens/operations_control_screen.dart';
+import 'screens/main_navigation_shell.dart';
+import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Portrait lock is a mobile-only API; browsers silently ignore or crash on it.
   if (!kIsWeb) {
     await SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -22,33 +22,45 @@ void main() async {
   runApp(const ProviderScope(child: SieApp()));
 }
 
-class SieApp extends ConsumerWidget {
+class SieApp extends ConsumerStatefulWidget {
   const SieApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final authAsync = ref.watch(authStateProvider);
+  ConsumerState<SieApp> createState() => _SieAppState();
+}
+
+class _SieAppState extends ConsumerState<SieApp> {
+  bool _launchComplete = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final sieMode = ref.watch(sieThemeModeProvider).valueOrNull
+        ?? SieThemeMode.classicDark;
 
     return MaterialApp(
       title: 'SiE',
       debugShowCheckedModeBanner: false,
-      theme: SieTheme.dark,
-      // On wide screens constrain the app to a phone-like column so the
-      // terminal aesthetic stays intact.  Dialogs and overlays live inside
-      // the Navigator, so they are constrained too — intentional.
+      theme: SieTheme.themeDataFor(sieMode),
       builder: kIsWeb ? _webConstraint : null,
-      home: authAsync.when(
-        data: (isAuthenticated) => isAuthenticated
-            ? const OperationsControlScreen()
-            : const AuthScreen(),
-        loading: () => const _SplashScreen(),
-        error: (_, _) => const AuthScreen(),
-      ),
+      home: !_launchComplete
+          ? SieSplashScreen(
+              onComplete: () => setState(() => _launchComplete = true),
+            )
+          : _authGate(),
     );
   }
 
-  static Widget _webConstraint(BuildContext context, Widget? child) =>
-      Center(
+  Widget _authGate() {
+    final authAsync = ref.watch(authStateProvider);
+    return authAsync.when(
+      data: (isAuthenticated) =>
+          isAuthenticated ? const MainNavigationShell() : const AuthScreen(),
+      loading: () => const _LoadingScreen(),
+      error: (_, _) => const AuthScreen(),
+    );
+  }
+
+  static Widget _webConstraint(BuildContext context, Widget? child) => Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
           child: child!,
@@ -56,18 +68,14 @@ class SieApp extends ConsumerWidget {
       );
 }
 
-class _SplashScreen extends StatelessWidget {
-  const _SplashScreen();
+class _LoadingScreen extends StatelessWidget {
+  const _LoadingScreen();
 
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      body: Center(
-        child: CircularProgressIndicator(
-          color: SieTheme.accent,
-          strokeWidth: 1.5,
-        ),
-      ),
+      backgroundColor: Color(0xFF0A0E1A),
+      body: SizedBox.shrink(),
     );
   }
 }

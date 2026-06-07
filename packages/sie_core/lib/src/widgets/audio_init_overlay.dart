@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/audio_service.dart';
 import '../services/web_audio_helper.dart';
-import '../theme/sie_theme.dart';
+import '../theme/sie_colors.dart';
 
 /// Renders a full-screen overlay on top of its parent Stack on web only.
 /// On the first tap, calls [AudioService.init()] to unlock the browser
@@ -58,46 +58,48 @@ class _AudioInitOverlayState extends ConsumerState<AudioInitOverlay>
     final initialized = ref.watch(audioInitializedProvider);
     if (initialized) return const SizedBox.shrink();
 
+    final c = ref.watch(sieColorsProvider);
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _onTap,
       child: Container(
-        color: SieTheme.background.withValues(alpha: 0.93),
+        color: c.background.withValues(alpha: 0.93),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.graphic_eq_rounded,
-                color: SieTheme.accent,
+                color: c.accent,
                 size: 44,
               ),
               const SizedBox(height: 20),
-              const Text(
+              Text(
                 'АУДИОСИСТЕМА',
                 style: TextStyle(
-                  color: SieTheme.textPrimary,
+                  color: c.textPrimary,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 3.5,
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'НЕ ИНИЦИАЛИЗИРОВАНА',
                 style: TextStyle(
-                  color: SieTheme.textSecondary,
+                  color: c.textSecondary,
                   fontSize: 10,
                   letterSpacing: 2.5,
                 ),
               ),
               const SizedBox(height: 28),
               _tapped
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
-                        color: SieTheme.accent,
+                        color: c.accent,
                         strokeWidth: 1.5,
                       ),
                     )
@@ -107,13 +109,13 @@ class _AudioInitOverlayState extends ConsumerState<AudioInitOverlay>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 28, vertical: 10),
                         decoration: BoxDecoration(
-                          border: Border.all(color: SieTheme.accent),
+                          border: Border.all(color: c.accent),
                           borderRadius: BorderRadius.circular(2),
                         ),
-                        child: const Text(
+                        child: Text(
                           'НАЖМИТЕ ДЛЯ АКТИВАЦИИ',
                           style: TextStyle(
-                            color: SieTheme.accent,
+                            color: c.accent,
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 2,

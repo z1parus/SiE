@@ -85,11 +85,12 @@ class CosmeticAsset {
   double get glowRadius =>
       (styleConfig['glow_radius'] as num?)?.toDouble() ?? 0;
 
-  BoxDecoration buildFrameDecoration() => BoxDecoration(
+  BoxDecoration buildFrameDecoration({Color? surfaceColor, bool suppressGlow = false}) =>
+      BoxDecoration(
         shape: BoxShape.circle,
-        color: SieTheme.surface,
+        color: surfaceColor ?? SieTheme.surface,
         border: Border.all(color: borderColor, width: borderWidth),
-        boxShadow: glowColor != null && glowRadius > 0
+        boxShadow: (!suppressGlow && glowColor != null && glowRadius > 0)
             ? [BoxShadow(color: glowColor!, blurRadius: glowRadius, spreadRadius: 1)]
             : null,
       );
@@ -120,13 +121,15 @@ class CosmeticAsset {
   double get styleGlowRadius =>
       (styleConfig['glow_radius'] as num?)?.toDouble() ?? 0;
 
-  BoxDecoration buildStatCardDecoration() {
+  BoxDecoration buildStatCardDecoration({Color? surfaceColor, bool isLightMode = false}) {
     final glow = styleGlowColor;
     return BoxDecoration(
-      color: SieTheme.surface,
-      border: Border.all(color: styleBorderColor),
+      color: surfaceColor ?? SieTheme.surface,
+      border: Border.all(
+        color: isLightMode ? SieTheme.borderDefault : styleBorderColor,
+      ),
       borderRadius: BorderRadius.circular(4),
-      boxShadow: glow != null && styleGlowRadius > 0
+      boxShadow: (!isLightMode && glow != null && styleGlowRadius > 0)
           ? [BoxShadow(color: glow, blurRadius: styleGlowRadius)]
           : null,
     );

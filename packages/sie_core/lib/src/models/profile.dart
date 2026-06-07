@@ -31,6 +31,30 @@ class Profile {
     this.designPoints = 0,
   });
 
+  Profile copyWith({
+    int? totalXp,
+    int? designPoints,
+    String? avatarUrl,
+    String? username,
+    String? fullName,
+  }) =>
+      Profile(
+        id: id,
+        username: username ?? this.username,
+        fullName: fullName ?? this.fullName,
+        avatarUrl: avatarUrl ?? this.avatarUrl,
+        totalXp: totalXp ?? this.totalXp,
+        isLabMember: isLabMember,
+        hasSeenWelcome: hasSeenWelcome,
+        hasSeenOnboardingBreathing: hasSeenOnboardingBreathing,
+        hasSeenOnboardingHabits: hasSeenOnboardingHabits,
+        hasSeenOnboardingFocus: hasSeenOnboardingFocus,
+        equippedFrameId: equippedFrameId,
+        equippedBackgroundId: equippedBackgroundId,
+        equippedStatStyleId: equippedStatStyleId,
+        designPoints: designPoints ?? this.designPoints,
+      );
+
   factory Profile.fromJson(Map<String, dynamic> json) => Profile(
         id: json['id'] as String,
         username: json['username'] as String?,

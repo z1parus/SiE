@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -7,22 +9,33 @@ import 'package:soundpool/soundpool.dart';
 import 'web_audio_helper.dart';
 
 // ── Ambient fade constants ─────────────────────────────────────
-const _ambientTargetVolume = 0.15;
+const _ambientMaxVolume      = 0.20;  // 100% volume; default 75% → 0.15
 const _ambientFadeDurationMs = 3000;
-const _ambientFadeStepMs = 100;
-const _ambientFadeSteps = _ambientFadeDurationMs ~/ _ambientFadeStepMs; // 30
+const _ambientFadeStepMs     = 100;
+const _ambientFadeSteps      = _ambientFadeDurationMs ~/ _ambientFadeStepMs; // 30
 
 // ── Cue soft-stop: 490 ms fade-out before end of each phase ───
-const _cueFadeMs = 490;
+const _cueFadeMs    = 490;
 const _cueFadeStepMs = 35;
-const _cueFadeSteps = _cueFadeMs ~/ _cueFadeStepMs; // 14
-const double _cueVolume = 0.6;
+const _cueFadeSteps  = _cueFadeMs ~/ _cueFadeStepMs; // 14
+
+// ── Volume maximums (at volumeFactor = 1.0; default 0.75 = current behaviour) ─
+const _cueMaxVolume       = 0.80;   // 0.60 / 0.75
+const _heartbeatMaxVolume = 0.73;   // 0.55 / 0.75
+const _tickMaxVolume      = 0.29;   // 0.22 / 0.75
 
 class AudioService {
   // ── Ambient — AudioPlayer on all platforms (looping long audio) ─
   final _ambient = AudioPlayer();
   Timer? _ambientFadeTimer;
   double _ambientVolume = 0.0;
+  double _ambientFadeTarget = _ambientMaxVolume * 0.75; // = 0.15, default
+
+  // ── Ambient hum — synthesized 58 Hz drone, played during hold phases ─
+  final _hum = AudioPlayer();
+  Uint8List? _humBytes;
+  double _humVolume = 0.0;
+  Timer? _humFadeTimer;
 
   // ── Short cues — Soundpool on all platforms ─────────────────
   // soundpool_web backs this with Web Audio API (AudioBufferSourceNode)
@@ -32,9 +45,10 @@ class AudioService {
   // soundpool.play() has no volume parameter; call setVolume() after play().
   // Stream IDs are 1-based; 0 means play() failed.
   final _pool = Soundpool.fromOptions(
-    options: const SoundpoolOptions(streamType: StreamType.notification, maxStreams: 4),
+    options: const SoundpoolOptions(streamType: StreamType.music, maxStreams: 6),
   );
   int _inhaleId = -1, _exhaleId = -1, _chimeId = -1;
+  int _heartbeatId = -1, _tickId = -1;
   int _inhaleStream = 0, _exhaleStream = 0;
 
   bool _initialized = false;
@@ -67,6 +81,9 @@ class AudioService {
       _inhaleId = results[0];
       _exhaleId = results[1];
       _chimeId = results[2];
+      _heartbeatId = await _pool.load(_generateHeartbeat().buffer.asByteData());
+      _tickId      = await _pool.load(_generateTick().buffer.asByteData());
+      _humBytes    = _generateAmbientHum();
 
       // Web: listen for page visibility changes so we can recover after
       // the browser suspends audio on screen-lock or tab-switch.
@@ -76,13 +93,14 @@ class AudioService {
       // iOS native warm-up: AVAudioEngine needs at least one play() before the
       // first real sound to prime its internal buffer pipeline.
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-        final streams = await Future.wait([
-          _pool.play(_inhaleId),
-          _pool.play(_exhaleId),
-          _pool.play(_chimeId),
-        ]);
-        for (final s in streams) {
-          if (s > 0) _pool.stop(s).ignore();
+        final warmIds = [_inhaleId, _exhaleId, _chimeId, _heartbeatId, _tickId];
+        final streams = await Future.wait(warmIds.map((id) => _pool.play(id)));
+        for (var i = 0; i < streams.length; i++) {
+          final s = streams[i];
+          if (s > 0) {
+            _pool.setVolume(soundId: warmIds[i], streamId: s, volume: 0).ignore();
+            _pool.stop(s).ignore();
+          }
         }
       }
     } catch (e) {
@@ -101,10 +119,11 @@ class AudioService {
 
   // ── Ambient ────────────────────────────────────────────────
 
-  Future<void> startAmbient() async {
+  Future<void> startAmbient({double volumeFactor = 0.75}) async {
     try {
       _ambientFadeTimer?.cancel();
       _ambientVolume = 0.0;
+      _ambientFadeTarget = (_ambientMaxVolume * volumeFactor).clamp(0.0, 1.0);
       await _ambient.setReleaseMode(ReleaseMode.loop);
       await _ambient.play(AssetSource('audio/ambient.mp3'), volume: 0.0);
       _startFadeIn();
@@ -120,8 +139,8 @@ class AudioService {
       const Duration(milliseconds: _ambientFadeStepMs),
       (t) {
         step++;
-        _ambientVolume = (step / _ambientFadeSteps * _ambientTargetVolume)
-            .clamp(0.0, _ambientTargetVolume);
+        _ambientVolume = (step / _ambientFadeSteps * _ambientFadeTarget)
+            .clamp(0.0, _ambientFadeTarget);
         _ambient.setVolume(_ambientVolume);
         if (step >= _ambientFadeSteps) t.cancel();
       },
@@ -164,6 +183,29 @@ class AudioService {
 
   Future<void> stopAmbient() => _fadeOutAndStop();
 
+  // Smoothly adjusts ambient volume to a new level without stopping playback.
+  void fadeAmbientTo(double volumeFactor, {int durationMs = 1500}) {
+    _ambientFadeTimer?.cancel();
+    final target = (volumeFactor * _ambientMaxVolume).clamp(0.0, 1.0);
+    final start  = _ambientVolume;
+    if ((start - target).abs() < 0.001) return;
+    final steps = (durationMs / _ambientFadeStepMs).round().clamp(1, 500);
+    var step = 0;
+    _ambientFadeTimer = Timer.periodic(
+      const Duration(milliseconds: _ambientFadeStepMs),
+      (t) {
+        step++;
+        _ambientVolume = (start + (target - start) * step / steps).clamp(0.0, 1.0);
+        _ambient.setVolume(_ambientVolume);
+        if (step >= steps) {
+          t.cancel();
+          _ambientVolume = target;
+          _ambient.setVolume(_ambientVolume);
+        }
+      },
+    );
+  }
+
   // ── Rate helper ────────────────────────────────────────────
 
   double _rateFor(double targetSeconds, bool isInhale) {
@@ -173,18 +215,19 @@ class AudioService {
 
   // ── Cues ───────────────────────────────────────────────────
 
-  Future<void> playInhale({required int targetSecs}) async {
+  Future<void> playInhale({required int targetSecs, double volumeFactor = 0.75}) async {
     _cueFadeTimer?.cancel();
     if (_inhaleId < 0) return;
     try {
       _stopStream(_exhaleStream);
       _stopStream(_inhaleStream);
+      final vol = (_cueMaxVolume * volumeFactor).clamp(0.0, 1.0);
       _inhaleStream = await _pool.play(_inhaleId, rate: _rateFor(targetSecs.toDouble(), true));
-      await _applyVolume(_inhaleId, _inhaleStream, _cueVolume);
+      await _applyVolume(_inhaleId, _inhaleStream, vol);
       final sid = _inhaleStream;
       final iid = _inhaleId;
       _scheduleCueFadeOut(
-        targetSecs,
+        targetSecs, vol,
         (v) { if (sid > 0) _pool.setVolume(soundId: iid, streamId: sid, volume: v).ignore(); },
         () { _stopStream(sid); },
       );
@@ -193,18 +236,19 @@ class AudioService {
     }
   }
 
-  Future<void> playExhale({required int targetSecs}) async {
+  Future<void> playExhale({required int targetSecs, double volumeFactor = 0.75}) async {
     _cueFadeTimer?.cancel();
     if (_exhaleId < 0) return;
     try {
       _stopStream(_inhaleStream);
       _stopStream(_exhaleStream);
+      final vol = (_cueMaxVolume * volumeFactor).clamp(0.0, 1.0);
       _exhaleStream = await _pool.play(_exhaleId, rate: _rateFor(targetSecs.toDouble(), false));
-      await _applyVolume(_exhaleId, _exhaleStream, _cueVolume);
+      await _applyVolume(_exhaleId, _exhaleStream, vol);
       final sid = _exhaleStream;
       final eid = _exhaleId;
       _scheduleCueFadeOut(
-        targetSecs,
+        targetSecs, vol,
         (v) { if (sid > 0) _pool.setVolume(soundId: eid, streamId: sid, volume: v).ignore(); },
         () { _stopStream(sid); },
       );
@@ -226,6 +270,7 @@ class AudioService {
   // Soft-stop via callbacks so the same fade logic works for every cue.
   void _scheduleCueFadeOut(
     int targetSecs,
+    double startVolume,
     void Function(double volume) setVol,
     void Function() stop,
   ) {
@@ -236,7 +281,7 @@ class AudioService {
         const Duration(milliseconds: _cueFadeStepMs),
         (t) {
           step++;
-          final vol = (_cueVolume * (1.0 - step / _cueFadeSteps)).clamp(0.0, _cueVolume);
+          final vol = (startVolume * (1.0 - step / _cueFadeSteps)).clamp(0.0, startVolume);
           try { setVol(vol); } catch (_) {}
           if (step >= _cueFadeSteps) {
             t.cancel();
@@ -278,13 +323,237 @@ class AudioService {
     }
   }
 
+  // ── Heartbeat & Tick ──────────────────────────────────────
+
+  Future<void> playHeartbeat({double volumeFactor = 0.75}) async {
+    if (_heartbeatId < 0) return;
+    try {
+      final sid = await _pool.play(_heartbeatId);
+      if (sid > 0) {
+        await _pool.setVolume(
+          soundId: _heartbeatId, streamId: sid,
+          volume: (_heartbeatMaxVolume * volumeFactor).clamp(0.0, 1.0),
+        );
+      }
+    } catch (e) {
+      debugPrint('SiE Audio: heartbeat error — $e');
+    }
+  }
+
+  Future<void> playTick({double volumeFactor = 0.75}) async {
+    if (_tickId < 0) return;
+    try {
+      final sid = await _pool.play(_tickId);
+      if (sid > 0) {
+        await _pool.setVolume(
+          soundId: _tickId, streamId: sid,
+          volume: (_tickMaxVolume * volumeFactor).clamp(0.0, 1.0),
+        );
+      }
+    } catch (e) {
+      debugPrint('SiE Audio: tick error — $e');
+    }
+  }
+
+  // ── Ambient hum ────────────────────────────────────────────
+
+  Future<void> startHum({double volumeFactor = 0.75}) async {
+    try {
+      _humFadeTimer?.cancel();
+      _humVolume = 0.0;
+      final bytes = _humBytes;
+      if (bytes == null) return;
+      await _hum.setReleaseMode(ReleaseMode.loop);
+      await _hum.play(BytesSource(bytes), volume: 0.0);
+      final target = (0.18 * volumeFactor).clamp(0.0, 1.0);
+      var step = 0;
+      _humFadeTimer = Timer.periodic(
+        const Duration(milliseconds: 80),
+        (t) {
+          step++;
+          _humVolume = (step / 25 * target).clamp(0.0, target);
+          _hum.setVolume(_humVolume);
+          if (step >= 25) t.cancel();
+        },
+      );
+    } catch (e) {
+      debugPrint('SiE Audio: hum start error — $e');
+    }
+  }
+
+  Future<void> stopHum({int durationMs = 2000}) async {
+    _humFadeTimer?.cancel();
+    if (_humVolume <= 0.001) {
+      await _hum.stop().catchError((_) {});
+      return;
+    }
+    if (durationMs <= 0) {
+      _humVolume = 0.0;
+      await _hum.stop().catchError((_) {});
+      return;
+    }
+    final startVol = _humVolume;
+    final steps = (durationMs / 80).round().clamp(1, 200);
+    var step = 0;
+    _humFadeTimer = Timer.periodic(
+      const Duration(milliseconds: 80),
+      (t) {
+        step++;
+        _humVolume = (startVol * (1.0 - step / steps)).clamp(0.0, startVol);
+        _hum.setVolume(_humVolume);
+        if (step >= steps || _humVolume <= 0.001) {
+          t.cancel();
+          _humVolume = 0.0;
+          _hum.stop().ignore();
+        }
+      },
+    );
+  }
+
+  // ── WAV synthesis ─────────────────────────────────────────
+
+  static List<double> _applyEcho(
+    List<double> samples, {
+    int delayMs = 80,
+    double gain = 0.22,
+    int sr = 44100,
+  }) {
+    final delaySamples = sr * delayMs ~/ 1000;
+    final tailSamples  = delaySamples + sr * 60 ~/ 1000;
+    final extended = List<double>.of(samples)
+      ..addAll(List<double>.filled(tailSamples, 0.0));
+    for (var i = delaySamples; i < extended.length; i++) {
+      final src = i - delaySamples;
+      if (src < samples.length) extended[i] += samples[src] * gain;
+    }
+    return extended;
+  }
+
+  static Uint8List _buildWav(List<double> samples, {int sr = 44100}) {
+    double maxA = 0;
+    for (final s in samples) {
+      final a = s.abs();
+      if (a > maxA) maxA = a;
+    }
+    final scale = maxA > 0 ? 0.95 / maxA : 1.0;
+
+    final dataSize = samples.length * 2;
+    final buf = ByteData(44 + dataSize);
+    var o = 0;
+
+    void text(String t) { for (final code in t.codeUnits) { buf.setUint8(o++, code); } }
+    void u16(int v) { buf.setUint16(o, v, Endian.little); o += 2; }
+    void u32(int v) { buf.setUint32(o, v, Endian.little); o += 4; }
+
+    text('RIFF'); u32(36 + dataSize); text('WAVE');
+    text('fmt '); u32(16); u16(1); u16(1); u32(sr); u32(sr * 2); u16(2); u16(16);
+    text('data'); u32(dataSize);
+
+    for (final s in samples) {
+      final v = (s * scale * 32767).round().clamp(-32768, 32767);
+      buf.setInt16(o, v, Endian.little);
+      o += 2;
+    }
+
+    return buf.buffer.asUint8List();
+  }
+
+  // Lub-dub heartbeat: deeper tone (45/90/180 Hz), longer decay, with echo
+  static Uint8List _generateHeartbeat({int sr = 44100}) {
+    const lubMs = 90, gapMs = 75, dubMs = 70, tailMs = 80;
+    final n = sr * (lubMs + gapMs + dubMs + tailMs) ~/ 1000;
+    final raw = List<double>.filled(n, 0.0);
+    final nLub    = sr * lubMs ~/ 1000;
+    final nGap    = sr * gapMs ~/ 1000;
+    final nDub    = sr * dubMs ~/ 1000;
+    final attackN = sr * 5 ~/ 1000; // 5 ms linear attack
+
+    for (var i = 0; i < nLub; i++) {
+      final t = i / sr;
+      final attack = i < attackN ? i / attackN : 1.0;
+      final env    = attack * math.exp(-i / (sr * 0.048));
+      raw[i] = env * (math.sin(2 * math.pi * 45  * t) * 0.60 +
+                      math.sin(2 * math.pi * 90  * t) * 0.28 +
+                      math.sin(2 * math.pi * 180 * t) * 0.12);
+    }
+
+    final dubStart = nLub + nGap;
+    for (var i = 0; i < nDub; i++) {
+      final t = i / sr;
+      final attack = i < attackN ? i / attackN : 1.0;
+      final env    = attack * math.exp(-i / (sr * 0.040)) * 0.6;
+      raw[dubStart + i] = env * (math.sin(2 * math.pi * 50  * t) * 0.60 +
+                                  math.sin(2 * math.pi * 100 * t) * 0.28 +
+                                  math.sin(2 * math.pi * 200 * t) * 0.12);
+    }
+
+    final lubFadeN = sr * 12 ~/ 1000;
+    for (var i = 0; i < lubFadeN; i++) {
+      final w = 0.5 * (1 + math.cos(math.pi * i / (lubFadeN - 1)));
+      raw[nLub - lubFadeN + i] *= w;
+    }
+
+    final dubFadeN = sr * 12 ~/ 1000;
+    for (var i = 0; i < dubFadeN; i++) {
+      final w = 0.5 * (1 + math.cos(math.pi * i / (dubFadeN - 1)));
+      raw[dubStart + nDub - dubFadeN + i] *= w;
+    }
+
+    return _buildWav(_applyEcho(raw, delayMs: 70, gain: 0.44, sr: sr), sr: sr);
+  }
+
+  // Light hi-hat: inharmonic metallic partials (4.8–13 kHz), fast click + sizzle tail
+  static Uint8List _generateTick({int sr = 44100}) {
+    const durationMs = 90;
+    final n             = sr * durationMs ~/ 1000;
+    final attackSamples = sr ~/ 4000; // 0.25 ms attack
+    const freqs = [4800.0, 5670.0, 6100.0, 7100.0, 8350.0, 9800.0, 11200.0, 13100.0];
+    const amps  = [0.22,   0.18,   0.09,   0.16,   0.13,   0.10,   0.07,    0.05  ];
+    final raw = List<double>.generate(n, (i) {
+      final t      = i / sr;
+      final attack = i < attackSamples ? i / attackSamples : 1.0;
+      final env    = attack * (math.exp(-i / (sr * 0.007)) * 0.65 +  // τ=7ms  click
+                               math.exp(-i / (sr * 0.028)) * 0.35);  // τ=28ms sizzle
+      var s = 0.0;
+      for (var j = 0; j < freqs.length; j++) {
+        s += math.sin(2 * math.pi * freqs[j] * t) * amps[j];
+      }
+      return env * s;
+    });
+    return _buildWav(_applyEcho(raw, delayMs: 25, gain: 0.36, sr: sr), sr: sr);
+  }
+
+  // Quiet 58 Hz ambient hum with harmonics and gentle tremolo; smooth loop points
+  static Uint8List _generateAmbientHum({int sr = 44100}) {
+    const durationSec = 6.0;
+    final n     = (sr * durationSec).round();
+    final fadeN = (sr * 0.3).round();
+
+    final samples = List<double>.generate(n, (i) {
+      final t       = i / sr;
+      final tremolo = 1.0 + 0.04 * math.sin(2 * math.pi * 0.07 * t);
+      final wave    = math.sin(2 * math.pi * 58.0  * t)        +
+                      math.sin(2 * math.pi * 116.0 * t) * 0.35 +
+                      math.sin(2 * math.pi * 174.0 * t) * 0.15;
+      double env = 1.0;
+      if (i < fadeN) env = i / fadeN;
+      else if (i >= n - fadeN) env = (n - i) / fadeN;
+      return 0.12 * env * tremolo * wave;
+    });
+
+    return _buildWav(samples, sr: sr);
+  }
+
   // ── Cleanup ────────────────────────────────────────────────
 
   Future<void> stopAll() async {
     _cueFadeTimer?.cancel();
+    _humFadeTimer?.cancel();
+    _humVolume = 0.0;
     try {
       await Future.wait([
         _fadeOutAndStop(),
+        _hum.stop().catchError((_) {}),
         if (_inhaleStream > 0) _pool.stop(_inhaleStream),
         if (_exhaleStream > 0) _pool.stop(_exhaleStream),
       ]);
@@ -294,9 +563,12 @@ class AudioService {
   Future<void> dispose() async {
     _cueFadeTimer?.cancel();
     _ambientFadeTimer?.cancel();
+    _humFadeTimer?.cancel();
     try {
       await _ambient.stop();
       await _ambient.dispose();
+      await _hum.stop();
+      await _hum.dispose();
       _pool.dispose();
     } catch (_) {}
   }

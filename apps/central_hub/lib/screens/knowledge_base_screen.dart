@@ -1,60 +1,63 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 
 // ── Knowledge Base Screen ─────────────────────────────────────
 
-class KnowledgeBaseScreen extends StatelessWidget {
+class KnowledgeBaseScreen extends ConsumerWidget {
   const KnowledgeBaseScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: SieTheme.background,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _TopBar(),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 48),
-                children: const [
-                  _SystemHeader(),
-                  SizedBox(height: 28),
-                  SectionHeader(title: 'МОДУЛИ СИСТЕМЫ'),
-                  SizedBox(height: 14),
-                  _KbEntry(
-                    moduleTag: 'M-01',
-                    label: 'BREATHING',
-                    subtitle: 'Сброс нервной системы',
-                    body: _breathingBody,
-                  ),
-                  SizedBox(height: 10),
-                  _KbEntry(
-                    moduleTag: 'M-02',
-                    label: 'HABIT ARCHIVE',
-                    subtitle: 'Архив нейронных связей',
-                    body: _habitsBody,
-                  ),
-                  SizedBox(height: 10),
-                  _KbEntry(
-                    moduleTag: 'M-03',
-                    label: 'FOCUS PROTOCOL',
-                    subtitle: 'Протокол глубокой работы',
-                    body: _focusBody,
-                  ),
-                  SizedBox(height: 28),
-                  SectionHeader(title: 'ТАБЛИЦА ПРОГРЕССА'),
-                  SizedBox(height: 14),
-                  _XpTable(),
-                  SizedBox(height: 28),
-                  SectionHeader(title: 'КОРПОРАТИВНАЯ ЭТИКА'),
-                  SizedBox(height: 14),
-                  _EthicsSection(),
-                ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SieBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _TopBar(),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 48),
+                  children: const [
+                    _SystemHeader(),
+                    SizedBox(height: 28),
+                    _NeonSectionLabel(label: 'МОДУЛИ СИСТЕМЫ'),
+                    SizedBox(height: 14),
+                    _KbEntry(
+                      moduleTag: 'M-01',
+                      label: 'BREATHING',
+                      subtitle: 'Сброс нервной системы',
+                      body: _breathingBody,
+                    ),
+                    SizedBox(height: 10),
+                    _KbEntry(
+                      moduleTag: 'M-02',
+                      label: 'HABIT ARCHIVE',
+                      subtitle: 'Архив нейронных связей',
+                      body: _habitsBody,
+                    ),
+                    SizedBox(height: 10),
+                    _KbEntry(
+                      moduleTag: 'M-03',
+                      label: 'FOCUS PROTOCOL',
+                      subtitle: 'Протокол глубокой работы',
+                      body: _focusBody,
+                    ),
+                    SizedBox(height: 28),
+                    _NeonSectionLabel(label: 'ТАБЛИЦА ПРОГРЕССА'),
+                    SizedBox(height: 14),
+                    _XpTable(),
+                    SizedBox(height: 28),
+                    _NeonSectionLabel(label: 'КОРПОРАТИВНАЯ ЭТИКА'),
+                    SizedBox(height: 14),
+                    _EthicsSection(),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -63,63 +66,110 @@ class KnowledgeBaseScreen extends StatelessWidget {
 
 // ── Top Bar ───────────────────────────────────────────────────
 
-class _TopBar extends StatelessWidget {
+class _TopBar extends ConsumerWidget {
+  const _TopBar();
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
-          IconButton(
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(
+          SieGlassCard(
+            padding: EdgeInsets.zero,
+            width: 40,
+            height: 40,
+            onTap: () => Navigator.of(context).pop(),
+            child: Icon(
               Icons.arrow_back_ios_new,
-              color: SieTheme.textSecondary,
+              color: c.accent,
               size: 18,
             ),
           ),
           Expanded(
             child: Text(
               'БАЗА ЗНАНИЙ',
-              style: Theme.of(context).textTheme.titleMedium,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: c.textPrimary,
+                    letterSpacing: 3,
+                    fontWeight: FontWeight.w700,
+                  ),
               textAlign: TextAlign.center,
             ),
           ),
-          const SizedBox(width: 48),
+          const SizedBox(width: 40),
         ],
       ),
     );
   }
 }
 
+// ── Neon Section Label ────────────────────────────────────────
+
+class _NeonSectionLabel extends ConsumerWidget {
+  final String label;
+  const _NeonSectionLabel({required this.label});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Row(
+      children: [
+        Container(
+          width: 2,
+          height: 12,
+          decoration: BoxDecoration(
+            color: c.accent,
+            boxShadow: null,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                fontSize: 12,
+                letterSpacing: 2,
+                color: c.accent.withValues(alpha: 0.9),
+              ),
+        ),
+      ],
+    );
+  }
+}
+
 // ── System Header ─────────────────────────────────────────────
 
-class _SystemHeader extends StatelessWidget {
+class _SystemHeader extends ConsumerWidget {
   const _SystemHeader();
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return SieGlassCard(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: SieTheme.surface,
-        border: Border.all(color: SieTheme.borderAccent),
-        borderRadius: BorderRadius.circular(4),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(width: 3, height: 14, color: SieTheme.accent),
+              Container(
+                width: 3,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: c.accent,
+                  boxShadow: null,
+                ),
+              ),
               const SizedBox(width: 10),
               Text(
                 'SiE KNOWLEDGE MATRIX v1.0',
                 style: TextStyle(
-                  color: SieTheme.accent,
-                  fontSize: 10,
+                  color: c.accent,
+                  fontSize: 11,
                   letterSpacing: 2.5,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
+                  shadows: null,
                 ),
               ),
             ],
@@ -133,7 +183,8 @@ class _SystemHeader extends StatelessWidget {
             'как максимизировать свой прогресс.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   height: 1.6,
-                  fontSize: 12,
+                  fontSize: 13,
+                  color: c.textPrimary.withValues(alpha: 0.85),
                 ),
           ),
         ],
@@ -144,7 +195,7 @@ class _SystemHeader extends StatelessWidget {
 
 // ── Expandable KB Entry ───────────────────────────────────────
 
-class _KbEntry extends StatefulWidget {
+class _KbEntry extends ConsumerStatefulWidget {
   final String moduleTag;
   final String label;
   final String subtitle;
@@ -158,142 +209,196 @@ class _KbEntry extends StatefulWidget {
   });
 
   @override
-  State<_KbEntry> createState() => _KbEntryState();
+  ConsumerState<_KbEntry> createState() => _KbEntryState();
 }
 
-class _KbEntryState extends State<_KbEntry>
-    with SingleTickerProviderStateMixin {
+class _KbEntryState extends ConsumerState<_KbEntry>
+    with TickerProviderStateMixin {
   bool _expanded = false;
-  late final AnimationController _ctrl;
+  late final AnimationController _fadeCtrl;
   late final Animation<double> _fade;
+  late final AnimationController _pressCtrl;
+  late final Animation<double> _press;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
+    _fadeCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _fade = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
+    _pressCtrl = AnimationController(vsync: this, value: 0.0);
+    _press = CurvedAnimation(parent: _pressCtrl, curve: Curves.easeOut);
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _fadeCtrl.dispose();
+    _pressCtrl.dispose();
     super.dispose();
   }
 
   void _toggle() {
     setState(() => _expanded = !_expanded);
     if (_expanded) {
-      _ctrl.forward();
+      _fadeCtrl.forward();
     } else {
-      _ctrl.reverse();
+      _fadeCtrl.reverse();
     }
+  }
+
+  void _onPressDown(PointerDownEvent _) {
+    _pressCtrl.animateTo(
+      1.0,
+      duration: const Duration(milliseconds: 80),
+      curve: Curves.easeIn,
+    );
+  }
+
+  void _onPressUp(PointerUpEvent _) => _onRelease();
+  void _onPressCancel(PointerCancelEvent _) => _onRelease();
+
+  void _onRelease() {
+    _pressCtrl.animateTo(
+      0.0,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: SieTheme.surface,
-        border: Border.all(
-          color: _expanded ? SieTheme.borderAccent : SieTheme.borderDefault,
+    final c = ref.watch(sieColorsProvider);
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _press,
+        builder: (_, child) => Transform.scale(
+          scale: 1.0 - 0.03 * _press.value,
+          child: child,
         ),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Column(
-        children: [
-          GestureDetector(
-            onTap: _toggle,
-            behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
-                children: [
-                  Container(
+        child: SieGlassCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              Listener(
+                onPointerDown: _onPressDown,
+                onPointerUp: _onPressUp,
+                onPointerCancel: _onPressCancel,
+                child: GestureDetector(
+                  onTap: _toggle,
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 3,
+                      horizontal: 16,
+                      vertical: 14,
                     ),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: SieTheme.borderAccent),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                    child: Text(
-                      widget.moduleTag,
-                      style: TextStyle(
-                        color: SieTheme.accent,
-                        fontSize: 9,
-                        letterSpacing: 1.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Text(
-                          widget.label,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          widget.subtitle,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                  AnimatedRotation(
-                    turns: _expanded ? 0.25 : 0,
-                    duration: const Duration(milliseconds: 300),
-                    child: const Icon(
-                      Icons.chevron_right,
-                      color: SieTheme.borderAccent,
-                      size: 18,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            child: _expanded
-                ? FadeTransition(
-                    opacity: _fade,
-                    child: Column(
-                      children: [
-                        const Divider(
-                          color: SieTheme.borderDefault,
-                          height: 1,
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(16),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: c.accent.withValues(alpha: 0.6),
+                            ),
+                            borderRadius: BorderRadius.circular(4),
+                            boxShadow: null,
+                          ),
                           child: Text(
-                            widget.body,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  height: 1.7,
+                            widget.moduleTag,
+                            style: TextStyle(
+                              color: c.accent,
+                              fontSize: 10,
+                              letterSpacing: 1.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.label,
+                                style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                widget.subtitle,
+                                style: TextStyle(
+                                  color: c.textSecondary,
                                   fontSize: 12,
                                 ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        AnimatedRotation(
+                          turns: _expanded ? 0.25 : 0,
+                          duration: const Duration(milliseconds: 300),
+                          child: Icon(
+                            Icons.chevron_right,
+                            color: _expanded
+                                ? c.accent
+                                : c.textSecondary.withValues(alpha: 0.6),
+                            size: 18,
                           ),
                         ),
                       ],
                     ),
-                  )
-                : const SizedBox.shrink(),
+                  ),
+                ),
+              ),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                child: _expanded
+                    ? FadeTransition(
+                        opacity: _fade,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              height: 1,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    c.accent.withValues(alpha: 0.0),
+                                    c.accent.withValues(alpha: 0.4),
+                                    c.accentSecondary.withValues(alpha: 0.4),
+                                    c.accentSecondary.withValues(alpha: 0.0),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                widget.body,
+                                style: TextStyle(
+                                  color: c.textPrimary,
+                                  height: 1.7,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -301,11 +406,12 @@ class _KbEntryState extends State<_KbEntry>
 
 // ── XP Table ──────────────────────────────────────────────────
 
-class _XpTable extends StatelessWidget {
+class _XpTable extends ConsumerWidget {
   const _XpTable();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     const rows = [
       _XpRow('Завершение дыхательной сессии', '100 XP', 'Breathing'),
       _XpRow('Выход из дыхания ≥ 30 сек', '10–80 XP', 'Breathing'),
@@ -316,20 +422,15 @@ class _XpTable extends StatelessWidget {
       _XpRow('Завершение блока отдыха', '5 XP', 'Focus'),
     ];
 
-    return Container(
-      decoration: BoxDecoration(
-        color: SieTheme.surface,
-        border: Border.all(color: SieTheme.borderDefault),
-        borderRadius: BorderRadius.circular(4),
-      ),
+    return SieGlassCard(
+      padding: EdgeInsets.zero,
       child: Column(
         children: [
-          // Header row
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(
-                bottom: BorderSide(color: SieTheme.borderDefault),
+                bottom: BorderSide(color: c.accent.withValues(alpha: 0.2)),
               ),
             ),
             child: Row(
@@ -339,8 +440,8 @@ class _XpTable extends StatelessWidget {
                   child: Text(
                     'АКТИВНОСТЬ',
                     style: TextStyle(
-                      color: SieTheme.textSecondary,
-                      fontSize: 9,
+                      color: c.accent.withValues(alpha: 0.6),
+                      fontSize: 10,
                       letterSpacing: 2,
                     ),
                   ),
@@ -349,7 +450,7 @@ class _XpTable extends StatelessWidget {
                 Text(
                   'НАГРАДА',
                   style: TextStyle(
-                    color: SieTheme.textSecondary,
+                    color: c.accent.withValues(alpha: 0.6),
                     fontSize: 9,
                     letterSpacing: 2,
                   ),
@@ -360,8 +461,8 @@ class _XpTable extends StatelessWidget {
                   child: Text(
                     'МОДУЛЬ',
                     style: TextStyle(
-                      color: SieTheme.textSecondary,
-                      fontSize: 9,
+                      color: c.accent.withValues(alpha: 0.6),
+                      fontSize: 10,
                       letterSpacing: 2,
                     ),
                   ),
@@ -369,19 +470,17 @@ class _XpTable extends StatelessWidget {
               ],
             ),
           ),
-          // Data rows
           ...rows.asMap().entries.map((e) {
             final isLast = e.key == rows.length - 1;
-            return _XpTableRow(row: e.value, isLast: isLast);
+            return _XpTableRow(row: e.value, isLast: isLast, c: c);
           }),
-          // Footnote
           Padding(
             padding: const EdgeInsets.all(12),
             child: Text(
               '1000 XP = LEVEL UP  ·  Уровень определяет ранг оперативника в иерархии SiE',
               style: TextStyle(
-                color: SieTheme.textSecondary.withValues(alpha: 0.6),
-                fontSize: 10,
+                color: c.textSecondary.withValues(alpha: 0.7),
+                fontSize: 11,
                 letterSpacing: 0.5,
               ),
               textAlign: TextAlign.center,
@@ -403,7 +502,8 @@ class _XpRow {
 class _XpTableRow extends StatelessWidget {
   final _XpRow row;
   final bool isLast;
-  const _XpTableRow({required this.row, required this.isLast});
+  final SieColors c;
+  const _XpTableRow({required this.row, required this.isLast, required this.c});
 
   @override
   Widget build(BuildContext context) {
@@ -411,9 +511,12 @@ class _XpTableRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: isLast
           ? null
-          : const BoxDecoration(
+          : BoxDecoration(
               border: Border(
-                bottom: BorderSide(color: SieTheme.borderDefault, width: 0.5),
+                bottom: BorderSide(
+                  color: c.border,
+                  width: 0.5,
+                ),
               ),
             ),
       child: Row(
@@ -422,18 +525,15 @@ class _XpTableRow extends StatelessWidget {
             flex: 4,
             child: Text(
               row.activity,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(fontSize: 11),
+              style: TextStyle(color: c.textPrimary, fontSize: 12),
             ),
           ),
           const SizedBox(width: 8),
           Text(
             row.reward,
             style: TextStyle(
-              color: SieTheme.accent,
-              fontSize: 11,
+              color: c.accent,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.5,
             ),
@@ -444,8 +544,8 @@ class _XpTableRow extends StatelessWidget {
             child: Text(
               row.module,
               style: TextStyle(
-                color: SieTheme.textSecondary,
-                fontSize: 10,
+                color: c.textSecondary,
+                fontSize: 11,
                 letterSpacing: 0.3,
               ),
             ),
@@ -458,11 +558,12 @@ class _XpTableRow extends StatelessWidget {
 
 // ── Ethics Section ────────────────────────────────────────────
 
-class _EthicsSection extends StatelessWidget {
+class _EthicsSection extends ConsumerWidget {
   const _EthicsSection();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     const paragraphs = [
       'SiE — Self-improvement Ecosystem — не приложение, это операционная система личного роста. Каждое действие здесь является вкладом в долгосрочную архитектуру твоей эффективности.',
       'Мы верим в науку, а не в мотивацию. Мотивация нестабильна — системы и протоколы постоянны. Каждый модуль SiE построен на верифицированных механиках: нейробиологии дыхания, психологии формирования привычек и когнитивной науке концентрации.',
@@ -470,13 +571,8 @@ class _EthicsSection extends StatelessWidget {
       'Корпоративный девиз: "Дисциплина — это форма уважения к своему будущему я."',
     ];
 
-    return Container(
+    return SieGlassCard(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: SieTheme.surface,
-        border: Border.all(color: SieTheme.borderDefault),
-        borderRadius: BorderRadius.circular(4),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -484,16 +580,17 @@ class _EthicsSection extends StatelessWidget {
             if (i > 0) const SizedBox(height: 16),
             Text(
               paragraphs[i],
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    height: 1.7,
-                    fontSize: 12,
-                    fontStyle: i == paragraphs.length - 1
-                        ? FontStyle.italic
-                        : FontStyle.normal,
-                    color: i == paragraphs.length - 1
-                        ? SieTheme.accent
-                        : null,
-                  ),
+              style: TextStyle(
+                color: i == paragraphs.length - 1
+                    ? c.accent
+                    : c.textPrimary.withValues(alpha: 0.85),
+                height: 1.7,
+                fontSize: 13,
+                fontStyle: i == paragraphs.length - 1
+                    ? FontStyle.italic
+                    : FontStyle.normal,
+                shadows: null,
+              ),
             ),
           ],
         ],
