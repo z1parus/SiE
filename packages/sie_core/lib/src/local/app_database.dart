@@ -565,6 +565,21 @@ class AppDatabase extends _$AppDatabase {
   Future<void> deleteGoalHabitLinkLocally(String id) =>
       (update(localGoalHabitLinks)..where((t) => t.id.equals(id)))
           .write(const LocalGoalHabitLinksCompanion(deletedLocally: Value(true)));
+
+  Future<Set<String>> unsyncedPlanningIds() async {
+    final goals = await (select(localGoals)..where((t) => t.synced.equals(false))).get();
+    final subs = await (select(localSubGoals)..where((t) => t.synced.equals(false))).get();
+    final tasks = await (select(localPlanningTasks)..where((t) => t.synced.equals(false))).get();
+    final ms = await (select(localMilestones)..where((t) => t.synced.equals(false))).get();
+    final links = await (select(localGoalHabitLinks)..where((t) => t.synced.equals(false))).get();
+    return {
+      for (final g in goals) g.id,
+      for (final s in subs) s.id,
+      for (final t in tasks) t.id,
+      for (final m in ms) m.id,
+      for (final l in links) l.id,
+    };
+  }
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:drift/drift.dart' show Value;
@@ -60,65 +61,78 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
   }
 
   Future<void> _mirrorToLocal(AppDatabase db, List<Goal> goals) async {
+    // Collect IDs that have local unsynced changes — server data must not overwrite them.
+    final unsyncedIds = await db.unsyncedPlanningIds();
+
     for (final g in goals) {
-      await db.upsertGoal(LocalGoalsCompanion(
-        id: Value(g.id),
-        userId: Value(g.userId),
-        name: Value(g.name),
-        description: Value(g.description),
-        deadlineMs: Value(g.deadline?.millisecondsSinceEpoch),
-        priority: Value(g.priority),
-        status: Value(g.status),
-        colorHex: Value(g.colorHex),
-        progress: Value(g.progress),
-        synced: const Value(true),
-        createdAtMs: Value(g.createdAt.millisecondsSinceEpoch),
-      ));
-      for (final sg in g.subGoals) {
-        await db.upsertSubGoal(LocalSubGoalsCompanion(
-          id: Value(sg.id),
-          goalId: Value(sg.goalId),
-          parentSubGoalId: Value(sg.parentSubGoalId),
-          name: Value(sg.name),
-          isCompleted: Value(sg.isCompleted),
-          orderIndex: Value(sg.orderIndex),
+      if (!unsyncedIds.contains(g.id)) {
+        await db.upsertGoal(LocalGoalsCompanion(
+          id: Value(g.id),
+          userId: Value(g.userId),
+          name: Value(g.name),
+          description: Value(g.description),
+          deadlineMs: Value(g.deadline?.millisecondsSinceEpoch),
+          priority: Value(g.priority),
+          status: Value(g.status),
+          colorHex: Value(g.colorHex),
+          progress: Value(g.progress),
           synced: const Value(true),
-          createdAtMs: Value(sg.createdAt.millisecondsSinceEpoch),
+          createdAtMs: Value(g.createdAt.millisecondsSinceEpoch),
         ));
-        for (final t in sg.tasks) {
-          await db.upsertPlanningTask(LocalPlanningTasksCompanion(
-            id: Value(t.id),
-            subGoalId: Value(t.subGoalId),
-            userId: Value(t.userId),
-            name: Value(t.name),
-            weight: Value(t.weight),
-            isCompleted: Value(t.isCompleted),
-            completedAtMs: Value(t.completedAt?.millisecondsSinceEpoch),
-            dueDateMs: Value(t.dueDate?.millisecondsSinceEpoch),
+      }
+      for (final sg in g.subGoals) {
+        if (!unsyncedIds.contains(sg.id)) {
+          await db.upsertSubGoal(LocalSubGoalsCompanion(
+            id: Value(sg.id),
+            goalId: Value(sg.goalId),
+            parentSubGoalId: Value(sg.parentSubGoalId),
+            name: Value(sg.name),
+            isCompleted: Value(sg.isCompleted),
+            orderIndex: Value(sg.orderIndex),
             synced: const Value(true),
-            createdAtMs: Value(t.createdAt.millisecondsSinceEpoch),
+            createdAtMs: Value(sg.createdAt.millisecondsSinceEpoch),
           ));
+        }
+        for (final t in sg.tasks) {
+          if (!unsyncedIds.contains(t.id)) {
+            await db.upsertPlanningTask(LocalPlanningTasksCompanion(
+              id: Value(t.id),
+              subGoalId: Value(t.subGoalId),
+              userId: Value(t.userId),
+              name: Value(t.name),
+              weight: Value(t.weight),
+              isCompleted: Value(t.isCompleted),
+              completedAtMs: Value(t.completedAt?.millisecondsSinceEpoch),
+              dueDateMs: Value(t.dueDate?.millisecondsSinceEpoch),
+              synced: const Value(true),
+              createdAtMs: Value(t.createdAt.millisecondsSinceEpoch),
+            ));
+          }
         }
       }
       for (final m in g.milestones) {
-        await db.upsertMilestone(LocalMilestonesCompanion(
-          id: Value(m.id),
-          goalId: Value(m.goalId),
-          name: Value(m.name),
-          targetDateMs: Value(m.targetDate?.millisecondsSinceEpoch),
-          isCompleted: Value(m.isCompleted),
-          synced: const Value(true),
-          createdAtMs: Value(m.createdAt.millisecondsSinceEpoch),
-        ));
+        if (!unsyncedIds.contains(m.id)) {
+          await db.upsertMilestone(LocalMilestonesCompanion(
+            id: Value(m.id),
+            goalId: Value(m.goalId),
+            name: Value(m.name),
+            targetDateMs: Value(m.targetDate?.millisecondsSinceEpoch),
+            isCompleted: Value(m.isCompleted),
+            synced: const Value(true),
+            createdAtMs: Value(m.createdAt.millisecondsSinceEpoch),
+          ));
+        }
       }
       for (final l in g.habitLinks) {
-        await db.upsertGoalHabitLink(LocalGoalHabitLinksCompanion(
-          id: Value(l.id),
-          goalId: Value(l.goalId),
-          habitId: Value(l.habitId),
-          synced: const Value(true),
-          createdAtMs: Value(l.createdAt.millisecondsSinceEpoch),
-        ));
+        if (!unsyncedIds.contains(l.id)) {
+          await db.upsertGoalHabitLink(LocalGoalHabitLinksCompanion(
+            id: Value(l.id),
+            goalId: Value(l.goalId),
+            habitId: Value(l.habitId),
+            synced: const Value(true),
+            createdAtMs: Value(l.createdAt.millisecondsSinceEpoch),
+          ));
+        }
       }
     }
   }
@@ -443,6 +457,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         synced: const Value(false)));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    var syncedToServer = false;
     if (isOnline) {
       try {
         await client
@@ -450,8 +465,12 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             .update({'is_completed': true}).eq('id', subGoalId);
         await db.upsertSubGoal(LocalSubGoalsCompanion(
             id: Value(subGoalId), synced: const Value(true)));
-      } catch (_) {}
-    } else {
+        syncedToServer = true;
+      } catch (e) {
+        debugPrint('SiE Planning: complete_sub_goal online failed — $e');
+      }
+    }
+    if (!syncedToServer) {
       await db.enqueueSyncOp('complete_sub_goal',
           jsonEncode({'id': subGoalId, 'goal_id': goalId}));
     }
@@ -609,6 +628,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     ));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    var syncedToServer = false;
     if (isOnline) {
       try {
         await client.from('planning_tasks').update({
@@ -617,10 +637,19 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         }).eq('id', taskId);
         await db.upsertPlanningTask(
             LocalPlanningTasksCompanion(id: Value(taskId), synced: const Value(true)));
-      } catch (_) {}
-    } else {
-      await db.enqueueSyncOp('toggle_task',
-          jsonEncode({'id': taskId, 'is_completed': nowCompleted}));
+        syncedToServer = true;
+      } catch (e) {
+        debugPrint('SiE Planning: toggle_task online failed — $e');
+      }
+    }
+    if (!syncedToServer) {
+      await db.enqueueSyncOp(
+          'toggle_task',
+          jsonEncode({
+            'id': taskId,
+            'is_completed': nowCompleted,
+            'completed_at': completedAt?.toIso8601String(),
+          }));
     }
 
     if (nowCompleted) await _awardXp(taskXp(task.weight), 0);
@@ -722,6 +751,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         synced: const Value(false)));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    var syncedToServer = false;
     if (isOnline) {
       try {
         await client
@@ -729,8 +759,12 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             .update({'is_completed': true}).eq('id', milestoneId);
         await db.upsertMilestone(LocalMilestonesCompanion(
             id: Value(milestoneId), synced: const Value(true)));
-      } catch (_) {}
-    } else {
+        syncedToServer = true;
+      } catch (e) {
+        debugPrint('SiE Planning: complete_milestone online failed — $e');
+      }
+    }
+    if (!syncedToServer) {
       await db.enqueueSyncOp('complete_milestone',
           jsonEncode({'id': milestoneId, 'goal_id': goalId}));
     }
