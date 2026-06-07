@@ -121,6 +121,79 @@ class PendingSyncOps extends Table {
   IntColumn get createdAtMs => integer()();
 }
 
+// ── Planning Tables ────────────────────────────────────────────────────────
+
+@DataClassName('LocalGoal')
+class LocalGoals extends Table {
+  TextColumn get id             => text()();
+  TextColumn get userId         => text()();
+  TextColumn get name           => text()();
+  TextColumn get description    => text().nullable()();
+  IntColumn  get deadlineMs     => integer().nullable()();
+  IntColumn  get priority       => integer().withDefault(const Constant(2))();
+  TextColumn get status         => text().withDefault(const Constant('active'))();
+  TextColumn get colorHex       => text().withDefault(const Constant('#5AADA0'))();
+  RealColumn get progress       => real().withDefault(const Constant(0))();
+  BoolColumn get synced         => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
+  IntColumn  get createdAtMs    => integer()();
+  @override Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('LocalSubGoal')
+class LocalSubGoals extends Table {
+  TextColumn get id               => text()();
+  TextColumn get goalId           => text()();
+  TextColumn get parentSubGoalId  => text().nullable()();
+  TextColumn get name             => text()();
+  BoolColumn get isCompleted      => boolean().withDefault(const Constant(false))();
+  IntColumn  get orderIndex       => integer().withDefault(const Constant(0))();
+  BoolColumn get synced           => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally   => boolean().withDefault(const Constant(false))();
+  IntColumn  get createdAtMs      => integer()();
+  @override Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('LocalMilestone')
+class LocalMilestones extends Table {
+  TextColumn get id             => text()();
+  TextColumn get goalId         => text()();
+  TextColumn get name           => text()();
+  IntColumn  get targetDateMs   => integer().nullable()();
+  BoolColumn get isCompleted    => boolean().withDefault(const Constant(false))();
+  BoolColumn get synced         => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
+  IntColumn  get createdAtMs    => integer()();
+  @override Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('LocalPlanningTask')
+class LocalPlanningTasks extends Table {
+  TextColumn get id             => text()();
+  TextColumn get subGoalId      => text()();
+  TextColumn get userId         => text()();
+  TextColumn get name           => text()();
+  IntColumn  get weight         => integer().withDefault(const Constant(1))();
+  BoolColumn get isCompleted    => boolean().withDefault(const Constant(false))();
+  IntColumn  get completedAtMs  => integer().nullable()();
+  IntColumn  get dueDateMs      => integer().nullable()();
+  BoolColumn get synced         => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
+  IntColumn  get createdAtMs    => integer()();
+  @override Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('LocalGoalHabitLink')
+class LocalGoalHabitLinks extends Table {
+  TextColumn get id             => text()();
+  TextColumn get goalId         => text()();
+  TextColumn get habitId        => text()();
+  BoolColumn get synced         => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
+  IntColumn  get createdAtMs    => integer()();
+  @override Set<Column> get primaryKey => {id};
+}
+
 // ── Database ───────────────────────────────────────────────────────────────
 
 @DriftDatabase(tables: [
@@ -132,12 +205,17 @@ class PendingSyncOps extends Table {
   LocalRoutines,
   LocalRoutineMembers,
   PendingSyncOps,
+  LocalGoals,
+  LocalSubGoals,
+  LocalMilestones,
+  LocalPlanningTasks,
+  LocalGoalHabitLinks,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -155,6 +233,13 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 5) {
         await m.addColumn(localHabits, localHabits.icon);
+      }
+      if (from < 6) {
+        await m.createTable(localGoals);
+        await m.createTable(localSubGoals);
+        await m.createTable(localMilestones);
+        await m.createTable(localPlanningTasks);
+        await m.createTable(localGoalHabitLinks);
       }
     },
   );
@@ -408,6 +493,62 @@ class AppDatabase extends _$AppDatabase {
       ),
     );
   }
+
+  // ── Planning ──────────────────────────────────────────────────────────────
+
+  Future<void> upsertGoal(LocalGoalsCompanion row) =>
+      into(localGoals).insertOnConflictUpdate(row);
+
+  Future<void> upsertSubGoal(LocalSubGoalsCompanion row) =>
+      into(localSubGoals).insertOnConflictUpdate(row);
+
+  Future<void> upsertMilestone(LocalMilestonesCompanion row) =>
+      into(localMilestones).insertOnConflictUpdate(row);
+
+  Future<void> upsertPlanningTask(LocalPlanningTasksCompanion row) =>
+      into(localPlanningTasks).insertOnConflictUpdate(row);
+
+  Future<void> upsertGoalHabitLink(LocalGoalHabitLinksCompanion row) =>
+      into(localGoalHabitLinks).insertOnConflictUpdate(row);
+
+  Future<List<LocalGoal>> goalsForUser(String uid) =>
+      (select(localGoals)
+            ..where((t) =>
+                t.userId.equals(uid) & t.deletedLocally.equals(false))
+            ..orderBy([(t) => OrderingTerm(expression: t.createdAtMs)]))
+          .get();
+
+  Future<List<LocalSubGoal>> subGoalsForGoal(String goalId) =>
+      (select(localSubGoals)
+            ..where((t) =>
+                t.goalId.equals(goalId) & t.deletedLocally.equals(false))
+            ..orderBy([(t) => OrderingTerm(expression: t.orderIndex)]))
+          .get();
+
+  Future<List<LocalPlanningTask>> tasksForSubGoal(String subGoalId) =>
+      (select(localPlanningTasks)
+            ..where((t) =>
+                t.subGoalId.equals(subGoalId) &
+                t.deletedLocally.equals(false))
+            ..orderBy([(t) => OrderingTerm(expression: t.createdAtMs)]))
+          .get();
+
+  Future<List<LocalMilestone>> milestonesForGoal(String goalId) =>
+      (select(localMilestones)
+            ..where((t) =>
+                t.goalId.equals(goalId) & t.deletedLocally.equals(false))
+            ..orderBy([(t) => OrderingTerm(expression: t.createdAtMs)]))
+          .get();
+
+  Future<List<LocalGoalHabitLink>> habitLinksForGoal(String goalId) =>
+      (select(localGoalHabitLinks)
+            ..where((t) =>
+                t.goalId.equals(goalId) & t.deletedLocally.equals(false)))
+          .get();
+
+  Future<void> deleteGoalLocally(String id) =>
+      (update(localGoals)..where((t) => t.id.equals(id)))
+          .write(const LocalGoalsCompanion(deletedLocally: Value(true)));
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────

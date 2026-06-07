@@ -42,3 +42,5 @@ export 'src/models/habit_log_entry.dart';
 export 'src/providers/habit_routines_provider.dart';
 export 'src/utils/color_utils.dart';
 export 'src/providers/user_timezone_provider.dart';
+export 'src/models/planning.dart';
+export 'src/providers/planning_provider.dart';

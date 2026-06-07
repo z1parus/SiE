@@ -8,6 +8,7 @@ import 'breathing_exercise_screen.dart';
 import 'focus_protocol_screen.dart';
 import 'habit_tracker_screen.dart';
 import 'leaderboard_screen.dart';
+import 'planning_screen.dart';
 import 'profile_screen.dart';
 import 'user_search_screen.dart';
 
@@ -302,6 +303,8 @@ void _onBranchTap(BuildContext context, Branch branch) {
     screen = const HabitTrackerScreen();
   } else if (branch.slug == 'focus_protocol') {
     screen = const FocusProtocolScreen();
+  } else if (branch.slug == 'planning') {
+    screen = const PlanningScreen();
   }
 
   if (screen != null) {
@@ -546,6 +549,7 @@ class _BranchCarouselCard extends ConsumerWidget {
       'breathing_practices' => const _BreathSpherePreview(),
       'habit_archive'       => const _HabitMatrixPreview(),
       'focus_protocol'      => const _FocusRingPreview(),
+      'planning'            => const _PlanningPreview(),
       _                     => const SizedBox.shrink(),
     };
   }
@@ -561,6 +565,10 @@ class _BranchCarouselCard extends ConsumerWidget {
         return '${focus.settings.workMinutes} min';
       case 'breathing_practices':
         return 'PROTOCOL READY';
+      case 'planning':
+        final planningState = ref.watch(planningProvider).valueOrNull;
+        final count = planningState?.activeGoals.length ?? 0;
+        return '$count ${count == 1 ? 'Mission' : 'Missions'}';
       default:
         return 'ACTIVE';
     }
@@ -829,6 +837,75 @@ class _FocusRingPreview extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _PlanningPreview extends StatelessWidget {
+  const _PlanningPreview();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _PlanningPreviewPainter(),
+    );
+  }
+}
+
+class _PlanningPreviewPainter extends CustomPainter {
+  static const _teal = Color(0xFF5AADA0);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final center = Offset(cx, cy);
+
+    // Concentric arc rings
+    final rings = [
+      (28.0, 0.75, 0.9),
+      (44.0, 0.45, 0.6),
+      (60.0, 0.25, 0.35),
+    ];
+
+    for (final (r, fill, alpha) in rings) {
+      final trackPaint = Paint()
+        ..color = _teal.withValues(alpha: 0.12)
+        ..strokeWidth = 5
+        ..style = PaintingStyle.stroke;
+      final arcPaint = Paint()
+        ..color = _teal.withValues(alpha: alpha)
+        ..strokeWidth = 5
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round;
+
+      final rect = Rect.fromCircle(center: center, radius: r);
+      canvas.drawArc(rect, 0, math.pi * 2, false, trackPaint);
+      canvas.drawArc(
+          rect, -math.pi / 2, math.pi * 2 * fill, false, arcPaint);
+    }
+
+    // Node dots at corners
+    final dotPaint = Paint()
+      ..color = _teal.withValues(alpha: 0.5)
+      ..style = PaintingStyle.fill;
+    final linePaint = Paint()
+      ..color = _teal.withValues(alpha: 0.2)
+      ..strokeWidth = 1;
+
+    final nodes = [
+      Offset(cx - 68, cy - 40),
+      Offset(cx + 68, cy - 40),
+      Offset(cx - 60, cy + 50),
+      Offset(cx + 60, cy + 50),
+    ];
+
+    for (final n in nodes) {
+      canvas.drawLine(center, n, linePaint);
+      canvas.drawCircle(n, 3.5, dotPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PlanningPreviewPainter _) => false;
 }
 
 class _ArcPainter extends CustomPainter {
