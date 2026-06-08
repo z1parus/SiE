@@ -487,6 +487,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     } else {
       await db.enqueueSyncOp('complete_sub_goal',
           jsonEncode({'id': subGoalId, 'goal_id': goalId}));
+      ref.read(planningDiagProvider.notifier).state = '📴 Offline — subgoal queued';
     }
     await _awardXp(150, 0);
   }
@@ -672,6 +673,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         'is_completed': nowCompleted,
         if (completedAt != null) 'completed_at': completedAt.toIso8601String(),
       }));
+      ref.read(planningDiagProvider.notifier).state = '📴 Offline — task queued';
     }
 
     if (nowCompleted) await _awardXp(taskXp(task.weight), 0);
@@ -796,6 +798,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     } else {
       await db.enqueueSyncOp('complete_milestone',
           jsonEncode({'id': milestoneId, 'goal_id': goalId}));
+      ref.read(planningDiagProvider.notifier).state = '📴 Offline — milestone queued';
     }
     await _awardXp(500, 0);
   }
