@@ -3182,7 +3182,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
               ),
               padding: const EdgeInsets.all(20),
               child: Column(
-                mainAxisSize: min,
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
