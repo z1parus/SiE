@@ -456,8 +456,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           'order_index': orderIndex,
           'created_at': now.toIso8601String(),
         });
-        await db.upsertSubGoal(
-            LocalSubGoalsCompanion(id: Value(id), synced: const Value(true)));
+        await db.updateSubGoal(id,
+            const LocalSubGoalsCompanion(synced: Value(true)));
         return;
       } catch (_) {}
     }
@@ -505,8 +505,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         subGoals: _updateSubGoalInTree(
             g.subGoals, subGoalId, (sg) => sg.copyWith(isCompleted: true))));
 
-    await db.upsertSubGoal(LocalSubGoalsCompanion(
-        id: Value(subGoalId),
+    await db.updateSubGoal(subGoalId, LocalSubGoalsCompanion(
         isCompleted: const Value(true),
         synced: const Value(false)));
 
@@ -517,8 +516,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         await client
             .from('sub_goals')
             .update({'is_completed': true}).eq('id', subGoalId);
-        await db.upsertSubGoal(LocalSubGoalsCompanion(
-            id: Value(subGoalId), synced: const Value(true)));
+        await db.updateSubGoal(subGoalId,
+            const LocalSubGoalsCompanion(synced: Value(true)));
         syncedToServer = true;
       } catch (e) {
         debugPrint('SiE Planning: complete_sub_goal online failed — $e');

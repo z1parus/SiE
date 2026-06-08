@@ -144,8 +144,8 @@ class SyncService {
               'order_index': payload['order_index'] ?? 0,
               'is_completed': localSg?.isCompleted ?? false,
             }, onConflict: 'id');
-            await _db.upsertSubGoal(LocalSubGoalsCompanion(
-                id: Value(sgId), synced: const Value(true)));
+            await _db.updateSubGoal(sgId,
+                const LocalSubGoalsCompanion(synced: Value(true)));
           case 'delete_sub_goal':
             await client
                 .from('sub_goals')
@@ -156,8 +156,8 @@ class SyncService {
                 .from('sub_goals')
                 .update({'is_completed': true})
                 .eq('id', payload['id'] as String);
-            await _db.upsertSubGoal(LocalSubGoalsCompanion(
-                id: Value(payload['id'] as String), synced: const Value(true)));
+            await _db.updateSubGoal(payload['id'] as String,
+                const LocalSubGoalsCompanion(synced: Value(true)));
           case 'insert_task':
             final taskId = payload['id'] as String;
             final localTask = await _db.getPlanningTask(taskId);
