@@ -31,12 +31,20 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
 
   void _setupSync() {
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
-    if (isOnline) SyncService.fromWidgetRef(ref).syncAll();
+    if (isOnline) {
+      SyncService.fromWidgetRef(ref).syncAll().then((_) {
+        if (mounted) ref.invalidate(planningProvider);
+      });
+    }
 
     ref.listenManual<AsyncValue<bool>>(connectivityProvider, (previous, next) {
       final wasOffline = previous?.valueOrNull == false;
       final isNowOnline = next.valueOrNull == true;
-      if (wasOffline && isNowOnline) SyncService.fromWidgetRef(ref).syncAll();
+      if (wasOffline && isNowOnline) {
+        SyncService.fromWidgetRef(ref).syncAll().then((_) {
+          if (mounted) ref.invalidate(planningProvider);
+        });
+      }
     });
   }
 

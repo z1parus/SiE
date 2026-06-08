@@ -565,6 +565,41 @@ class AppDatabase extends _$AppDatabase {
   Future<void> deleteGoalHabitLinkLocally(String id) =>
       (update(localGoalHabitLinks)..where((t) => t.id.equals(id)))
           .write(const LocalGoalHabitLinksCompanion(deletedLocally: Value(true)));
+
+  // ── Planning lookups (used by sync_service) ──────────────────────────────
+
+  Future<LocalPlanningTask?> getPlanningTask(String id) =>
+      (select(localPlanningTasks)..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
+
+  Future<LocalSubGoal?> getSubGoal(String id) =>
+      (select(localSubGoals)..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
+
+  Future<LocalMilestone?> getMilestone(String id) =>
+      (select(localMilestones)..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
+
+  // ── Unsynced ID sets (used by _mirrorToLocal) ─────────────────────────────
+
+  Future<Set<String>> unsyncedSubGoalIds() async =>
+      (await (select(localSubGoals)..where((t) => t.synced.equals(false))).get())
+          .map((e) => e.id)
+          .toSet();
+
+  Future<Set<String>> unsyncedTaskIds() async =>
+      (await (select(localPlanningTasks)
+            ..where((t) => t.synced.equals(false)))
+          .get())
+          .map((e) => e.id)
+          .toSet();
+
+  Future<Set<String>> unsyncedMilestoneIds() async =>
+      (await (select(localMilestones)
+            ..where((t) => t.synced.equals(false)))
+          .get())
+          .map((e) => e.id)
+          .toSet();
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────

@@ -60,6 +60,12 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
   }
 
   Future<void> _mirrorToLocal(AppDatabase db, List<Goal> goals) async {
+    // Collect IDs with pending local changes to avoid overwriting them
+    // before syncAll() has a chance to push them to Supabase.
+    final unsyncedSgIds = await db.unsyncedSubGoalIds();
+    final unsyncedTaskIds = await db.unsyncedTaskIds();
+    final unsyncedMsIds = await db.unsyncedMilestoneIds();
+
     for (final g in goals) {
       await db.upsertGoal(LocalGoalsCompanion(
         id: Value(g.id),
@@ -75,41 +81,47 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         createdAtMs: Value(g.createdAt.millisecondsSinceEpoch),
       ));
       for (final sg in g.subGoals) {
-        await db.upsertSubGoal(LocalSubGoalsCompanion(
-          id: Value(sg.id),
-          goalId: Value(sg.goalId),
-          parentSubGoalId: Value(sg.parentSubGoalId),
-          name: Value(sg.name),
-          isCompleted: Value(sg.isCompleted),
-          orderIndex: Value(sg.orderIndex),
-          synced: const Value(true),
-          createdAtMs: Value(sg.createdAt.millisecondsSinceEpoch),
-        ));
-        for (final t in sg.tasks) {
-          await db.upsertPlanningTask(LocalPlanningTasksCompanion(
-            id: Value(t.id),
-            subGoalId: Value(t.subGoalId),
-            userId: Value(t.userId),
-            name: Value(t.name),
-            weight: Value(t.weight),
-            isCompleted: Value(t.isCompleted),
-            completedAtMs: Value(t.completedAt?.millisecondsSinceEpoch),
-            dueDateMs: Value(t.dueDate?.millisecondsSinceEpoch),
+        if (!unsyncedSgIds.contains(sg.id)) {
+          await db.upsertSubGoal(LocalSubGoalsCompanion(
+            id: Value(sg.id),
+            goalId: Value(sg.goalId),
+            parentSubGoalId: Value(sg.parentSubGoalId),
+            name: Value(sg.name),
+            isCompleted: Value(sg.isCompleted),
+            orderIndex: Value(sg.orderIndex),
             synced: const Value(true),
-            createdAtMs: Value(t.createdAt.millisecondsSinceEpoch),
+            createdAtMs: Value(sg.createdAt.millisecondsSinceEpoch),
           ));
+        }
+        for (final t in sg.tasks) {
+          if (!unsyncedTaskIds.contains(t.id)) {
+            await db.upsertPlanningTask(LocalPlanningTasksCompanion(
+              id: Value(t.id),
+              subGoalId: Value(t.subGoalId),
+              userId: Value(t.userId),
+              name: Value(t.name),
+              weight: Value(t.weight),
+              isCompleted: Value(t.isCompleted),
+              completedAtMs: Value(t.completedAt?.millisecondsSinceEpoch),
+              dueDateMs: Value(t.dueDate?.millisecondsSinceEpoch),
+              synced: const Value(true),
+              createdAtMs: Value(t.createdAt.millisecondsSinceEpoch),
+            ));
+          }
         }
       }
       for (final m in g.milestones) {
-        await db.upsertMilestone(LocalMilestonesCompanion(
-          id: Value(m.id),
-          goalId: Value(m.goalId),
-          name: Value(m.name),
-          targetDateMs: Value(m.targetDate?.millisecondsSinceEpoch),
-          isCompleted: Value(m.isCompleted),
-          synced: const Value(true),
-          createdAtMs: Value(m.createdAt.millisecondsSinceEpoch),
-        ));
+        if (!unsyncedMsIds.contains(m.id)) {
+          await db.upsertMilestone(LocalMilestonesCompanion(
+            id: Value(m.id),
+            goalId: Value(m.goalId),
+            name: Value(m.name),
+            targetDateMs: Value(m.targetDate?.millisecondsSinceEpoch),
+            isCompleted: Value(m.isCompleted),
+            synced: const Value(true),
+            createdAtMs: Value(m.createdAt.millisecondsSinceEpoch),
+          ));
+        }
       }
       for (final l in g.habitLinks) {
         await db.upsertGoalHabitLink(LocalGoalHabitLinksCompanion(
@@ -619,8 +631,11 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             LocalPlanningTasksCompanion(id: Value(taskId), synced: const Value(true)));
       } catch (_) {}
     } else {
-      await db.enqueueSyncOp('toggle_task',
-          jsonEncode({'id': taskId, 'is_completed': nowCompleted}));
+      await db.enqueueSyncOp('toggle_task', jsonEncode({
+        'id': taskId,
+        'is_completed': nowCompleted,
+        if (completedAt != null) 'completed_at': completedAt.toIso8601String(),
+      }));
     }
 
     if (nowCompleted) await _awardXp(taskXp(task.weight), 0);
