@@ -26,27 +26,7 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _setupSync();
-      ref.listenManual<String?>(planningDiagProvider, (_, msg) {
-        if (msg != null && mounted) {
-          showDialog<void>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Sync Diagnostic'),
-              content: Text(msg),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
-          ref.read(planningDiagProvider.notifier).state = null;
-        }
-      });
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _setupSync());
   }
 
   void _setupSync() {
