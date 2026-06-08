@@ -173,8 +173,8 @@ class SyncService {
                 'completed_at': DateTime.fromMillisecondsSinceEpoch(
                     localTask!.completedAtMs!).toIso8601String(),
             }, onConflict: 'id');
-            await _db.upsertPlanningTask(LocalPlanningTasksCompanion(
-                id: Value(taskId), synced: const Value(true)));
+            await _db.updatePlanningTask(taskId,
+                const LocalPlanningTasksCompanion(synced: Value(true)));
           case 'toggle_task':
             final isCompleted = payload['is_completed'] as bool;
             await client.from('planning_tasks').update({

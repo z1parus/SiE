@@ -588,8 +588,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           'due_date': dueDate?.toIso8601String(),
           'created_at': now.toIso8601String(),
         });
-        await db.upsertPlanningTask(
-            LocalPlanningTasksCompanion(id: Value(id), synced: const Value(true)));
+        await db.updatePlanningTask(id,
+            LocalPlanningTasksCompanion(synced: const Value(true)));
         return;
       } catch (_) {}
     }
@@ -659,8 +659,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
                         : t)
                     .toList()))));
 
-    await db.upsertPlanningTask(LocalPlanningTasksCompanion(
-      id: Value(taskId),
+    await db.updatePlanningTask(taskId, LocalPlanningTasksCompanion(
       isCompleted: Value(nowCompleted),
       completedAtMs: Value(completedAt?.millisecondsSinceEpoch),
       synced: const Value(false),
@@ -674,8 +673,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           'is_completed': nowCompleted,
           'completed_at': completedAt?.toIso8601String(),
         }).eq('id', taskId);
-        await db.upsertPlanningTask(
-            LocalPlanningTasksCompanion(id: Value(taskId), synced: const Value(true)));
+        await db.updatePlanningTask(taskId,
+            LocalPlanningTasksCompanion(synced: const Value(true)));
         syncedToServer = true;
       } catch (e) {
         debugPrint('SiE Planning: toggle_task online failed — $e');
