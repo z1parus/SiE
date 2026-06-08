@@ -186,10 +186,8 @@ class HabitRoutinesNotifier
           'user_id':      userId,
           'routine_type': routineType,
         });
-        await db.upsertRoutine(LocalRoutinesCompanion(
-          id:     Value(routineId),
-          synced: const Value(true),
-        ));
+        await db.updateRoutine(routineId,
+            const LocalRoutinesCompanion(synced: Value(true)));
       } else {
         await db.enqueueSyncOp('insert_routine', jsonEncode({
           'id':           routineId,
@@ -239,10 +237,8 @@ class HabitRoutinesNotifier
           'habit_id':  habitId,
           'position':  newPosition,
         });
-        await db.upsertRoutineMember(LocalRoutineMembersCompanion(
-          id:     Value(memberId),
-          synced: const Value(true),
-        ));
+        await db.updateRoutineMember(memberId,
+            const LocalRoutineMembersCompanion(synced: Value(true)));
       } else {
         await _enqueueMembersSync(db, routineId, userId);
       }

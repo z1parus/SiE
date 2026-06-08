@@ -459,8 +459,14 @@ class AppDatabase extends _$AppDatabase {
   Future<void> upsertRoutine(LocalRoutinesCompanion row) =>
       into(localRoutines).insertOnConflictUpdate(row);
 
+  Future<void> updateRoutine(String id, LocalRoutinesCompanion changes) =>
+      (update(localRoutines)..where((r) => r.id.equals(id))).write(changes);
+
   Future<void> upsertRoutineMember(LocalRoutineMembersCompanion row) =>
       into(localRoutineMembers).insertOnConflictUpdate(row);
+
+  Future<void> updateRoutineMember(String id, LocalRoutineMembersCompanion changes) =>
+      (update(localRoutineMembers)..where((m) => m.id.equals(id))).write(changes);
 
   Future<void> deleteRoutineMembers(String routineId) =>
       (delete(localRoutineMembers)
