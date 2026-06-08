@@ -30,10 +30,19 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
       _setupSync();
       ref.listenManual<String?>(planningDiagProvider, (_, msg) {
         if (msg != null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(msg),
-            duration: const Duration(seconds: 5),
-          ));
+          showDialog<void>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Sync Diagnostic'),
+              content: Text(msg),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
           ref.read(planningDiagProvider.notifier).state = null;
         }
       });
