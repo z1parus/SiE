@@ -329,8 +329,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     if (isOnline) {
       try {
         await client.from('goals').insert(newGoal.toInsertJson());
-        await db.upsertGoal(
-            LocalGoalsCompanion(id: Value(id), synced: const Value(true)));
+        await db.updateGoal(id, const LocalGoalsCompanion(synced: Value(true)));
         return;
       } catch (_) {}
     }
@@ -373,8 +372,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         .toList();
     state = AsyncData(current.copyWith(goals: updated));
 
-    await db.upsertGoal(LocalGoalsCompanion(
-        id: Value(id), status: Value(newStatus), synced: const Value(false)));
+    await db.updateGoal(id, LocalGoalsCompanion(
+        status: Value(newStatus), synced: const Value(false)));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) {
@@ -382,8 +381,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         await client
             .from('goals')
             .update({'status': newStatus}).eq('id', id);
-        await db.upsertGoal(
-            LocalGoalsCompanion(id: Value(id), synced: const Value(true)));
+        await db.updateGoal(id,
+            const LocalGoalsCompanion(synced: Value(true)));
         return;
       } catch (_) {}
     }
@@ -890,8 +889,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final now = DateTime.now();
     _updateGoalInState(goalId, (g) => g.copyWith(updatedAt: now));
     final db = ref.read(appDatabaseProvider);
-    await db.upsertGoal(LocalGoalsCompanion(
-      id: Value(goalId),
+    await db.updateGoal(goalId, LocalGoalsCompanion(
       updatedAtMs: Value(now.millisecondsSinceEpoch),
       synced: const Value(false),
     ));
@@ -909,8 +907,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     _updateGoalInState(
         goalId, (g) => g.copyWith(progress: newProgress, updatedAt: now));
     final db = ref.read(appDatabaseProvider);
-    await db.upsertGoal(LocalGoalsCompanion(
-      id: Value(goalId),
+    await db.updateGoal(goalId, LocalGoalsCompanion(
       progress: Value(newProgress),
       updatedAtMs: Value(now.millisecondsSinceEpoch),
       synced: const Value(false),

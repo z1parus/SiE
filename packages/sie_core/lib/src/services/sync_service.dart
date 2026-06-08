@@ -118,8 +118,8 @@ class SyncService {
           // ── Planning ops ────────────────────────────────────────────────
           case 'insert_goal':
             await client.from('goals').upsert(payload, onConflict: 'id');
-            await _db.upsertGoal(LocalGoalsCompanion(
-                id: Value(payload['id'] as String), synced: const Value(true)));
+            await _db.updateGoal(payload['id'] as String,
+                const LocalGoalsCompanion(synced: Value(true)));
           case 'delete_goal':
             await client
                 .from('goals')
@@ -132,8 +132,8 @@ class SyncService {
                 .update({'status': payload['status'] as String})
                 .eq('id', payload['id'] as String)
                 .eq('user_id', userId);
-            await _db.upsertGoal(LocalGoalsCompanion(
-                id: Value(payload['id'] as String), synced: const Value(true)));
+            await _db.updateGoal(payload['id'] as String,
+                const LocalGoalsCompanion(synced: Value(true)));
           case 'insert_sub_goal':
             final sgId = payload['id'] as String;
             final localSg = await _db.getSubGoal(sgId);
@@ -238,8 +238,8 @@ class SyncService {
                 .update({'progress': payload['progress'] as double})
                 .eq('id', payload['id'] as String)
                 .eq('user_id', userId);
-            await _db.upsertGoal(LocalGoalsCompanion(
-                id: Value(payload['id'] as String), synced: const Value(true)));
+            await _db.updateGoal(payload['id'] as String,
+                const LocalGoalsCompanion(synced: Value(true)));
 
           default:
             debugPrint(

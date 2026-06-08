@@ -518,6 +518,9 @@ class AppDatabase extends _$AppDatabase {
   Future<void> updatePlanningTask(String id, LocalPlanningTasksCompanion changes) =>
       (update(localPlanningTasks)..where((t) => t.id.equals(id))).write(changes);
 
+  Future<void> updateGoal(String id, LocalGoalsCompanion changes) =>
+      (update(localGoals)..where((g) => g.id.equals(id))).write(changes);
+
   Future<void> upsertGoalHabitLink(LocalGoalHabitLinksCompanion row) =>
       into(localGoalHabitLinks).insertOnConflictUpdate(row);
 
