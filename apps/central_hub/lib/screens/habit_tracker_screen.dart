@@ -1049,15 +1049,7 @@ class _HabitMatrixCard extends ConsumerWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: accentColor,
-                    boxShadow: sc.isCosmicMode
-                        ? [
-                            BoxShadow(
-                              color: accentColor.withValues(alpha: 0.85),
-                              blurRadius: 7,
-                              spreadRadius: 1,
-                            ),
-                          ]
-                        : null,
+                    boxShadow: null,
                   ),
                 ),
                 const SizedBox(width: 10),
