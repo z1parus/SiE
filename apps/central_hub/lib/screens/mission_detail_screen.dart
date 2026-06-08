@@ -544,9 +544,30 @@ class _TaskTile extends ConsumerWidget {
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => ref
-                .read(planningProvider.notifier)
-                .toggleTask(t.id, subGoal.id, goal.id),
+            onTap: () async {
+              await ref
+                  .read(planningProvider.notifier)
+                  .toggleTask(t.id, subGoal.id, goal.id);
+              if (context.mounted) {
+                final msg = ref.read(planningDiagProvider);
+                if (msg != null) {
+                  ref.read(planningDiagProvider.notifier).state = null;
+                  showDialog<void>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Sync Diagnostic'),
+                      content: Text(msg),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: const Text('OK'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+              }
+            },
             child: Icon(
               t.isCompleted
                   ? Icons.check_circle
