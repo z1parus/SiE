@@ -375,13 +375,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
             // Tasks
             for (final sg in goal.subGoals)
               for (final t in sg.tasks)
-                _posNode(
-                  t.id,
-                  _taskW(t.weight),
-                  40,
-                  goal,
-                  _TaskNode(task: t, sc: c, dragging: _draggingId == t.id),
-                ),
+                _taskPosNode(t, sg.id, goal, c),
             // SubGoals
             for (final sg in goal.subGoals)
               _posNode(
@@ -413,6 +407,54 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
   }
 
   double _taskW(int w) => switch (w) { 5 => 124, 3 => 104, _ => 84 };
+
+  Widget _taskPosNode(PlanningTask task, String currentSgId, Goal goal, SieColors c) {
+    final pos = _positions[task.id];
+    if (pos == null) return const SizedBox.shrink();
+    final w = _taskW(task.weight);
+    const h = 40.0;
+    return Positioned(
+      left: _cx + pos.dx - w / 2,
+      top: _cx + pos.dy - h / 2,
+      width: w,
+      height: h,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _onTap(task.id, goal),
+        onPanStart: (_) => setState(() => _draggingId = task.id),
+        onPanUpdate: (d) {
+          final scale = _tc.value.getMaxScaleOnAxis();
+          setState(() => _positions[task.id] = _positions[task.id]! + d.delta / scale);
+        },
+        onPanEnd: (_) {
+          _tryReparentTask(task.id, currentSgId, goal);
+          _resolveCollisions(task.id, goal);
+          setState(() => _draggingId = null);
+        },
+        child: _TaskNode(task: task, sc: c, dragging: _draggingId == task.id),
+      ),
+    );
+  }
+
+  void _tryReparentTask(String taskId, String currentSgId, Goal goal) {
+    final taskPos = _positions[taskId];
+    if (taskPos == null) return;
+    const threshold = 120.0;
+    String? nearestSgId;
+    double nearestDist = threshold;
+    for (final sg in goal.subGoals) {
+      final sgPos = _positions[sg.id];
+      if (sgPos == null) continue;
+      final dist = (taskPos - sgPos).distance;
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearestSgId = sg.id;
+      }
+    }
+    if (nearestSgId != null && nearestSgId != currentSgId) {
+      ref.read(planningProvider.notifier).moveTask(taskId, nearestSgId);
+    }
+  }
 
   Widget _posNode(String id, double w, double h, Goal goal, Widget child) {
     final pos = _positions[id];

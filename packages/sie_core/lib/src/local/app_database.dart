@@ -135,6 +135,7 @@ class LocalGoals extends Table {
   BoolColumn get synced         => boolean().withDefault(const Constant(false))();
   BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
   IntColumn  get createdAtMs    => integer()();
+  IntColumn  get updatedAtMs    => integer().nullable()();
   @override Set<Column> get primaryKey => {id};
 }
 
@@ -186,6 +187,7 @@ class LocalGoalHabitLinks extends Table {
   TextColumn get id             => text()();
   TextColumn get goalId         => text()();
   TextColumn get habitId        => text()();
+  RealColumn get boostValue     => real().withDefault(const Constant(0.5))();
   BoolColumn get synced         => boolean().withDefault(const Constant(false))();
   BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
   IntColumn  get createdAtMs    => integer()();
@@ -213,7 +215,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -238,6 +240,10 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(localMilestones);
         await m.createTable(localPlanningTasks);
         await m.createTable(localGoalHabitLinks);
+      }
+      if (from < 7) {
+        await m.addColumn(localGoals, localGoals.updatedAtMs);
+        await m.addColumn(localGoalHabitLinks, localGoalHabitLinks.boostValue);
       }
     },
   );
@@ -542,6 +548,12 @@ class AppDatabase extends _$AppDatabase {
       (select(localGoalHabitLinks)
             ..where((t) =>
                 t.goalId.equals(goalId) & t.deletedLocally.equals(false)))
+          .get();
+
+  Future<List<LocalGoalHabitLink>> habitLinksForHabit(String habitId) =>
+      (select(localGoalHabitLinks)
+            ..where((t) =>
+                t.habitId.equals(habitId) & t.deletedLocally.equals(false)))
           .get();
 
   Future<void> deleteGoalLocally(String id) =>

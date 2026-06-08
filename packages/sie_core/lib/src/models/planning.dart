@@ -28,6 +28,7 @@ class PlanningTask {
   final DateTime createdAt;
 
   PlanningTask copyWith({
+    String? subGoalId,
     String? name,
     bool? isCompleted,
     Object? completedAt = _unset,
@@ -35,7 +36,7 @@ class PlanningTask {
   }) =>
       PlanningTask(
         id: id,
-        subGoalId: subGoalId,
+        subGoalId: subGoalId ?? this.subGoalId,
         userId: userId,
         name: name ?? this.name,
         weight: weight,
@@ -181,18 +182,21 @@ class GoalHabitLink {
     required this.goalId,
     required this.habitId,
     required this.createdAt,
+    this.boostValue = 0.5,
   });
 
   final String id;
   final String goalId;
   final String habitId;
   final DateTime createdAt;
+  final double boostValue;
 
   factory GoalHabitLink.fromJson(Map<String, dynamic> j) => GoalHabitLink(
         id: j['id'] as String,
         goalId: j['goal_id'] as String,
         habitId: j['habit_id'] as String,
         createdAt: DateTime.parse(j['created_at'] as String),
+        boostValue: (j['boost_value'] as num?)?.toDouble() ?? 0.5,
       );
 }
 
@@ -213,6 +217,7 @@ class Goal {
     required this.createdAt,
     this.description,
     this.deadline,
+    this.updatedAt,
   });
 
   final String id;
@@ -228,6 +233,7 @@ class Goal {
   final List<Milestone> milestones;
   final List<GoalHabitLink> habitLinks;
   final DateTime createdAt;
+  final DateTime? updatedAt;
 
   Color get color =>
       Color(int.parse('0xFF${colorHex.replaceAll('#', '')}'));
@@ -257,6 +263,7 @@ class Goal {
     List<SubGoal>? subGoals,
     List<Milestone>? milestones,
     List<GoalHabitLink>? habitLinks,
+    DateTime? updatedAt,
   }) =>
       Goal(
         id: id,
@@ -272,6 +279,7 @@ class Goal {
         milestones: milestones ?? this.milestones,
         habitLinks: habitLinks ?? this.habitLinks,
         createdAt: createdAt,
+        updatedAt: updatedAt ?? this.updatedAt,
       );
 
   factory Goal.fromJson(Map<String, dynamic> j) {
@@ -312,6 +320,9 @@ class Goal {
       milestones: milestones,
       habitLinks: links,
       createdAt: DateTime.parse(j['created_at'] as String),
+      updatedAt: j['updated_at'] != null
+          ? DateTime.parse(j['updated_at'] as String)
+          : null,
     );
   }
 
@@ -371,5 +382,18 @@ int taskXp(int weight) => switch (weight) {
 
 bool isGoalFatigued(Goal g) {
   if (g.status != 'active') return false;
-  return g.isOverdue;
+  if (g.isOverdue) return true;
+  // Stagnation: no progress update for 7+ days
+  final ref = g.updatedAt ?? g.createdAt;
+  if (DateTime.now().difference(ref).inDays >= 7) return true;
+  // 2+ tasks with missed deadlines
+  int missed = 0;
+  for (final sg in g.subGoals) {
+    for (final t in sg.tasks) {
+      if (!t.isCompleted && t.dueDate != null && DateTime.now().isAfter(t.dueDate!)) {
+        if (++missed >= 2) return true;
+      }
+    }
+  }
+  return false;
 }

@@ -344,6 +344,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     }
     await db.enqueueSyncOp(
         'update_goal_status', jsonEncode({'id': id, 'status': newStatus}));
+    if (newStatus == 'completed') await _awardXp(2000, 0);
   }
 
   // ── State helper ──────────────────────────────────────────────────────────
@@ -653,6 +654,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     }
 
     if (nowCompleted) await _awardXp(taskXp(task.weight), 0);
+    await _touchGoalUpdatedAt(goalId);
   }
 
   // ── Add Milestone ─────────────────────────────────────────────────────────
@@ -843,5 +845,107 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     try {
       await ref.read(userProfileProvider.notifier).applyLocalXpDelta(xp, dp);
     } catch (_) {}
+  }
+
+  // ── Touch updatedAt ───────────────────────────────────────────────────────
+
+  Future<void> _touchGoalUpdatedAt(String goalId) async {
+    final now = DateTime.now();
+    _updateGoalInState(goalId, (g) => g.copyWith(updatedAt: now));
+    final db = ref.read(appDatabaseProvider);
+    await db.upsertGoal(LocalGoalsCompanion(
+      id: Value(goalId),
+      updatedAtMs: Value(now.millisecondsSinceEpoch),
+      synced: const Value(false),
+    ));
+  }
+
+  // ── Habit Boost ───────────────────────────────────────────────────────────
+
+  Future<void> applyHabitBoost(String goalId, double boost) async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final goal = current.goals.where((g) => g.id == goalId).firstOrNull;
+    if (goal == null || goal.status != 'active') return;
+    final newProgress = (goal.progress + boost).clamp(0.0, 100.0);
+    final now = DateTime.now();
+    _updateGoalInState(
+        goalId, (g) => g.copyWith(progress: newProgress, updatedAt: now));
+    final db = ref.read(appDatabaseProvider);
+    await db.upsertGoal(LocalGoalsCompanion(
+      id: Value(goalId),
+      progress: Value(newProgress),
+      updatedAtMs: Value(now.millisecondsSinceEpoch),
+      synced: const Value(false),
+    ));
+    await db.enqueueSyncOp(
+        'update_goal_progress', jsonEncode({'id': goalId, 'progress': newProgress}));
+  }
+
+  // ── Move Task (re-parent) ─────────────────────────────────────────────────
+
+  Future<void> moveTask(String taskId, String newSubGoalId) async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+
+    String? oldSubGoalId;
+    PlanningTask? task;
+    for (final g in current.goals) {
+      for (final sg in g.subGoals) {
+        final found = sg.tasks.where((t) => t.id == taskId).firstOrNull;
+        if (found != null) {
+          task = found;
+          oldSubGoalId = sg.id;
+          break;
+        }
+      }
+      if (task != null) break;
+    }
+    if (task == null || oldSubGoalId == null || oldSubGoalId == newSubGoalId) {
+      return;
+    }
+
+    final movedTask = task.copyWith(subGoalId: newSubGoalId);
+    state = AsyncData(current.copyWith(
+      goals: current.goals
+          .map((g) => g.copyWith(
+                subGoals: g.subGoals
+                    .map((sg) {
+                      if (sg.id == oldSubGoalId) {
+                        return sg.copyWith(
+                            tasks: sg.tasks
+                                .where((t) => t.id != taskId)
+                                .toList());
+                      }
+                      if (sg.id == newSubGoalId) {
+                        return sg.copyWith(tasks: [...sg.tasks, movedTask]);
+                      }
+                      return sg;
+                    })
+                    .toList(),
+              ))
+          .toList(),
+    ));
+
+    final db = ref.read(appDatabaseProvider);
+    await db.upsertPlanningTask(LocalPlanningTasksCompanion(
+      id: Value(taskId),
+      subGoalId: Value(newSubGoalId),
+      synced: const Value(false),
+    ));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await Supabase.instance.client
+            .from('planning_tasks')
+            .update({'sub_goal_id': newSubGoalId}).eq('id', taskId);
+        await db.upsertPlanningTask(
+            LocalPlanningTasksCompanion(id: Value(taskId), synced: const Value(true)));
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp(
+        'move_task', jsonEncode({'id': taskId, 'sub_goal_id': newSubGoalId}));
   }
 }
