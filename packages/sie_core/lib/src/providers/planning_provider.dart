@@ -954,7 +954,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     String? oldSubGoalId;
     PlanningTask? task;
     for (final g in current.goals) {
-      for (final sg in g.subGoals) {
+      for (final sg in _allSubGoals(g.subGoals)) {
         final found = sg.tasks.where((t) => t.id == taskId).firstOrNull;
         if (found != null) {
           task = found;
@@ -970,24 +970,17 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
     final movedTask = task.copyWith(subGoalId: newSubGoalId);
     state = AsyncData(current.copyWith(
-      goals: current.goals
-          .map((g) => g.copyWith(
-                subGoals: g.subGoals
-                    .map((sg) {
-                      if (sg.id == oldSubGoalId) {
-                        return sg.copyWith(
-                            tasks: sg.tasks
-                                .where((t) => t.id != taskId)
-                                .toList());
-                      }
-                      if (sg.id == newSubGoalId) {
-                        return sg.copyWith(tasks: [...sg.tasks, movedTask]);
-                      }
-                      return sg;
-                    })
-                    .toList(),
-              ))
-          .toList(),
+      goals: current.goals.map((g) {
+        final hasOld = _allSubGoals(g.subGoals).any((s) => s.id == oldSubGoalId);
+        if (!hasOld) return g;
+        // Remove from old sub-goal
+        var updated = _updateSubGoalInTree(g.subGoals, oldSubGoalId!, (s) =>
+            s.copyWith(tasks: s.tasks.where((t) => t.id != taskId).toList()));
+        // Add to new sub-goal
+        updated = _updateSubGoalInTree(updated, newSubGoalId, (s) =>
+            s.copyWith(tasks: [...s.tasks, movedTask]));
+        return g.copyWith(subGoals: updated);
+      }).toList(),
     ));
 
     final db = ref.read(appDatabaseProvider);
