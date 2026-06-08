@@ -511,6 +511,21 @@ class AppDatabase extends _$AppDatabase {
   Future<void> upsertGoalHabitLink(LocalGoalHabitLinksCompanion row) =>
       into(localGoalHabitLinks).insertOnConflictUpdate(row);
 
+  // Partial UPDATE helpers — use these instead of upsert when only updating
+  // a subset of fields (e.g. synced flag, isCompleted). upsert requires all
+  // non-nullable fields for its INSERT portion and throws otherwise.
+  Future<void> patchGoal(String id, LocalGoalsCompanion patch) =>
+      (update(localGoals)..where((t) => t.id.equals(id))).write(patch);
+
+  Future<void> patchSubGoal(String id, LocalSubGoalsCompanion patch) =>
+      (update(localSubGoals)..where((t) => t.id.equals(id))).write(patch);
+
+  Future<void> patchMilestone(String id, LocalMilestonesCompanion patch) =>
+      (update(localMilestones)..where((t) => t.id.equals(id))).write(patch);
+
+  Future<void> patchPlanningTask(String id, LocalPlanningTasksCompanion patch) =>
+      (update(localPlanningTasks)..where((t) => t.id.equals(id))).write(patch);
+
   Future<List<LocalGoal>> goalsForUser(String uid) =>
       (select(localGoals)
             ..where((t) =>
@@ -566,29 +581,40 @@ class AppDatabase extends _$AppDatabase {
       (update(localGoalHabitLinks)..where((t) => t.id.equals(id)))
           .write(const LocalGoalHabitLinksCompanion(deletedLocally: Value(true)));
 
+  // ── Planning lookups (used by sync_service) ──────────────────────────────
+
   Future<LocalPlanningTask?> getPlanningTask(String id) =>
-      (select(localPlanningTasks)..where((t) => t.id.equals(id))).getSingleOrNull();
+      (select(localPlanningTasks)..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
 
   Future<LocalSubGoal?> getSubGoal(String id) =>
-      (select(localSubGoals)..where((t) => t.id.equals(id))).getSingleOrNull();
+      (select(localSubGoals)..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
 
   Future<LocalMilestone?> getMilestone(String id) =>
-      (select(localMilestones)..where((t) => t.id.equals(id))).getSingleOrNull();
+      (select(localMilestones)..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
 
-  Future<Set<String>> unsyncedPlanningIds() async {
-    final goals = await (select(localGoals)..where((t) => t.synced.equals(false))).get();
-    final subs = await (select(localSubGoals)..where((t) => t.synced.equals(false))).get();
-    final tasks = await (select(localPlanningTasks)..where((t) => t.synced.equals(false))).get();
-    final ms = await (select(localMilestones)..where((t) => t.synced.equals(false))).get();
-    final links = await (select(localGoalHabitLinks)..where((t) => t.synced.equals(false))).get();
-    return {
-      for (final g in goals) g.id,
-      for (final s in subs) s.id,
-      for (final t in tasks) t.id,
-      for (final m in ms) m.id,
-      for (final l in links) l.id,
-    };
-  }
+  // ── Unsynced ID sets (used by _mirrorToLocal) ─────────────────────────────
+
+  Future<Set<String>> unsyncedSubGoalIds() async =>
+      (await (select(localSubGoals)..where((t) => t.synced.equals(false))).get())
+          .map((e) => e.id)
+          .toSet();
+
+  Future<Set<String>> unsyncedTaskIds() async =>
+      (await (select(localPlanningTasks)
+            ..where((t) => t.synced.equals(false)))
+          .get())
+          .map((e) => e.id)
+          .toSet();
+
+  Future<Set<String>> unsyncedMilestoneIds() async =>
+      (await (select(localMilestones)
+            ..where((t) => t.synced.equals(false)))
+          .get())
+          .map((e) => e.id)
+          .toSet();
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────
