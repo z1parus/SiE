@@ -566,6 +566,15 @@ class AppDatabase extends _$AppDatabase {
       (update(localGoalHabitLinks)..where((t) => t.id.equals(id)))
           .write(const LocalGoalHabitLinksCompanion(deletedLocally: Value(true)));
 
+  Future<LocalPlanningTask?> getPlanningTask(String id) =>
+      (select(localPlanningTasks)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  Future<LocalSubGoal?> getSubGoal(String id) =>
+      (select(localSubGoals)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  Future<LocalMilestone?> getMilestone(String id) =>
+      (select(localMilestones)..where((t) => t.id.equals(id))).getSingleOrNull();
+
   Future<Set<String>> unsyncedPlanningIds() async {
     final goals = await (select(localGoals)..where((t) => t.synced.equals(false))).get();
     final subs = await (select(localSubGoals)..where((t) => t.synced.equals(false))).get();
