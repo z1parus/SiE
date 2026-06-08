@@ -286,8 +286,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     if (isOnline) {
       try {
         await client.from('goals').insert(newGoal.toInsertJson());
-        await db.upsertGoal(
-            LocalGoalsCompanion(id: Value(id), synced: const Value(true)));
+        await db.patchGoal(id, LocalGoalsCompanion(synced: const Value(true)));
         return;
       } catch (_) {}
     }
@@ -330,8 +329,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         .toList();
     state = AsyncData(current.copyWith(goals: updated));
 
-    await db.upsertGoal(LocalGoalsCompanion(
-        id: Value(id), status: Value(newStatus), synced: const Value(false)));
+    await db.patchGoal(id, LocalGoalsCompanion(status: Value(newStatus), synced: const Value(false)));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) {
@@ -340,8 +338,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             .from('goals')
             .update({'status': newStatus}).eq('id', id).select();
         if (rows.isNotEmpty) {
-          await db.upsertGoal(
-              LocalGoalsCompanion(id: Value(id), synced: const Value(true)));
+          await db.patchGoal(id, LocalGoalsCompanion(synced: const Value(true)));
           return;
         }
         debugPrint('SiE: updateGoalStatus 0 rows for $id — queuing');
@@ -410,8 +407,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           'order_index': orderIndex,
           'created_at': now.toIso8601String(),
         });
-        await db.upsertSubGoal(
-            LocalSubGoalsCompanion(id: Value(id), synced: const Value(true)));
+        await db.patchSubGoal(id, LocalSubGoalsCompanion(synced: const Value(true)));
         return;
       } catch (_) {}
     }
@@ -458,10 +454,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
                     sg.id == subGoalId ? sg.copyWith(isCompleted: true) : sg)
                 .toList()));
 
-    await db.upsertSubGoal(LocalSubGoalsCompanion(
-        id: Value(subGoalId),
-        isCompleted: const Value(true),
-        synced: const Value(false)));
+    await db.patchSubGoal(subGoalId, LocalSubGoalsCompanion(
+        isCompleted: const Value(true), synced: const Value(false)));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) {
@@ -470,8 +464,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             .from('sub_goals')
             .update({'is_completed': true}).eq('id', subGoalId).select();
         if (rows.isNotEmpty) {
-          await db.upsertSubGoal(LocalSubGoalsCompanion(
-              id: Value(subGoalId), synced: const Value(true)));
+          await db.patchSubGoal(subGoalId, LocalSubGoalsCompanion(synced: const Value(true)));
           ref.read(planningDiagProvider.notifier).state = '✅ SubGoal saved to server';
           await _awardXp(150, 0);
           return;
@@ -554,8 +547,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           'due_date': dueDate?.toIso8601String(),
           'created_at': now.toIso8601String(),
         });
-        await db.upsertPlanningTask(
-            LocalPlanningTasksCompanion(id: Value(id), synced: const Value(true)));
+        await db.patchPlanningTask(id, LocalPlanningTasksCompanion(synced: const Value(true)));
         return;
       } catch (_) {}
     }
@@ -635,8 +627,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
                     : s)
                 .toList()));
 
-    await db.upsertPlanningTask(LocalPlanningTasksCompanion(
-      id: Value(taskId),
+    await db.patchPlanningTask(taskId, LocalPlanningTasksCompanion(
       isCompleted: Value(nowCompleted),
       completedAtMs: Value(completedAt?.millisecondsSinceEpoch),
       synced: const Value(false),
@@ -650,8 +641,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           'completed_at': completedAt?.toIso8601String(),
         }).eq('id', taskId).select();
         if (rows.isNotEmpty) {
-          await db.upsertPlanningTask(LocalPlanningTasksCompanion(
-              id: Value(taskId), synced: const Value(true)));
+          await db.patchPlanningTask(taskId, LocalPlanningTasksCompanion(synced: const Value(true)));
           ref.read(planningDiagProvider.notifier).state = '✅ Saved to server';
           if (nowCompleted) await _awardXp(taskXp(task.weight), 0);
           return;
@@ -769,10 +759,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
                     m.id == milestoneId ? m.copyWith(isCompleted: true) : m)
                 .toList()));
 
-    await db.upsertMilestone(LocalMilestonesCompanion(
-        id: Value(milestoneId),
-        isCompleted: const Value(true),
-        synced: const Value(false)));
+    await db.patchMilestone(milestoneId, LocalMilestonesCompanion(
+        isCompleted: const Value(true), synced: const Value(false)));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) {
@@ -781,8 +769,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             .from('milestones')
             .update({'is_completed': true}).eq('id', milestoneId).select();
         if (rows.isNotEmpty) {
-          await db.upsertMilestone(LocalMilestonesCompanion(
-              id: Value(milestoneId), synced: const Value(true)));
+          await db.patchMilestone(milestoneId, LocalMilestonesCompanion(synced: const Value(true)));
           ref.read(planningDiagProvider.notifier).state = '✅ Milestone saved to server';
           await _awardXp(500, 0);
           return;

@@ -511,6 +511,21 @@ class AppDatabase extends _$AppDatabase {
   Future<void> upsertGoalHabitLink(LocalGoalHabitLinksCompanion row) =>
       into(localGoalHabitLinks).insertOnConflictUpdate(row);
 
+  // Partial UPDATE helpers — use these instead of upsert when only updating
+  // a subset of fields (e.g. synced flag, isCompleted). upsert requires all
+  // non-nullable fields for its INSERT portion and throws otherwise.
+  Future<void> patchGoal(String id, LocalGoalsCompanion patch) =>
+      (update(localGoals)..where((t) => t.id.equals(id))).write(patch);
+
+  Future<void> patchSubGoal(String id, LocalSubGoalsCompanion patch) =>
+      (update(localSubGoals)..where((t) => t.id.equals(id))).write(patch);
+
+  Future<void> patchMilestone(String id, LocalMilestonesCompanion patch) =>
+      (update(localMilestones)..where((t) => t.id.equals(id))).write(patch);
+
+  Future<void> patchPlanningTask(String id, LocalPlanningTasksCompanion patch) =>
+      (update(localPlanningTasks)..where((t) => t.id.equals(id))).write(patch);
+
   Future<List<LocalGoal>> goalsForUser(String uid) =>
       (select(localGoals)
             ..where((t) =>
