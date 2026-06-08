@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
+import 'tactical_map_view.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -60,7 +61,7 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
               ),
               Expanded(
                 child: _mapMode
-                    ? _MapPlaceholder(sc: sc)
+                    ? TacticalMapView(goal: goal)
                     : _DetailListView(
                         goal: goal,
                         sc: sc,
@@ -1105,39 +1106,6 @@ class _SectionHeader extends StatelessWidget {
               onTap: onAdd,
               child: Icon(Icons.add, size: 18, color: sc.accent),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Map Placeholder ──────────────────────────────────────────────────────────
-
-class _MapPlaceholder extends StatelessWidget {
-  const _MapPlaceholder({required this.sc});
-
-  final SieColors sc;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.map_outlined, size: 72, color: sc.border),
-          const SizedBox(height: 20),
-          Text(
-            'Тактическая карта',
-            style: TextStyle(
-                color: sc.textPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Визуальный режим — скоро',
-            style: TextStyle(color: sc.textSecondary, fontSize: 13),
-          ),
         ],
       ),
     );
