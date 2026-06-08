@@ -1083,7 +1083,7 @@ class _ClaimButtonState extends State<_ClaimButton>
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                '✦  ПОЛУЧИТЬ НАГРАДУ  ✦',
+                '★  ПОЛУЧИТЬ НАГРАДУ  ★',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: c.accent,

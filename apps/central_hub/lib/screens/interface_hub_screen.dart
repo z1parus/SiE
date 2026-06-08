@@ -458,7 +458,7 @@ class _CardContent extends ConsumerWidget {
     final borderColor = equipped
         ? c.accent
         : accessible
-            ? c.accentSecondary.withValues(alpha: 0.5)
+            ? c.accent.withValues(alpha: 0.30)
             : c.border;
 
     final cardChild = Column(
@@ -497,7 +497,7 @@ class _CardContent extends ConsumerWidget {
                       left: 7,
                       child: _Badge(
                           label: 'КУПЛЕНО',
-                          color: c.accentSecondary,
+                          color: c.accent,
                           filled: false),
                     ),
                   // Preview eye
@@ -602,7 +602,7 @@ class _CardContent extends ConsumerWidget {
                 color: equipped
                     ? c.textSecondary
                     : accessible
-                        ? c.accentSecondary
+                        ? c.accent
                         : (canAfford ? c.accent : c.textSecondary),
                 enabled: !equipped && !loading,
                 loading: loading,
@@ -885,7 +885,7 @@ class _GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final p = Paint()
-      ..color = const Color(0xFF00C8FF).withValues(alpha: 0.06)
+      ..color = const Color(0xFFC8A84B).withValues(alpha: 0.06)
       ..strokeWidth = 0.5;
     const step = 14.0;
     for (var x = 0.0; x < size.width; x += step) {
