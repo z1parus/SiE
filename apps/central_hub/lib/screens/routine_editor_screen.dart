@@ -333,11 +333,13 @@ class _HabitPickerSheet extends ConsumerWidget {
     final habitsAsync = ref.watch(habitsProvider);
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
-    return Container(
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
+      child: Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
       padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
       decoration: BoxDecoration(
-        color: sc.surface,
+        color: sc.surface.withOpacity(0.92),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: sc.border),
       ),
@@ -423,7 +425,7 @@ class _HabitPickerSheet extends ConsumerWidget {
           ),
         ],
       ),
-    );
+    ));
   }
 
   Future<void> _doAdd(
