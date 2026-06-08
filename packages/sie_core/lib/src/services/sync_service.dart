@@ -224,6 +224,22 @@ class SyncService {
                 .from('goal_habit_links')
                 .delete()
                 .eq('id', payload['id'] as String);
+          case 'move_task':
+            await client
+                .from('planning_tasks')
+                .update({'sub_goal_id': payload['sub_goal_id'] as String})
+                .eq('id', payload['id'] as String)
+                .eq('user_id', userId);
+            await _db.upsertPlanningTask(LocalPlanningTasksCompanion(
+                id: Value(payload['id'] as String), synced: const Value(true)));
+          case 'update_goal_progress':
+            await client
+                .from('goals')
+                .update({'progress': payload['progress'] as double})
+                .eq('id', payload['id'] as String)
+                .eq('user_id', userId);
+            await _db.upsertGoal(LocalGoalsCompanion(
+                id: Value(payload['id'] as String), synced: const Value(true)));
 
           default:
             debugPrint(
