@@ -242,8 +242,11 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(localGoalHabitLinks);
       }
       if (from < 7) {
-        await m.addColumn(localGoals, localGoals.updatedAtMs);
-        await m.addColumn(localGoalHabitLinks, localGoalHabitLinks.boostValue);
+        await m.issueCustomQuery(
+            'ALTER TABLE local_goals ADD COLUMN updated_at_ms INTEGER', const []);
+        await m.issueCustomQuery(
+            'ALTER TABLE local_goal_habit_links ADD COLUMN boost_value REAL NOT NULL DEFAULT 0.5',
+            const []);
       }
     },
   );

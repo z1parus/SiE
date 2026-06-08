@@ -547,7 +547,6 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
             .read(userProfileProvider.notifier)
             .applyLocalXpDelta(50, 10);
         // Habit Synergy: boost linked goals
-        final db = ref.read(appDatabaseProvider);
         final links = await db.habitLinksForHabit(habitId);
         if (links.isNotEmpty) {
           final planning = ref.read(planningProvider.notifier);
