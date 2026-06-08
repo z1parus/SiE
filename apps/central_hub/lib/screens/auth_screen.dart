@@ -1,23 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:sie_core/sie_core.dart';
-
-LiquidGlassSettings _glassSettings({double glowIntensity = 0.88}) =>
-    LiquidGlassSettings(
-      blur: 4.0,
-      thickness: 28,
-      refractiveIndex: 1.45,
-      glassColor: const Color(0x0A0A0E1A),
-      lightAngle: GlassDefaults.lightAngle,
-      lightIntensity: 0.72,
-      glowIntensity: glowIntensity,
-      saturation: 1.4,
-      specularSharpness: GlassSpecularSharpness.sharp,
-      ambientStrength: 0.08,
-      chromaticAberration: 0.015,
-    );
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AuthScreen
@@ -201,17 +185,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       ),
     );
 
-    if (c.isCosmicMode) {
-      return GlassCard(
-        padding: const EdgeInsets.all(20),
-        shape: LiquidRoundedSuperellipse(borderRadius: 20),
-        useOwnLayer: true,
-        quality: GlassQuality.standard,
-        clipBehavior: Clip.antiAlias,
-        settings: _glassSettings(),
-        child: form,
-      );
-    }
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: c.flatCard(radius: 20),
@@ -330,14 +303,7 @@ class _PressButtonState extends ConsumerState<_PressButton>
         animation: _ctrl,
         builder: (_, child) {
           final t = _ctrl.value;
-          final gradientColors = c.isCosmicMode
-              ? [
-                  Color.lerp(
-                      const Color(0xFF00E5FF), const Color(0xFF00BFFF), t)!,
-                  Color.lerp(
-                      const Color(0xFF7000FF), const Color(0xFF9000FF), t)!,
-                ]
-              : [c.accent, c.accentSecondary];
+          final gradientColors = [c.accent, c.accentSecondary];
           return Transform.scale(
             scale: 1.0 - 0.03 * t,
             child: Container(
@@ -545,22 +511,11 @@ class _PendingConfirmScreen extends ConsumerWidget {
                 Text('REGISTRATION\nINITIATED',
                     style: theme.textTheme.headlineMedium),
                 const SizedBox(height: 24),
-                if (c.isCosmicMode)
-                  GlassCard(
-                    padding: const EdgeInsets.all(16),
-                    shape: LiquidRoundedSuperellipse(borderRadius: 16),
-                    useOwnLayer: true,
-                    quality: GlassQuality.standard,
-                    clipBehavior: Clip.antiAlias,
-                    settings: _glassSettings(),
-                    child: infoCard,
-                  )
-                else
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: c.flatCard(radius: 16),
-                    child: infoCard,
-                  ),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: c.flatCard(radius: 16),
+                  child: infoCard,
+                ),
                 const SizedBox(height: 32),
                 _PressButton(
                   onTap: onContinue,

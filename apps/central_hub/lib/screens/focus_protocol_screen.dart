@@ -3,7 +3,6 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 
 // mirrors provider constant — used only for HUD display
@@ -103,8 +102,6 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
             onboardingProfile != null &&
             !onboardingProfile.hasSeenOnboardingFocus);
 
-    // Outer Stack so OnboardingOverlay floats above SieBackground's GlassPage
-    // layer without being clipped by it.
     return Stack(
       children: [
         SieBackground(
@@ -177,7 +174,6 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
           ),
         ),
 
-        // Onboarding overlay floats above GlassPage
         Positioned.fill(
           child: OnboardingOverlay(
             visible: showOnboarding,
@@ -555,40 +551,14 @@ class _GlassCircleButton extends ConsumerWidget {
     final c = ref.watch(sieColorsProvider);
     return GestureDetector(
       onTap: onTap,
-      child: c.isCosmicMode
-          ? GlassCard(
-              width: 38,
-              height: 38,
-              padding: EdgeInsets.zero,
-              shape: LiquidRoundedSuperellipse(borderRadius: 19),
-              useOwnLayer: true,
-              quality: GlassQuality.standard,
-              clipBehavior: Clip.antiAlias,
-              settings: LiquidGlassSettings(
-                blur: 2.0,
-                thickness: 20,
-                refractiveIndex: 1.45,
-                glassColor: const Color(0x0A0A0E1A),
-                lightAngle: GlassDefaults.lightAngle,
-                lightIntensity: 0.72,
-                glowIntensity: 0.85,
-                saturation: 1.4,
-                specularSharpness: GlassSpecularSharpness.sharp,
-                ambientStrength: 0.08,
-                chromaticAberration: 0.015,
-              ),
-              child: Center(
-                child: Icon(icon, color: c.textSecondary, size: 17),
-              ),
-            )
-          : Container(
-              width: 38,
-              height: 38,
-              decoration: c.flatCard(radius: 19),
-              child: Center(
-                child: Icon(icon, color: c.textSecondary, size: 17),
-              ),
-            ),
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: c.flatCard(radius: 19),
+        child: Center(
+          child: Icon(icon, color: c.textSecondary, size: 17),
+        ),
+      ),
     );
   }
 }
@@ -855,9 +825,7 @@ class _ResultOverlayState extends ConsumerState<_ResultOverlay>
   @override
   Widget build(BuildContext context) {
     final c = ref.watch(sieColorsProvider);
-    final bgColor = c.isCosmicMode
-        ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
-        : c.background.withValues(alpha: 0.96);
+    final bgColor = c.background.withValues(alpha: 0.96);
 
     return FadeTransition(
       opacity: _opacity,
@@ -1232,30 +1200,6 @@ class _FocusSettingsSheetState extends ConsumerState<_FocusSettingsSheet> {
       ),
     );
 
-    final cosmicDecoration = BoxDecoration(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          c.accent.withValues(alpha: 0.04),
-          const Color(0xFF0A0E1A).withValues(alpha: 0.92),
-        ],
-      ),
-      border: Border(
-        top: BorderSide(color: c.accent.withValues(alpha: 0.30), width: 1.0),
-        left: BorderSide(color: c.accent.withValues(alpha: 0.12), width: 1.0),
-        right: BorderSide(color: c.accent.withValues(alpha: 0.12), width: 1.0),
-      ),
-      boxShadow: [
-        BoxShadow(
-          color: c.accent.withValues(alpha: 0.08),
-          blurRadius: 60,
-          offset: const Offset(0, -10),
-        ),
-      ],
-    );
-
     final lightDecoration = BoxDecoration(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       color: c.surface,
@@ -1270,16 +1214,6 @@ class _FocusSettingsSheetState extends ConsumerState<_FocusSettingsSheet> {
         ),
       ],
     );
-
-    if (c.isCosmicMode) {
-      return ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
-          child: Container(decoration: cosmicDecoration, child: content),
-        ),
-      );
-    }
 
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -1466,25 +1400,17 @@ class _CockpitToggleState extends ConsumerState<_CockpitToggle> {
                     Container(
                       height: 1,
                       margin: const EdgeInsets.symmetric(horizontal: 8),
-                      color: c.isCosmicMode
-                          ? Colors.white.withValues(
-                              alpha: widget.value ? 0.18 : 0.08,
-                            )
-                          : c.border.withValues(
-                              alpha: widget.value ? 0.5 : 0.3,
-                            ),
+                      color: c.border.withValues(
+                        alpha: widget.value ? 0.5 : 0.3,
+                      ),
                     ),
                     const SizedBox(height: 3),
                     Container(
                       height: 1,
                       margin: const EdgeInsets.symmetric(horizontal: 8),
-                      color: c.isCosmicMode
-                          ? Colors.white.withValues(
-                              alpha: widget.value ? 0.12 : 0.05,
-                            )
-                          : c.border.withValues(
-                              alpha: widget.value ? 0.3 : 0.15,
-                            ),
+                      color: c.border.withValues(
+                        alpha: widget.value ? 0.3 : 0.15,
+                      ),
                     ),
                   ],
                 ),

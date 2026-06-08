@@ -1,27 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 import 'public_profile_screen.dart';
-
-LiquidGlassSettings _glassSettings({
-  double blur = 3.0,
-  double glowIntensity = 0.88,
-}) =>
-    LiquidGlassSettings(
-      blur: blur,
-      thickness: 24,
-      refractiveIndex: 1.45,
-      glassColor: const Color(0x0A0A0E1A),
-      lightAngle: GlassDefaults.lightAngle,
-      lightIntensity: 0.72,
-      glowIntensity: glowIntensity,
-      saturation: 1.4,
-      specularSharpness: GlassSpecularSharpness.sharp,
-      ambientStrength: 0.08,
-      chromaticAberration: 0.015,
-    );
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UserSearchScreen
@@ -150,33 +131,19 @@ class _TopBarState extends ConsumerState<_TopBar> {
                       ]
                     : [],
               ),
-              child: c.isCosmicMode
-                  ? GlassCard(
-                      height: 44,
-                      padding: EdgeInsets.zero,
-                      shape: LiquidRoundedSuperellipse(borderRadius: 28),
-                      useOwnLayer: true,
-                      quality: GlassQuality.standard,
-                      clipBehavior: Clip.antiAlias,
-                      settings: _glassSettings(
-                        blur: _focused ? 4.0 : 3.0,
-                        glowIntensity: _focused ? 1.05 : 0.88,
-                      ),
-                      child: _searchFieldContent(c),
-                    )
-                  : Container(
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: c.surface,
-                        borderRadius: BorderRadius.circular(28),
-                        border: Border.all(
-                          color: _focused
-                              ? c.accent.withValues(alpha: 0.6)
-                              : c.border,
-                        ),
-                      ),
-                      child: _searchFieldContent(c),
-                    ),
+              child: Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  color: c.surface,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: _focused
+                        ? c.accent.withValues(alpha: 0.6)
+                        : c.border,
+                  ),
+                ),
+                child: _searchFieldContent(c),
+              ),
             ),
           ),
         ],
@@ -436,24 +403,6 @@ class _UserTileState extends ConsumerState<_UserTile>
         animation: _pressCtrl,
         builder: (_, child) {
           final t = _pressCtrl.value;
-          if (c.isCosmicMode) {
-            return Transform.scale(
-              scale: 1.0 - 0.03 * t,
-              child: GlassCard(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: LiquidRoundedSuperellipse(borderRadius: 16),
-                useOwnLayer: true,
-                quality: GlassQuality.standard,
-                clipBehavior: Clip.antiAlias,
-                settings: _glassSettings(
-                  blur: 3.0,
-                  glowIntensity: 0.88 + 0.22 * t,
-                ),
-                child: child!,
-              ),
-            );
-          }
           return Transform.scale(
             scale: 1.0 - 0.03 * t,
             child: Container(

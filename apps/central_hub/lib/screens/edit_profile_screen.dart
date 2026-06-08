@@ -2,26 +2,10 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 
 import 'customization_screen.dart';
 import 'interface_hub_screen.dart';
-
-LiquidGlassSettings _glassSettings({double glowIntensity = 0.88}) =>
-    LiquidGlassSettings(
-      blur: 3.5,
-      thickness: 24,
-      refractiveIndex: 1.45,
-      glassColor: const Color(0x0A0A0E1A),
-      lightAngle: GlassDefaults.lightAngle,
-      lightIntensity: 0.72,
-      glowIntensity: glowIntensity,
-      saturation: 1.4,
-      specularSharpness: GlassSpecularSharpness.sharp,
-      ambientStrength: 0.08,
-      chromaticAberration: 0.015,
-    );
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EditProfileScreen
@@ -103,14 +87,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor:
-          c.isCosmicMode ? const Color(0xFF0B1E30) : c.surface,
+      backgroundColor: c.surface,
       shape: RoundedRectangleBorder(
         borderRadius:
             const BorderRadius.vertical(top: Radius.circular(20)),
-        side: BorderSide(
-          color: c.isCosmicMode ? const Color(0xFF1A3A5C) : c.border,
-        ),
+        side: BorderSide(color: c.border),
       ),
       builder: (_) => const _PasswordSheet(),
     );
@@ -157,36 +138,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 
   Widget _buildForm(Profile profile, SieColors c) {
-    Widget identityCard({required Widget child}) => c.isCosmicMode
-        ? GlassCard(
-            padding: const EdgeInsets.all(20),
-            shape: LiquidRoundedSuperellipse(borderRadius: 20),
-            useOwnLayer: true,
-            quality: GlassQuality.standard,
-            clipBehavior: Clip.antiAlias,
-            settings: _glassSettings(),
-            child: child,
-          )
-        : Container(
-            padding: const EdgeInsets.all(20),
-            decoration: c.flatCard(radius: 20),
-            child: child,
-          );
+    Widget identityCard({required Widget child}) => Container(
+          padding: const EdgeInsets.all(20),
+          decoration: c.flatCard(radius: 20),
+          child: child,
+        );
 
-    Widget securityCard({required Widget child}) => c.isCosmicMode
-        ? GlassCard(
-            padding: const EdgeInsets.all(4),
-            shape: LiquidRoundedSuperellipse(borderRadius: 20),
-            useOwnLayer: true,
-            quality: GlassQuality.standard,
-            clipBehavior: Clip.antiAlias,
-            settings: _glassSettings(),
-            child: child,
-          )
-        : Container(
-            decoration: c.flatCard(radius: 20),
-            child: child,
-          );
+    Widget securityCard({required Widget child}) => Container(
+          decoration: c.flatCard(radius: 20),
+          child: child,
+        );
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
@@ -1159,13 +1120,6 @@ class _ThemeSwitcherSection extends ConsumerWidget {
 
   static const _options = [
     (
-      mode: SieThemeMode.cosmicLiquidGlass,
-      label: 'COSMIC LIQUID GLASS',
-      description: 'Звёздное поле, стеклянные шейдеры',
-      bgColor: Color(0xFF0A0E1A),
-      accentColor: Color(0xFF00E5FF),
-    ),
-    (
       mode: SieThemeMode.classicDark,
       label: 'CLASSIC DARK',
       description: 'Антрацит + золото, без шейдеров',
@@ -1185,7 +1139,7 @@ class _ThemeSwitcherSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c       = ref.watch(sieColorsProvider);
     final current = ref.watch(sieThemeModeProvider).valueOrNull
-        ?? SieThemeMode.cosmicLiquidGlass;
+        ?? SieThemeMode.classicDark;
 
     return Column(
       children: [
@@ -1291,12 +1245,7 @@ class _ThemeOptionTile extends StatelessWidget {
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 1.4,
-                      shadows: isActive && c.isCosmicMode
-                          ? [Shadow(
-                              color: accentColor.withValues(alpha: 0.35),
-                              blurRadius: 8,
-                            )]
-                          : null,
+                      shadows: null,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -1393,7 +1342,7 @@ class _TimezonePicker extends ConsumerWidget {
       isScrollControlled: true,
       enableDrag: true,
       isDismissible: true,
-      backgroundColor: c.isCosmicMode ? const Color(0xFF0B1E30) : c.surface,
+      backgroundColor: c.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),

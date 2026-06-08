@@ -10,7 +10,7 @@ enum SieThemeMode {
   /// Flat anthracite dark mode. No shaders, no starfield. Gold-sand accents.
   classicDark,
 
-  /// Flat light mode. No shaders, no starfield. Seafoam-teal accents.
+  /// Flat light mode. Seafoam-teal accents.
   classicLight,
 }
 

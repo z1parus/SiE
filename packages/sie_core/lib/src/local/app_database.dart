@@ -1,8 +1,6 @@
-import 'dart:io';
 import 'package:drift/drift.dart';
-import 'package:drift_sqflite/drift_sqflite.dart';
+import 'package:drift_flutter/drift_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
 
 part 'app_database.g.dart';
 
@@ -121,6 +119,81 @@ class PendingSyncOps extends Table {
   IntColumn get createdAtMs => integer()();
 }
 
+// ── Planning Tables ────────────────────────────────────────────────────────
+
+@DataClassName('LocalGoal')
+class LocalGoals extends Table {
+  TextColumn get id             => text()();
+  TextColumn get userId         => text()();
+  TextColumn get name           => text()();
+  TextColumn get description    => text().nullable()();
+  IntColumn  get deadlineMs     => integer().nullable()();
+  IntColumn  get priority       => integer().withDefault(const Constant(2))();
+  TextColumn get status         => text().withDefault(const Constant('active'))();
+  TextColumn get colorHex       => text().withDefault(const Constant('#5AADA0'))();
+  RealColumn get progress       => real().withDefault(const Constant(0))();
+  BoolColumn get synced         => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
+  IntColumn  get createdAtMs    => integer()();
+  IntColumn  get updatedAtMs    => integer().nullable()();
+  @override Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('LocalSubGoal')
+class LocalSubGoals extends Table {
+  TextColumn get id               => text()();
+  TextColumn get goalId           => text()();
+  TextColumn get parentSubGoalId  => text().nullable()();
+  TextColumn get name             => text()();
+  BoolColumn get isCompleted      => boolean().withDefault(const Constant(false))();
+  IntColumn  get orderIndex       => integer().withDefault(const Constant(0))();
+  BoolColumn get synced           => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally   => boolean().withDefault(const Constant(false))();
+  IntColumn  get createdAtMs      => integer()();
+  @override Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('LocalMilestone')
+class LocalMilestones extends Table {
+  TextColumn get id             => text()();
+  TextColumn get goalId         => text()();
+  TextColumn get name           => text()();
+  IntColumn  get targetDateMs   => integer().nullable()();
+  BoolColumn get isCompleted    => boolean().withDefault(const Constant(false))();
+  BoolColumn get synced         => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
+  IntColumn  get createdAtMs    => integer()();
+  @override Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('LocalPlanningTask')
+class LocalPlanningTasks extends Table {
+  TextColumn get id             => text()();
+  TextColumn get subGoalId      => text()();
+  TextColumn get userId         => text()();
+  TextColumn get name           => text()();
+  IntColumn  get weight         => integer().withDefault(const Constant(1))();
+  BoolColumn get isCompleted    => boolean().withDefault(const Constant(false))();
+  IntColumn  get completedAtMs  => integer().nullable()();
+  IntColumn  get dueDateMs      => integer().nullable()();
+  BoolColumn get synced         => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
+  IntColumn  get createdAtMs    => integer()();
+  @override Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('LocalGoalHabitLink')
+class LocalGoalHabitLinks extends Table {
+  TextColumn get id             => text()();
+  TextColumn get goalId         => text()();
+  TextColumn get habitId        => text()();
+  RealColumn get boostValue     => real().withDefault(const Constant(0.5))();
+  BoolColumn get synced         => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
+  IntColumn  get createdAtMs    => integer()();
+  @override Set<Column> get primaryKey => {id};
+}
+
 // ── Database ───────────────────────────────────────────────────────────────
 
 @DriftDatabase(tables: [
@@ -132,12 +205,17 @@ class PendingSyncOps extends Table {
   LocalRoutines,
   LocalRoutineMembers,
   PendingSyncOps,
+  LocalGoals,
+  LocalSubGoals,
+  LocalMilestones,
+  LocalPlanningTasks,
+  LocalGoalHabitLinks,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -155,6 +233,20 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 5) {
         await m.addColumn(localHabits, localHabits.icon);
+      }
+      if (from < 6) {
+        await m.createTable(localGoals);
+        await m.createTable(localSubGoals);
+        await m.createTable(localMilestones);
+        await m.createTable(localPlanningTasks);
+        await m.createTable(localGoalHabitLinks);
+      }
+      if (from < 7) {
+        await m.issueCustomQuery(
+            'ALTER TABLE local_goals ADD COLUMN updated_at_ms INTEGER', const []);
+        await m.issueCustomQuery(
+            'ALTER TABLE local_goal_habit_links ADD COLUMN boost_value REAL NOT NULL DEFAULT 0.5',
+            const []);
       }
     },
   );
@@ -408,6 +500,111 @@ class AppDatabase extends _$AppDatabase {
       ),
     );
   }
+
+  // ── Planning ──────────────────────────────────────────────────────────────
+
+  Future<void> upsertGoal(LocalGoalsCompanion row) =>
+      into(localGoals).insertOnConflictUpdate(row);
+
+  Future<void> upsertSubGoal(LocalSubGoalsCompanion row) =>
+      into(localSubGoals).insertOnConflictUpdate(row);
+
+  Future<void> upsertMilestone(LocalMilestonesCompanion row) =>
+      into(localMilestones).insertOnConflictUpdate(row);
+
+  Future<void> upsertPlanningTask(LocalPlanningTasksCompanion row) =>
+      into(localPlanningTasks).insertOnConflictUpdate(row);
+
+  Future<void> updatePlanningTask(String id, LocalPlanningTasksCompanion changes) =>
+      (update(localPlanningTasks)..where((t) => t.id.equals(id))).write(changes);
+
+  Future<void> upsertGoalHabitLink(LocalGoalHabitLinksCompanion row) =>
+      into(localGoalHabitLinks).insertOnConflictUpdate(row);
+
+  Future<List<LocalGoal>> goalsForUser(String uid) =>
+      (select(localGoals)
+            ..where((t) =>
+                t.userId.equals(uid) & t.deletedLocally.equals(false))
+            ..orderBy([(t) => OrderingTerm(expression: t.createdAtMs)]))
+          .get();
+
+  Future<List<LocalSubGoal>> subGoalsForGoal(String goalId) =>
+      (select(localSubGoals)
+            ..where((t) =>
+                t.goalId.equals(goalId) & t.deletedLocally.equals(false))
+            ..orderBy([(t) => OrderingTerm(expression: t.orderIndex)]))
+          .get();
+
+  Future<List<LocalPlanningTask>> tasksForSubGoal(String subGoalId) =>
+      (select(localPlanningTasks)
+            ..where((t) =>
+                t.subGoalId.equals(subGoalId) &
+                t.deletedLocally.equals(false))
+            ..orderBy([(t) => OrderingTerm(expression: t.createdAtMs)]))
+          .get();
+
+  Future<List<LocalMilestone>> milestonesForGoal(String goalId) =>
+      (select(localMilestones)
+            ..where((t) =>
+                t.goalId.equals(goalId) & t.deletedLocally.equals(false))
+            ..orderBy([(t) => OrderingTerm(expression: t.createdAtMs)]))
+          .get();
+
+  Future<List<LocalGoalHabitLink>> habitLinksForGoal(String goalId) =>
+      (select(localGoalHabitLinks)
+            ..where((t) =>
+                t.goalId.equals(goalId) & t.deletedLocally.equals(false)))
+          .get();
+
+  Future<List<LocalGoalHabitLink>> habitLinksForHabit(String habitId) =>
+      (select(localGoalHabitLinks)
+            ..where((t) =>
+                t.habitId.equals(habitId) & t.deletedLocally.equals(false)))
+          .get();
+
+  Future<void> deleteGoalLocally(String id) =>
+      (update(localGoals)..where((t) => t.id.equals(id)))
+          .write(const LocalGoalsCompanion(deletedLocally: Value(true)));
+
+  Future<void> deleteSubGoalLocally(String id) =>
+      (update(localSubGoals)..where((t) => t.id.equals(id)))
+          .write(const LocalSubGoalsCompanion(deletedLocally: Value(true)));
+
+  Future<void> deletePlanningTaskLocally(String id) =>
+      (update(localPlanningTasks)..where((t) => t.id.equals(id)))
+          .write(const LocalPlanningTasksCompanion(deletedLocally: Value(true)));
+
+  Future<void> deleteMilestoneLocally(String id) =>
+      (update(localMilestones)..where((t) => t.id.equals(id)))
+          .write(const LocalMilestonesCompanion(deletedLocally: Value(true)));
+
+  Future<void> deleteGoalHabitLinkLocally(String id) =>
+      (update(localGoalHabitLinks)..where((t) => t.id.equals(id)))
+          .write(const LocalGoalHabitLinksCompanion(deletedLocally: Value(true)));
+
+  Future<LocalPlanningTask?> getPlanningTask(String id) =>
+      (select(localPlanningTasks)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  Future<LocalSubGoal?> getSubGoal(String id) =>
+      (select(localSubGoals)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  Future<LocalMilestone?> getMilestone(String id) =>
+      (select(localMilestones)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  Future<Set<String>> unsyncedPlanningIds() async {
+    final goals = await (select(localGoals)..where((t) => t.synced.equals(false))).get();
+    final subs = await (select(localSubGoals)..where((t) => t.synced.equals(false))).get();
+    final tasks = await (select(localPlanningTasks)..where((t) => t.synced.equals(false))).get();
+    final ms = await (select(localMilestones)..where((t) => t.synced.equals(false))).get();
+    final links = await (select(localGoalHabitLinks)..where((t) => t.synced.equals(false))).get();
+    return {
+      for (final g in goals) g.id,
+      for (final s in subs) s.id,
+      for (final t in tasks) t.id,
+      for (final m in ms) m.id,
+      for (final l in links) l.id,
+    };
+  }
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────
@@ -420,10 +617,12 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
 
 // ── Connection ─────────────────────────────────────────────────────────────────
 
-LazyDatabase _openConnection() {
-  return LazyDatabase(() async {
-    final dbFolder = await getApplicationDocumentsDirectory();
-    final file = File('${dbFolder.path}/sie_local.db');
-    return SqfliteQueryExecutor(path: file.path);
-  });
+QueryExecutor _openConnection() {
+  return driftDatabase(
+    name: 'sie_local',
+    web: DriftWebOptions(
+      sqlite3Wasm: Uri.parse('sqlite3.wasm'),
+      driftWorker: Uri.parse('drift_worker.js'),
+    ),
+  );
 }

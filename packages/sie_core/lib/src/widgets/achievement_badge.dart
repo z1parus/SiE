@@ -228,12 +228,6 @@ class _LegendaryBadgeDecorState extends State<_LegendaryBadgeDecor>
               blurRadius: c.isLightMode ? 20 : 18,
               spreadRadius: c.isLightMode ? 2 : 1,
             ),
-            if (c.isCosmicMode)
-              BoxShadow(
-                color: _kLegendary.withValues(alpha: _glow.value * 0.15),
-                blurRadius: 36,
-                spreadRadius: 4,
-              ),
           ],
         ),
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),

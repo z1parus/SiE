@@ -200,12 +200,7 @@ class _GarageHeader extends StatelessWidget {
                   fontSize: 22,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 1.5,
-                  shadows: c.isCosmicMode
-                      ? [
-                          Shadow(color: c.accent, blurRadius: 8),
-                          Shadow(color: c.accent, blurRadius: 20),
-                        ]
-                      : null,
+                  shadows: null,
                 ),
               ),
               TextSpan(
@@ -375,8 +370,7 @@ class _DayNodeState extends State<_DayNode>
 
   @override
   Widget build(BuildContext context) {
-    final c           = widget.c;
-    final isCosmicMode = c.isCosmicMode;
+    final c = widget.c;
 
     Color nodeColor;
     Widget nodeChild;
@@ -397,9 +391,7 @@ class _DayNodeState extends State<_DayNode>
           fontSize: 13,
           fontWeight: FontWeight.w800,
           letterSpacing: 0.5,
-          shadows: isCosmicMode
-              ? [Shadow(color: c.accent, blurRadius: 6)]
-              : null,
+          shadows: null,
         ),
       );
     } else if (widget.isUnlocked) {
@@ -430,26 +422,7 @@ class _DayNodeState extends State<_DayNode>
             alignment: Alignment.center,
             children: [
               // Pulse ring (active only)
-              if (widget.isActive && isCosmicMode)
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: c.accent.withValues(alpha: _pulse.value * 0.8),
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: c.accent.withValues(alpha: _pulse.value * 0.25),
-                        blurRadius: 12,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                ),
-              if (widget.isActive && !isCosmicMode)
+              if (widget.isActive)
                 Container(
                   width: 44,
                   height: 44,
@@ -478,15 +451,7 @@ class _DayNodeState extends State<_DayNode>
                                 : c.border,
                     width: 1.5,
                   ),
-                  boxShadow: widget.isCompleted && isCosmicMode
-                      ? [
-                          BoxShadow(
-                            color: c.accent.withValues(alpha: 0.4),
-                            blurRadius: 10,
-                            spreadRadius: 1,
-                          ),
-                        ]
-                      : null,
+                  boxShadow: null,
                 ),
                 child: Center(child: nodeChild),
               ),
@@ -643,7 +608,7 @@ class _StoryTerminal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accentAlpha = c.isCosmicMode ? 0.12 : 0.07;
+    final accentAlpha = 0.07;
 
     return SieGlassCard(
       padding: const EdgeInsets.all(18),
@@ -659,14 +624,7 @@ class _StoryTerminal extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: c.accent,
-                  boxShadow: c.isCosmicMode
-                      ? [
-                          BoxShadow(
-                            color: c.accent.withValues(alpha: 0.7),
-                            blurRadius: 8,
-                          ),
-                        ]
-                      : null,
+                  boxShadow: null,
                 ),
               ),
               const SizedBox(width: 8),
@@ -678,9 +636,7 @@ class _StoryTerminal extends StatelessWidget {
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 2.0,
-                    shadows: c.isCosmicMode
-                        ? [Shadow(color: c.accent, blurRadius: 6)]
-                        : null,
+                    shadows: null,
                   ),
                 ),
               ),
@@ -1121,16 +1077,7 @@ class _ClaimButtonState extends State<_ClaimButton>
               width: 1.5,
             ),
             color: c.accent.withValues(alpha: 0.08),
-            boxShadow: c.isCosmicMode
-                ? [
-                    BoxShadow(
-                      color: c.accent.withValues(
-                          alpha: _shimAnim.value * 0.2),
-                      blurRadius: 20,
-                      spreadRadius: 2,
-                    ),
-                  ]
-                : null,
+            boxShadow: null,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1143,9 +1090,7 @@ class _ClaimButtonState extends State<_ClaimButton>
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 2.5,
-                  shadows: c.isCosmicMode
-                      ? [Shadow(color: c.accent, blurRadius: 8)]
-                      : null,
+                  shadows: null,
                 ),
               ),
               const SizedBox(height: 4),
@@ -1250,16 +1195,7 @@ class _CourseCompletedViewState extends State<_CourseCompletedView>
                   color: c.dp.withValues(alpha: _glow.value * 0.7),
                   width: 1.5,
                 ),
-                boxShadow: c.isCosmicMode
-                    ? [
-                        BoxShadow(
-                          color: c.dp.withValues(
-                              alpha: _glow.value * 0.25),
-                          blurRadius: 40,
-                          spreadRadius: 8,
-                        ),
-                      ]
-                    : null,
+                boxShadow: null,
               ),
               child: const Center(
                 child: Text('🛡️', style: TextStyle(fontSize: 48)),
@@ -1277,12 +1213,7 @@ class _CourseCompletedViewState extends State<_CourseCompletedView>
               fontSize: 22,
               fontWeight: FontWeight.w900,
               letterSpacing: 4.0,
-              shadows: c.isCosmicMode
-                  ? [
-                      Shadow(color: c.dp, blurRadius: 12),
-                      Shadow(color: c.dp, blurRadius: 24),
-                    ]
-                  : null,
+              shadows: null,
             ),
           ),
           const SizedBox(height: 8),

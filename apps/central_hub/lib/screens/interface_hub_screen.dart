@@ -1,26 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
-
-LiquidGlassSettings _glassSettings({
-  double blur = 3.0,
-  double glowIntensity = 0.88,
-}) =>
-    LiquidGlassSettings(
-      blur: blur,
-      thickness: 24,
-      refractiveIndex: 1.45,
-      glassColor: const Color(0x0A0A0E1A),
-      lightAngle: GlassDefaults.lightAngle,
-      lightIntensity: 0.72,
-      glowIntensity: glowIntensity,
-      saturation: 1.4,
-      specularSharpness: GlassSpecularSharpness.sharp,
-      ambientStrength: 0.08,
-      chromaticAberration: 0.015,
-    );
 
 // ─────────────────────────────────────────────────────────────────────────────
 // InterfaceHubScreen
@@ -96,7 +77,7 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
 
   void _showPreview(CosmeticAsset asset, Profile? profile) {
     final c = SieColors.forMode(
-      ref.read(sieThemeModeProvider).valueOrNull ?? SieThemeMode.cosmicLiquidGlass,
+      ref.read(sieThemeModeProvider).valueOrNull ?? SieThemeMode.classicDark,
     );
     showModalBottomSheet(
       context: context,
@@ -128,24 +109,14 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
             children: [
               _TopBar(dp: dp, onBack: () => Navigator.of(context).pop()),
               // Tab panel
-              c.isCosmicMode
-                  ? GlassCard(
-                      height: 44,
-                      padding: EdgeInsets.zero,
-                      shape: LiquidRoundedSuperellipse(borderRadius: 0),
-                      useOwnLayer: true,
-                      quality: GlassQuality.standard,
-                      settings: _glassSettings(blur: 2.5, glowIntensity: 0.75),
-                      child: _buildTabBar(c),
-                    )
-                  : Container(
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: c.surface,
-                        border: Border(bottom: BorderSide(color: c.border)),
-                      ),
-                      child: _buildTabBar(c),
-                    ),
+              Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  color: c.surface,
+                  border: Border(bottom: BorderSide(color: c.border)),
+                ),
+                child: _buildTabBar(c),
+              ),
               Expanded(
                 child: TabBarView(
                   controller: _tabs,
@@ -239,9 +210,7 @@ class _TopBar extends ConsumerWidget {
             decoration: BoxDecoration(
               border: Border.all(color: c.dp.withValues(alpha: 0.5)),
               borderRadius: BorderRadius.circular(8),
-              boxShadow: c.isCosmicMode
-                  ? [BoxShadow(color: c.dp.withValues(alpha: 0.12), blurRadius: 8)]
-                  : null,
+              boxShadow: null,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -647,23 +616,13 @@ class _CardContent extends ConsumerWidget {
 
     return Stack(
       children: [
-        c.isCosmicMode
-            ? GlassCard(
-                padding: EdgeInsets.zero,
-                shape: LiquidRoundedSuperellipse(borderRadius: 16),
-                useOwnLayer: true,
-                quality: GlassQuality.standard,
-                clipBehavior: Clip.antiAlias,
-                settings: _glassSettings(glowIntensity: glowIntensity),
-                child: cardChild,
-              )
-            : Container(
-                decoration: c.flatCard(radius: 16),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: cardChild,
-                ),
-              ),
+        Container(
+          decoration: c.flatCard(radius: 16),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: cardChild,
+          ),
+        ),
         // Neon border overlay for owned/equipped items
         if (accessible)
           Positioned.fill(
@@ -675,22 +634,7 @@ class _CardContent extends ConsumerWidget {
                     color: borderColor,
                     width: equipped ? 1.5 : 1.0,
                   ),
-                  boxShadow: c.isCosmicMode
-                      ? (equipped
-                          ? [
-                              BoxShadow(
-                                color: c.accent.withValues(alpha: 0.25),
-                                blurRadius: 12,
-                                spreadRadius: 1,
-                              ),
-                            ]
-                          : [
-                              BoxShadow(
-                                color: c.accentSecondary.withValues(alpha: 0.1),
-                                blurRadius: 8,
-                              ),
-                            ])
-                      : null,
+                  boxShadow: null,
                 ),
               ),
             ),

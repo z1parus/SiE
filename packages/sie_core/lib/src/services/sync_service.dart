@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -113,6 +114,133 @@ class SyncService {
                 .delete()
                 .eq('id', payload['id'] as String)
                 .eq('user_id', userId);
+
+          // ── Planning ops ────────────────────────────────────────────────
+          case 'insert_goal':
+            await client.from('goals').upsert(payload, onConflict: 'id');
+            await _db.upsertGoal(LocalGoalsCompanion(
+                id: Value(payload['id'] as String), synced: const Value(true)));
+          case 'delete_goal':
+            await client
+                .from('goals')
+                .delete()
+                .eq('id', payload['id'] as String)
+                .eq('user_id', userId);
+          case 'update_goal_status':
+            await client
+                .from('goals')
+                .update({'status': payload['status'] as String})
+                .eq('id', payload['id'] as String)
+                .eq('user_id', userId);
+            await _db.upsertGoal(LocalGoalsCompanion(
+                id: Value(payload['id'] as String), synced: const Value(true)));
+          case 'insert_sub_goal':
+            final sgId = payload['id'] as String;
+            final localSg = await _db.getSubGoal(sgId);
+            await client.from('sub_goals').upsert({
+              'id': sgId,
+              'goal_id': payload['goal_id'],
+              'name': payload['name'],
+              'order_index': payload['order_index'] ?? 0,
+              'is_completed': localSg?.isCompleted ?? false,
+            }, onConflict: 'id');
+            await _db.upsertSubGoal(LocalSubGoalsCompanion(
+                id: Value(sgId), synced: const Value(true)));
+          case 'delete_sub_goal':
+            await client
+                .from('sub_goals')
+                .delete()
+                .eq('id', payload['id'] as String);
+          case 'complete_sub_goal':
+            await client
+                .from('sub_goals')
+                .update({'is_completed': true})
+                .eq('id', payload['id'] as String);
+            await _db.upsertSubGoal(LocalSubGoalsCompanion(
+                id: Value(payload['id'] as String), synced: const Value(true)));
+          case 'insert_task':
+            final taskId = payload['id'] as String;
+            final localTask = await _db.getPlanningTask(taskId);
+            await client.from('planning_tasks').upsert({
+              'id': taskId,
+              'sub_goal_id': payload['sub_goal_id'],
+              'user_id': payload['user_id'],
+              'name': payload['name'],
+              'weight': payload['weight'] ?? 1,
+              if (payload['due_date'] != null) 'due_date': payload['due_date'],
+              'is_completed': localTask?.isCompleted ?? false,
+              if (localTask?.completedAtMs != null)
+                'completed_at': DateTime.fromMillisecondsSinceEpoch(
+                    localTask!.completedAtMs!).toIso8601String(),
+            }, onConflict: 'id');
+            await _db.upsertPlanningTask(LocalPlanningTasksCompanion(
+                id: Value(taskId), synced: const Value(true)));
+          case 'toggle_task':
+            final isCompleted = payload['is_completed'] as bool;
+            await client.from('planning_tasks').update({
+              'is_completed': isCompleted,
+              'completed_at': payload['completed_at'],
+            }).eq('id', payload['id'] as String);
+            await _db.updatePlanningTask(payload['id'] as String,
+                const LocalPlanningTasksCompanion(synced: Value(true)));
+          case 'delete_task':
+            await client
+                .from('planning_tasks')
+                .delete()
+                .eq('id', payload['id'] as String)
+                .eq('user_id', userId);
+          case 'insert_milestone':
+            final msId = payload['id'] as String;
+            final localMs = await _db.getMilestone(msId);
+            await client.from('milestones').upsert({
+              'id': msId,
+              'goal_id': payload['goal_id'],
+              'name': payload['name'],
+              if (payload['target_date'] != null) 'target_date': payload['target_date'],
+              'is_completed': localMs?.isCompleted ?? false,
+            }, onConflict: 'id');
+            await _db.upsertMilestone(LocalMilestonesCompanion(
+                id: Value(msId), synced: const Value(true)));
+          case 'complete_milestone':
+            await client
+                .from('milestones')
+                .update({'is_completed': true})
+                .eq('id', payload['id'] as String);
+            await _db.upsertMilestone(LocalMilestonesCompanion(
+                id: Value(payload['id'] as String), synced: const Value(true)));
+          case 'delete_milestone':
+            await client
+                .from('milestones')
+                .delete()
+                .eq('id', payload['id'] as String);
+          case 'insert_habit_link':
+            await client.from('goal_habit_links').upsert({
+              'id': payload['id'],
+              'goal_id': payload['goal_id'],
+              'habit_id': payload['habit_id'],
+            }, onConflict: 'id');
+          case 'delete_habit_link':
+            await client
+                .from('goal_habit_links')
+                .delete()
+                .eq('id', payload['id'] as String);
+          case 'move_task':
+            await client
+                .from('planning_tasks')
+                .update({'sub_goal_id': payload['sub_goal_id'] as String})
+                .eq('id', payload['id'] as String)
+                .eq('user_id', userId);
+            await _db.updatePlanningTask(payload['id'] as String,
+                const LocalPlanningTasksCompanion(synced: Value(true)));
+          case 'update_goal_progress':
+            await client
+                .from('goals')
+                .update({'progress': payload['progress'] as double})
+                .eq('id', payload['id'] as String)
+                .eq('user_id', userId);
+            await _db.upsertGoal(LocalGoalsCompanion(
+                id: Value(payload['id'] as String), synced: const Value(true)));
+
           default:
             debugPrint(
                 'SiE Sync: unknown op ${op.operationType}');

@@ -10,6 +10,7 @@ import '../models/habit_log_entry.dart';
 import 'auth_state_provider.dart';
 import 'connectivity_provider.dart';
 import 'user_profile_provider.dart';
+import 'planning_provider.dart';
 
 String _fmt(DateTime dt) =>
     '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
@@ -545,6 +546,16 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         await ref
             .read(userProfileProvider.notifier)
             .applyLocalXpDelta(50, 10);
+        // Habit Synergy: boost linked goals
+        final links = await db.habitLinksForHabit(habitId);
+        if (links.isNotEmpty) {
+          final planning = ref.read(planningProvider.notifier);
+          final streak = state.valueOrNull?.streaks[habitId] ?? 0;
+          for (final link in links) {
+            final boost = streak > 7 ? 1.0 : link.boostValue;
+            await planning.applyHabitBoost(link.goalId, boost);
+          }
+        }
       }
     } catch (e, st) {
       state = AsyncData(prev);

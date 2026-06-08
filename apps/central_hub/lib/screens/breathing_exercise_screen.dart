@@ -4,20 +4,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 import 'mission_accomplished_screen.dart';
-
-// ── Shared HUD glass settings ──────────────────────────────────
-LiquidGlassSettings _hudGlass({double blur = 3.0, double glow = 0.88}) =>
-    LiquidGlassSettings(
-      blur: blur, thickness: 24, refractiveIndex: 1.45,
-      glassColor: const Color(0x0A0A0E1A),
-      lightAngle: GlassDefaults.lightAngle, lightIntensity: 0.72,
-      glowIntensity: glow, saturation: 1.4,
-      specularSharpness: GlassSpecularSharpness.sharp,
-      ambientStrength: 0.08, chromaticAberration: 0.015,
-    );
 
 // ── Settings ──────────────────────────────────────────────────
 
@@ -336,6 +324,10 @@ class _BreathingExerciseScreenState
     });
     _pulseCtrl.repeat(reverse: true);
     _breathColorCtrl.animateTo(1.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+    if (_settings.ambientEnabled) {
+      _audio.fadeAmbientTo(0.0);
+      _audio.startHum(volumeFactor: _settings.ambientVolume);
+    }
     if (_settings.exhaustRetentionSecs <= 30) _startHeartbeatSequence();
     _retentionTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) { t.cancel(); return; }
@@ -407,6 +399,10 @@ class _BreathingExerciseScreenState
 
   void _startRoundTransitionPhase() {
     if (!mounted) return;
+    _audio.stopHum();
+    if (_settings.ambientEnabled) {
+      _audio.fadeAmbientTo(_settings.ambientVolume);
+    }
     _circleCtrl.value = 1.0;
     setState(() {
       _phase = _Phase.roundTransition;
@@ -649,29 +645,30 @@ class _BreathingExerciseScreenState
               ),
             ),
 
-            // Glass sphere — always rendered with shader for refractive effect
-            GlassCard(
-              width: size,
-              height: size,
-              padding: EdgeInsets.zero,
-              shape: LiquidRoundedSuperellipse(borderRadius: size / 2),
-              useOwnLayer: true,
-              quality: GlassQuality.standard,
-              clipBehavior: Clip.antiAlias,
-              settings: LiquidGlassSettings(
-                blur: blur,
-                thickness: 36,
-                refractiveIndex: 1.55,
-                glassColor: glassColor,
-                lightAngle: GlassDefaults.lightAngle,
-                lightIntensity: 0.92,
-                glowIntensity: glow.clamp(0.0, 1.2),
-                saturation: 1.65,
-                specularSharpness: GlassSpecularSharpness.sharp,
-                ambientStrength: 0.14,
-                chromaticAberration: 0.030,
-              ),
-              child: switch (_phase) {
+            // Breathing sphere
+            ClipOval(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: blur * 8, sigmaY: blur * 8),
+                child: Container(
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        glassColor.withValues(alpha: (glassAlpha * 4).clamp(0.0, 0.35)),
+                        glassColor.withValues(alpha: glassAlpha),
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: accent.withValues(alpha: glow.clamp(0.0, 1.0) * 0.35),
+                        blurRadius: 30,
+                        spreadRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: switch (_phase) {
                 _Phase.idle => Center(
                     child: Icon(
                       Icons.fingerprint,
@@ -696,7 +693,9 @@ class _BreathingExerciseScreenState
                   ),
                 _ => const SizedBox.shrink(),
               },
-            ),
+            ),   // Container
+          ),     // BackdropFilter
+        ),       // ClipOval
           ],
         );
       },
@@ -844,22 +843,6 @@ class _BreathingExerciseScreenState
               glow: 0.92,
               child: Stack(
                 children: [
-                  // Ambient bloom absorbed by glass refraction (cosmic only)
-                  if (c.isCosmicMode)
-                    Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: RadialGradient(
-                            center: const Alignment(0.8, -0.5),
-                            radius: 1.1,
-                            colors: [
-                              c.accentSecondary.withValues(alpha: 0.09),
-                              Colors.transparent,
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
                   Align(
                     alignment: Alignment.center,
                     child: Column(
@@ -1085,24 +1068,7 @@ class _BreathingExerciseScreenState
     }
   }
 
-  // Helper: wraps content in GlassCard (cosmic) or flat Container (light/dark).
-  Widget _hudCard(
-    SieColors c, {
-    double blur = 3.0,
-    double glow = 0.88,
-    required Widget child,
-  }) {
-    if (c.isCosmicMode) {
-      return GlassCard(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-        shape: LiquidRoundedSuperellipse(borderRadius: 20),
-        useOwnLayer: true,
-        quality: GlassQuality.standard,
-        clipBehavior: Clip.antiAlias,
-        settings: _hudGlass(blur: blur, glow: glow),
-        child: child,
-      );
-    }
+  Widget _hudCard(SieColors c, {double blur = 3.0, double glow = 0.88, required Widget child}) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
@@ -1139,36 +1105,14 @@ class _TopBar extends ConsumerWidget {
     Widget circleBtn(IconData icon, VoidCallback onTap, {double alpha = 1.0}) {
       return GestureDetector(
         onTap: onTap,
-        child: c.isCosmicMode
-            ? GlassCard(
-                width: 36,
-                height: 36,
-                padding: EdgeInsets.zero,
-                shape: LiquidRoundedSuperellipse(borderRadius: 18),
-                useOwnLayer: true,
-                quality: GlassQuality.standard,
-                clipBehavior: Clip.antiAlias,
-                settings: _hudGlass(blur: 2.0, glow: 0.85),
-                child: Center(
-                  child: Icon(
-                    icon,
-                    color: c.textSecondary.withValues(alpha: alpha),
-                    size: 15,
-                  ),
-                ),
-              )
-            : Container(
-                width: 36,
-                height: 36,
-                decoration: c.flatCard(radius: 18),
-                child: Center(
-                  child: Icon(
-                    icon,
-                    color: c.textSecondary.withValues(alpha: alpha),
-                    size: 15,
-                  ),
-                ),
-              ),
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: c.flatCard(radius: 18),
+          child: Center(
+            child: Icon(icon, color: c.textSecondary.withValues(alpha: alpha), size: 15),
+          ),
+        ),
       );
     }
 
@@ -1179,37 +1123,14 @@ class _TopBar extends ConsumerWidget {
           circleBtn(Icons.arrow_back_ios_new, onBack),
           const Spacer(),
           if (showRound)
-            c.isCosmicMode
-                ? GlassCard(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 7),
-                    shape: LiquidRoundedSuperellipse(borderRadius: 16),
-                    useOwnLayer: true,
-                    quality: GlassQuality.standard,
-                    clipBehavior: Clip.antiAlias,
-                    settings: _hudGlass(blur: 2.5, glow: 0.88),
-                    child: Text(
-                      'ROUND $round / $totalRounds',
-                      style: TextStyle(
-                        color: c.textSecondary,
-                        fontSize: 11,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                  )
-                : Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 7),
-                    decoration: c.flatCard(radius: 16),
-                    child: Text(
-                      'ROUND $round / $totalRounds',
-                      style: TextStyle(
-                        color: c.textSecondary,
-                        fontSize: 11,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                  ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: c.flatCard(radius: 16),
+              child: Text(
+                'ROUND $round / $totalRounds',
+                style: TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1.5),
+              ),
+            ),
           const Spacer(),
           circleBtn(Icons.help_outline, onInfo, alpha: 0.7),
         ],
@@ -1246,23 +1167,11 @@ class _SettingsButton extends ConsumerWidget {
     return Center(
       child: GestureDetector(
         onTap: onTap,
-        child: c.isCosmicMode
-            ? GlassCard(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 20, vertical: 10),
-                shape: LiquidRoundedSuperellipse(borderRadius: 16),
-                useOwnLayer: true,
-                quality: GlassQuality.standard,
-                clipBehavior: Clip.antiAlias,
-                settings: _hudGlass(blur: 2.5, glow: 0.84),
-                child: content,
-              )
-            : Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 20, vertical: 10),
-                decoration: c.flatCard(radius: 16),
-                child: content,
-              ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          decoration: c.flatCard(radius: 16),
+          child: content,
+        ),
       ),
     );
   }
@@ -1492,31 +1401,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
       ),
     );
 
-    final cosmicDecoration = BoxDecoration(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          c.accent.withValues(alpha: 0.04),
-          const Color(0xFF0A0E1A).withValues(alpha: 0.92),
-        ],
-      ),
-      border: Border(
-        top: BorderSide(color: c.accent.withValues(alpha: 0.30), width: 1.0),
-        left: BorderSide(color: c.accent.withValues(alpha: 0.12), width: 1.0),
-        right: BorderSide(color: c.accent.withValues(alpha: 0.12), width: 1.0),
-      ),
-      boxShadow: [
-        BoxShadow(
-          color: c.accent.withValues(alpha: 0.08),
-          blurRadius: 60,
-          offset: const Offset(0, -10),
-        ),
-      ],
-    );
-
-    final lightDecoration = BoxDecoration(
+    final decoration = BoxDecoration(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       color: c.surface,
       border: Border(top: BorderSide(color: c.border, width: 1.0)),
@@ -1529,19 +1414,9 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
       ],
     );
 
-    if (c.isCosmicMode) {
-      return ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
-          child: Container(decoration: cosmicDecoration, child: content),
-        ),
-      );
-    }
-
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      child: Container(decoration: lightDecoration, child: content),
+      child: Container(decoration: decoration, child: content),
     );
   }
 }

@@ -232,9 +232,6 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      constraints: BoxConstraints(
-        maxWidth: MediaQuery.of(context).size.width - 40,
-      ),
       builder: (_) => _HabitDialog(
         existing: existing,
         onSave: (title, description, color, icon) {
@@ -296,7 +293,6 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
       ),
     );
   }
-
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -407,6 +403,78 @@ class _GlassIconBtn extends ConsumerWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Bottom Action Bar
+// ─────────────────────────────────────────────────────────────────────────────
+class _BottomActionBar extends ConsumerWidget {
+  final VoidCallback onAdd;
+  final VoidCallback onMorning;
+  final VoidCallback onEvening;
+  final bool isEmpty;
+
+  const _BottomActionBar({
+    required this.onAdd,
+    required this.onMorning,
+    required this.onEvening,
+    this.isEmpty = false,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+
+    Widget sideBtn(IconData icon, VoidCallback onTap) {
+      final child = Center(
+        child: Icon(icon, color: sc.textSecondary, size: 20),
+      );
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: sc.flatCard(radius: 24),
+          child: child,
+        ),
+      );
+    }
+
+    Widget centerBtn() {
+      if (isEmpty) return _AddButton(onTap: onAdd);
+      final child = Center(
+        child: Icon(Icons.add, color: Colors.black, size: 24),
+      );
+      return GestureDetector(
+        onTap: onAdd,
+        child: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: sc.accent,
+            boxShadow: [
+              BoxShadow(
+                color: sc.accent.withValues(alpha: 0.45),
+                blurRadius: 12,
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: child,
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        sideBtn(Icons.wb_sunny_outlined, onMorning),
+        const SizedBox(width: 20),
+        centerBtn(),
+        const SizedBox(width: 20),
+        sideBtn(Icons.nightlight_round, onEvening),
+      ],
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // View Mode Toggle
 // ─────────────────────────────────────────────────────────────────────────────
@@ -684,78 +752,6 @@ class _AllTimeHabitCard extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-class _BottomActionBar extends ConsumerWidget {
-  final VoidCallback onAdd;
-  final VoidCallback onMorning;
-  final VoidCallback onEvening;
-  final bool isEmpty;
-
-  const _BottomActionBar({
-    required this.onAdd,
-    required this.onMorning,
-    required this.onEvening,
-    this.isEmpty = false,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final sc = ref.watch(sieColorsProvider);
-
-    Widget sideBtn(IconData icon, VoidCallback onTap) {
-      final child = Center(
-        child: Icon(icon, color: sc.textSecondary, size: 20),
-      );
-      return GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 48,
-          height: 48,
-          decoration: sc.flatCard(radius: 24),
-          child: child,
-        ),
-      );
-    }
-
-    Widget centerBtn() {
-      if (isEmpty) return _AddButton(onTap: onAdd);
-      final child = Center(
-        child: Icon(Icons.add, color: Colors.black, size: 24),
-      );
-      return GestureDetector(
-        onTap: onAdd,
-        child: Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: sc.accent,
-            boxShadow: [
-              BoxShadow(
-                color: sc.accent.withValues(alpha: 0.45),
-                blurRadius: 12,
-                spreadRadius: 0,
-              ),
-            ],
-          ),
-          child: child,
-        ),
-      );
-    }
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        sideBtn(Icons.wb_sunny_outlined, onMorning),
-        const SizedBox(width: 20),
-        centerBtn(),
-        const SizedBox(width: 20),
-        sideBtn(Icons.nightlight_round, onEvening),
-      ],
     );
   }
 }
@@ -1053,15 +1049,7 @@ class _HabitMatrixCard extends ConsumerWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: accentColor,
-                    boxShadow: sc.isCosmicMode
-                        ? [
-                            BoxShadow(
-                              color: accentColor.withValues(alpha: 0.85),
-                              blurRadius: 7,
-                              spreadRadius: 1,
-                            ),
-                          ]
-                        : null,
+                    boxShadow: null,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -1182,9 +1170,7 @@ class _DayNode extends ConsumerWidget {
                   border: Border.all(
                     color: isToday
                         ? accentColor.withValues(alpha: 0.60)
-                        : (sc.isCosmicMode
-                            ? Colors.white.withValues(alpha: 0.13)
-                            : sc.border),
+                        : sc.border,
                     width: 1.5,
                   ),
                   color: isToday
@@ -1201,14 +1187,7 @@ class _DayNode extends ConsumerWidget {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: accentColor.withValues(alpha: 0.80),
-                          boxShadow: sc.isCosmicMode
-                              ? [
-                                  BoxShadow(
-                                    color: accentColor.withValues(alpha: 0.50),
-                                    blurRadius: 5,
-                                  ),
-                                ]
-                              : null,
+                          boxShadow: null,
                         ),
                       ),
                     )
@@ -1222,9 +1201,7 @@ class _DayNode extends ConsumerWidget {
                 ? accentColor.withValues(alpha: 0.90)
                 : isToday
                     ? accentColor.withValues(alpha: 0.65)
-                    : (sc.isCosmicMode
-                        ? Colors.white.withValues(alpha: 0.22)
-                        : sc.textSecondary.withValues(alpha: 0.4)),
+                    : sc.textSecondary.withValues(alpha: 0.4),
             fontSize: 8,
             height: 1.0,
             letterSpacing: 0.5,
@@ -1307,19 +1284,10 @@ class _EmptyState extends ConsumerWidget {
                     border: Border.all(
                       color: lit
                           ? sc.accent.withValues(alpha: 0.40)
-                          : (sc.isCosmicMode
-                              ? Colors.white.withValues(alpha: 0.09)
-                              : sc.border),
+                          : sc.border,
                       width: 1.2,
                     ),
-                    boxShadow: lit && sc.isCosmicMode
-                        ? [
-                            BoxShadow(
-                              color: sc.accent.withValues(alpha: 0.28),
-                              blurRadius: 7,
-                            ),
-                          ]
-                        : null,
+                    boxShadow: null,
                   ),
                 );
               }),
@@ -1454,10 +1422,12 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
   String? _selectedIcon;
 
   static const _colorOptions = [
-    '#00C8FF',
-    '#00E5A0',
-    '#A78BFA',
-    '#F59E0B',
+    '#5AADA0',
+    '#6A8ED8',
+    '#E07830',
+    '#C8A84B',
+    '#C05080',
+    '#70B870',
   ];
 
   static const _iconOptions = [
@@ -1468,7 +1438,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
 
   Color _toColor(String hex) {
     final h = hex.replaceAll('#', '').padLeft(6, '0');
-    return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF00C8FF);
+    return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF5AADA0);
   }
 
   @override
@@ -1476,7 +1446,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
     super.initState();
     _titleCtrl = TextEditingController(text: widget.existing?.title ?? '');
     _descCtrl  = TextEditingController(text: widget.existing?.description ?? '');
-    _selectedColor = widget.existing?.color ?? '#00C8FF';
+    _selectedColor = widget.existing?.color ?? '#5AADA0';
     _selectedIcon  = widget.existing?.icon;
   }
 
@@ -1492,96 +1462,55 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
     final sc     = ref.watch(sieColorsProvider);
     final isEdit = widget.existing != null;
     final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
-    return TweenAnimationBuilder<Color?>(
-      tween: ColorTween(
-        begin: _toColor(_selectedColor),
-        end: _toColor(_selectedColor),
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + keyboardBottom),
+      decoration: BoxDecoration(
+        color: sc.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: sc.border),
       ),
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeInOut,
-      builder: (_, animColor, child) {
-        final habitColor = animColor ?? _toColor(_selectedColor);
-        return ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(20)),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    habitColor.withValues(alpha: 0.08),
-                    sc.surface,
-                  ],
-                ),
-                border: Border(
-                  top: BorderSide(
-                    color: habitColor.withValues(alpha: 0.50),
-                    width: 1.0,
-                  ),
-                  left: BorderSide(
-                    color: habitColor.withValues(alpha: 0.18),
-                    width: 1.0,
-                  ),
-                  right: BorderSide(
-                    color: habitColor.withValues(alpha: 0.18),
-                    width: 1.0,
-                  ),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: habitColor.withValues(alpha: 0.12),
-                    blurRadius: 40,
-                    offset: const Offset(0, -8),
-                  ),
-                ],
-              ),
-              padding: EdgeInsets.fromLTRB(24, 14, 24, 20 + keyboardBottom),
-              child: child,
-            ),
-          ),
-        );
-      },
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Center(
             child: Container(
-              width: 36,
-              height: 3,
-              margin: const EdgeInsets.only(bottom: 12),
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(2),
-                color: Colors.white.withValues(alpha: 0.20),
+                color: sc.border,
               ),
             ),
           ),
           Text(
             isEdit ? 'EDIT PROTOCOL' : 'NEW PROTOCOL',
-            style: Theme.of(context).textTheme.titleMedium,
+            style: TextStyle(
+              color: sc.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2.5,
+            ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           _GlowField(controller: _titleCtrl, label: 'TITLE'),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           _GlowField(
               controller: _descCtrl,
               label: 'DESCRIPTION (OPTIONAL)'),
-          const SizedBox(height: 10),
-          Consumer(builder: (_, ref2, _) {
-            final sc2 = ref2.watch(sieColorsProvider);
-            return Text(
-              'COLOR',
-              style: TextStyle(
-                color: sc2.textSecondary,
-                fontSize: 10,
-                letterSpacing: 1.5,
-              ),
-            );
-          }),
+          const SizedBox(height: 20),
+          Text(
+            'COLOR',
+            style: TextStyle(
+              color: sc.textSecondary,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
+            ),
+          ),
           const SizedBox(height: 8),
           Row(
             children: _colorOptions.map((hex) {
@@ -1593,18 +1522,16 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
               );
             }).toList(),
           ),
-          const SizedBox(height: 10),
-          Consumer(builder: (_, ref2, _) {
-            final sc2 = ref2.watch(sieColorsProvider);
-            return Text(
-              'ICON',
-              style: TextStyle(
-                color: sc2.textSecondary,
-                fontSize: 10,
-                letterSpacing: 1.5,
-              ),
-            );
-          }),
+          const SizedBox(height: 20),
+          Text(
+            'ICON',
+            style: TextStyle(
+              color: sc.textSecondary,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
+            ),
+          ),
           const SizedBox(height: 8),
           _IconPicker(
             options: _iconOptions,
@@ -1612,38 +1539,35 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
             accentColor: _toColor(_selectedColor),
             onSelect: (v) => setState(() => _selectedIcon = v),
           ),
-          const SizedBox(height: 16),
-          Consumer(builder: (_, ref2, _) {
-            final sc2 = ref2.watch(sieColorsProvider);
-            return Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _SheetTextBtn(
-                  label: 'CANCEL',
-                  color: sc2.textSecondary,
-                  onTap: () => Navigator.of(context).pop(),
-                ),
-                const SizedBox(width: 8),
-                _SheetTextBtn(
-                  label: isEdit ? 'SAVE' : 'DEPLOY',
-                  color: _toColor(_selectedColor),
-                  onTap: () {
-                    final title = _titleCtrl.text.trim();
-                    if (title.isEmpty) return;
-                    widget.onSave(
-                      title,
-                      _descCtrl.text.trim().isEmpty
-                          ? null
-                          : _descCtrl.text.trim(),
-                      _selectedColor,
-                      _selectedIcon,
-                    );
-                    Navigator.of(context).pop();
-                  },
-                ),
-              ],
-            );
-          }),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              _SheetTextBtn(
+                label: 'CANCEL',
+                color: sc.textSecondary,
+                onTap: () => Navigator.of(context).pop(),
+              ),
+              const SizedBox(width: 12),
+              _SheetTextBtn(
+                label: isEdit ? 'SAVE' : 'DEPLOY',
+                color: _toColor(_selectedColor),
+                onTap: () {
+                  final title = _titleCtrl.text.trim();
+                  if (title.isEmpty) return;
+                  widget.onSave(
+                    title,
+                    _descCtrl.text.trim().isEmpty
+                        ? null
+                        : _descCtrl.text.trim(),
+                    _selectedColor,
+                    _selectedIcon,
+                  );
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -1728,7 +1652,7 @@ class _GlowFieldState extends ConsumerState<_GlowField> {
 
 // ── Color Lens Chip ───────────────────────────────────────────
 
-class _ColorLens extends StatefulWidget {
+class _ColorLens extends StatelessWidget {
   final Color color;
   final bool selected;
   final VoidCallback onTap;
@@ -1739,53 +1663,19 @@ class _ColorLens extends StatefulWidget {
   });
 
   @override
-  State<_ColorLens> createState() => _ColorLensState();
-}
-
-class _ColorLensState extends State<_ColorLens> {
-  bool _pressed = false;
-
-  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: widget.onTap,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? 0.97 : 1.0,
-        duration: _pressed
-            ? const Duration(milliseconds: 80)
-            : const Duration(milliseconds: 220),
-        child: Container(
-          width: 28,
-          height: 28,
-          margin: const EdgeInsets.only(right: 10),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: widget.selected
-                ? widget.color
-                : widget.color.withValues(alpha: 0.40),
-            border: widget.selected
-                ? Border.all(color: Colors.white, width: 2)
-                : Border.all(
-                    color: widget.color.withValues(alpha: 0.50),
-                    width: 1,
-                  ),
-            boxShadow: widget.selected
-                ? [
-                    BoxShadow(
-                      color: widget.color.withValues(alpha: 0.65),
-                      blurRadius: 10,
-                      spreadRadius: 2,
-                    ),
-                    BoxShadow(
-                      color: widget.color.withValues(alpha: 0.30),
-                      blurRadius: 20,
-                    ),
-                  ]
-                : null,
-          ),
+      onTap: onTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        margin: const EdgeInsets.only(right: 8),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color,
+          border: selected
+              ? Border.all(color: Colors.white, width: 2.5)
+              : null,
         ),
       ),
     );
@@ -2095,9 +1985,7 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
               end: Alignment.bottomRight,
               colors: [
                 accentColor.withValues(alpha: 0.08),
-                sc.isCosmicMode
-                    ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
-                    : sc.surface,
+                sc.surface,
               ],
             ),
             border: Border(
@@ -2352,16 +2240,7 @@ class HabitArchiveScreen extends ConsumerWidget {
                                     fontSize: 20,
                                     fontWeight: FontWeight.w900,
                                     letterSpacing: 1.5,
-                                    shadows: sc.isCosmicMode
-                                        ? [
-                                            Shadow(
-                                                color: sc.accent,
-                                                blurRadius: 8),
-                                            Shadow(
-                                                color: sc.accent,
-                                                blurRadius: 22),
-                                          ]
-                                        : null,
+                                    shadows: null,
                                   ),
                                 ),
                                 TextSpan(
@@ -2508,9 +2387,7 @@ class _ArchivedHabitCardState extends ConsumerState<_ArchivedHabitCard> {
               end: Alignment.bottomRight,
               colors: [
                 habitColor.withValues(alpha: 0.06),
-                sc.isCosmicMode
-                    ? const Color(0xFF0A0E1A).withValues(alpha: 0.85)
-                    : sc.surface,
+                sc.surface,
               ],
             ),
             border: Border.all(
@@ -2525,14 +2402,7 @@ class _ArchivedHabitCardState extends ConsumerState<_ArchivedHabitCard> {
                 decoration: BoxDecoration(
                   color: habitColor,
                   borderRadius: BorderRadius.circular(2),
-                  boxShadow: sc.isCosmicMode
-                      ? [
-                          BoxShadow(
-                            color: habitColor.withValues(alpha: 0.4),
-                            blurRadius: 8,
-                          )
-                        ]
-                      : null,
+                  boxShadow: null,
                 ),
               ),
               const SizedBox(width: 12),
@@ -2849,9 +2719,7 @@ class _RoutineBlockState extends ConsumerState<_RoutineBlock> {
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.8,
-                shadows: sc.isCosmicMode
-                    ? [Shadow(color: sc.accent, blurRadius: 8)]
-                    : null,
+                shadows: null,
               ),
             ),
             const SizedBox(height: 10),
@@ -3032,16 +2900,7 @@ class _CarouselHabitSlide extends ConsumerWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: habitColor,
-                    boxShadow: sc.isCosmicMode
-                        ? [
-                            BoxShadow(
-                              color:
-                                  habitColor.withValues(alpha: 0.80),
-                              blurRadius: 6,
-                              spreadRadius: 1,
-                            ),
-                          ]
-                        : null,
+                    boxShadow: null,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -3072,13 +2931,7 @@ class _CarouselHabitSlide extends ConsumerWidget {
                     fontSize: 10,
                     letterSpacing: 1.5,
                     fontWeight: FontWeight.w700,
-                    shadows: sc.isCosmicMode
-                        ? [
-                            Shadow(
-                                color: habitColor.withValues(alpha: 0.6),
-                                blurRadius: 8)
-                          ]
-                        : null,
+                    shadows: null,
                   ),
                 ),
               )
@@ -3327,7 +3180,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
               ),
               padding: const EdgeInsets.all(20),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                mainAxisSize: min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
@@ -3447,18 +3300,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                                     fontSize: 20,
                                     fontWeight: FontWeight.w900,
                                     letterSpacing: 1.5,
-                                    shadows: sc.isCosmicMode
-                                        ? [
-                                            Shadow(
-                                              color: sc.accent,
-                                              blurRadius: 8,
-                                            ),
-                                            Shadow(
-                                              color: sc.accent,
-                                              blurRadius: 22,
-                                            ),
-                                          ]
-                                        : null,
+                                    shadows: null,
                                   ),
                                 ),
                                 TextSpan(
@@ -3490,162 +3332,111 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                       ),
                     ),
                     _GlassIconBtn(
-                      icon: Icons.settings_outlined,
+                      icon: Icons.more_horiz,
                       onTap: _editHabit,
                       size: 18,
                     ),
                   ],
                 ),
               ),
-              // ── Stats strip ──────────────────────────────────────────────
+              const SizedBox(height: 12),
+              // ── Quick Stats ──────────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
                   children: [
-                    _StatChip(
+                    _DetailStatCard(
                       label: 'STREAK',
                       value: '$streak',
-                      accentColor: accentColor,
+                      color: accentColor,
+                      sc: sc,
                     ),
-                    const SizedBox(width: 10),
-                    _StatChip(
-                      label: 'СЕГОДНЯ',
-                      value: completedToday ? 'ДА' : 'НЕТ',
-                      accentColor: completedToday
-                          ? accentColor
-                          : sc.textSecondary.withValues(alpha: 0.5),
-                    ),
-                    const SizedBox(width: 10),
-                    _StatChip(
-                      label: 'ВСЕГО',
+                    const SizedBox(width: 12),
+                    _DetailStatCard(
+                      label: 'TOTAL',
                       value: '$totalDone',
-                      accentColor: accentColor,
+                      color: sc.accent,
+                      sc: sc,
                     ),
                   ],
                 ),
               ),
-              // ── Today card ───────────────────────────────────────────────
+              const SizedBox(height: 20),
+              // ── Today Status ─────────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                child: SieGlassCard(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 7-day graph
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: days.asMap().entries.map((e) {
-                          final isToday    = e.key == 6;
-                          final isComplete = logDates.contains(_fmt(e.value));
-                          return _DayNode(
-                            date: e.value,
-                            isCompleted: isComplete,
-                            isToday: isToday,
-                            accentColor: accentColor,
-                          );
-                        }).toList(),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'STATUS: ${completedToday ? "COMPLETED" : "PENDING"}',
+                      style: TextStyle(
+                        color: sc.textSecondary.withValues(alpha: 0.6),
+                        fontSize: 9,
+                        letterSpacing: 1.5,
+                        fontWeight: FontWeight.w700,
                       ),
-                      const SizedBox(height: 16),
-                      // Action buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _DetailActionBtn(
-                              label: completedToday
-                                  ? 'ОТМЕНИТЬ'
-                                  : 'ОТМЕТИТЬ',
-                              icon: completedToday
-                                  ? Icons.remove_circle_outline
-                                  : Icons.check_circle_outline,
-                              accentColor: completedToday
-                                  ? sc.textSecondary.withValues(alpha: 0.6)
-                                  : accentColor,
-                              onTap: () => ref
-                                  .read(habitsProvider.notifier)
-                                  .toggleHabit(
-                                      widget.habit.id, DateTime.now()),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _DetailActionBtn(
-                              label: todayEntry?.note != null ||
-                                      todayEntry?.emoji != null
-                                  ? 'ЗАМЕТКА ✎'
-                                  : '+ ЗАМЕТКА',
-                              icon: Icons.edit_outlined,
-                              accentColor: completedToday
-                                  ? accentColor
-                                  : sc.textSecondary.withValues(alpha: 0.35),
-                              onTap: completedToday
-                                  ? () => _openReflection(
-                                      today, todayEntry, accentColor)
-                                  : null,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 8),
+                    _TodayActionCard(
+                      completed: completedToday,
+                      accentColor: accentColor,
+                      emoji: todayEntry?.emoji,
+                      note: todayEntry?.note,
+                      onToggle: () => ref
+                          .read(habitsProvider.notifier)
+                          .toggleHabit(widget.habit.id, DateTime.now()),
+                      onOpenReflection: () => _openReflection(
+                          today, todayEntry, accentColor),
+                    ),
+                  ],
                 ),
               ),
-              // ── Journal header ───────────────────────────────────────────
+              const SizedBox(height: 24),
+              // ── Journal Timeline ──────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Text(
-                  'ЖУРНАЛ',
+                  'JOURNAL TIMELINE',
                   style: TextStyle(
-                    color: sc.textSecondary.withValues(alpha: 0.55),
-                    fontSize: 9,
-                    letterSpacing: 2.5,
+                    color: sc.textSecondary,
+                    fontSize: 10,
+                    letterSpacing: 2,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-              // ── Journal timeline ─────────────────────────────────────────
+              const SizedBox(height: 12),
               Expanded(
                 child: entriesAsync.when(
-                  loading: () => Center(
-                    child: CircularProgressIndicator(
-                      color: accentColor,
-                      strokeWidth: 1.5,
-                    ),
-                  ),
-                  error: (_, _) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Text(
-                        'ОШИБКА ЗАГРУЗКИ',
-                        style: TextStyle(
-                          color: sc.textSecondary,
-                          fontSize: 11,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                    ),
+                  loading: () => const SizedBox.shrink(),
+                  error: (e, _) => Center(
+                    child: Text('Error loading journal',
+                        style: TextStyle(color: sc.textSecondary)),
                   ),
                   data: (entries) {
-                    final journaled = entries
-                        .where((e) =>
-                            (e.note?.isNotEmpty ?? false) || e.emoji != null)
-                        .toList();
-
-                    if (journaled.isEmpty) {
-                      return _EmptyJournal(accentColor: accentColor);
+                    final reversed = entries.reversed.toList();
+                    if (reversed.isEmpty) {
+                      return Center(
+                        child: Text(
+                          'No journal entries yet',
+                          style: TextStyle(
+                            color: sc.textSecondary.withValues(alpha: 0.5),
+                            fontSize: 12,
+                          ),
+                        ),
+                      );
                     }
-
-                    return ListView.separated(
+                    return ListView.builder(
                       padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
-                      itemCount: journaled.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 10),
+                      itemCount: reversed.length,
                       itemBuilder: (ctx, i) => _JournalEntryTile(
-                        entry: journaled[i],
-                        habit: widget.habit,
+                        entry: reversed[i],
                         accentColor: accentColor,
-                        onEdit: () => _openReflection(
-                          journaled[i].completedAt,
-                          journaled[i],
+                        sc: sc,
+                        onTap: () => _openReflection(
+                          reversed[i].completedAt,
+                          reversed[i],
                           accentColor,
                         ),
                       ),
@@ -3661,48 +3452,49 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Stat Chip
-// ─────────────────────────────────────────────────────────────────────────────
-class _StatChip extends ConsumerWidget {
-  final String label;
-  final String value;
-  final Color accentColor;
-
-  const _StatChip({
+class _DetailStatCard extends StatelessWidget {
+  const _DetailStatCard({
     required this.label,
     required this.value,
-    required this.accentColor,
+    required this.color,
+    required this.sc,
   });
 
+  final String label;
+  final String value;
+  final Color color;
+  final SieColors sc;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final sc = ref.watch(sieColorsProvider);
+  Widget build(BuildContext context) {
     return Expanded(
-      child: SieGlassCard(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+          color: color.withValues(alpha: 0.05),
+        ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              value,
+              label,
               style: TextStyle(
-                color: accentColor,
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.0,
-                height: 1.0,
+                color: color.withValues(alpha: 0.6),
+                fontSize: 9,
+                letterSpacing: 1.5,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 4),
             Text(
-              label,
+              value,
               style: TextStyle(
-                color: sc.textSecondary.withValues(alpha: 0.55),
-                fontSize: 8,
-                letterSpacing: 1.5,
-                fontWeight: FontWeight.w600,
+                color: color,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
               ),
             ),
           ],
@@ -3712,238 +3504,187 @@ class _StatChip extends ConsumerWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Detail Action Button
-// ─────────────────────────────────────────────────────────────────────────────
-class _DetailActionBtn extends ConsumerWidget {
-  final String label;
-  final IconData icon;
-  final Color accentColor;
-  final VoidCallback? onTap;
-
-  const _DetailActionBtn({
-    required this.label,
-    required this.icon,
+class _TodayActionCard extends StatelessWidget {
+  const _TodayActionCard({
+    required this.completed,
     required this.accentColor,
-    this.onTap,
+    required this.onToggle,
+    required this.onOpenReflection,
+    this.emoji,
+    this.note,
   });
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final sc = ref.watch(sieColorsProvider);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          color: onTap != null
-              ? accentColor.withValues(alpha: 0.10)
-              : sc.textSecondary.withValues(alpha: 0.04),
-          border: Border.all(
-            color: onTap != null
-                ? accentColor.withValues(alpha: 0.30)
-                : sc.textSecondary.withValues(alpha: 0.12),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 13,
-              color: onTap != null
-                  ? accentColor
-                  : sc.textSecondary.withValues(alpha: 0.35),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: onTap != null
-                    ? accentColor
-                    : sc.textSecondary.withValues(alpha: 0.35),
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Journal Entry Tile
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _JournalEntryTile extends ConsumerWidget {
-  final HabitLogEntry entry;
-  final Habit habit;
+  final bool completed;
   final Color accentColor;
-  final VoidCallback onEdit;
-
-  const _JournalEntryTile({
-    required this.entry,
-    required this.habit,
-    required this.accentColor,
-    required this.onEdit,
-  });
-
-  static String _fmtDisplay(String dateStr) {
-    try {
-      final parts = dateStr.split('-');
-      if (parts.length != 3) return dateStr;
-      return '${parts[2]}.${parts[1]}.${parts[0]}';
-    } catch (_) {
-      return dateStr;
-    }
-  }
+  final VoidCallback onToggle;
+  final VoidCallback onOpenReflection;
+  final String? emoji;
+  final String? note;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final sc = ref.watch(sieColorsProvider);
+  Widget build(BuildContext context) {
+    final sc = ProviderScope.containerOf(context).read(sieColorsProvider);
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Timeline column: date + node dot
-        SizedBox(
-          width: 52,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  _fmtDisplay(entry.completedAt),
-                  style: TextStyle(
-                    color: sc.textSecondary.withValues(alpha: 0.55),
-                    fontSize: 8,
-                    letterSpacing: 0.5,
-                    fontWeight: FontWeight.w500,
-                    height: 1.2,
-                  ),
-                  textAlign: TextAlign.center,
+    return SieGlassCard(
+      onTap: onOpenReflection,
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: onToggle,
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: completed
+                    ? accentColor.withValues(alpha: 0.15)
+                    : Colors.transparent,
+                border: Border.all(
+                  color: completed
+                      ? accentColor
+                      : sc.textSecondary.withValues(alpha: 0.2),
+                  width: 1.5,
                 ),
               ),
-              const SizedBox(height: 6),
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: accentColor,
-                  boxShadow: [
-                    BoxShadow(
-                      color: accentColor.withValues(alpha: 0.6),
-                      blurRadius: 6,
-                      spreadRadius: 1,
-                    ),
-                  ],
-                ),
+              child: Icon(
+                completed ? Icons.check : Icons.add,
+                color: completed ? accentColor : sc.textSecondary,
               ),
-            ],
+            ),
           ),
-        ),
-        const SizedBox(width: 8),
-        // Entry card
-        Expanded(
-          child: SieGlassCard(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          const SizedBox(width: 16),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (entry.emoji != null) ...[
-                      Text(entry.emoji!,
-                          style: const TextStyle(fontSize: 22)),
-                      const SizedBox(width: 10),
-                    ],
-                    if (entry.note?.isNotEmpty == true)
-                      Expanded(
-                        child: Text(
-                          entry.note!,
-                          style: TextStyle(
-                            color: sc.textPrimary.withValues(alpha: 0.85),
-                            fontSize: 12,
-                            letterSpacing: 0.2,
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
-                  ],
+                Text(
+                  completed ? 'MISSION ACCOMPLISHED' : 'INITIALIZE PROTOCOL',
+                  style: TextStyle(
+                    color: completed ? accentColor : sc.textPrimary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1,
+                  ),
                 ),
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: GestureDetector(
-                    onTap: onEdit,
-                    child: Text(
-                      'EDIT',
-                      style: TextStyle(
-                        color: accentColor.withValues(alpha: 0.7),
-                        fontSize: 9,
-                        letterSpacing: 1.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                const SizedBox(height: 2),
+                Text(
+                  completed
+                      ? (note ?? 'Tap to add reflection')
+                      : 'Mark as done for today',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: sc.textSecondary.withValues(alpha: 0.6),
+                    fontSize: 10,
                   ),
                 ),
               ],
             ),
           ),
-        ),
-      ],
+          if (emoji != null) ...[
+            const SizedBox(width: 8),
+            Text(emoji!, style: const TextStyle(fontSize: 20)),
+          ] else if (completed) ...[
+            const SizedBox(width: 8),
+            Icon(Icons.edit_note,
+                color: sc.textSecondary.withValues(alpha: 0.4), size: 20),
+          ],
+        ],
+      ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Empty Journal State
-// ─────────────────────────────────────────────────────────────────────────────
+class _JournalEntryTile extends StatelessWidget {
+  const _JournalEntryTile({
+    required this.entry,
+    required this.accentColor,
+    required this.sc,
+    required this.onTap,
+  });
 
-class _EmptyJournal extends ConsumerWidget {
+  final HabitLogEntry entry;
   final Color accentColor;
-  const _EmptyJournal({required this.accentColor});
+  final SieColors sc;
+  final VoidCallback onTap;
+
+  static String _fmtDate(String s) {
+    final dt = DateTime.parse(s);
+    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${days[dt.weekday - 1]}, ${dt.day} ${months[dt.month - 1]}';
+  }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final sc = ref.watch(sieColorsProvider);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: sc.border.withValues(alpha: 0.5)),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.auto_stories_outlined,
-              color: accentColor.withValues(alpha: 0.35),
-              size: 40,
+            Column(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: accentColor.withValues(alpha: 0.1),
+                    border: Border.all(
+                        color: accentColor.withValues(alpha: 0.3)),
+                  ),
+                  alignment: Alignment.center,
+                  child: entry.emoji != null
+                      ? Text(entry.emoji!,
+                          style: const TextStyle(fontSize: 14))
+                      : Icon(Icons.check, size: 14, color: accentColor),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: 1,
+                  height: 20,
+                  color: sc.border.withValues(alpha: 0.3),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              'ЖУРНАЛ ПУСТ',
-              style: TextStyle(
-                color: sc.textSecondary.withValues(alpha: 0.6),
-                fontSize: 11,
-                letterSpacing: 2,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Отметьте выполнение и добавьте\nзаметку через кнопку "+ ЗАМЕТКА"',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: sc.textSecondary.withValues(alpha: 0.4),
-                fontSize: 10,
-                letterSpacing: 0.5,
-                height: 1.5,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _fmtDate(entry.completedAt).toUpperCase(),
+                    style: TextStyle(
+                      color: sc.textPrimary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  if (entry.note != null && entry.note!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      entry.note!,
+                      style: TextStyle(
+                        color: sc.textSecondary,
+                        fontSize: 11,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ],

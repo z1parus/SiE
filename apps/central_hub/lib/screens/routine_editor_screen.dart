@@ -1,7 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sie_core/sie_core.dart';
 import 'habit_tracker_screen.dart' show HabitDetailScreen;
 
@@ -193,34 +192,6 @@ class _EditorIconBtn extends ConsumerWidget {
     final child = Center(
       child: Icon(icon, color: sc.textSecondary, size: size),
     );
-    if (sc.isCosmicMode) {
-      return GestureDetector(
-        onTap: onTap,
-        child: GlassCard(
-          width: 36,
-          height: 36,
-          padding: EdgeInsets.zero,
-          shape: LiquidRoundedSuperellipse(borderRadius: 18),
-          useOwnLayer: true,
-          quality: GlassQuality.standard,
-          clipBehavior: Clip.antiAlias,
-          settings: LiquidGlassSettings(
-            blur: 2.0,
-            thickness: 24,
-            refractiveIndex: 1.45,
-            glassColor: const Color(0x0A0A0E1A),
-            lightAngle: GlassDefaults.lightAngle,
-            lightIntensity: 0.72,
-            glowIntensity: 0.85,
-            saturation: 1.4,
-            specularSharpness: GlassSpecularSharpness.sharp,
-            ambientStrength: 0.08,
-            chromaticAberration: 0.015,
-          ),
-          child: child,
-        ),
-      );
-    }
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -266,15 +237,7 @@ class _RoutineMemberTile extends ConsumerWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: color,
-                boxShadow: sc.isCosmicMode
-                    ? [
-                        BoxShadow(
-                          color: color.withValues(alpha: 0.70),
-                          blurRadius: 6,
-                          spreadRadius: 1,
-                        ),
-                      ]
-                    : null,
+                boxShadow: null,
               ),
             ),
             const SizedBox(width: 12),
@@ -371,123 +334,97 @@ class _HabitPickerSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final sc         = ref.watch(sieColorsProvider);
     final habitsAsync = ref.watch(habitsProvider);
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(20)),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                sc.accent.withValues(alpha: 0.05),
-                sc.isCosmicMode
-                    ? const Color(0xFF0A0E1A).withValues(alpha: 0.92)
-                    : sc.surface,
-              ],
-            ),
-            border: Border(
-              top: BorderSide(
-                  color: sc.accent.withValues(alpha: 0.25), width: 1.0),
-              left: BorderSide(
-                  color: sc.accent.withValues(alpha: 0.12), width: 1.0),
-              right: BorderSide(
-                  color: sc.accent.withValues(alpha: 0.12), width: 1.0),
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
+      decoration: BoxDecoration(
+        color: sc.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: sc.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(2),
+                color: sc.border,
+              ),
             ),
           ),
-          padding: EdgeInsets.fromLTRB(
-            20,
-            14,
-            20,
-            20 + MediaQuery.of(context).padding.bottom,
+          Text(
+            'ADD TO ROUTINE',
+            style: TextStyle(
+              color: sc.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2.5,
+            ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 3,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(2),
-                    color: Colors.white.withValues(alpha: 0.20),
-                  ),
-                ),
+          const SizedBox(height: 16),
+          habitsAsync.when(
+            loading: () => Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: CircularProgressIndicator(
+                    color: sc.accent, strokeWidth: 1.5),
               ),
-              Text(
-                'ДОБАВИТЬ ПРИВЫЧКУ',
-                style: TextStyle(
-                  color: sc.textPrimary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 2,
-                ),
-              ),
-              const SizedBox(height: 12),
-              habitsAsync.when(
-                loading: () => Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: CircularProgressIndicator(
-                        color: sc.accent, strokeWidth: 1.5),
-                  ),
-                ),
-                error: (e, _) => const SizedBox.shrink(),
-                data: (state) {
-                  final available = state.habits
-                      .where((h) => !existingHabitIds.contains(h.id))
-                      .toList();
-                  if (available.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Center(
-                        child: Text(
-                          'Все активные привычки уже добавлены',
-                          style: TextStyle(
-                            color: sc.textSecondary,
-                            fontSize: 11,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
+            ),
+            error: (e, _) => const SizedBox.shrink(),
+            data: (state) {
+              final available = state.habits
+                  .where((h) => !existingHabitIds.contains(h.id))
+                  .toList();
+              if (available.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text(
+                      'Все активные привычки уже добавлены',
+                      style: TextStyle(
+                        color: sc.textSecondary,
+                        fontSize: 12,
+                        letterSpacing: 0.3,
                       ),
-                    );
-                  }
-                  return ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight:
-                          MediaQuery.of(context).size.height * 0.40,
                     ),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: available.length,
-                      separatorBuilder: (_, _) =>
-                          const SizedBox(height: 8),
-                      itemBuilder: (context, i) {
-                        final habit = available[i];
-                        return _HabitPickerTile(
-                          habit: habit,
-                          onTap: () {
-                            final notifier = ref
-                                .read(habitRoutinesProvider.notifier);
-                            final routineId = currentRoutineId;
-                            Navigator.of(context).pop();
-                            _doAdd(notifier, routineId, habit.id);
-                          },
-                        );
+                  ),
+                );
+              }
+              return ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight:
+                      MediaQuery.of(context).size.height * 0.40,
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: available.length,
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(height: 8),
+                  itemBuilder: (context, i) {
+                    final habit = available[i];
+                    return _HabitPickerTile(
+                      habit: habit,
+                      onTap: () {
+                        final notifier = ref
+                            .read(habitRoutinesProvider.notifier);
+                        final routineId = currentRoutineId;
+                        Navigator.of(context).pop();
+                        _doAdd(notifier, routineId, habit.id);
                       },
-                    ),
-                  );
-                },
-              ),
-            ],
+                    );
+                  },
+                ),
+              );
+            },
           ),
-        ),
+        ],
       ),
     );
   }

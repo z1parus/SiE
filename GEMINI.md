@@ -5,16 +5,26 @@
 - **Git & GitHub:** Assist with version control tasks, commit message drafting, and PR preparation.
 - **Workflow:** Act as a senior peer programmer, providing high-signal technical rationale and maintaining engineering standards.
 
+### 🛡️ Режим Планирования (Planning Mode)
+Специальный протокол для проработки концепций, логики и архитектуры без риска для кодовой базы. Активируется фразой: **"Переходим в режим планирования"**.
+
+**Жесткие ограничения Режима Планирования:**
+1. **Scope:** Работа ведется *исключительно* в директории `planningSources`.
+2. **File Types:** Разрешено создание и редактирование *только* `.md` файлов.
+3. **Code Access:** Файлы исходного кода (lib, test, supabase и т.д.) доступны *исключительно в режиме чтения* для анализа контекста.
+4. **No Code Changes:** Категорически запрещено вносить любые изменения в исполняемый код проекта.
+5. **Goal:** Результатом сессии должен быть набор логически завершенных спецификаций, схем БД и описаний интерфейсов, готовых к реализации.
+
 ## Project Architecture & Structure
 
 ### 1. Workspace Overview
 - **Type:** Multi-package Flutter/Dart project (Monorepo-lite).
-- **Core Stack:** Flutter (SDK ^3.11.5), Riverpod (State Management), Supabase (Backend/Auth), Liquid Glass (Visual Engine).
+- **Core Stack:** Flutter (SDK ^3.11.5), Riverpod (State Management), Supabase (Backend/Auth).
 
 ### 2. Modules & Packages
 - **`apps/central_hub` (Main App):**
   - The primary entry point and user interface.
-  - **Dependencies:** `flutter_riverpod`, `supabase_flutter`, `fl_chart`, `liquid_glass_widgets`, `sie_core` (local).
+  - **Dependencies:** `flutter_riverpod`, `supabase_flutter`, `fl_chart`, `sie_core` (local).
   - **Key Screens (`lib/screens/`):**
     - `auth_screen.dart`: Authentication gate.
     - `main_navigation_shell.dart`: Primary layout wrapper.
@@ -42,6 +52,6 @@
 
 ### 5. Architectural Patterns
 - **State Management:** Riverpod for reactive UI and dependency injection.
-- **Theming:** `SieTheme` with custom modes (e.g., `cosmicLiquidGlass`).
+- **Theming:** `SieTheme` with `classicDark` and `classicLight` modes.
 - **Data Flow:** Repository/Service pattern via `sie_core`.
 - **Navigation:** Shell-based navigation for a persistent UI experience.
