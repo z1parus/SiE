@@ -1975,36 +1975,16 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
     final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
     final isEdit = widget.existing != null;
 
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                accentColor.withValues(alpha: 0.08),
-                sc.surface,
-              ],
-            ),
-            border: Border(
-              top: BorderSide(
-                color: accentColor.withValues(alpha: 0.50),
-                width: 1.0,
-              ),
-              left: BorderSide(
-                color: accentColor.withValues(alpha: 0.18),
-                width: 1.0,
-              ),
-              right: BorderSide(
-                color: accentColor.withValues(alpha: 0.18),
-                width: 1.0,
-              ),
-            ),
-          ),
-          padding: EdgeInsets.fromLTRB(24, 14, 24, 20 + keyboardBottom),
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+        decoration: BoxDecoration(
+          color: sc.surface.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: sc.border),
+        ),
+        padding: EdgeInsets.fromLTRB(20, 14, 20, 20 + keyboardBottom),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2012,12 +1992,12 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
               // Handle bar
               Center(
                 child: Container(
-                  width: 36,
-                  height: 3,
-                  margin: const EdgeInsets.only(bottom: 12),
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(2),
-                    color: Colors.white.withValues(alpha: 0.20),
+                    color: sc.border,
                   ),
                 ),
               ),
@@ -2077,10 +2057,10 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
               Text(
                 'MOOD',
                 style: TextStyle(
-                  color: sc.textSecondary.withValues(alpha: 0.5),
-                  fontSize: 9,
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w600,
+                  color: sc.textSecondary,
+                  fontSize: 10,
+                  letterSpacing: 2.5,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 10),
@@ -2120,20 +2100,18 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
               Text(
                 'NOTE',
                 style: TextStyle(
-                  color: sc.textSecondary.withValues(alpha: 0.5),
-                  fontSize: 9,
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w600,
+                  color: sc.textSecondary,
+                  fontSize: 10,
+                  letterSpacing: 2.5,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 8),
               Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: accentColor.withValues(alpha: 0.25),
-                  ),
-                  color: accentColor.withValues(alpha: 0.04),
+                  border: Border.all(color: sc.border),
+                  color: sc.surface,
                 ),
                 child: TextField(
                   controller: _noteCtrl,
@@ -2192,8 +2170,7 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 }
 
