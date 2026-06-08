@@ -47,6 +47,40 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
 
   // ── Layout ────────────────────────────────────────────────────────────────
 
+  void _ensureSubGoalPositions(SubGoal sg) {
+    // Position child sub-goals around this sub-goal
+    final children = sg.children;
+    for (int i = 0; i < children.length; i++) {
+      final child = children[i];
+      if (!_positions.containsKey(child.id)) {
+        final sgPos = _positions[sg.id]!;
+        final base = math.atan2(sgPos.dy, sgPos.dx) + math.pi / 2;
+        const spread = math.pi * 0.7;
+        final angle = children.length <= 1
+            ? base
+            : base + (-spread / 2 + spread * i / (children.length - 1));
+        _positions[child.id] =
+            sgPos + Offset(160 * math.cos(angle), 160 * math.sin(angle));
+      }
+      _ensureSubGoalPositions(child);
+    }
+    // Position tasks for this sub-goal
+    final tasks = sg.tasks;
+    for (int j = 0; j < tasks.length; j++) {
+      final t = tasks[j];
+      if (!_positions.containsKey(t.id)) {
+        final sgPos = _positions[sg.id]!;
+        final base = math.atan2(sgPos.dy, sgPos.dx);
+        const spread = math.pi * 0.8;
+        final ta = tasks.length <= 1
+            ? base
+            : base + (-spread / 2 + spread * j / (tasks.length - 1));
+        _positions[t.id] =
+            sgPos + Offset(145 * math.cos(ta), 145 * math.sin(ta));
+      }
+    }
+  }
+
   void _ensurePositions(Goal goal) {
     _positions[goal.id] = Offset.zero;
 
@@ -58,20 +92,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
             (2 * math.pi * i / math.max(sgs.length, 1)) - math.pi / 2;
         _positions[sg.id] = Offset(240 * math.cos(angle), 240 * math.sin(angle));
       }
-      final tasks = sg.tasks;
-      for (int j = 0; j < tasks.length; j++) {
-        final t = tasks[j];
-        if (!_positions.containsKey(t.id)) {
-          final sgPos = _positions[sg.id]!;
-          final base = math.atan2(sgPos.dy, sgPos.dx);
-          const spread = math.pi * 0.8;
-          final ta = tasks.length <= 1
-              ? base
-              : base + (-spread / 2 + spread * j / (tasks.length - 1));
-          _positions[t.id] =
-              sgPos + Offset(145 * math.cos(ta), 145 * math.sin(ta));
-        }
-      }
+      _ensureSubGoalPositions(sg);
     }
 
     final mss = goal.milestones;
@@ -94,23 +115,34 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
       }
     }
 
+    final allSgs = _flatSubGoals(goal.subGoals);
     final all = {
       goal.id,
-      ...goal.subGoals.map((e) => e.id),
-      ...goal.subGoals.expand((sg) => sg.tasks).map((t) => t.id),
+      ...allSgs.map((sg) => sg.id),
+      ...allSgs.expand((sg) => sg.tasks).map((t) => t.id),
       ...goal.milestones.map((m) => m.id),
       ...goal.habitLinks.map((l) => l.id),
     };
     _positions.removeWhere((k, _) => !all.contains(k));
   }
 
+  List<SubGoal> _flatSubGoals(List<SubGoal> roots) {
+    final result = <SubGoal>[];
+    void visit(SubGoal sg) {
+      result.add(sg);
+      for (final child in sg.children) visit(child);
+    }
+    for (final sg in roots) visit(sg);
+    return result;
+  }
+
   // ── Collision resolution ──────────────────────────────────────────────────
 
   double _nodeRadius(String id, Goal goal) {
     if (id == goal.id) return 80.0;
-    if (goal.subGoals.any((sg) => sg.id == id)) return 55.0;
-    final task =
-        goal.subGoals.expand((sg) => sg.tasks).where((t) => t.id == id).firstOrNull;
+    final allSgs = _flatSubGoals(goal.subGoals);
+    if (allSgs.any((sg) => sg.id == id)) return 55.0;
+    final task = allSgs.expand((sg) => sg.tasks).where((t) => t.id == id).firstOrNull;
     if (task != null) return switch (task.weight) { 5 => 36, 3 => 28, _ => 22 };
     if (goal.milestones.any((m) => m.id == id)) return 40.0;
     if (goal.habitLinks.any((l) => l.id == id)) return 26.0;
@@ -151,18 +183,15 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
       _showGoalSheet(goal, c);
       return;
     }
-    final sg = goal.subGoals.where((s) => s.id == nodeId).firstOrNull;
+    final allSgs = _flatSubGoals(goal.subGoals);
+    final sg = allSgs.where((s) => s.id == nodeId).firstOrNull;
     if (sg != null) {
       _showSubGoalSheet(sg, goal, c);
       return;
     }
-    final task = goal.subGoals
-        .expand((s) => s.tasks)
-        .where((t) => t.id == nodeId)
-        .firstOrNull;
+    final task = allSgs.expand((s) => s.tasks).where((t) => t.id == nodeId).firstOrNull;
     if (task != null) {
-      final parent =
-          goal.subGoals.firstWhere((s) => s.tasks.any((t) => t.id == nodeId));
+      final parent = allSgs.firstWhere((s) => s.tasks.any((t) => t.id == nodeId));
       _showTaskSheet(task, parent, goal, c);
       return;
     }
@@ -317,15 +346,20 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
     final goalPos = _positions[goal.id] ?? Offset.zero;
 
     final edges = <_Edge>[];
-    for (final sg in goal.subGoals) {
+    void addSubGoalEdges(SubGoal sg, Offset parentPos, _EType edgeType) {
       final sgPos = _positions[sg.id];
-      if (sgPos != null) {
-        edges.add(_Edge(goalPos, sgPos, _EType.goalSub));
-        for (final t in sg.tasks) {
-          final tp = _positions[t.id];
-          if (tp != null) edges.add(_Edge(sgPos, tp, _EType.subTask));
-        }
+      if (sgPos == null) return;
+      edges.add(_Edge(parentPos, sgPos, edgeType));
+      for (final t in sg.tasks) {
+        final tp = _positions[t.id];
+        if (tp != null) edges.add(_Edge(sgPos, tp, _EType.subTask));
       }
+      for (final child in sg.children) {
+        addSubGoalEdges(child, sgPos, _EType.subSub);
+      }
+    }
+    for (final sg in goal.subGoals) {
+      addSubGoalEdges(sg, goalPos, _EType.goalSub);
     }
     for (final ms in goal.milestones) {
       final mp = _positions[ms.id];
@@ -372,12 +406,10 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
                 goal,
                 _MilestoneNode(ms: ms, sc: c, dragging: _draggingId == ms.id),
               ),
-            // Tasks
-            for (final sg in goal.subGoals)
+            // Tasks and nested sub-goals (all depths)
+            for (final sg in _flatSubGoals(goal.subGoals)) ...[
               for (final t in sg.tasks)
                 _taskPosNode(t, sg.id, goal, c),
-            // SubGoals
-            for (final sg in goal.subGoals)
               _posNode(
                 sg.id,
                 158,
@@ -390,6 +422,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
                   onAdd: () => _showSubGoalSheet(sg, goal, c),
                 ),
               ),
+            ],
             // Goal (fixed, topmost)
             Positioned(
               left: _cx - 80,
@@ -442,7 +475,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
     const threshold = 120.0;
     String? nearestSgId;
     double nearestDist = threshold;
-    for (final sg in goal.subGoals) {
+    for (final sg in _flatSubGoals(goal.subGoals)) {
       final sgPos = _positions[sg.id];
       if (sgPos == null) continue;
       final dist = (taskPos - sgPos).distance;
@@ -485,7 +518,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
 
 // ─── Edge types & data ────────────────────────────────────────────────────────
 
-enum _EType { goalSub, subTask, goalMs, goalHabit }
+enum _EType { goalSub, subSub, subTask, goalMs, goalHabit }
 
 class _Edge {
   const _Edge(this.src, this.dst, this.type);
@@ -534,6 +567,7 @@ class _EdgePainter extends CustomPainter {
 
       final (color, width, dashed) = switch (e.type) {
         _EType.goalSub => (c.accent.withOpacity(0.38), 2.0, false),
+        _EType.subSub => (c.border.withOpacity(0.9), 1.5, true),
         _EType.subTask => (c.border.withOpacity(0.8), 1.5, false),
         _EType.goalMs => (c.accentSecondary.withOpacity(0.45), 1.5, true),
         _EType.goalHabit => (c.dp.withOpacity(0.35), 1.2, false),
