@@ -12,6 +12,9 @@ import 'user_profile_provider.dart';
 
 const _uuid = Uuid();
 
+// Temporary diagnostic provider — remove after debugging sync issue.
+final planningDiagProvider = StateProvider<String?>((ref) => null);
+
 final planningProvider =
     AsyncNotifierProvider.autoDispose<PlanningNotifier, PlanningState>(
   PlanningNotifier.new,
@@ -469,12 +472,15 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         if (rows.isNotEmpty) {
           await db.upsertSubGoal(LocalSubGoalsCompanion(
               id: Value(subGoalId), synced: const Value(true)));
+          ref.read(planningDiagProvider.notifier).state = '✅ SubGoal saved to server';
           await _awardXp(150, 0);
           return;
         }
         debugPrint('SiE: completeSubGoal 0 rows for $subGoalId — queuing');
+        ref.read(planningDiagProvider.notifier).state = '⚠️ SubGoal 0 rows — queued';
       } catch (e) {
         debugPrint('SiE: completeSubGoal error — $e — queuing');
+        ref.read(planningDiagProvider.notifier).state = '❌ SubGoal error: $e';
       }
       await db.enqueueSyncOp('complete_sub_goal',
           jsonEncode({'id': subGoalId, 'goal_id': goalId}));
@@ -645,12 +651,15 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         if (rows.isNotEmpty) {
           await db.upsertPlanningTask(LocalPlanningTasksCompanion(
               id: Value(taskId), synced: const Value(true)));
+          ref.read(planningDiagProvider.notifier).state = '✅ Saved to server';
           if (nowCompleted) await _awardXp(taskXp(task.weight), 0);
           return;
         }
         debugPrint('SiE: toggleTask 0 rows for $taskId — queuing');
+        ref.read(planningDiagProvider.notifier).state = '⚠️ 0 rows — queued for retry';
       } catch (e) {
         debugPrint('SiE: toggleTask error — $e — queuing');
+        ref.read(planningDiagProvider.notifier).state = '❌ Error: $e';
       }
       await db.enqueueSyncOp('toggle_task', jsonEncode({
         'id': taskId,
@@ -772,12 +781,15 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         if (rows.isNotEmpty) {
           await db.upsertMilestone(LocalMilestonesCompanion(
               id: Value(milestoneId), synced: const Value(true)));
+          ref.read(planningDiagProvider.notifier).state = '✅ Milestone saved to server';
           await _awardXp(500, 0);
           return;
         }
         debugPrint('SiE: completeMilestone 0 rows for $milestoneId — queuing');
+        ref.read(planningDiagProvider.notifier).state = '⚠️ Milestone 0 rows — queued';
       } catch (e) {
         debugPrint('SiE: completeMilestone error — $e — queuing');
+        ref.read(planningDiagProvider.notifier).state = '❌ Milestone error: $e';
       }
       await db.enqueueSyncOp('complete_milestone',
           jsonEncode({'id': milestoneId, 'goal_id': goalId}));

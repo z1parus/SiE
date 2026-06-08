@@ -50,6 +50,15 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<String?>(planningDiagProvider, (_, msg) {
+      if (msg != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(msg),
+          duration: const Duration(seconds: 5),
+        ));
+        ref.read(planningDiagProvider.notifier).state = null;
+      }
+    });
     return SieBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
