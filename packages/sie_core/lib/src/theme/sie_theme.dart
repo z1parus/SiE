@@ -10,7 +10,7 @@ enum SieThemeMode {
   /// Flat anthracite dark mode. No shaders, no starfield. Gold-sand accents.
   classicDark,
 
-  /// Flat light mode. Seafoam-teal accents.
+  /// Flat light mode. Gold-sand primary accents, seafoam-teal secondary.
   classicLight,
 }
 
@@ -43,13 +43,14 @@ class SieTheme {
 
   // ── Classic Light palette ──────────────────────────────────────────────────
 
-  static const clBackground    = Color(0xFFF5F6FA); // crisp light grey
-  static const clSurface       = Color(0xFFFFFFFF);
-  static const clAccent        = Color(0xFF5AADA0); // seafoam teal
-  static const clBorder        = Color(0xFFE4E4EE);
-  static const clTextPrimary   = Color(0xFF1C1C22);
-  static const clTextSecondary = Color(0xFF646470);
-  static const clDp            = Color(0xFF8B5CF6); // muted violet
+  static const clBackground      = Color(0xFFF5F6FA); // crisp light grey
+  static const clSurface         = Color(0xFFFFFFFF);
+  static const clAccent          = Color(0xFFC8A84B); // gold sand — primary
+  static const clAccentSecondary = Color(0xFF5AADA0); // marine foam — secondary
+  static const clBorder          = Color(0xFFE4E4EE);
+  static const clTextPrimary     = Color(0xFF1C1C22);
+  static const clTextSecondary   = Color(0xFF646470);
+  static const clDp              = Color(0xFF8B5CF6); // muted violet
 
   // ── Theme routing ──────────────────────────────────────────────────────────
 
@@ -147,7 +148,7 @@ class SieTheme {
         scaffoldBackgroundColor: clBackground,
         colorScheme: ColorScheme.light(
           primary: clAccent,
-          secondary: clAccent,
+          secondary: clAccentSecondary,
           surface: clSurface,
           onSurface: clTextPrimary,
           onPrimary: clSurface,
