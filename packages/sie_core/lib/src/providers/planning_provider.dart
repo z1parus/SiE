@@ -125,7 +125,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           createdAtMs: Value(g.createdAt.millisecondsSinceEpoch),
         ));
       }
-      for (final sg in g.subGoals) {
+      for (final sg in _allSubGoals(g.subGoals)) {
         if (!unsyncedIds.contains(sg.id)) {
           await db.upsertSubGoal(LocalSubGoalsCompanion(
             id: Value(sg.id),
@@ -376,6 +376,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         status: Value(newStatus), synced: const Value(false)));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (newStatus == 'completed') await _awardXp(2000, 0);
+
     if (isOnline) {
       try {
         await client
@@ -388,7 +390,6 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     }
     await db.enqueueSyncOp(
         'update_goal_status', jsonEncode({'id': id, 'status': newStatus}));
-    if (newStatus == 'completed') await _awardXp(2000, 0);
   }
 
   // ── State helper ──────────────────────────────────────────────────────────
@@ -691,6 +692,35 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
     if (nowCompleted) await _awardXp(taskXp(task.weight), 0);
     await _touchGoalUpdatedAt(goalId);
+    if (nowCompleted) await _autoCompleteParents(goalId);
+  }
+
+  // Auto-complete sub-goals and goal when all children/tasks are done.
+  Future<void> _autoCompleteParents(String goalId) async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final goal = current.goals.firstWhere((g) => g.id == goalId,
+        orElse: () => throw StateError('goal not found'));
+
+    bool anyChange = true;
+    while (anyChange) {
+      anyChange = false;
+      final updatedGoal = current.goals.firstWhere((g) => g.id == goalId,
+          orElse: () => throw StateError('goal not found'));
+      for (final sg in _allSubGoals(updatedGoal.subGoals)) {
+        if (sg.isCompleted) continue;
+        final allTasksDone = sg.tasks.isNotEmpty && sg.tasks.every((t) => t.isCompleted);
+        final allChildrenDone = sg.children.isNotEmpty
+            ? sg.children.every((c) => c.isCompleted)
+            : true;
+        final hasContent = sg.tasks.isNotEmpty || sg.children.isNotEmpty;
+        if (hasContent && allTasksDone && allChildrenDone) {
+          await completeSubGoal(sg.id, goalId);
+          anyChange = true;
+          break;
+        }
+      }
+    }
   }
 
   // ── Add Milestone ─────────────────────────────────────────────────────────

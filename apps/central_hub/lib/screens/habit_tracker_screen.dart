@@ -147,6 +147,9 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                       streak: state.streaks[habit.id] ?? 0,
                       todayEmoji: todayEntry?.emoji,
                       onTap: onTapDetail,
+                      onToggle: () => ref
+                          .read(habitsProvider.notifier)
+                          .toggleHabit(habit.id, DateTime.now()),
                       onDelete: () => ref
                           .read(habitsProvider.notifier)
                           .deleteHabit(habit.id),
@@ -765,6 +768,7 @@ class _SwipeableHabitCard extends StatefulWidget {
   final int streak;
   final String? todayEmoji;
   final VoidCallback onTap;
+  final VoidCallback onToggle;
   final Future<void> Function() onDelete;
   final VoidCallback onTogglePin;
 
@@ -774,6 +778,7 @@ class _SwipeableHabitCard extends StatefulWidget {
     required this.completedToday,
     required this.streak,
     required this.onTap,
+    required this.onToggle,
     required this.onDelete,
     required this.onTogglePin,
     this.todayEmoji,
@@ -918,6 +923,7 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
                     completedToday: widget.completedToday,
                     streak: widget.streak,
                     onTap: widget.onTap,
+                    onToggle: widget.onToggle,
                     todayEmoji: widget.todayEmoji,
                   ),
                 ),
@@ -1016,12 +1022,14 @@ class _HabitMatrixCard extends ConsumerWidget {
   final int streak;
   final String? todayEmoji;
   final VoidCallback onTap;
+  final VoidCallback onToggle;
 
   const _HabitMatrixCard({
     required this.habit,
     required this.completedToday,
     required this.streak,
     required this.onTap,
+    required this.onToggle,
     this.todayEmoji,
   });
 
@@ -1030,91 +1038,113 @@ class _HabitMatrixCard extends ConsumerWidget {
     final sc          = ref.watch(sieColorsProvider);
     final accentColor = hexToColor(habit.color);
 
-    final card = SieGlassCard(
+    return SieGlassCard(
       onTap: onTap,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+      padding: const EdgeInsets.fromLTRB(12, 12, 16, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              if (habit.icon != null) ...[
-                Text(habit.icon!, style: const TextStyle(fontSize: 16)),
-                const SizedBox(width: 8),
-              ] else ...[
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: accentColor,
-                    boxShadow: null,
-                  ),
-                ),
-                const SizedBox(width: 10),
-              ],
-              Expanded(
-                child: Text(
-                  habit.title.toUpperCase(),
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: sc.textPrimary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.5,
-                    height: 1.1,
-                  ),
+          // Toggle button (tap to complete/uncomplete)
+          GestureDetector(
+            onTap: onToggle,
+            behavior: HitTestBehavior.opaque,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: completedToday
+                    ? accentColor.withValues(alpha: 0.18)
+                    : Colors.transparent,
+                border: Border.all(
+                  color: completedToday
+                      ? accentColor
+                      : sc.textSecondary.withValues(alpha: 0.25),
+                  width: 1.5,
                 ),
               ),
-              if (habit.isPinned) ...[
-                const SizedBox(width: 8),
-                Icon(
-                  Icons.push_pin,
-                  color: sc.textSecondary.withValues(alpha: 0.45),
-                  size: 11,
-                ),
-              ],
-              if (todayEmoji != null) ...[
-                const SizedBox(width: 6),
-                Text(todayEmoji!, style: const TextStyle(fontSize: 13)),
-              ],
-              if (streak > 0) ...[
-                const SizedBox(width: 8),
-                _StreakBadge(streak: streak, color: accentColor),
-              ],
-              if (completedToday) ...[
-                const SizedBox(width: 8),
-                Icon(
-                  Icons.check_circle_outline,
-                  color: accentColor.withValues(alpha: 0.80),
-                  size: 14,
-                ),
-              ],
-            ],
-          ),
-          if (habit.description != null && habit.description!.isNotEmpty) ...[
-            const SizedBox(height: 5),
-            Padding(
-              padding: const EdgeInsets.only(left: 17),
-              child: Text(
-                habit.description!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: sc.textSecondary.withValues(alpha: 0.7),
-                  fontSize: 10.5,
-                  letterSpacing: 0.3,
-                  height: 1.2,
-                ),
-              ),
+              child: completedToday
+                  ? Icon(Icons.check, color: accentColor, size: 16)
+                  : null,
             ),
-          ],
+          ),
+          const SizedBox(width: 12),
+          // Main content (tap to open detail)
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    if (habit.icon != null) ...[
+                      Text(habit.icon!, style: const TextStyle(fontSize: 14)),
+                      const SizedBox(width: 6),
+                    ],
+                    Expanded(
+                      child: Text(
+                        habit.title.toUpperCase(),
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: completedToday
+                              ? sc.textSecondary
+                              : sc.textPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.5,
+                          height: 1.1,
+                          decoration: completedToday
+                              ? TextDecoration.lineThrough
+                              : null,
+                          decorationColor: sc.textSecondary,
+                        ),
+                      ),
+                    ),
+                    if (habit.isPinned) ...[
+                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.push_pin,
+                        color: sc.textSecondary.withValues(alpha: 0.45),
+                        size: 11,
+                      ),
+                    ],
+                    if (todayEmoji != null) ...[
+                      const SizedBox(width: 6),
+                      Text(todayEmoji!, style: const TextStyle(fontSize: 13)),
+                    ],
+                    if (streak > 0) ...[
+                      const SizedBox(width: 8),
+                      _StreakBadge(streak: streak, color: accentColor),
+                    ],
+                  ],
+                ),
+                if (habit.description != null && habit.description!.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    habit.description!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: sc.textSecondary.withValues(alpha: 0.7),
+                      fontSize: 10.5,
+                      letterSpacing: 0.3,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          // Info arrow
+          Icon(
+            Icons.chevron_right,
+            size: 16,
+            color: sc.textSecondary.withValues(alpha: 0.3),
+          ),
         ],
       ),
     );
-
-    return card;
   }
 }
 

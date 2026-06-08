@@ -159,7 +159,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
           final b = ids[j];
           final pa = _positions[a]!;
           final pb = _positions[b]!;
-          final minD = _nodeRadius(a, goal) + _nodeRadius(b, goal) + 18.0;
+          final minD = _nodeRadius(a, goal) + _nodeRadius(b, goal) + 36.0;
           final diff = pb - pa;
           final dist = diff.distance;
           if (dist < minD && dist > 0.001) {
@@ -241,6 +241,12 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
           ref
               .read(planningProvider.notifier)
               .addTask(goalId: goal.id, subGoalId: sg.id, name: name, weight: weight);
+          Navigator.pop(ctx);
+        },
+        onAddSubGoal: (name) {
+          ref
+              .read(planningProvider.notifier)
+              .addSubGoal(goal.id, name, parentSubGoalId: sg.id);
           Navigator.pop(ctx);
         },
         onComplete: sg.isCompleted
@@ -472,7 +478,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
   void _tryReparentTask(String taskId, String currentSgId, Goal goal) {
     final taskPos = _positions[taskId];
     if (taskPos == null) return;
-    const threshold = 120.0;
+    const threshold = 200.0;
     String? nearestSgId;
     double nearestDist = threshold;
     for (final sg in _flatSubGoals(goal.subGoals)) {
@@ -1085,12 +1091,14 @@ class _SubGoalSheet extends StatefulWidget {
     required this.sg,
     required this.sc,
     required this.onAddTask,
+    required this.onAddSubGoal,
     this.onComplete,
     required this.onDelete,
   });
   final SubGoal sg;
   final SieColors sc;
   final void Function(String name, int weight) onAddTask;
+  final ValueChanged<String> onAddSubGoal;
   final VoidCallback? onComplete;
   final VoidCallback onDelete;
 
@@ -1100,12 +1108,15 @@ class _SubGoalSheet extends StatefulWidget {
 
 class _SubGoalSheetState extends State<_SubGoalSheet> {
   bool _adding = false;
+  bool _addingSubGoal = false;
   final _ctrl = TextEditingController();
+  final _sgCtrl = TextEditingController();
   int _weight = 1;
 
   @override
   void dispose() {
     _ctrl.dispose();
+    _sgCtrl.dispose();
     super.dispose();
   }
 
@@ -1125,7 +1136,7 @@ class _SubGoalSheetState extends State<_SubGoalSheet> {
         children: [
           _SheetHeader(title: widget.sg.name, icon: Icons.layers_outlined, sc: c),
           const SizedBox(height: 16),
-          if (!_adding) ...[
+          if (!_adding && !_addingSubGoal) ...[
             if (widget.onComplete != null) ...[
               _ActionBtn(
                   label: 'Завершить',
@@ -1143,11 +1154,50 @@ class _SubGoalSheetState extends State<_SubGoalSheet> {
                 onTap: () => setState(() => _adding = true)),
             const SizedBox(height: 8),
             _ActionBtn(
+                label: 'Добавить под-этап',
+                icon: Icons.account_tree_outlined,
+                color: c.accent,
+                sc: c,
+                onTap: () => setState(() => _addingSubGoal = true)),
+            const SizedBox(height: 8),
+            _ActionBtn(
                 label: 'Удалить',
                 icon: Icons.delete_outline,
                 color: const Color(0xFFE03050),
                 sc: c,
                 onTap: widget.onDelete),
+          ] else if (_addingSubGoal) ...[
+            _StyledTextField(ctrl: _sgCtrl, hint: 'Название под-этапа', sc: c,
+                onSubmit: _submitSubGoal),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => setState(() => _addingSubGoal = false),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: c.border),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text('Отмена', style: TextStyle(color: c.textSecondary)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _submitSubGoal,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: c.accent,
+                      foregroundColor: c.background,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Добавить'),
+                  ),
+                ),
+              ],
+            ),
           ] else ...[
             _StyledTextField(ctrl: _ctrl, hint: 'Название задачи', sc: c, onSubmit: _submitTask),
             const SizedBox(height: 10),
@@ -1217,6 +1267,12 @@ class _SubGoalSheetState extends State<_SubGoalSheet> {
     final v = _ctrl.text.trim();
     if (v.isEmpty) return;
     widget.onAddTask(v, _weight);
+  }
+
+  void _submitSubGoal([String? _]) {
+    final v = _sgCtrl.text.trim();
+    if (v.isEmpty) return;
+    widget.onAddSubGoal(v);
   }
 }
 

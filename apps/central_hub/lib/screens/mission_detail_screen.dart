@@ -432,7 +432,7 @@ class _SubGoalTile extends ConsumerWidget {
     final prog = subGoalProgress(sg);
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
+      margin: const EdgeInsets.fromLTRB(0, 4, 16, 4),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
