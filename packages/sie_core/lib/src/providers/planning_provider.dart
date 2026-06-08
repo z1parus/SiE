@@ -696,14 +696,13 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
   // Auto-complete sub-goals and goal when all children/tasks are done.
   Future<void> _autoCompleteParents(String goalId) async {
-    final current = state.valueOrNull;
-    if (current == null) return;
-    final goal = current.goals.firstWhere((g) => g.id == goalId,
-        orElse: () => throw StateError('goal not found'));
-
     bool anyChange = true;
     while (anyChange) {
       anyChange = false;
+      // Read fresh state on every iteration so already-completed sub-goals
+      // are visible and the loop terminates correctly.
+      final current = state.valueOrNull;
+      if (current == null) return;
       final updatedGoal = current.goals.firstWhere((g) => g.id == goalId,
           orElse: () => throw StateError('goal not found'));
       for (final sg in _allSubGoals(updatedGoal.subGoals)) {
