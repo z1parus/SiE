@@ -147,9 +147,6 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                       streak: state.streaks[habit.id] ?? 0,
                       todayEmoji: todayEntry?.emoji,
                       onTap: onTapDetail,
-                      onToggle: () => ref
-                          .read(habitsProvider.notifier)
-                          .toggleHabit(habit.id, DateTime.now()),
                       onDelete: () => ref
                           .read(habitsProvider.notifier)
                           .deleteHabit(habit.id),
@@ -768,7 +765,6 @@ class _SwipeableHabitCard extends StatefulWidget {
   final int streak;
   final String? todayEmoji;
   final VoidCallback onTap;
-  final VoidCallback onToggle;
   final Future<void> Function() onDelete;
   final VoidCallback onTogglePin;
 
@@ -778,7 +774,6 @@ class _SwipeableHabitCard extends StatefulWidget {
     required this.completedToday,
     required this.streak,
     required this.onTap,
-    required this.onToggle,
     required this.onDelete,
     required this.onTogglePin,
     this.todayEmoji,
@@ -923,7 +918,6 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
                     completedToday: widget.completedToday,
                     streak: widget.streak,
                     onTap: widget.onTap,
-                    onToggle: widget.onToggle,
                     todayEmoji: widget.todayEmoji,
                   ),
                 ),
@@ -1022,14 +1016,12 @@ class _HabitMatrixCard extends ConsumerWidget {
   final int streak;
   final String? todayEmoji;
   final VoidCallback onTap;
-  final VoidCallback onToggle;
 
   const _HabitMatrixCard({
     required this.habit,
     required this.completedToday,
     required this.streak,
     required this.onTap,
-    required this.onToggle,
     this.todayEmoji,
   });
 
@@ -1038,113 +1030,99 @@ class _HabitMatrixCard extends ConsumerWidget {
     final sc          = ref.watch(sieColorsProvider);
     final accentColor = hexToColor(habit.color);
 
-    return SieGlassCard(
+    final card = SieGlassCard(
       onTap: onTap,
-      padding: const EdgeInsets.fromLTRB(12, 12, 16, 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Toggle button (tap to complete/uncomplete)
-          GestureDetector(
-            onTap: onToggle,
-            behavior: HitTestBehavior.opaque,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: completedToday
-                    ? accentColor.withValues(alpha: 0.18)
-                    : Colors.transparent,
-                border: Border.all(
-                  color: completedToday
-                      ? accentColor
-                      : sc.textSecondary.withValues(alpha: 0.25),
-                  width: 1.5,
+          Row(
+            children: [
+              if (habit.icon != null) ...[
+                Text(habit.icon!, style: const TextStyle(fontSize: 16)),
+                const SizedBox(width: 8),
+              ] else ...[
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: accentColor,
+                    boxShadow: sc.isCosmicMode
+                        ? [
+                            BoxShadow(
+                              color: accentColor.withValues(alpha: 0.85),
+                              blurRadius: 7,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : null,
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                child: Text(
+                  habit.title.toUpperCase(),
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: sc.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                    height: 1.1,
+                  ),
                 ),
               ),
-              child: completedToday
-                  ? Icon(Icons.check, color: accentColor, size: 16)
-                  : null,
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Main content (tap to open detail)
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    if (habit.icon != null) ...[
-                      Text(habit.icon!, style: const TextStyle(fontSize: 14)),
-                      const SizedBox(width: 6),
-                    ],
-                    Expanded(
-                      child: Text(
-                        habit.title.toUpperCase(),
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: completedToday
-                              ? sc.textSecondary
-                              : sc.textPrimary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.5,
-                          height: 1.1,
-                          decoration: completedToday
-                              ? TextDecoration.lineThrough
-                              : null,
-                          decorationColor: sc.textSecondary,
-                        ),
-                      ),
-                    ),
-                    if (habit.isPinned) ...[
-                      const SizedBox(width: 6),
-                      Icon(
-                        Icons.push_pin,
-                        color: sc.textSecondary.withValues(alpha: 0.45),
-                        size: 11,
-                      ),
-                    ],
-                    if (todayEmoji != null) ...[
-                      const SizedBox(width: 6),
-                      Text(todayEmoji!, style: const TextStyle(fontSize: 13)),
-                    ],
-                    if (streak > 0) ...[
-                      const SizedBox(width: 8),
-                      _StreakBadge(streak: streak, color: accentColor),
-                    ],
-                  ],
+              if (habit.isPinned) ...[
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.push_pin,
+                  color: sc.textSecondary.withValues(alpha: 0.45),
+                  size: 11,
                 ),
-                if (habit.description != null && habit.description!.isNotEmpty) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    habit.description!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: sc.textSecondary.withValues(alpha: 0.7),
-                      fontSize: 10.5,
-                      letterSpacing: 0.3,
-                      height: 1.2,
-                    ),
-                  ),
-                ],
               ],
+              if (todayEmoji != null) ...[
+                const SizedBox(width: 6),
+                Text(todayEmoji!, style: const TextStyle(fontSize: 13)),
+              ],
+              if (streak > 0) ...[
+                const SizedBox(width: 8),
+                _StreakBadge(streak: streak, color: accentColor),
+              ],
+              if (completedToday) ...[
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.check_circle_outline,
+                  color: accentColor.withValues(alpha: 0.80),
+                  size: 14,
+                ),
+              ],
+            ],
+          ),
+          if (habit.description != null && habit.description!.isNotEmpty) ...[
+            const SizedBox(height: 5),
+            Padding(
+              padding: const EdgeInsets.only(left: 17),
+              child: Text(
+                habit.description!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: sc.textSecondary.withValues(alpha: 0.7),
+                  fontSize: 10.5,
+                  letterSpacing: 0.3,
+                  height: 1.2,
+                ),
+              ),
             ),
-          ),
-          // Info arrow
-          Icon(
-            Icons.chevron_right,
-            size: 16,
-            color: sc.textSecondary.withValues(alpha: 0.3),
-          ),
+          ],
         ],
       ),
     );
+
+    return card;
   }
 }
 
@@ -3364,111 +3342,157 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                       ),
                     ),
                     _GlassIconBtn(
-                      icon: Icons.more_horiz,
+                      icon: Icons.settings_outlined,
                       onTap: _editHabit,
                       size: 18,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              // ── Quick Stats ──────────────────────────────────────────────
+              // ── Stats strip ──────────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
                 child: Row(
                   children: [
-                    _DetailStatCard(
+                    _StatChip(
                       label: 'STREAK',
                       value: '$streak',
-                      color: accentColor,
-                      sc: sc,
-                    ),
-                    const SizedBox(width: 12),
-                    _DetailStatCard(
-                      label: 'TOTAL',
-                      value: '$totalDone',
-                      color: sc.accent,
-                      sc: sc,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              // ── Today Status ─────────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'STATUS: ${completedToday ? "COMPLETED" : "PENDING"}',
-                      style: TextStyle(
-                        color: sc.textSecondary.withValues(alpha: 0.6),
-                        fontSize: 9,
-                        letterSpacing: 1.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _TodayActionCard(
-                      completed: completedToday,
                       accentColor: accentColor,
-                      emoji: todayEntry?.emoji,
-                      note: todayEntry?.note,
-                      onToggle: () => ref
-                          .read(habitsProvider.notifier)
-                          .toggleHabit(widget.habit.id, DateTime.now()),
-                      onOpenReflection: () => _openReflection(
-                          today, todayEntry, accentColor),
+                    ),
+                    const SizedBox(width: 10),
+                    _StatChip(
+                      label: 'СЕГОДНЯ',
+                      value: completedToday ? 'ДА' : 'НЕТ',
+                      accentColor: completedToday
+                          ? accentColor
+                          : sc.textSecondary.withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(width: 10),
+                    _StatChip(
+                      label: 'ВСЕГО',
+                      value: '$totalDone',
+                      accentColor: accentColor,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
-              // ── Journal Timeline ──────────────────────────────────────────
+              // ── Today card ───────────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                child: SieGlassCard(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: days.asMap().entries.map((e) {
+                          final isToday    = e.key == 6;
+                          final isComplete = logDates.contains(_fmt(e.value));
+                          return _DayNode(
+                            date: e.value,
+                            isCompleted: isComplete,
+                            isToday: isToday,
+                            accentColor: accentColor,
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _DetailActionBtn(
+                              label: completedToday ? 'ОТМЕНИТЬ' : 'ОТМЕТИТЬ',
+                              icon: completedToday
+                                  ? Icons.remove_circle_outline
+                                  : Icons.check_circle_outline,
+                              accentColor: completedToday
+                                  ? sc.textSecondary.withValues(alpha: 0.6)
+                                  : accentColor,
+                              onTap: () => ref
+                                  .read(habitsProvider.notifier)
+                                  .toggleHabit(widget.habit.id, DateTime.now()),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _DetailActionBtn(
+                              label: todayEntry?.note != null ||
+                                      todayEntry?.emoji != null
+                                  ? 'ЗАМЕТКА ✎'
+                                  : '+ ЗАМЕТКА',
+                              icon: Icons.edit_outlined,
+                              accentColor: completedToday
+                                  ? accentColor
+                                  : sc.textSecondary.withValues(alpha: 0.35),
+                              onTap: completedToday
+                                  ? () => _openReflection(
+                                      today, todayEntry, accentColor)
+                                  : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // ── Journal header ───────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
                 child: Text(
-                  'JOURNAL TIMELINE',
+                  'ЖУРНАЛ',
                   style: TextStyle(
-                    color: sc.textSecondary,
-                    fontSize: 10,
-                    letterSpacing: 2,
+                    color: sc.textSecondary.withValues(alpha: 0.55),
+                    fontSize: 9,
+                    letterSpacing: 2.5,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              // ── Journal timeline ─────────────────────────────────────────
               Expanded(
                 child: entriesAsync.when(
-                  loading: () => const SizedBox.shrink(),
-                  error: (e, _) => Center(
-                    child: Text('Error loading journal',
-                        style: TextStyle(color: sc.textSecondary)),
+                  loading: () => Center(
+                    child: CircularProgressIndicator(
+                      color: accentColor,
+                      strokeWidth: 1.5,
+                    ),
+                  ),
+                  error: (_, _) => Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Text(
+                        'ОШИБКА ЗАГРУЗКИ',
+                        style: TextStyle(
+                          color: sc.textSecondary,
+                          fontSize: 11,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ),
                   ),
                   data: (entries) {
-                    final reversed = entries.reversed.toList();
-                    if (reversed.isEmpty) {
-                      return Center(
-                        child: Text(
-                          'No journal entries yet',
-                          style: TextStyle(
-                            color: sc.textSecondary.withValues(alpha: 0.5),
-                            fontSize: 12,
-                          ),
-                        ),
-                      );
+                    final journaled = entries
+                        .where((e) =>
+                            (e.note?.isNotEmpty ?? false) || e.emoji != null)
+                        .toList();
+
+                    if (journaled.isEmpty) {
+                      return _EmptyJournal(accentColor: accentColor);
                     }
-                    return ListView.builder(
+
+                    return ListView.separated(
                       padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
-                      itemCount: reversed.length,
+                      itemCount: journaled.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
                       itemBuilder: (ctx, i) => _JournalEntryTile(
-                        entry: reversed[i],
+                        entry: journaled[i],
+                        habit: widget.habit,
                         accentColor: accentColor,
-                        sc: sc,
-                        onTap: () => _openReflection(
-                          reversed[i].completedAt,
-                          reversed[i],
+                        onEdit: () => _openReflection(
+                          journaled[i].completedAt,
+                          journaled[i],
                           accentColor,
                         ),
                       ),
@@ -3484,49 +3508,48 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
   }
 }
 
-class _DetailStatCard extends StatelessWidget {
-  const _DetailStatCard({
-    required this.label,
-    required this.value,
-    required this.color,
-    required this.sc,
-  });
-
+// ─────────────────────────────────────────────────────────────────────────────
+// Stat Chip
+// ─────────────────────────────────────────────────────────────────────────────
+class _StatChip extends ConsumerWidget {
   final String label;
   final String value;
-  final Color color;
-  final SieColors sc;
+  final Color accentColor;
+
+  const _StatChip({
+    required this.label,
+    required this.value,
+    required this.accentColor,
+  });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.25)),
-          color: color.withValues(alpha: 0.05),
-        ),
+      child: SieGlassCard(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              label,
+              value,
               style: TextStyle(
-                color: color.withValues(alpha: 0.6),
-                fontSize: 9,
-                letterSpacing: 1.5,
-                fontWeight: FontWeight.w700,
+                color: accentColor,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.0,
+                height: 1.0,
               ),
             ),
             const SizedBox(height: 4),
             Text(
-              value,
+              label,
               style: TextStyle(
-                color: color,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.5,
+                color: sc.textSecondary.withValues(alpha: 0.55),
+                fontSize: 8,
+                letterSpacing: 1.5,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -3536,187 +3559,234 @@ class _DetailStatCard extends StatelessWidget {
   }
 }
 
-class _TodayActionCard extends StatelessWidget {
-  const _TodayActionCard({
-    required this.completed,
+// ─────────────────────────────────────────────────────────────────────────────
+// Detail Action Button
+// ─────────────────────────────────────────────────────────────────────────────
+class _DetailActionBtn extends ConsumerWidget {
+  final String label;
+  final IconData icon;
+  final Color accentColor;
+  final VoidCallback? onTap;
+
+  const _DetailActionBtn({
+    required this.label,
+    required this.icon,
     required this.accentColor,
-    required this.onToggle,
-    required this.onOpenReflection,
-    this.emoji,
-    this.note,
+    this.onTap,
   });
 
-  final bool completed;
-  final Color accentColor;
-  final VoidCallback onToggle;
-  final VoidCallback onOpenReflection;
-  final String? emoji;
-  final String? note;
-
   @override
-  Widget build(BuildContext context) {
-    final sc = ProviderScope.containerOf(context).read(sieColorsProvider);
-
-    return SieGlassCard(
-      onTap: onOpenReflection,
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: onToggle,
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: completed
-                    ? accentColor.withValues(alpha: 0.15)
-                    : Colors.transparent,
-                border: Border.all(
-                  color: completed
-                      ? accentColor
-                      : sc.textSecondary.withValues(alpha: 0.2),
-                  width: 1.5,
-                ),
-              ),
-              child: Icon(
-                completed ? Icons.check : Icons.add,
-                color: completed ? accentColor : sc.textSecondary,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  completed ? 'MISSION ACCOMPLISHED' : 'INITIALIZE PROTOCOL',
-                  style: TextStyle(
-                    color: completed ? accentColor : sc.textPrimary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  completed
-                      ? (note ?? 'Tap to add reflection')
-                      : 'Mark as done for today',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: sc.textSecondary.withValues(alpha: 0.6),
-                    fontSize: 10,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (emoji != null) ...[
-            const SizedBox(width: 8),
-            Text(emoji!, style: const TextStyle(fontSize: 20)),
-          ] else if (completed) ...[
-            const SizedBox(width: 8),
-            Icon(Icons.edit_note,
-                color: sc.textSecondary.withValues(alpha: 0.4), size: 20),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _JournalEntryTile extends StatelessWidget {
-  const _JournalEntryTile({
-    required this.entry,
-    required this.accentColor,
-    required this.sc,
-    required this.onTap,
-  });
-
-  final HabitLogEntry entry;
-  final Color accentColor;
-  final SieColors sc;
-  final VoidCallback onTap;
-
-  static String _fmtDate(String s) {
-    final dt = DateTime.parse(s);
-    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${days[dt.weekday - 1]}, ${dt.day} ${months[dt.month - 1]}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
         decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: sc.border.withValues(alpha: 0.5)),
+          borderRadius: BorderRadius.circular(8),
+          color: onTap != null
+              ? accentColor.withValues(alpha: 0.10)
+              : sc.textSecondary.withValues(alpha: 0.04),
+          border: Border.all(
+            color: onTap != null
+                ? accentColor.withValues(alpha: 0.30)
+                : sc.textSecondary.withValues(alpha: 0.12),
+            width: 1,
           ),
         ),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Column(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: accentColor.withValues(alpha: 0.1),
-                    border: Border.all(
-                        color: accentColor.withValues(alpha: 0.3)),
+            Icon(
+              icon,
+              size: 13,
+              color: onTap != null
+                  ? accentColor
+                  : sc.textSecondary.withValues(alpha: 0.35),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: onTap != null
+                    ? accentColor
+                    : sc.textSecondary.withValues(alpha: 0.35),
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Journal Entry Tile
+// ─────────────────────────────────────────────────────────────────────────────
+class _JournalEntryTile extends ConsumerWidget {
+  final HabitLogEntry entry;
+  final Habit habit;
+  final Color accentColor;
+  final VoidCallback onEdit;
+
+  const _JournalEntryTile({
+    required this.entry,
+    required this.habit,
+    required this.accentColor,
+    required this.onEdit,
+  });
+
+  static String _fmtDisplay(String dateStr) {
+    try {
+      final parts = dateStr.split('-');
+      if (parts.length != 3) return dateStr;
+      return '${parts[2]}.${parts[1]}.${parts[0]}';
+    } catch (_) {
+      return dateStr;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 52,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  _fmtDisplay(entry.completedAt),
+                  style: TextStyle(
+                    color: sc.textSecondary.withValues(alpha: 0.55),
+                    fontSize: 8,
+                    letterSpacing: 0.5,
+                    fontWeight: FontWeight.w500,
+                    height: 1.2,
                   ),
-                  alignment: Alignment.center,
-                  child: entry.emoji != null
-                      ? Text(entry.emoji!,
-                          style: const TextStyle(fontSize: 14))
-                      : Icon(Icons.check, size: 14, color: accentColor),
+                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 8),
-                Container(
-                  width: 1,
-                  height: 20,
-                  color: sc.border.withValues(alpha: 0.3),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accentColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: accentColor.withValues(alpha: 0.6),
+                      blurRadius: 6,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: SieGlassCard(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (entry.emoji != null) ...[
+                      Text(entry.emoji!,
+                          style: const TextStyle(fontSize: 22)),
+                      const SizedBox(width: 10),
+                    ],
+                    if (entry.note?.isNotEmpty == true)
+                      Expanded(
+                        child: Text(
+                          entry.note!,
+                          style: TextStyle(
+                            color: sc.textPrimary.withValues(alpha: 0.85),
+                            fontSize: 12,
+                            letterSpacing: 0.2,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: GestureDetector(
+                    onTap: onEdit,
+                    child: Text(
+                      'EDIT',
+                      style: TextStyle(
+                        color: accentColor.withValues(alpha: 0.7),
+                        fontSize: 9,
+                        letterSpacing: 1.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _fmtDate(entry.completedAt).toUpperCase(),
-                    style: TextStyle(
-                      color: sc.textPrimary,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                  if (entry.note != null && entry.note!.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      entry.note!,
-                      style: TextStyle(
-                        color: sc.textSecondary,
-                        fontSize: 11,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Empty Journal
+// ─────────────────────────────────────────────────────────────────────────────
+class _EmptyJournal extends ConsumerWidget {
+  final Color accentColor;
+  const _EmptyJournal({required this.accentColor});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.auto_stories_outlined,
+              color: accentColor.withValues(alpha: 0.35),
+              size: 40,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'ЖУРНАЛ ПУСТ',
+              style: TextStyle(
+                color: sc.textSecondary.withValues(alpha: 0.6),
+                fontSize: 11,
+                letterSpacing: 2,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Отметьте выполнение и добавьте\nзаметку через кнопку "+ ЗАМЕТКА"',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: sc.textSecondary.withValues(alpha: 0.4),
+                fontSize: 10,
+                letterSpacing: 0.5,
+                height: 1.5,
               ),
             ),
           ],
