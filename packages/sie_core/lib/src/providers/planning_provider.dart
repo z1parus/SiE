@@ -47,6 +47,16 @@ List<SubGoal> _removeSubGoalFromTree(List<SubGoal> sgs, String id) {
       .toList();
 }
 
+List<SubGoal> _allSubGoals(List<SubGoal> roots) {
+  final result = <SubGoal>[];
+  void visit(SubGoal sg) {
+    result.add(sg);
+    for (final child in sg.children) visit(child);
+  }
+  for (final sg in roots) visit(sg);
+  return result;
+}
+
 final planningProvider =
     AsyncNotifierProvider.autoDispose<PlanningNotifier, PlanningState>(
   PlanningNotifier.new,

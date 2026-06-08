@@ -404,6 +404,7 @@ class _SubGoalsSectionState extends ConsumerState<_SubGoalsSection> {
 
 class _SubGoalTile extends ConsumerWidget {
   const _SubGoalTile({
+    super.key,
     required this.subGoal,
     required this.goal,
     required this.sc,
