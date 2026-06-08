@@ -68,6 +68,7 @@ class RoutineEditorScreen extends ConsumerWidget {
                     : ReorderableListView.builder(
                         padding:
                             const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                        buildDefaultDragHandles: false,
                         proxyDecorator: (child, _, _) =>
                             Material(color: Colors.transparent, child: child),
                         onReorderItem: (oldIdx, newIdx) {
@@ -85,6 +86,7 @@ class RoutineEditorScreen extends ConsumerWidget {
                         itemCount: habits.length,
                         itemBuilder: (context, i) => _RoutineMemberTile(
                           key: ValueKey(habits[i].id),
+                          index: i,
                           habit: habits[i],
                           onRemove: routine == null
                               ? null
@@ -211,10 +213,12 @@ class _EditorIconBtn extends ConsumerWidget {
 class _RoutineMemberTile extends ConsumerWidget {
   const _RoutineMemberTile({
     super.key,
+    required this.index,
     required this.habit,
     this.onRemove,
     this.onTap,
   });
+  final int index;
   final Habit habit;
   final VoidCallback? onRemove;
   final VoidCallback? onTap;
@@ -267,10 +271,13 @@ class _RoutineMemberTile extends ConsumerWidget {
               ),
             ],
             const SizedBox(width: 4),
-            Icon(
-              Icons.drag_handle,
-              color: sc.textSecondary.withValues(alpha: 0.35),
-              size: 20,
+            ReorderableDragStartListener(
+              index: index,
+              child: Icon(
+                Icons.drag_handle,
+                color: sc.textSecondary.withValues(alpha: 0.35),
+                size: 20,
+              ),
             ),
           ],
         ),
