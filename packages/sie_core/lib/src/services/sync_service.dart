@@ -181,8 +181,8 @@ class SyncService {
               'is_completed': isCompleted,
               'completed_at': payload['completed_at'],
             }).eq('id', payload['id'] as String);
-            await _db.upsertPlanningTask(LocalPlanningTasksCompanion(
-                id: Value(payload['id'] as String), synced: const Value(true)));
+            await _db.updatePlanningTask(payload['id'] as String,
+                const LocalPlanningTasksCompanion(synced: Value(true)));
           case 'delete_task':
             await client
                 .from('planning_tasks')
@@ -230,8 +230,8 @@ class SyncService {
                 .update({'sub_goal_id': payload['sub_goal_id'] as String})
                 .eq('id', payload['id'] as String)
                 .eq('user_id', userId);
-            await _db.upsertPlanningTask(LocalPlanningTasksCompanion(
-                id: Value(payload['id'] as String), synced: const Value(true)));
+            await _db.updatePlanningTask(payload['id'] as String,
+                const LocalPlanningTasksCompanion(synced: Value(true)));
           case 'update_goal_progress':
             await client
                 .from('goals')

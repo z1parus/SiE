@@ -928,8 +928,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     ));
 
     final db = ref.read(appDatabaseProvider);
-    await db.upsertPlanningTask(LocalPlanningTasksCompanion(
-      id: Value(taskId),
+    await db.updatePlanningTask(taskId, LocalPlanningTasksCompanion(
       subGoalId: Value(newSubGoalId),
       synced: const Value(false),
     ));
@@ -940,8 +939,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         await Supabase.instance.client
             .from('planning_tasks')
             .update({'sub_goal_id': newSubGoalId}).eq('id', taskId);
-        await db.upsertPlanningTask(
-            LocalPlanningTasksCompanion(id: Value(taskId), synced: const Value(true)));
+        await db.updatePlanningTask(taskId,
+            const LocalPlanningTasksCompanion(synced: Value(true)));
         return;
       } catch (_) {}
     }
