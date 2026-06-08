@@ -125,13 +125,15 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         }
       }
       for (final l in g.habitLinks) {
-        await db.upsertGoalHabitLink(LocalGoalHabitLinksCompanion(
-          id: Value(l.id),
-          goalId: Value(l.goalId),
-          habitId: Value(l.habitId),
-          synced: const Value(true),
-          createdAtMs: Value(l.createdAt.millisecondsSinceEpoch),
-        ));
+        if (!unsyncedIds.contains(l.id)) {
+          await db.upsertGoalHabitLink(LocalGoalHabitLinksCompanion(
+            id: Value(l.id),
+            goalId: Value(l.goalId),
+            habitId: Value(l.habitId),
+            synced: const Value(true),
+            createdAtMs: Value(l.createdAt.millisecondsSinceEpoch),
+          ));
+        }
       }
     }
   }
@@ -455,6 +457,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         isCompleted: const Value(true), synced: const Value(false)));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    var syncedToServer = false;
     if (isOnline) {
       try {
         final rows = await client
@@ -627,6 +630,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     ));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    var syncedToServer = false;
     if (isOnline) {
       try {
         final rows = await client.from('planning_tasks').update({
@@ -752,6 +756,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         isCompleted: const Value(true), synced: const Value(false)));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    var syncedToServer = false;
     if (isOnline) {
       try {
         final rows = await client
