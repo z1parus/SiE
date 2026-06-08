@@ -94,7 +94,7 @@ class SieColors {
     background: Color(0xFFF5F6FA),
     surface: Color(0xFFFFFFFF),
     accent:          Color(0xFFC8A84B),  // Gold Sand — primary
-    accentSecondary: Color(0xFF5AADA0),  // Marine Foam — secondary
+    accentSecondary: Color(0xFFE5C16C),  // Light Gold — secondary
     textPrimary:  Color(0xFF1C1C22),
     textSecondary: Color(0xFF646470),
     border: Color(0xFFE4E4EE),
