@@ -1,8 +1,6 @@
-import 'dart:io';
 import 'package:drift/drift.dart';
-import 'package:drift_sqflite/drift_sqflite.dart';
+import 'package:drift_flutter/drift_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
 
 part 'app_database.g.dart';
 
@@ -601,10 +599,12 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
 
 // ── Connection ─────────────────────────────────────────────────────────────────
 
-LazyDatabase _openConnection() {
-  return LazyDatabase(() async {
-    final dbFolder = await getApplicationDocumentsDirectory();
-    final file = File('${dbFolder.path}/sie_local.db');
-    return SqfliteQueryExecutor(path: file.path);
-  });
+QueryExecutor _openConnection() {
+  return driftDatabase(
+    name: 'sie_local',
+    web: DriftWebOptions(
+      sqlite3Wasm: Uri.parse('sqlite3.wasm'),
+      driftWorker: Uri.parse('drift_worker.js'),
+    ),
+  );
 }
