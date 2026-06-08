@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:drift/drift.dart' show Value;
@@ -332,13 +333,18 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) {
       try {
-        await client
+        final rows = await client
             .from('goals')
-            .update({'status': newStatus}).eq('id', id);
-        await db.upsertGoal(
-            LocalGoalsCompanion(id: Value(id), synced: const Value(true)));
-        return;
-      } catch (_) {}
+            .update({'status': newStatus}).eq('id', id).select();
+        if (rows.isNotEmpty) {
+          await db.upsertGoal(
+              LocalGoalsCompanion(id: Value(id), synced: const Value(true)));
+          return;
+        }
+        debugPrint('SiE: updateGoalStatus 0 rows for $id — queuing');
+      } catch (e) {
+        debugPrint('SiE: updateGoalStatus error — $e — queuing');
+      }
     }
     await db.enqueueSyncOp(
         'update_goal_status', jsonEncode({'id': id, 'status': newStatus}));
@@ -457,12 +463,21 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) {
       try {
-        await client
+        final rows = await client
             .from('sub_goals')
-            .update({'is_completed': true}).eq('id', subGoalId);
-        await db.upsertSubGoal(LocalSubGoalsCompanion(
-            id: Value(subGoalId), synced: const Value(true)));
-      } catch (_) {}
+            .update({'is_completed': true}).eq('id', subGoalId).select();
+        if (rows.isNotEmpty) {
+          await db.upsertSubGoal(LocalSubGoalsCompanion(
+              id: Value(subGoalId), synced: const Value(true)));
+          await _awardXp(150, 0);
+          return;
+        }
+        debugPrint('SiE: completeSubGoal 0 rows for $subGoalId — queuing');
+      } catch (e) {
+        debugPrint('SiE: completeSubGoal error — $e — queuing');
+      }
+      await db.enqueueSyncOp('complete_sub_goal',
+          jsonEncode({'id': subGoalId, 'goal_id': goalId}));
     } else {
       await db.enqueueSyncOp('complete_sub_goal',
           jsonEncode({'id': subGoalId, 'goal_id': goalId}));
@@ -623,13 +638,25 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) {
       try {
-        await client.from('planning_tasks').update({
+        final rows = await client.from('planning_tasks').update({
           'is_completed': nowCompleted,
           'completed_at': completedAt?.toIso8601String(),
-        }).eq('id', taskId);
-        await db.upsertPlanningTask(
-            LocalPlanningTasksCompanion(id: Value(taskId), synced: const Value(true)));
-      } catch (_) {}
+        }).eq('id', taskId).select();
+        if (rows.isNotEmpty) {
+          await db.upsertPlanningTask(LocalPlanningTasksCompanion(
+              id: Value(taskId), synced: const Value(true)));
+          if (nowCompleted) await _awardXp(taskXp(task.weight), 0);
+          return;
+        }
+        debugPrint('SiE: toggleTask 0 rows for $taskId — queuing');
+      } catch (e) {
+        debugPrint('SiE: toggleTask error — $e — queuing');
+      }
+      await db.enqueueSyncOp('toggle_task', jsonEncode({
+        'id': taskId,
+        'is_completed': nowCompleted,
+        if (completedAt != null) 'completed_at': completedAt.toIso8601String(),
+      }));
     } else {
       await db.enqueueSyncOp('toggle_task', jsonEncode({
         'id': taskId,
@@ -739,12 +766,21 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) {
       try {
-        await client
+        final rows = await client
             .from('milestones')
-            .update({'is_completed': true}).eq('id', milestoneId);
-        await db.upsertMilestone(LocalMilestonesCompanion(
-            id: Value(milestoneId), synced: const Value(true)));
-      } catch (_) {}
+            .update({'is_completed': true}).eq('id', milestoneId).select();
+        if (rows.isNotEmpty) {
+          await db.upsertMilestone(LocalMilestonesCompanion(
+              id: Value(milestoneId), synced: const Value(true)));
+          await _awardXp(500, 0);
+          return;
+        }
+        debugPrint('SiE: completeMilestone 0 rows for $milestoneId — queuing');
+      } catch (e) {
+        debugPrint('SiE: completeMilestone error — $e — queuing');
+      }
+      await db.enqueueSyncOp('complete_milestone',
+          jsonEncode({'id': milestoneId, 'goal_id': goalId}));
     } else {
       await db.enqueueSyncOp('complete_milestone',
           jsonEncode({'id': milestoneId, 'goal_id': goalId}));
