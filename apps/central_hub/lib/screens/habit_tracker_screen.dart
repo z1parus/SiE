@@ -1411,10 +1411,12 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
   String? _selectedIcon;
 
   static const _colorOptions = [
-    '#00C8FF',
-    '#00E5A0',
-    '#A78BFA',
-    '#F59E0B',
+    '#5AADA0',
+    '#6A8ED8',
+    '#E07830',
+    '#C8A84B',
+    '#C05080',
+    '#70B870',
   ];
 
   static const _iconOptions = [
@@ -1425,7 +1427,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
 
   Color _toColor(String hex) {
     final h = hex.replaceAll('#', '').padLeft(6, '0');
-    return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF00C8FF);
+    return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF5AADA0);
   }
 
   @override
@@ -1433,7 +1435,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
     super.initState();
     _titleCtrl = TextEditingController(text: widget.existing?.title ?? '');
     _descCtrl  = TextEditingController(text: widget.existing?.description ?? '');
-    _selectedColor = widget.existing?.color ?? '#00C8FF';
+    _selectedColor = widget.existing?.color ?? '#5AADA0';
     _selectedIcon  = widget.existing?.icon;
   }
 
@@ -1449,96 +1451,55 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
     final sc     = ref.watch(sieColorsProvider);
     final isEdit = widget.existing != null;
     final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
-    return TweenAnimationBuilder<Color?>(
-      tween: ColorTween(
-        begin: _toColor(_selectedColor),
-        end: _toColor(_selectedColor),
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + keyboardBottom),
+      decoration: BoxDecoration(
+        color: sc.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: sc.border),
       ),
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeInOut,
-      builder: (_, animColor, child) {
-        final habitColor = animColor ?? _toColor(_selectedColor);
-        return ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(20)),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    habitColor.withValues(alpha: 0.08),
-                    sc.surface,
-                  ],
-                ),
-                border: Border(
-                  top: BorderSide(
-                    color: habitColor.withValues(alpha: 0.50),
-                    width: 1.0,
-                  ),
-                  left: BorderSide(
-                    color: habitColor.withValues(alpha: 0.18),
-                    width: 1.0,
-                  ),
-                  right: BorderSide(
-                    color: habitColor.withValues(alpha: 0.18),
-                    width: 1.0,
-                  ),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: habitColor.withValues(alpha: 0.12),
-                    blurRadius: 40,
-                    offset: const Offset(0, -8),
-                  ),
-                ],
-              ),
-              padding: EdgeInsets.fromLTRB(24, 14, 24, 20 + keyboardBottom),
-              child: child,
-            ),
-          ),
-        );
-      },
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Center(
             child: Container(
-              width: 36,
-              height: 3,
-              margin: const EdgeInsets.only(bottom: 12),
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(2),
-                color: Colors.white.withValues(alpha: 0.20),
+                color: sc.border,
               ),
             ),
           ),
           Text(
             isEdit ? 'EDIT PROTOCOL' : 'NEW PROTOCOL',
-            style: Theme.of(context).textTheme.titleMedium,
+            style: TextStyle(
+              color: sc.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2.5,
+            ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           _GlowField(controller: _titleCtrl, label: 'TITLE'),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           _GlowField(
               controller: _descCtrl,
               label: 'DESCRIPTION (OPTIONAL)'),
-          const SizedBox(height: 10),
-          Consumer(builder: (_, ref2, _) {
-            final sc2 = ref2.watch(sieColorsProvider);
-            return Text(
-              'COLOR',
-              style: TextStyle(
-                color: sc2.textSecondary,
-                fontSize: 10,
-                letterSpacing: 1.5,
-              ),
-            );
-          }),
+          const SizedBox(height: 20),
+          Text(
+            'COLOR',
+            style: TextStyle(
+              color: sc.textSecondary,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
+            ),
+          ),
           const SizedBox(height: 8),
           Row(
             children: _colorOptions.map((hex) {
@@ -1550,18 +1511,16 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
               );
             }).toList(),
           ),
-          const SizedBox(height: 10),
-          Consumer(builder: (_, ref2, _) {
-            final sc2 = ref2.watch(sieColorsProvider);
-            return Text(
-              'ICON',
-              style: TextStyle(
-                color: sc2.textSecondary,
-                fontSize: 10,
-                letterSpacing: 1.5,
-              ),
-            );
-          }),
+          const SizedBox(height: 20),
+          Text(
+            'ICON',
+            style: TextStyle(
+              color: sc.textSecondary,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
+            ),
+          ),
           const SizedBox(height: 8),
           _IconPicker(
             options: _iconOptions,
@@ -1569,38 +1528,35 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
             accentColor: _toColor(_selectedColor),
             onSelect: (v) => setState(() => _selectedIcon = v),
           ),
-          const SizedBox(height: 16),
-          Consumer(builder: (_, ref2, _) {
-            final sc2 = ref2.watch(sieColorsProvider);
-            return Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _SheetTextBtn(
-                  label: 'CANCEL',
-                  color: sc2.textSecondary,
-                  onTap: () => Navigator.of(context).pop(),
-                ),
-                const SizedBox(width: 8),
-                _SheetTextBtn(
-                  label: isEdit ? 'SAVE' : 'DEPLOY',
-                  color: _toColor(_selectedColor),
-                  onTap: () {
-                    final title = _titleCtrl.text.trim();
-                    if (title.isEmpty) return;
-                    widget.onSave(
-                      title,
-                      _descCtrl.text.trim().isEmpty
-                          ? null
-                          : _descCtrl.text.trim(),
-                      _selectedColor,
-                      _selectedIcon,
-                    );
-                    Navigator.of(context).pop();
-                  },
-                ),
-              ],
-            );
-          }),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              _SheetTextBtn(
+                label: 'CANCEL',
+                color: sc.textSecondary,
+                onTap: () => Navigator.of(context).pop(),
+              ),
+              const SizedBox(width: 12),
+              _SheetTextBtn(
+                label: isEdit ? 'SAVE' : 'DEPLOY',
+                color: _toColor(_selectedColor),
+                onTap: () {
+                  final title = _titleCtrl.text.trim();
+                  if (title.isEmpty) return;
+                  widget.onSave(
+                    title,
+                    _descCtrl.text.trim().isEmpty
+                        ? null
+                        : _descCtrl.text.trim(),
+                    _selectedColor,
+                    _selectedIcon,
+                  );
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -1685,7 +1641,7 @@ class _GlowFieldState extends ConsumerState<_GlowField> {
 
 // ── Color Lens Chip ───────────────────────────────────────────
 
-class _ColorLens extends StatefulWidget {
+class _ColorLens extends StatelessWidget {
   final Color color;
   final bool selected;
   final VoidCallback onTap;
@@ -1696,53 +1652,19 @@ class _ColorLens extends StatefulWidget {
   });
 
   @override
-  State<_ColorLens> createState() => _ColorLensState();
-}
-
-class _ColorLensState extends State<_ColorLens> {
-  bool _pressed = false;
-
-  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: widget.onTap,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? 0.97 : 1.0,
-        duration: _pressed
-            ? const Duration(milliseconds: 80)
-            : const Duration(milliseconds: 220),
-        child: Container(
-          width: 28,
-          height: 28,
-          margin: const EdgeInsets.only(right: 10),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: widget.selected
-                ? widget.color
-                : widget.color.withValues(alpha: 0.40),
-            border: widget.selected
-                ? Border.all(color: Colors.white, width: 2)
-                : Border.all(
-                    color: widget.color.withValues(alpha: 0.50),
-                    width: 1,
-                  ),
-            boxShadow: widget.selected
-                ? [
-                    BoxShadow(
-                      color: widget.color.withValues(alpha: 0.65),
-                      blurRadius: 10,
-                      spreadRadius: 2,
-                    ),
-                    BoxShadow(
-                      color: widget.color.withValues(alpha: 0.30),
-                      blurRadius: 20,
-                    ),
-                  ]
-                : null,
-          ),
+      onTap: onTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        margin: const EdgeInsets.only(right: 8),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color,
+          border: selected
+              ? Border.all(color: Colors.white, width: 2.5)
+              : null,
         ),
       ),
     );
