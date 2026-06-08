@@ -113,6 +113,89 @@ class SyncService {
                 .delete()
                 .eq('id', payload['id'] as String)
                 .eq('user_id', userId);
+
+          // ── Planning ops ────────────────────────────────────────────────
+          case 'insert_goal':
+            await client.from('goals').upsert(payload, onConflict: 'id');
+          case 'delete_goal':
+            await client
+                .from('goals')
+                .delete()
+                .eq('id', payload['id'] as String)
+                .eq('user_id', userId);
+          case 'update_goal_status':
+            await client
+                .from('goals')
+                .update({'status': payload['status'] as String})
+                .eq('id', payload['id'] as String)
+                .eq('user_id', userId);
+          case 'insert_sub_goal':
+            await client.from('sub_goals').upsert({
+              'id': payload['id'],
+              'goal_id': payload['goal_id'],
+              'name': payload['name'],
+              'order_index': payload['order_index'] ?? 0,
+            }, onConflict: 'id');
+          case 'delete_sub_goal':
+            await client
+                .from('sub_goals')
+                .delete()
+                .eq('id', payload['id'] as String);
+          case 'complete_sub_goal':
+            await client
+                .from('sub_goals')
+                .update({'is_completed': true})
+                .eq('id', payload['id'] as String);
+          case 'insert_task':
+            await client.from('planning_tasks').upsert({
+              'id': payload['id'],
+              'sub_goal_id': payload['sub_goal_id'],
+              'user_id': payload['user_id'],
+              'name': payload['name'],
+              'weight': payload['weight'] ?? 1,
+              if (payload['due_date'] != null) 'due_date': payload['due_date'],
+            }, onConflict: 'id');
+          case 'toggle_task':
+            final isCompleted = payload['is_completed'] as bool;
+            await client.from('planning_tasks').update({
+              'is_completed': isCompleted,
+              'completed_at': payload['completed_at'],
+            }).eq('id', payload['id'] as String);
+          case 'delete_task':
+            await client
+                .from('planning_tasks')
+                .delete()
+                .eq('id', payload['id'] as String)
+                .eq('user_id', userId);
+          case 'insert_milestone':
+            await client.from('milestones').upsert({
+              'id': payload['id'],
+              'goal_id': payload['goal_id'],
+              'name': payload['name'],
+              if (payload['target_date'] != null) 'target_date': payload['target_date'],
+            }, onConflict: 'id');
+          case 'complete_milestone':
+            await client
+                .from('milestones')
+                .update({'is_completed': true})
+                .eq('id', payload['id'] as String);
+          case 'delete_milestone':
+            await client
+                .from('milestones')
+                .delete()
+                .eq('id', payload['id'] as String);
+          case 'insert_habit_link':
+            await client.from('goal_habit_links').upsert({
+              'id': payload['id'],
+              'goal_id': payload['goal_id'],
+              'habit_id': payload['habit_id'],
+            }, onConflict: 'id');
+          case 'delete_habit_link':
+            await client
+                .from('goal_habit_links')
+                .delete()
+                .eq('id', payload['id'] as String);
+
           default:
             debugPrint(
                 'SiE Sync: unknown op ${op.operationType}');
