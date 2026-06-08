@@ -392,15 +392,30 @@ List<SubGoal> buildSubGoalTree(List<SubGoal> flat) {
 }
 
 double subGoalProgress(SubGoal sg) {
-  if (sg.children.isNotEmpty) {
-    final list = sg.children.map(subGoalProgress).toList();
-    return list.reduce((a, b) => a + b) / list.length;
+  final hasTasks    = sg.tasks.isNotEmpty;
+  final hasChildren = sg.children.isNotEmpty;
+
+  if (!hasTasks && !hasChildren) return sg.isCompleted ? 100.0 : 0.0;
+
+  double? taskSlot;
+  if (hasTasks) {
+    final total = sg.tasks.fold(0, (s, t) => s + t.weight);
+    final done  = sg.tasks
+        .where((t) => t.isCompleted)
+        .fold(0, (s, t) => s + t.weight);
+    taskSlot = total == 0 ? 0.0 : (done / total) * 100.0;
   }
-  if (sg.tasks.isEmpty) return sg.isCompleted ? 100.0 : 0.0;
-  final total = sg.tasks.fold(0, (s, t) => s + t.weight);
-  final done =
-      sg.tasks.where((t) => t.isCompleted).fold(0, (s, t) => s + t.weight);
-  return total == 0 ? 0.0 : (done / total) * 100.0;
+
+  if (!hasChildren) return taskSlot!;
+
+  final childValues = sg.children.map(subGoalProgress).toList();
+  if (!hasTasks) {
+    return childValues.reduce((a, b) => a + b) / childValues.length;
+  }
+
+  // tasks form 1 slot alongside each child slot
+  final slots = [taskSlot!, ...childValues];
+  return slots.reduce((a, b) => a + b) / slots.length;
 }
 
 double goalProgress(Goal g) {
