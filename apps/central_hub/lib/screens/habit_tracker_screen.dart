@@ -1981,7 +1981,6 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
         filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
