@@ -376,6 +376,7 @@ class _SubGoalsSectionState extends ConsumerState<_SubGoalsSection> {
           onAdd: () => _showAddSubGoalSheet(context, ref, goal, sc),
         ),
         ...goal.subGoals.map((sg) => _SubGoalTile(
+              key: ValueKey(sg.id),
               subGoal: sg,
               goal: goal,
               sc: sc,
@@ -385,6 +386,14 @@ class _SubGoalsSectionState extends ConsumerState<_SubGoalsSection> {
                   _expanded.remove(sg.id);
                 } else {
                   _expanded.add(sg.id);
+                }
+              }),
+              expandedSet: _expanded,
+              onToggleChild: (id) => setState(() {
+                if (_expanded.contains(id)) {
+                  _expanded.remove(id);
+                } else {
+                  _expanded.add(id);
                 }
               }),
             )),
@@ -400,6 +409,9 @@ class _SubGoalTile extends ConsumerWidget {
     required this.sc,
     required this.isExpanded,
     required this.onToggle,
+    this.depth = 0,
+    required this.expandedSet,
+    required this.onToggleChild,
   });
 
   final SubGoal subGoal;
@@ -407,6 +419,9 @@ class _SubGoalTile extends ConsumerWidget {
   final SieColors sc;
   final bool isExpanded;
   final VoidCallback onToggle;
+  final int depth;
+  final Set<String> expandedSet;
+  final void Function(String) onToggleChild;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -485,7 +500,24 @@ class _SubGoalTile extends ConsumerWidget {
                       goal: goal,
                       sc: sc,
                     )),
+                if (sg.children.isNotEmpty) ...[
+                  ...sg.children.map((child) => Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: _SubGoalTile(
+                      key: ValueKey(child.id),
+                      subGoal: child,
+                      goal: goal,
+                      sc: sc,
+                      depth: depth + 1,
+                      isExpanded: expandedSet.contains(child.id),
+                      onToggle: () => onToggleChild(child.id),
+                      expandedSet: expandedSet,
+                      onToggleChild: onToggleChild,
+                    ),
+                  )),
+                ],
                 _AddTaskRow(subGoal: sg, goal: goal, sc: sc),
+                _AddChildSubGoalRow(subGoal: sg, goal: goal, sc: sc),
               ],
             ),
           ],
@@ -613,6 +645,32 @@ class _WeightBadge extends StatelessWidget {
         '×$weight',
         style: TextStyle(
             color: color, fontSize: 9, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+class _AddChildSubGoalRow extends ConsumerWidget {
+  const _AddChildSubGoalRow(
+      {required this.subGoal, required this.goal, required this.sc});
+
+  final SubGoal subGoal;
+  final Goal goal;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: TextButton.icon(
+        onPressed: () => _showAddSubGoalSheet(context, ref, goal, sc,
+            parentSubGoalId: subGoal.id),
+        icon: Icon(Icons.account_tree_outlined, size: 13, color: sc.textSecondary),
+        label: Text(
+          'Добавить под-этап',
+          style: TextStyle(color: sc.textSecondary, fontSize: 12),
+        ),
+        style: TextButton.styleFrom(padding: const EdgeInsets.all(8)),
       ),
     );
   }
@@ -1227,12 +1285,14 @@ class _SmallArcPainter extends CustomPainter {
 // ─── Bottom Sheets ────────────────────────────────────────────────────────────
 
 void _showAddSubGoalSheet(
-    BuildContext context, WidgetRef ref, Goal goal, SieColors sc) {
+    BuildContext context, WidgetRef ref, Goal goal, SieColors sc,
+    {String? parentSubGoalId}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _AddSubGoalSheet(goal: goal, sc: sc),
+    builder: (_) => _AddSubGoalSheet(
+        goal: goal, sc: sc, parentSubGoalId: parentSubGoalId),
   );
 }
 
@@ -1376,10 +1436,12 @@ Future<void> _confirmDeleteMilestone(BuildContext context, WidgetRef ref,
 // ─── Sheet widgets ────────────────────────────────────────────────────────────
 
 class _AddSubGoalSheet extends ConsumerStatefulWidget {
-  const _AddSubGoalSheet({required this.goal, required this.sc});
+  const _AddSubGoalSheet(
+      {required this.goal, required this.sc, this.parentSubGoalId});
 
   final Goal goal;
   final SieColors sc;
+  final String? parentSubGoalId;
 
   @override
   ConsumerState<_AddSubGoalSheet> createState() => _AddSubGoalSheetState();
@@ -1417,7 +1479,8 @@ class _AddSubGoalSheetState extends ConsumerState<_AddSubGoalSheet> {
               if (name.isEmpty) return;
               ref
                   .read(planningProvider.notifier)
-                  .addSubGoal(widget.goal.id, name);
+                  .addSubGoal(widget.goal.id, name,
+                      parentSubGoalId: widget.parentSubGoalId);
               Navigator.pop(context);
             },
           ),
