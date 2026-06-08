@@ -1463,11 +1463,13 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
     final isEdit = widget.existing != null;
     final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
 
-    return Container(
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
+      child: Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
       padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + keyboardBottom),
       decoration: BoxDecoration(
-        color: sc.surface,
+        color: sc.surface.withOpacity(0.92),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: sc.border),
       ),
@@ -1506,9 +1508,9 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
             'COLOR',
             style: TextStyle(
               color: sc.textSecondary,
-              fontSize: 9,
+              fontSize: 10,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1.5,
+              letterSpacing: 2.5,
             ),
           ),
           const SizedBox(height: 8),
@@ -1527,9 +1529,9 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
             'ICON',
             style: TextStyle(
               color: sc.textSecondary,
-              fontSize: 9,
+              fontSize: 10,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1.5,
+              letterSpacing: 2.5,
             ),
           ),
           const SizedBox(height: 8),
@@ -1570,7 +1572,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
           ),
         ],
       ),
-    );
+    ));
   }
 }
 
