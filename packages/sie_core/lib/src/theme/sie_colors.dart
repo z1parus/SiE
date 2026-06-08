@@ -93,9 +93,9 @@ class SieColors {
     mode: SieThemeMode.classicLight,
     background: Color(0xFFF5F6FA),
     surface: Color(0xFFFFFFFF),
-    accent: Color(0xFF5AADA0),
-    accentSecondary: Color(0xFF3D9489),
-    textPrimary: Color(0xFF1C1C22),
+    accent:          Color(0xFFC8A84B),  // Gold Sand — primary
+    accentSecondary: Color(0xFF5AADA0),  // Marine Foam — secondary
+    textPrimary:  Color(0xFF1C1C22),
     textSecondary: Color(0xFF646470),
     border: Color(0xFFE4E4EE),
     iconMuted: Color(0xFF9494A0),

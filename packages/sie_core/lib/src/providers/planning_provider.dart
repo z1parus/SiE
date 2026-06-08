@@ -12,6 +12,51 @@ import 'user_profile_provider.dart';
 
 const _uuid = Uuid();
 
+// ── Sub-goal tree helpers ─────────────────────────────────────────────────────
+
+List<SubGoal> _updateSubGoalInTree(
+    List<SubGoal> sgs, String id, SubGoal Function(SubGoal) fn) {
+  return sgs.map((sg) {
+    if (sg.id == id) return fn(sg);
+    if (sg.children.isNotEmpty) {
+      return sg.copyWith(
+          children: _updateSubGoalInTree(sg.children, id, fn));
+    }
+    return sg;
+  }).toList();
+}
+
+List<SubGoal> _addChildToSubGoal(
+    List<SubGoal> sgs, String parentId, SubGoal child) {
+  return sgs.map((sg) {
+    if (sg.id == parentId) return sg.copyWith(children: [...sg.children, child]);
+    if (sg.children.isNotEmpty) {
+      return sg.copyWith(
+          children: _addChildToSubGoal(sg.children, parentId, child));
+    }
+    return sg;
+  }).toList();
+}
+
+List<SubGoal> _removeSubGoalFromTree(List<SubGoal> sgs, String id) {
+  return sgs
+      .where((sg) => sg.id != id)
+      .map((sg) => sg.children.isNotEmpty
+          ? sg.copyWith(children: _removeSubGoalFromTree(sg.children, id))
+          : sg)
+      .toList();
+}
+
+List<SubGoal> _allSubGoals(List<SubGoal> roots) {
+  final result = <SubGoal>[];
+  void visit(SubGoal sg) {
+    result.add(sg);
+    for (final child in sg.children) visit(child);
+  }
+  for (final sg in roots) visit(sg);
+  return result;
+}
+
 final planningProvider =
     AsyncNotifierProvider.autoDispose<PlanningNotifier, PlanningState>(
   PlanningNotifier.new,
@@ -80,7 +125,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           createdAtMs: Value(g.createdAt.millisecondsSinceEpoch),
         ));
       }
-      for (final sg in g.subGoals) {
+      for (final sg in _allSubGoals(g.subGoals)) {
         if (!unsyncedIds.contains(sg.id)) {
           await db.upsertSubGoal(LocalSubGoalsCompanion(
             id: Value(sg.id),
@@ -216,7 +261,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         status: rg.status,
         colorHex: rg.colorHex,
         progress: rg.progress,
-        subGoals: subGoals,
+        subGoals: buildSubGoalTree(subGoals),
         milestones: milestones,
         habitLinks: links,
         createdAt: DateTime.fromMillisecondsSinceEpoch(rg.createdAtMs),
@@ -284,8 +329,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     if (isOnline) {
       try {
         await client.from('goals').insert(newGoal.toInsertJson());
-        await db.upsertGoal(
-            LocalGoalsCompanion(id: Value(id), synced: const Value(true)));
+        await db.updateGoal(id, const LocalGoalsCompanion(synced: Value(true)));
         return;
       } catch (_) {}
     }
@@ -328,17 +372,19 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         .toList();
     state = AsyncData(current.copyWith(goals: updated));
 
-    await db.upsertGoal(LocalGoalsCompanion(
-        id: Value(id), status: Value(newStatus), synced: const Value(false)));
+    await db.updateGoal(id, LocalGoalsCompanion(
+        status: Value(newStatus), synced: const Value(false)));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (newStatus == 'completed') await _awardXp(2000, 0);
+
     if (isOnline) {
       try {
         await client
             .from('goals')
             .update({'status': newStatus}).eq('id', id);
-        await db.upsertGoal(
-            LocalGoalsCompanion(id: Value(id), synced: const Value(true)));
+        await db.updateGoal(id,
+            const LocalGoalsCompanion(synced: Value(true)));
         return;
       } catch (_) {}
     }
@@ -361,7 +407,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
   // ── Add Sub-goal ──────────────────────────────────────────────────────────
 
   Future<void> addSubGoal(String goalId, String name,
-      {int orderIndex = 0}) async {
+      {int orderIndex = 0, String? parentSubGoalId}) async {
     final client = Supabase.instance.client;
     final session = client.auth.currentSession;
     if (session == null) return;
@@ -373,7 +419,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final newSg = SubGoal(
       id: id,
       goalId: goalId,
-      parentSubGoalId: null,
+      parentSubGoalId: parentSubGoalId,
       name: name,
       isCompleted: false,
       orderIndex: orderIndex,
@@ -381,12 +427,18 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       createdAt: now,
     );
 
-    _updateGoalInState(goalId,
-        (g) => g.copyWith(subGoals: [...g.subGoals, newSg]));
+    _updateGoalInState(goalId, (g) {
+      if (parentSubGoalId == null) {
+        return g.copyWith(subGoals: [...g.subGoals, newSg]);
+      }
+      return g.copyWith(
+          subGoals: _addChildToSubGoal(g.subGoals, parentSubGoalId, newSg));
+    });
 
     await db.upsertSubGoal(LocalSubGoalsCompanion(
       id: Value(id),
       goalId: Value(goalId),
+      parentSubGoalId: Value(parentSubGoalId),
       name: Value(name),
       orderIndex: Value(orderIndex),
       synced: const Value(false),
@@ -399,19 +451,25 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         await client.from('sub_goals').insert({
           'id': id,
           'goal_id': goalId,
+          if (parentSubGoalId != null) 'parent_sub_goal_id': parentSubGoalId,
           'name': name,
           'order_index': orderIndex,
           'created_at': now.toIso8601String(),
         });
-        await db.upsertSubGoal(
-            LocalSubGoalsCompanion(id: Value(id), synced: const Value(true)));
+        await db.updateSubGoal(id,
+            const LocalSubGoalsCompanion(synced: Value(true)));
         return;
       } catch (_) {}
     }
     await db.enqueueSyncOp(
         'insert_sub_goal',
-        jsonEncode(
-            {'id': id, 'goal_id': goalId, 'name': name, 'order_index': orderIndex}));
+        jsonEncode({
+          'id': id,
+          'goal_id': goalId,
+          if (parentSubGoalId != null) 'parent_sub_goal_id': parentSubGoalId,
+          'name': name,
+          'order_index': orderIndex,
+        }));
   }
 
   // ── Delete Sub-goal ───────────────────────────────────────────────────────
@@ -422,7 +480,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
     _updateGoalInState(goalId,
         (g) => g.copyWith(
-            subGoals: g.subGoals.where((sg) => sg.id != subGoalId).toList()));
+            subGoals: _removeSubGoalFromTree(g.subGoals, subGoalId)));
 
     await db.deleteSubGoalLocally(subGoalId);
 
@@ -443,16 +501,11 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final client = Supabase.instance.client;
     final db = ref.read(appDatabaseProvider);
 
-    _updateGoalInState(
-        goalId,
-        (g) => g.copyWith(
-            subGoals: g.subGoals
-                .map((sg) =>
-                    sg.id == subGoalId ? sg.copyWith(isCompleted: true) : sg)
-                .toList()));
+    _updateGoalInState(goalId, (g) => g.copyWith(
+        subGoals: _updateSubGoalInTree(
+            g.subGoals, subGoalId, (sg) => sg.copyWith(isCompleted: true))));
 
-    await db.upsertSubGoal(LocalSubGoalsCompanion(
-        id: Value(subGoalId),
+    await db.updateSubGoal(subGoalId, LocalSubGoalsCompanion(
         isCompleted: const Value(true),
         synced: const Value(false)));
 
@@ -463,8 +516,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         await client
             .from('sub_goals')
             .update({'is_completed': true}).eq('id', subGoalId);
-        await db.upsertSubGoal(LocalSubGoalsCompanion(
-            id: Value(subGoalId), synced: const Value(true)));
+        await db.updateSubGoal(subGoalId,
+            const LocalSubGoalsCompanion(synced: Value(true)));
         syncedToServer = true;
       } catch (e) {
         debugPrint('SiE Planning: complete_sub_goal online failed — $e');
@@ -507,14 +560,9 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       createdAt: now,
     );
 
-    _updateGoalInState(
-        goalId,
-        (g) => g.copyWith(
-            subGoals: g.subGoals
-                .map((sg) => sg.id == subGoalId
-                    ? sg.copyWith(tasks: [...sg.tasks, newTask])
-                    : sg)
-                .toList()));
+    _updateGoalInState(goalId, (g) => g.copyWith(
+        subGoals: _updateSubGoalInTree(g.subGoals, subGoalId,
+            (sg) => sg.copyWith(tasks: [...sg.tasks, newTask]))));
 
     await db.upsertPlanningTask(LocalPlanningTasksCompanion(
       id: Value(id),
@@ -539,8 +587,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           'due_date': dueDate?.toIso8601String(),
           'created_at': now.toIso8601String(),
         });
-        await db.upsertPlanningTask(
-            LocalPlanningTasksCompanion(id: Value(id), synced: const Value(true)));
+        await db.updatePlanningTask(id,
+            LocalPlanningTasksCompanion(synced: const Value(true)));
         return;
       } catch (_) {}
     }
@@ -562,15 +610,10 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final client = Supabase.instance.client;
     final db = ref.read(appDatabaseProvider);
 
-    _updateGoalInState(
-        goalId,
-        (g) => g.copyWith(
-            subGoals: g.subGoals
-                .map((sg) => sg.id == subGoalId
-                    ? sg.copyWith(
-                        tasks: sg.tasks.where((t) => t.id != taskId).toList())
-                    : sg)
-                .toList()));
+    _updateGoalInState(goalId, (g) => g.copyWith(
+        subGoals: _updateSubGoalInTree(g.subGoals, subGoalId,
+            (sg) => sg.copyWith(
+                tasks: sg.tasks.where((t) => t.id != taskId).toList()))));
 
     await db.deletePlanningTaskLocally(taskId);
 
@@ -596,7 +639,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
     final goal = current.goals.firstWhere((g) => g.id == goalId,
         orElse: () => throw StateError('goal not found'));
-    final sg = goal.subGoals.firstWhere((s) => s.id == subGoalId,
+    final sg = _allSubGoals(goal.subGoals).firstWhere((s) => s.id == subGoalId,
         orElse: () => throw StateError('subgoal not found'));
     final task = sg.tasks.firstWhere((t) => t.id == taskId,
         orElse: () => throw StateError('task not found'));
@@ -604,24 +647,18 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final nowCompleted = !task.isCompleted;
     final completedAt = nowCompleted ? DateTime.now() : null;
 
-    _updateGoalInState(
-        goalId,
-        (g) => g.copyWith(
-            subGoals: g.subGoals
-                .map((s) => s.id == subGoalId
-                    ? s.copyWith(
-                        tasks: s.tasks
-                            .map((t) => t.id == taskId
-                                ? t.copyWith(
-                                    isCompleted: nowCompleted,
-                                    completedAt: completedAt)
-                                : t)
-                            .toList())
-                    : s)
-                .toList()));
+    _updateGoalInState(goalId, (g) => g.copyWith(
+        subGoals: _updateSubGoalInTree(g.subGoals, subGoalId,
+            (s) => s.copyWith(
+                tasks: s.tasks
+                    .map((t) => t.id == taskId
+                        ? t.copyWith(
+                            isCompleted: nowCompleted,
+                            completedAt: completedAt)
+                        : t)
+                    .toList()))));
 
-    await db.upsertPlanningTask(LocalPlanningTasksCompanion(
-      id: Value(taskId),
+    await db.updatePlanningTask(taskId, LocalPlanningTasksCompanion(
       isCompleted: Value(nowCompleted),
       completedAtMs: Value(completedAt?.millisecondsSinceEpoch),
       synced: const Value(false),
@@ -635,8 +672,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           'is_completed': nowCompleted,
           'completed_at': completedAt?.toIso8601String(),
         }).eq('id', taskId);
-        await db.upsertPlanningTask(
-            LocalPlanningTasksCompanion(id: Value(taskId), synced: const Value(true)));
+        await db.updatePlanningTask(taskId,
+            LocalPlanningTasksCompanion(synced: const Value(true)));
         syncedToServer = true;
       } catch (e) {
         debugPrint('SiE Planning: toggle_task online failed — $e');
@@ -653,6 +690,36 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     }
 
     if (nowCompleted) await _awardXp(taskXp(task.weight), 0);
+    await _touchGoalUpdatedAt(goalId);
+    if (nowCompleted) await _autoCompleteParents(goalId);
+  }
+
+  // Auto-complete sub-goals and goal when all children/tasks are done.
+  Future<void> _autoCompleteParents(String goalId) async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final goal = current.goals.firstWhere((g) => g.id == goalId,
+        orElse: () => throw StateError('goal not found'));
+
+    bool anyChange = true;
+    while (anyChange) {
+      anyChange = false;
+      final updatedGoal = current.goals.firstWhere((g) => g.id == goalId,
+          orElse: () => throw StateError('goal not found'));
+      for (final sg in _allSubGoals(updatedGoal.subGoals)) {
+        if (sg.isCompleted) continue;
+        final allTasksDone = sg.tasks.isNotEmpty && sg.tasks.every((t) => t.isCompleted);
+        final allChildrenDone = sg.children.isNotEmpty
+            ? sg.children.every((c) => c.isCompleted)
+            : true;
+        final hasContent = sg.tasks.isNotEmpty || sg.children.isNotEmpty;
+        if (hasContent && allTasksDone && allChildrenDone) {
+          await completeSubGoal(sg.id, goalId);
+          anyChange = true;
+          break;
+        }
+      }
+    }
   }
 
   // ── Add Milestone ─────────────────────────────────────────────────────────
@@ -843,5 +910,97 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     try {
       await ref.read(userProfileProvider.notifier).applyLocalXpDelta(xp, dp);
     } catch (_) {}
+  }
+
+  // ── Touch updatedAt ───────────────────────────────────────────────────────
+
+  Future<void> _touchGoalUpdatedAt(String goalId) async {
+    final now = DateTime.now();
+    _updateGoalInState(goalId, (g) => g.copyWith(updatedAt: now));
+    final db = ref.read(appDatabaseProvider);
+    await db.updateGoal(goalId, LocalGoalsCompanion(
+      updatedAtMs: Value(now.millisecondsSinceEpoch),
+      synced: const Value(false),
+    ));
+  }
+
+  // ── Habit Boost ───────────────────────────────────────────────────────────
+
+  Future<void> applyHabitBoost(String goalId, double boost) async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final goal = current.goals.where((g) => g.id == goalId).firstOrNull;
+    if (goal == null || goal.status != 'active') return;
+    final newProgress = (goal.progress + boost).clamp(0.0, 100.0);
+    final now = DateTime.now();
+    _updateGoalInState(
+        goalId, (g) => g.copyWith(progress: newProgress, updatedAt: now));
+    final db = ref.read(appDatabaseProvider);
+    await db.updateGoal(goalId, LocalGoalsCompanion(
+      progress: Value(newProgress),
+      updatedAtMs: Value(now.millisecondsSinceEpoch),
+      synced: const Value(false),
+    ));
+    await db.enqueueSyncOp(
+        'update_goal_progress', jsonEncode({'id': goalId, 'progress': newProgress}));
+  }
+
+  // ── Move Task (re-parent) ─────────────────────────────────────────────────
+
+  Future<void> moveTask(String taskId, String newSubGoalId) async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+
+    String? oldSubGoalId;
+    PlanningTask? task;
+    for (final g in current.goals) {
+      for (final sg in _allSubGoals(g.subGoals)) {
+        final found = sg.tasks.where((t) => t.id == taskId).firstOrNull;
+        if (found != null) {
+          task = found;
+          oldSubGoalId = sg.id;
+          break;
+        }
+      }
+      if (task != null) break;
+    }
+    if (task == null || oldSubGoalId == null || oldSubGoalId == newSubGoalId) {
+      return;
+    }
+
+    final movedTask = task.copyWith(subGoalId: newSubGoalId);
+    state = AsyncData(current.copyWith(
+      goals: current.goals.map((g) {
+        final hasOld = _allSubGoals(g.subGoals).any((s) => s.id == oldSubGoalId);
+        if (!hasOld) return g;
+        // Remove from old sub-goal
+        var updated = _updateSubGoalInTree(g.subGoals, oldSubGoalId!, (s) =>
+            s.copyWith(tasks: s.tasks.where((t) => t.id != taskId).toList()));
+        // Add to new sub-goal
+        updated = _updateSubGoalInTree(updated, newSubGoalId, (s) =>
+            s.copyWith(tasks: [...s.tasks, movedTask]));
+        return g.copyWith(subGoals: updated);
+      }).toList(),
+    ));
+
+    final db = ref.read(appDatabaseProvider);
+    await db.updatePlanningTask(taskId, LocalPlanningTasksCompanion(
+      subGoalId: Value(newSubGoalId),
+      synced: const Value(false),
+    ));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await Supabase.instance.client
+            .from('planning_tasks')
+            .update({'sub_goal_id': newSubGoalId}).eq('id', taskId);
+        await db.updatePlanningTask(taskId,
+            const LocalPlanningTasksCompanion(synced: Value(true)));
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp(
+        'move_task', jsonEncode({'id': taskId, 'sub_goal_id': newSubGoalId}));
   }
 }

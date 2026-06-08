@@ -47,6 +47,40 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
 
   // ── Layout ────────────────────────────────────────────────────────────────
 
+  void _ensureSubGoalPositions(SubGoal sg) {
+    // Position child sub-goals around this sub-goal
+    final children = sg.children;
+    for (int i = 0; i < children.length; i++) {
+      final child = children[i];
+      if (!_positions.containsKey(child.id)) {
+        final sgPos = _positions[sg.id]!;
+        final base = math.atan2(sgPos.dy, sgPos.dx) + math.pi / 2;
+        const spread = math.pi * 0.7;
+        final angle = children.length <= 1
+            ? base
+            : base + (-spread / 2 + spread * i / (children.length - 1));
+        _positions[child.id] =
+            sgPos + Offset(160 * math.cos(angle), 160 * math.sin(angle));
+      }
+      _ensureSubGoalPositions(child);
+    }
+    // Position tasks for this sub-goal
+    final tasks = sg.tasks;
+    for (int j = 0; j < tasks.length; j++) {
+      final t = tasks[j];
+      if (!_positions.containsKey(t.id)) {
+        final sgPos = _positions[sg.id]!;
+        final base = math.atan2(sgPos.dy, sgPos.dx);
+        const spread = math.pi * 0.8;
+        final ta = tasks.length <= 1
+            ? base
+            : base + (-spread / 2 + spread * j / (tasks.length - 1));
+        _positions[t.id] =
+            sgPos + Offset(145 * math.cos(ta), 145 * math.sin(ta));
+      }
+    }
+  }
+
   void _ensurePositions(Goal goal) {
     _positions[goal.id] = Offset.zero;
 
@@ -58,20 +92,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
             (2 * math.pi * i / math.max(sgs.length, 1)) - math.pi / 2;
         _positions[sg.id] = Offset(240 * math.cos(angle), 240 * math.sin(angle));
       }
-      final tasks = sg.tasks;
-      for (int j = 0; j < tasks.length; j++) {
-        final t = tasks[j];
-        if (!_positions.containsKey(t.id)) {
-          final sgPos = _positions[sg.id]!;
-          final base = math.atan2(sgPos.dy, sgPos.dx);
-          const spread = math.pi * 0.8;
-          final ta = tasks.length <= 1
-              ? base
-              : base + (-spread / 2 + spread * j / (tasks.length - 1));
-          _positions[t.id] =
-              sgPos + Offset(145 * math.cos(ta), 145 * math.sin(ta));
-        }
-      }
+      _ensureSubGoalPositions(sg);
     }
 
     final mss = goal.milestones;
@@ -94,23 +115,34 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
       }
     }
 
+    final allSgs = _flatSubGoals(goal.subGoals);
     final all = {
       goal.id,
-      ...goal.subGoals.map((e) => e.id),
-      ...goal.subGoals.expand((sg) => sg.tasks).map((t) => t.id),
+      ...allSgs.map((sg) => sg.id),
+      ...allSgs.expand((sg) => sg.tasks).map((t) => t.id),
       ...goal.milestones.map((m) => m.id),
       ...goal.habitLinks.map((l) => l.id),
     };
     _positions.removeWhere((k, _) => !all.contains(k));
   }
 
+  List<SubGoal> _flatSubGoals(List<SubGoal> roots) {
+    final result = <SubGoal>[];
+    void visit(SubGoal sg) {
+      result.add(sg);
+      for (final child in sg.children) visit(child);
+    }
+    for (final sg in roots) visit(sg);
+    return result;
+  }
+
   // ── Collision resolution ──────────────────────────────────────────────────
 
   double _nodeRadius(String id, Goal goal) {
     if (id == goal.id) return 80.0;
-    if (goal.subGoals.any((sg) => sg.id == id)) return 55.0;
-    final task =
-        goal.subGoals.expand((sg) => sg.tasks).where((t) => t.id == id).firstOrNull;
+    final allSgs = _flatSubGoals(goal.subGoals);
+    if (allSgs.any((sg) => sg.id == id)) return 55.0;
+    final task = allSgs.expand((sg) => sg.tasks).where((t) => t.id == id).firstOrNull;
     if (task != null) return switch (task.weight) { 5 => 36, 3 => 28, _ => 22 };
     if (goal.milestones.any((m) => m.id == id)) return 40.0;
     if (goal.habitLinks.any((l) => l.id == id)) return 26.0;
@@ -127,7 +159,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
           final b = ids[j];
           final pa = _positions[a]!;
           final pb = _positions[b]!;
-          final minD = _nodeRadius(a, goal) + _nodeRadius(b, goal) + 18.0;
+          final minD = _nodeRadius(a, goal) + _nodeRadius(b, goal) + 36.0;
           final diff = pb - pa;
           final dist = diff.distance;
           if (dist < minD && dist > 0.001) {
@@ -151,18 +183,15 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
       _showGoalSheet(goal, c);
       return;
     }
-    final sg = goal.subGoals.where((s) => s.id == nodeId).firstOrNull;
+    final allSgs = _flatSubGoals(goal.subGoals);
+    final sg = allSgs.where((s) => s.id == nodeId).firstOrNull;
     if (sg != null) {
       _showSubGoalSheet(sg, goal, c);
       return;
     }
-    final task = goal.subGoals
-        .expand((s) => s.tasks)
-        .where((t) => t.id == nodeId)
-        .firstOrNull;
+    final task = allSgs.expand((s) => s.tasks).where((t) => t.id == nodeId).firstOrNull;
     if (task != null) {
-      final parent =
-          goal.subGoals.firstWhere((s) => s.tasks.any((t) => t.id == nodeId));
+      final parent = allSgs.firstWhere((s) => s.tasks.any((t) => t.id == nodeId));
       _showTaskSheet(task, parent, goal, c);
       return;
     }
@@ -212,6 +241,12 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
           ref
               .read(planningProvider.notifier)
               .addTask(goalId: goal.id, subGoalId: sg.id, name: name, weight: weight);
+          Navigator.pop(ctx);
+        },
+        onAddSubGoal: (name) {
+          ref
+              .read(planningProvider.notifier)
+              .addSubGoal(goal.id, name, parentSubGoalId: sg.id);
           Navigator.pop(ctx);
         },
         onComplete: sg.isCompleted
@@ -317,15 +352,20 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
     final goalPos = _positions[goal.id] ?? Offset.zero;
 
     final edges = <_Edge>[];
-    for (final sg in goal.subGoals) {
+    void addSubGoalEdges(SubGoal sg, Offset parentPos, _EType edgeType) {
       final sgPos = _positions[sg.id];
-      if (sgPos != null) {
-        edges.add(_Edge(goalPos, sgPos, _EType.goalSub));
-        for (final t in sg.tasks) {
-          final tp = _positions[t.id];
-          if (tp != null) edges.add(_Edge(sgPos, tp, _EType.subTask));
-        }
+      if (sgPos == null) return;
+      edges.add(_Edge(parentPos, sgPos, edgeType));
+      for (final t in sg.tasks) {
+        final tp = _positions[t.id];
+        if (tp != null) edges.add(_Edge(sgPos, tp, _EType.subTask));
       }
+      for (final child in sg.children) {
+        addSubGoalEdges(child, sgPos, _EType.subSub);
+      }
+    }
+    for (final sg in goal.subGoals) {
+      addSubGoalEdges(sg, goalPos, _EType.goalSub);
     }
     for (final ms in goal.milestones) {
       final mp = _positions[ms.id];
@@ -372,18 +412,10 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
                 goal,
                 _MilestoneNode(ms: ms, sc: c, dragging: _draggingId == ms.id),
               ),
-            // Tasks
-            for (final sg in goal.subGoals)
+            // Tasks and nested sub-goals (all depths)
+            for (final sg in _flatSubGoals(goal.subGoals)) ...[
               for (final t in sg.tasks)
-                _posNode(
-                  t.id,
-                  _taskW(t.weight),
-                  40,
-                  goal,
-                  _TaskNode(task: t, sc: c, dragging: _draggingId == t.id),
-                ),
-            // SubGoals
-            for (final sg in goal.subGoals)
+                _taskPosNode(t, sg.id, goal, c),
               _posNode(
                 sg.id,
                 158,
@@ -396,6 +428,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
                   onAdd: () => _showSubGoalSheet(sg, goal, c),
                 ),
               ),
+            ],
             // Goal (fixed, topmost)
             Positioned(
               left: _cx - 80,
@@ -413,6 +446,54 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
   }
 
   double _taskW(int w) => switch (w) { 5 => 124, 3 => 104, _ => 84 };
+
+  Widget _taskPosNode(PlanningTask task, String currentSgId, Goal goal, SieColors c) {
+    final pos = _positions[task.id];
+    if (pos == null) return const SizedBox.shrink();
+    final w = _taskW(task.weight);
+    const h = 40.0;
+    return Positioned(
+      left: _cx + pos.dx - w / 2,
+      top: _cx + pos.dy - h / 2,
+      width: w,
+      height: h,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _onTap(task.id, goal),
+        onPanStart: (_) => setState(() => _draggingId = task.id),
+        onPanUpdate: (d) {
+          final scale = _tc.value.getMaxScaleOnAxis();
+          setState(() => _positions[task.id] = _positions[task.id]! + d.delta / scale);
+        },
+        onPanEnd: (_) {
+          _tryReparentTask(task.id, currentSgId, goal);
+          _resolveCollisions(task.id, goal);
+          setState(() => _draggingId = null);
+        },
+        child: _TaskNode(task: task, sc: c, dragging: _draggingId == task.id),
+      ),
+    );
+  }
+
+  void _tryReparentTask(String taskId, String currentSgId, Goal goal) {
+    final taskPos = _positions[taskId];
+    if (taskPos == null) return;
+    const threshold = 200.0;
+    String? nearestSgId;
+    double nearestDist = threshold;
+    for (final sg in _flatSubGoals(goal.subGoals)) {
+      final sgPos = _positions[sg.id];
+      if (sgPos == null) continue;
+      final dist = (taskPos - sgPos).distance;
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearestSgId = sg.id;
+      }
+    }
+    if (nearestSgId != null && nearestSgId != currentSgId) {
+      ref.read(planningProvider.notifier).moveTask(taskId, nearestSgId);
+    }
+  }
 
   Widget _posNode(String id, double w, double h, Goal goal, Widget child) {
     final pos = _positions[id];
@@ -443,7 +524,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
 
 // ─── Edge types & data ────────────────────────────────────────────────────────
 
-enum _EType { goalSub, subTask, goalMs, goalHabit }
+enum _EType { goalSub, subSub, subTask, goalMs, goalHabit }
 
 class _Edge {
   const _Edge(this.src, this.dst, this.type);
@@ -492,6 +573,7 @@ class _EdgePainter extends CustomPainter {
 
       final (color, width, dashed) = switch (e.type) {
         _EType.goalSub => (c.accent.withOpacity(0.38), 2.0, false),
+        _EType.subSub => (c.border.withOpacity(0.9), 1.5, true),
         _EType.subTask => (c.border.withOpacity(0.8), 1.5, false),
         _EType.goalMs => (c.accentSecondary.withOpacity(0.45), 1.5, true),
         _EType.goalHabit => (c.dp.withOpacity(0.35), 1.2, false),
@@ -689,7 +771,7 @@ class _SubGoalNode extends StatelessWidget {
           child: Stack(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 16),
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1009,12 +1091,14 @@ class _SubGoalSheet extends StatefulWidget {
     required this.sg,
     required this.sc,
     required this.onAddTask,
+    required this.onAddSubGoal,
     this.onComplete,
     required this.onDelete,
   });
   final SubGoal sg;
   final SieColors sc;
   final void Function(String name, int weight) onAddTask;
+  final ValueChanged<String> onAddSubGoal;
   final VoidCallback? onComplete;
   final VoidCallback onDelete;
 
@@ -1024,12 +1108,15 @@ class _SubGoalSheet extends StatefulWidget {
 
 class _SubGoalSheetState extends State<_SubGoalSheet> {
   bool _adding = false;
+  bool _addingSubGoal = false;
   final _ctrl = TextEditingController();
+  final _sgCtrl = TextEditingController();
   int _weight = 1;
 
   @override
   void dispose() {
     _ctrl.dispose();
+    _sgCtrl.dispose();
     super.dispose();
   }
 
@@ -1049,7 +1136,7 @@ class _SubGoalSheetState extends State<_SubGoalSheet> {
         children: [
           _SheetHeader(title: widget.sg.name, icon: Icons.layers_outlined, sc: c),
           const SizedBox(height: 16),
-          if (!_adding) ...[
+          if (!_adding && !_addingSubGoal) ...[
             if (widget.onComplete != null) ...[
               _ActionBtn(
                   label: 'Завершить',
@@ -1067,11 +1154,50 @@ class _SubGoalSheetState extends State<_SubGoalSheet> {
                 onTap: () => setState(() => _adding = true)),
             const SizedBox(height: 8),
             _ActionBtn(
+                label: 'Добавить под-этап',
+                icon: Icons.account_tree_outlined,
+                color: c.accent,
+                sc: c,
+                onTap: () => setState(() => _addingSubGoal = true)),
+            const SizedBox(height: 8),
+            _ActionBtn(
                 label: 'Удалить',
                 icon: Icons.delete_outline,
                 color: const Color(0xFFE03050),
                 sc: c,
                 onTap: widget.onDelete),
+          ] else if (_addingSubGoal) ...[
+            _StyledTextField(ctrl: _sgCtrl, hint: 'Название под-этапа', sc: c,
+                onSubmit: _submitSubGoal),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => setState(() => _addingSubGoal = false),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: c.border),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text('Отмена', style: TextStyle(color: c.textSecondary)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _submitSubGoal,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: c.accent,
+                      foregroundColor: c.background,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Добавить'),
+                  ),
+                ),
+              ],
+            ),
           ] else ...[
             _StyledTextField(ctrl: _ctrl, hint: 'Название задачи', sc: c, onSubmit: _submitTask),
             const SizedBox(height: 10),
@@ -1141,6 +1267,12 @@ class _SubGoalSheetState extends State<_SubGoalSheet> {
     final v = _ctrl.text.trim();
     if (v.isEmpty) return;
     widget.onAddTask(v, _weight);
+  }
+
+  void _submitSubGoal([String? _]) {
+    final v = _sgCtrl.text.trim();
+    if (v.isEmpty) return;
+    widget.onAddSubGoal(v);
   }
 }
 

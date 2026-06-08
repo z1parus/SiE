@@ -34,6 +34,16 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
     final routinesAsync = ref.watch(habitRoutinesProvider);
     final today         = _fmt(DateTime.now());
     final profile       = ref.watch(userProfileProvider).valueOrNull;
+
+    final habitsData   = habitsAsync.valueOrNull;
+    final routineData  = routinesAsync.valueOrNull;
+    final isListEmpty  = habitsData != null && () {
+      final routineIds = {
+        ...?routineData?.morning?.habits.map((h) => h.id),
+        ...?routineData?.evening?.habits.map((h) => h.id),
+      };
+      return habitsData.habits.where((h) => !routineIds.contains(h.id)).isEmpty;
+    }();
     final showOnboarding = _showOnboardingManual ||
         (!_onboardingDismissed &&
             profile != null &&
@@ -185,6 +195,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
               right: 24,
               child: _BottomActionBar(
                 onAdd: () => _showHabitDialog(null),
+                isEmpty: isListEmpty,
                 onMorning: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) =>
@@ -282,7 +293,6 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
       ),
     );
   }
-
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -393,6 +403,78 @@ class _GlassIconBtn extends ConsumerWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Bottom Action Bar
+// ─────────────────────────────────────────────────────────────────────────────
+class _BottomActionBar extends ConsumerWidget {
+  final VoidCallback onAdd;
+  final VoidCallback onMorning;
+  final VoidCallback onEvening;
+  final bool isEmpty;
+
+  const _BottomActionBar({
+    required this.onAdd,
+    required this.onMorning,
+    required this.onEvening,
+    this.isEmpty = false,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+
+    Widget sideBtn(IconData icon, VoidCallback onTap) {
+      final child = Center(
+        child: Icon(icon, color: sc.textSecondary, size: 20),
+      );
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: sc.flatCard(radius: 24),
+          child: child,
+        ),
+      );
+    }
+
+    Widget centerBtn() {
+      if (isEmpty) return _AddButton(onTap: onAdd);
+      final child = Center(
+        child: Icon(Icons.add, color: Colors.black, size: 24),
+      );
+      return GestureDetector(
+        onTap: onAdd,
+        child: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: sc.accent,
+            boxShadow: [
+              BoxShadow(
+                color: sc.accent.withValues(alpha: 0.45),
+                blurRadius: 12,
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: child,
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        sideBtn(Icons.wb_sunny_outlined, onMorning),
+        const SizedBox(width: 20),
+        centerBtn(),
+        const SizedBox(width: 20),
+        sideBtn(Icons.nightlight_round, onEvening),
+      ],
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // View Mode Toggle
 // ─────────────────────────────────────────────────────────────────────────────
@@ -670,75 +752,6 @@ class _AllTimeHabitCard extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-class _BottomActionBar extends ConsumerWidget {
-  final VoidCallback onAdd;
-  final VoidCallback onMorning;
-  final VoidCallback onEvening;
-
-  const _BottomActionBar({
-    required this.onAdd,
-    required this.onMorning,
-    required this.onEvening,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final sc = ref.watch(sieColorsProvider);
-
-    Widget sideBtn(IconData icon, VoidCallback onTap) {
-      final child = Center(
-        child: Icon(icon, color: sc.textSecondary, size: 20),
-      );
-      return GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 48,
-          height: 48,
-          decoration: sc.flatCard(radius: 24),
-          child: child,
-        ),
-      );
-    }
-
-    Widget centerBtn() {
-      final child = Center(
-        child: Icon(Icons.add, color: Colors.black, size: 24),
-      );
-      return GestureDetector(
-        onTap: onAdd,
-        child: Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: sc.accent,
-            boxShadow: [
-              BoxShadow(
-                color: sc.accent.withValues(alpha: 0.45),
-                blurRadius: 12,
-                spreadRadius: 0,
-              ),
-            ],
-          ),
-          child: child,
-        ),
-      );
-    }
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        sideBtn(Icons.wb_sunny_outlined, onMorning),
-        const SizedBox(width: 20),
-        centerBtn(),
-        const SizedBox(width: 20),
-        sideBtn(Icons.nightlight_round, onEvening),
-      ],
     );
   }
 }
@@ -1298,8 +1311,6 @@ class _EmptyState extends ConsumerWidget {
               letterSpacing: 1.5,
             ),
           ),
-          const SizedBox(height: 32),
-          _AddButton(onTap: onAdd),
         ],
       ),
     );
@@ -1411,10 +1422,12 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
   String? _selectedIcon;
 
   static const _colorOptions = [
-    '#00C8FF',
-    '#00E5A0',
-    '#A78BFA',
-    '#F59E0B',
+    '#5AADA0',
+    '#6A8ED8',
+    '#E07830',
+    '#C8A84B',
+    '#C05080',
+    '#70B870',
   ];
 
   static const _iconOptions = [
@@ -1425,7 +1438,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
 
   Color _toColor(String hex) {
     final h = hex.replaceAll('#', '').padLeft(6, '0');
-    return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF00C8FF);
+    return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF5AADA0);
   }
 
   @override
@@ -1433,7 +1446,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
     super.initState();
     _titleCtrl = TextEditingController(text: widget.existing?.title ?? '');
     _descCtrl  = TextEditingController(text: widget.existing?.description ?? '');
-    _selectedColor = widget.existing?.color ?? '#00C8FF';
+    _selectedColor = widget.existing?.color ?? '#5AADA0';
     _selectedIcon  = widget.existing?.icon;
   }
 
@@ -1449,96 +1462,57 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
     final sc     = ref.watch(sieColorsProvider);
     final isEdit = widget.existing != null;
     final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
-    return TweenAnimationBuilder<Color?>(
-      tween: ColorTween(
-        begin: _toColor(_selectedColor),
-        end: _toColor(_selectedColor),
+
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
+      child: Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + keyboardBottom),
+      decoration: BoxDecoration(
+        color: sc.surface.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: sc.border),
       ),
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeInOut,
-      builder: (_, animColor, child) {
-        final habitColor = animColor ?? _toColor(_selectedColor);
-        return ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(20)),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    habitColor.withValues(alpha: 0.08),
-                    sc.surface,
-                  ],
-                ),
-                border: Border(
-                  top: BorderSide(
-                    color: habitColor.withValues(alpha: 0.50),
-                    width: 1.0,
-                  ),
-                  left: BorderSide(
-                    color: habitColor.withValues(alpha: 0.18),
-                    width: 1.0,
-                  ),
-                  right: BorderSide(
-                    color: habitColor.withValues(alpha: 0.18),
-                    width: 1.0,
-                  ),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: habitColor.withValues(alpha: 0.12),
-                    blurRadius: 40,
-                    offset: const Offset(0, -8),
-                  ),
-                ],
-              ),
-              padding: EdgeInsets.fromLTRB(24, 14, 24, 20 + keyboardBottom),
-              child: child,
-            ),
-          ),
-        );
-      },
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Center(
             child: Container(
-              width: 36,
-              height: 3,
-              margin: const EdgeInsets.only(bottom: 12),
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(2),
-                color: Colors.white.withValues(alpha: 0.20),
+                color: sc.border,
               ),
             ),
           ),
           Text(
             isEdit ? 'EDIT PROTOCOL' : 'NEW PROTOCOL',
-            style: Theme.of(context).textTheme.titleMedium,
+            style: TextStyle(
+              color: sc.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2.5,
+            ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           _GlowField(controller: _titleCtrl, label: 'TITLE'),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           _GlowField(
               controller: _descCtrl,
               label: 'DESCRIPTION (OPTIONAL)'),
-          const SizedBox(height: 10),
-          Consumer(builder: (_, ref2, _) {
-            final sc2 = ref2.watch(sieColorsProvider);
-            return Text(
-              'COLOR',
-              style: TextStyle(
-                color: sc2.textSecondary,
-                fontSize: 10,
-                letterSpacing: 1.5,
-              ),
-            );
-          }),
+          const SizedBox(height: 20),
+          Text(
+            'COLOR',
+            style: TextStyle(
+              color: sc.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2.5,
+            ),
+          ),
           const SizedBox(height: 8),
           Row(
             children: _colorOptions.map((hex) {
@@ -1550,18 +1524,16 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
               );
             }).toList(),
           ),
-          const SizedBox(height: 10),
-          Consumer(builder: (_, ref2, _) {
-            final sc2 = ref2.watch(sieColorsProvider);
-            return Text(
-              'ICON',
-              style: TextStyle(
-                color: sc2.textSecondary,
-                fontSize: 10,
-                letterSpacing: 1.5,
-              ),
-            );
-          }),
+          const SizedBox(height: 20),
+          Text(
+            'ICON',
+            style: TextStyle(
+              color: sc.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2.5,
+            ),
+          ),
           const SizedBox(height: 8),
           _IconPicker(
             options: _iconOptions,
@@ -1569,41 +1541,38 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
             accentColor: _toColor(_selectedColor),
             onSelect: (v) => setState(() => _selectedIcon = v),
           ),
-          const SizedBox(height: 16),
-          Consumer(builder: (_, ref2, _) {
-            final sc2 = ref2.watch(sieColorsProvider);
-            return Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _SheetTextBtn(
-                  label: 'CANCEL',
-                  color: sc2.textSecondary,
-                  onTap: () => Navigator.of(context).pop(),
-                ),
-                const SizedBox(width: 8),
-                _SheetTextBtn(
-                  label: isEdit ? 'SAVE' : 'DEPLOY',
-                  color: _toColor(_selectedColor),
-                  onTap: () {
-                    final title = _titleCtrl.text.trim();
-                    if (title.isEmpty) return;
-                    widget.onSave(
-                      title,
-                      _descCtrl.text.trim().isEmpty
-                          ? null
-                          : _descCtrl.text.trim(),
-                      _selectedColor,
-                      _selectedIcon,
-                    );
-                    Navigator.of(context).pop();
-                  },
-                ),
-              ],
-            );
-          }),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              _SheetTextBtn(
+                label: 'CANCEL',
+                color: sc.textSecondary,
+                onTap: () => Navigator.of(context).pop(),
+              ),
+              const SizedBox(width: 12),
+              _SheetTextBtn(
+                label: isEdit ? 'SAVE' : 'DEPLOY',
+                color: _toColor(_selectedColor),
+                onTap: () {
+                  final title = _titleCtrl.text.trim();
+                  if (title.isEmpty) return;
+                  widget.onSave(
+                    title,
+                    _descCtrl.text.trim().isEmpty
+                        ? null
+                        : _descCtrl.text.trim(),
+                    _selectedColor,
+                    _selectedIcon,
+                  );
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
         ],
       ),
-    );
+    ));
   }
 }
 
@@ -1685,7 +1654,7 @@ class _GlowFieldState extends ConsumerState<_GlowField> {
 
 // ── Color Lens Chip ───────────────────────────────────────────
 
-class _ColorLens extends StatefulWidget {
+class _ColorLens extends StatelessWidget {
   final Color color;
   final bool selected;
   final VoidCallback onTap;
@@ -1696,53 +1665,19 @@ class _ColorLens extends StatefulWidget {
   });
 
   @override
-  State<_ColorLens> createState() => _ColorLensState();
-}
-
-class _ColorLensState extends State<_ColorLens> {
-  bool _pressed = false;
-
-  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: widget.onTap,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? 0.97 : 1.0,
-        duration: _pressed
-            ? const Duration(milliseconds: 80)
-            : const Duration(milliseconds: 220),
-        child: Container(
-          width: 28,
-          height: 28,
-          margin: const EdgeInsets.only(right: 10),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: widget.selected
-                ? widget.color
-                : widget.color.withValues(alpha: 0.40),
-            border: widget.selected
-                ? Border.all(color: Colors.white, width: 2)
-                : Border.all(
-                    color: widget.color.withValues(alpha: 0.50),
-                    width: 1,
-                  ),
-            boxShadow: widget.selected
-                ? [
-                    BoxShadow(
-                      color: widget.color.withValues(alpha: 0.65),
-                      blurRadius: 10,
-                      spreadRadius: 2,
-                    ),
-                    BoxShadow(
-                      color: widget.color.withValues(alpha: 0.30),
-                      blurRadius: 20,
-                    ),
-                  ]
-                : null,
-          ),
+      onTap: onTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        margin: const EdgeInsets.only(right: 8),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color,
+          border: selected
+              ? Border.all(color: Colors.white, width: 2.5)
+              : null,
         ),
       ),
     );
@@ -2040,37 +1975,16 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
     final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
     final isEdit = widget.existing != null;
 
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                accentColor.withValues(alpha: 0.08),
-                sc.surface,
-              ],
-            ),
-            border: Border(
-              top: BorderSide(
-                color: accentColor.withValues(alpha: 0.50),
-                width: 1.0,
-              ),
-              left: BorderSide(
-                color: accentColor.withValues(alpha: 0.18),
-                width: 1.0,
-              ),
-              right: BorderSide(
-                color: accentColor.withValues(alpha: 0.18),
-                width: 1.0,
-              ),
-            ),
-          ),
-          padding: EdgeInsets.fromLTRB(24, 14, 24, 20 + keyboardBottom),
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+        decoration: BoxDecoration(
+          color: sc.surface.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: sc.border),
+        ),
+        padding: EdgeInsets.fromLTRB(20, 14, 20, 20 + keyboardBottom),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2078,12 +1992,12 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
               // Handle bar
               Center(
                 child: Container(
-                  width: 36,
-                  height: 3,
-                  margin: const EdgeInsets.only(bottom: 12),
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(2),
-                    color: Colors.white.withValues(alpha: 0.20),
+                    color: sc.border,
                   ),
                 ),
               ),
@@ -2143,10 +2057,10 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
               Text(
                 'MOOD',
                 style: TextStyle(
-                  color: sc.textSecondary.withValues(alpha: 0.5),
-                  fontSize: 9,
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w600,
+                  color: sc.textSecondary,
+                  fontSize: 10,
+                  letterSpacing: 2.5,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 10),
@@ -2186,20 +2100,18 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
               Text(
                 'NOTE',
                 style: TextStyle(
-                  color: sc.textSecondary.withValues(alpha: 0.5),
-                  fontSize: 9,
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w600,
+                  color: sc.textSecondary,
+                  fontSize: 10,
+                  letterSpacing: 2.5,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 8),
               Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: accentColor.withValues(alpha: 0.25),
-                  ),
-                  color: accentColor.withValues(alpha: 0.04),
+                  border: Border.all(color: sc.border),
+                  color: sc.surface,
                 ),
                 child: TextField(
                   controller: _noteCtrl,
@@ -2258,8 +2170,7 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 }
 
@@ -3441,7 +3352,6 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 7-day graph
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: days.asMap().entries.map((e) {
@@ -3456,14 +3366,11 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                         }).toList(),
                       ),
                       const SizedBox(height: 16),
-                      // Action buttons
                       Row(
                         children: [
                           Expanded(
                             child: _DetailActionBtn(
-                              label: completedToday
-                                  ? 'ОТМЕНИТЬ'
-                                  : 'ОТМЕТИТЬ',
+                              label: completedToday ? 'ОТМЕНИТЬ' : 'ОТМЕТИТЬ',
                               icon: completedToday
                                   ? Icons.remove_circle_outline
                                   : Icons.check_circle_outline,
@@ -3472,8 +3379,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                                   : accentColor,
                               onTap: () => ref
                                   .read(habitsProvider.notifier)
-                                  .toggleHabit(
-                                      widget.habit.id, DateTime.now()),
+                                  .toggleHabit(widget.habit.id, DateTime.now()),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -3688,7 +3594,6 @@ class _DetailActionBtn extends ConsumerWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Journal Entry Tile
 // ─────────────────────────────────────────────────────────────────────────────
-
 class _JournalEntryTile extends ConsumerWidget {
   final HabitLogEntry entry;
   final Habit habit;
@@ -3719,7 +3624,6 @@ class _JournalEntryTile extends ConsumerWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Timeline column: date + node dot
         SizedBox(
           width: 52,
           child: Column(
@@ -3758,7 +3662,6 @@ class _JournalEntryTile extends ConsumerWidget {
           ),
         ),
         const SizedBox(width: 8),
-        // Entry card
         Expanded(
           child: SieGlassCard(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -3813,9 +3716,8 @@ class _JournalEntryTile extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Empty Journal State
+// Empty Journal
 // ─────────────────────────────────────────────────────────────────────────────
-
 class _EmptyJournal extends ConsumerWidget {
   final Color accentColor;
   const _EmptyJournal({required this.accentColor});

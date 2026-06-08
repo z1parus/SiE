@@ -28,6 +28,7 @@ class PlanningTask {
   final DateTime createdAt;
 
   PlanningTask copyWith({
+    String? subGoalId,
     String? name,
     bool? isCompleted,
     Object? completedAt = _unset,
@@ -35,7 +36,7 @@ class PlanningTask {
   }) =>
       PlanningTask(
         id: id,
-        subGoalId: subGoalId,
+        subGoalId: subGoalId ?? this.subGoalId,
         userId: userId,
         name: name ?? this.name,
         weight: weight,
@@ -86,6 +87,7 @@ class SubGoal {
     required this.tasks,
     required this.createdAt,
     this.parentSubGoalId,
+    this.children = const [],
   });
 
   final String id;
@@ -95,12 +97,14 @@ class SubGoal {
   final bool isCompleted;
   final int orderIndex;
   final List<PlanningTask> tasks;
+  final List<SubGoal> children;
   final DateTime createdAt;
 
   SubGoal copyWith({
     String? name,
     bool? isCompleted,
     List<PlanningTask>? tasks,
+    List<SubGoal>? children,
   }) =>
       SubGoal(
         id: id,
@@ -110,6 +114,7 @@ class SubGoal {
         isCompleted: isCompleted ?? this.isCompleted,
         orderIndex: orderIndex,
         tasks: tasks ?? this.tasks,
+        children: children ?? this.children,
         createdAt: createdAt,
       );
 
@@ -181,18 +186,21 @@ class GoalHabitLink {
     required this.goalId,
     required this.habitId,
     required this.createdAt,
+    this.boostValue = 0.5,
   });
 
   final String id;
   final String goalId;
   final String habitId;
   final DateTime createdAt;
+  final double boostValue;
 
   factory GoalHabitLink.fromJson(Map<String, dynamic> j) => GoalHabitLink(
         id: j['id'] as String,
         goalId: j['goal_id'] as String,
         habitId: j['habit_id'] as String,
         createdAt: DateTime.parse(j['created_at'] as String),
+        boostValue: (j['boost_value'] as num?)?.toDouble() ?? 0.5,
       );
 }
 
@@ -213,6 +221,7 @@ class Goal {
     required this.createdAt,
     this.description,
     this.deadline,
+    this.updatedAt,
   });
 
   final String id;
@@ -228,16 +237,17 @@ class Goal {
   final List<Milestone> milestones;
   final List<GoalHabitLink> habitLinks;
   final DateTime createdAt;
+  final DateTime? updatedAt;
 
   Color get color =>
       Color(int.parse('0xFF${colorHex.replaceAll('#', '')}'));
 
-  int get completedTasks => subGoals.fold(
+  int get completedTasks => _allSubGoals(subGoals).fold(
       0, (s, sg) => s + sg.tasks.where((t) => t.isCompleted).length);
   int get totalTasks =>
-      subGoals.fold(0, (s, sg) => s + sg.tasks.length);
+      _allSubGoals(subGoals).fold(0, (s, sg) => s + sg.tasks.length);
   int get completedSubGoals =>
-      subGoals.where((sg) => sg.isCompleted).length;
+      _allSubGoals(subGoals).where((sg) => sg.isCompleted).length;
 
   int? get daysUntilDeadline =>
       deadline?.difference(DateTime.now()).inDays;
@@ -257,6 +267,7 @@ class Goal {
     List<SubGoal>? subGoals,
     List<Milestone>? milestones,
     List<GoalHabitLink>? habitLinks,
+    DateTime? updatedAt,
   }) =>
       Goal(
         id: id,
@@ -272,6 +283,7 @@ class Goal {
         milestones: milestones ?? this.milestones,
         habitLinks: habitLinks ?? this.habitLinks,
         createdAt: createdAt,
+        updatedAt: updatedAt ?? this.updatedAt,
       );
 
   factory Goal.fromJson(Map<String, dynamic> j) {
@@ -308,10 +320,13 @@ class Goal {
       status: j['status'] as String? ?? 'active',
       colorHex: j['color_hex'] as String? ?? '#5AADA0',
       progress: (j['progress'] as num?)?.toDouble() ?? 0.0,
-      subGoals: subs,
+      subGoals: buildSubGoalTree(subs),
       milestones: milestones,
       habitLinks: links,
       createdAt: DateTime.parse(j['created_at'] as String),
+      updatedAt: j['updated_at'] != null
+          ? DateTime.parse(j['updated_at'] as String)
+          : null,
     );
   }
 
@@ -348,12 +363,59 @@ class PlanningState {
 
 // ─── Helper functions ─────────────────────────────────────────────────────────
 
+// Flatten entire sub-goal tree into a list
+List<SubGoal> _allSubGoals(List<SubGoal> roots) {
+  final result = <SubGoal>[];
+  void visit(SubGoal sg) {
+    result.add(sg);
+    for (final child in sg.children) visit(child);
+  }
+  for (final sg in roots) visit(sg);
+  return result;
+}
+
+// Build recursive tree from a flat list using parentSubGoalId
+SubGoal _buildNode(String id, Map<String, SubGoal> byId, List<SubGoal> flat) {
+  final children = flat
+      .where((sg) => sg.parentSubGoalId == id)
+      .map((sg) => _buildNode(sg.id, byId, flat))
+      .toList();
+  return byId[id]!.copyWith(children: children);
+}
+
+List<SubGoal> buildSubGoalTree(List<SubGoal> flat) {
+  final byId = {for (final sg in flat) sg.id: sg.copyWith(children: const [])};
+  return flat
+      .where((sg) => sg.parentSubGoalId == null)
+      .map((sg) => _buildNode(sg.id, byId, flat))
+      .toList();
+}
+
 double subGoalProgress(SubGoal sg) {
-  if (sg.tasks.isEmpty) return sg.isCompleted ? 100.0 : 0.0;
-  final total = sg.tasks.fold(0, (s, t) => s + t.weight);
-  final done =
-      sg.tasks.where((t) => t.isCompleted).fold(0, (s, t) => s + t.weight);
-  return total == 0 ? 0.0 : (done / total) * 100.0;
+  final hasTasks    = sg.tasks.isNotEmpty;
+  final hasChildren = sg.children.isNotEmpty;
+
+  if (!hasTasks && !hasChildren) return sg.isCompleted ? 100.0 : 0.0;
+
+  double? taskSlot;
+  if (hasTasks) {
+    final total = sg.tasks.fold(0, (s, t) => s + t.weight);
+    final done  = sg.tasks
+        .where((t) => t.isCompleted)
+        .fold(0, (s, t) => s + t.weight);
+    taskSlot = total == 0 ? 0.0 : (done / total) * 100.0;
+  }
+
+  if (!hasChildren) return taskSlot!;
+
+  final childValues = sg.children.map(subGoalProgress).toList();
+  if (!hasTasks) {
+    return childValues.reduce((a, b) => a + b) / childValues.length;
+  }
+
+  // tasks form 1 slot alongside each child slot
+  final slots = [taskSlot!, ...childValues];
+  return slots.reduce((a, b) => a + b) / slots.length;
 }
 
 double goalProgress(Goal g) {
@@ -371,5 +433,18 @@ int taskXp(int weight) => switch (weight) {
 
 bool isGoalFatigued(Goal g) {
   if (g.status != 'active') return false;
-  return g.isOverdue;
+  if (g.isOverdue) return true;
+  // Stagnation: no progress update for 7+ days
+  final ref = g.updatedAt ?? g.createdAt;
+  if (DateTime.now().difference(ref).inDays >= 7) return true;
+  // 2+ tasks with missed deadlines (search entire tree)
+  int missed = 0;
+  for (final sg in _allSubGoals(g.subGoals)) {
+    for (final t in sg.tasks) {
+      if (!t.isCompleted && t.dueDate != null && DateTime.now().isAfter(t.dueDate!)) {
+        if (++missed >= 2) return true;
+      }
+    }
+  }
+  return false;
 }

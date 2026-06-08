@@ -93,14 +93,15 @@ class AudioService {
       // iOS native warm-up: AVAudioEngine needs at least one play() before the
       // first real sound to prime its internal buffer pipeline.
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-        final warmIds = [_inhaleId, _exhaleId, _chimeId, _heartbeatId, _tickId];
-        final streams = await Future.wait(warmIds.map((id) => _pool.play(id)));
-        for (var i = 0; i < streams.length; i++) {
-          final s = streams[i];
-          if (s > 0) {
-            _pool.setVolume(soundId: warmIds[i], streamId: s, volume: 0).ignore();
-            _pool.stop(s).ignore();
-          }
+        final streams = await Future.wait([
+          _pool.play(_inhaleId),
+          _pool.play(_exhaleId),
+          _pool.play(_chimeId),
+          _pool.play(_heartbeatId),
+          _pool.play(_tickId),
+        ]);
+        for (final s in streams) {
+          if (s > 0) _pool.stop(s).ignore();
         }
       }
     } catch (e) {
@@ -495,7 +496,7 @@ class AudioService {
 
     final dubFadeN = sr * 12 ~/ 1000;
     for (var i = 0; i < dubFadeN; i++) {
-      final w = 0.5 * (1 + math.cos(math.pi * i / (dubFadeN - 1)));
+      final w = 0.5 * (1 + math.cos(math.pi * i / (lubFadeN - 1)));
       raw[dubStart + nDub - dubFadeN + i] *= w;
     }
 

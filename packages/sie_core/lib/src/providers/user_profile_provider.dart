@@ -28,17 +28,25 @@ class UserProfileNotifier extends AsyncNotifier<Profile?> {
       if (data == null) return null;
       final profile = Profile.fromJson(data);
 
-      // Mirror full profile to local DB (resets pending deltas after online sync).
+      // Preserve any pending XP/DP that hasn't been flushed to the server yet.
       final db = ref.read(appDatabaseProvider);
+      final existing = await db.getProfile(user.id);
+      final pendingXp = existing?.pendingXp ?? 0;
+      final pendingDp = existing?.pendingDp ?? 0;
+
       await db.upsertProfile(LocalProfilesCompanion(
         userId: Value(user.id),
-        totalXp: Value(profile.totalXp),
-        designPoints: Value(profile.designPoints),
-        pendingXp: const Value(0),
-        pendingDp: const Value(0),
+        totalXp: Value(profile.totalXp + pendingXp),
+        designPoints: Value(profile.designPoints + pendingDp),
+        pendingXp: Value(pendingXp),
+        pendingDp: Value(pendingDp),
         cachedJson: Value(jsonEncode(data)),
       ));
-      return profile;
+      if (pendingXp == 0 && pendingDp == 0) return profile;
+      return profile.copyWith(
+        totalXp: profile.totalXp + pendingXp,
+        designPoints: profile.designPoints + pendingDp,
+      );
     } catch (_) {
       // Offline fallback: reconstruct from local cache.
       final db = ref.read(appDatabaseProvider);

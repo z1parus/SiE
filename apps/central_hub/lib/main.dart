@@ -74,7 +74,7 @@ class _LoadingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      backgroundColor: Color(0xFF0A0E1A),
+      backgroundColor: Color(0xFF1C1C22),
       body: SizedBox.shrink(),
     );
   }

@@ -1,8 +1,6 @@
-import 'dart:io';
 import 'package:drift/drift.dart';
-import 'package:drift_sqflite/drift_sqflite.dart';
+import 'package:drift_flutter/drift_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
 
 part 'app_database.g.dart';
 
@@ -137,6 +135,7 @@ class LocalGoals extends Table {
   BoolColumn get synced         => boolean().withDefault(const Constant(false))();
   BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
   IntColumn  get createdAtMs    => integer()();
+  IntColumn  get updatedAtMs    => integer().nullable()();
   @override Set<Column> get primaryKey => {id};
 }
 
@@ -188,6 +187,7 @@ class LocalGoalHabitLinks extends Table {
   TextColumn get id             => text()();
   TextColumn get goalId         => text()();
   TextColumn get habitId        => text()();
+  RealColumn get boostValue     => real().withDefault(const Constant(0.5))();
   BoolColumn get synced         => boolean().withDefault(const Constant(false))();
   BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
   IntColumn  get createdAtMs    => integer()();
@@ -215,7 +215,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -240,6 +240,13 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(localMilestones);
         await m.createTable(localPlanningTasks);
         await m.createTable(localGoalHabitLinks);
+      }
+      if (from < 7) {
+        await m.issueCustomQuery(
+            'ALTER TABLE local_goals ADD COLUMN updated_at_ms INTEGER', const []);
+        await m.issueCustomQuery(
+            'ALTER TABLE local_goal_habit_links ADD COLUMN boost_value REAL NOT NULL DEFAULT 0.5',
+            const []);
       }
     },
   );
@@ -452,8 +459,14 @@ class AppDatabase extends _$AppDatabase {
   Future<void> upsertRoutine(LocalRoutinesCompanion row) =>
       into(localRoutines).insertOnConflictUpdate(row);
 
+  Future<void> updateRoutine(String id, LocalRoutinesCompanion changes) =>
+      (update(localRoutines)..where((r) => r.id.equals(id))).write(changes);
+
   Future<void> upsertRoutineMember(LocalRoutineMembersCompanion row) =>
       into(localRoutineMembers).insertOnConflictUpdate(row);
+
+  Future<void> updateRoutineMember(String id, LocalRoutineMembersCompanion changes) =>
+      (update(localRoutineMembers)..where((m) => m.id.equals(id))).write(changes);
 
   Future<void> deleteRoutineMembers(String routineId) =>
       (delete(localRoutineMembers)
@@ -508,6 +521,15 @@ class AppDatabase extends _$AppDatabase {
   Future<void> upsertPlanningTask(LocalPlanningTasksCompanion row) =>
       into(localPlanningTasks).insertOnConflictUpdate(row);
 
+  Future<void> updatePlanningTask(String id, LocalPlanningTasksCompanion changes) =>
+      (update(localPlanningTasks)..where((t) => t.id.equals(id))).write(changes);
+
+  Future<void> updateSubGoal(String id, LocalSubGoalsCompanion changes) =>
+      (update(localSubGoals)..where((s) => s.id.equals(id))).write(changes);
+
+  Future<void> updateGoal(String id, LocalGoalsCompanion changes) =>
+      (update(localGoals)..where((g) => g.id.equals(id))).write(changes);
+
   Future<void> upsertGoalHabitLink(LocalGoalHabitLinksCompanion row) =>
       into(localGoalHabitLinks).insertOnConflictUpdate(row);
 
@@ -544,6 +566,12 @@ class AppDatabase extends _$AppDatabase {
       (select(localGoalHabitLinks)
             ..where((t) =>
                 t.goalId.equals(goalId) & t.deletedLocally.equals(false)))
+          .get();
+
+  Future<List<LocalGoalHabitLink>> habitLinksForHabit(String habitId) =>
+      (select(localGoalHabitLinks)
+            ..where((t) =>
+                t.habitId.equals(habitId) & t.deletedLocally.equals(false)))
           .get();
 
   Future<void> deleteGoalLocally(String id) =>
@@ -601,10 +629,12 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
 
 // ── Connection ─────────────────────────────────────────────────────────────────
 
-LazyDatabase _openConnection() {
-  return LazyDatabase(() async {
-    final dbFolder = await getApplicationDocumentsDirectory();
-    final file = File('${dbFolder.path}/sie_local.db');
-    return SqfliteQueryExecutor(path: file.path);
-  });
+QueryExecutor _openConnection() {
+  return driftDatabase(
+    name: 'sie_local',
+    web: DriftWebOptions(
+      sqlite3Wasm: Uri.parse('sqlite3.wasm'),
+      driftWorker: Uri.parse('drift_worker.js'),
+    ),
+  );
 }
