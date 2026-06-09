@@ -62,7 +62,7 @@
 *   **Task:** 5-15 XP (в зависимости от веса).
 *   **Sub-goal:** 100-200 XP.
 *   **Milestone:** 500 XP (большой скачок).
-*   **Global Goal:** 2000+ XP + уникальное достижение (Achievement).
+*   **Global Goal:** 2000+ XP + уникальное достижение (Achievement/Medal) в зависимости от категории и сложности миссии (см. `PlanningModuleEnhancements.md`).
 
 ---
 
