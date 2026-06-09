@@ -3,8 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 import 'tactical_map_view.dart';
+import 'mission_accomplished_screen.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
+
+int _categoryDp(GoalCategory? cat) => switch (cat) {
+      GoalCategory.project    => 50,
+      GoalCategory.learning   => 40,
+      GoalCategory.health     => 35,
+      GoalCategory.discipline => 30,
+      GoalCategory.lifestyle  => 25,
+      null                    => 20,
+    };
 
 Color _priorityColor(int p) => switch (p) {
       1 => const Color(0xFF888898),
@@ -58,6 +68,7 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
                 onToggle: () => setState(() => _mapMode = !_mapMode),
                 sc: sc,
                 onBack: () => Navigator.pop(context),
+                onSettings: () => _showGoalSettingsSheet(context, goal, sc),
               ),
               Expanded(
                 child: _mapMode
@@ -68,6 +79,8 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
                         selectedSubGoalId: _selectedSubGoalId,
                         onSubGoalSelected: (id) =>
                             setState(() => _selectedSubGoalId = id),
+                        isQuickEntryActive:
+                            MediaQuery.of(context).viewInsets.bottom > 0,
                       ),
               ),
               _QuickEntryBar(
@@ -95,6 +108,7 @@ class _MissionHeader extends StatelessWidget {
     required this.onToggle,
     required this.sc,
     required this.onBack,
+    required this.onSettings,
   });
 
   final Goal goal;
@@ -102,12 +116,15 @@ class _MissionHeader extends StatelessWidget {
   final VoidCallback onToggle;
   final SieColors sc;
   final VoidCallback onBack;
+  final VoidCallback onSettings;
 
   @override
   Widget build(BuildContext context) {
     final progress = goalProgress(goal);
     final goalColor = goal.color;
     final fatigued = isGoalFatigued(goal);
+    final advice = _MissionHeader._buildAdvice(goal);
+    final catIcon = _categoryIcon(goal.settings.category);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 16, 12),
@@ -133,6 +150,14 @@ class _MissionHeader extends StatelessWidget {
               if (fatigued) const SizedBox(width: 6),
               _StatusChip(status: goal.status, sc: sc),
               const Spacer(),
+              IconButton(
+                icon: Icon(Icons.settings_outlined,
+                    color: sc.textSecondary, size: 20),
+                onPressed: onSettings,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 8),
               _ViewToggle(
                   mapMode: mapMode, onToggle: onToggle, goalColor: goalColor, sc: sc),
             ],
@@ -160,6 +185,10 @@ class _MissionHeader extends StatelessWidget {
                   ),
                 ),
               ),
+              if (catIcon != null) ...[
+                const SizedBox(width: 8),
+                Icon(catIcon, size: 18, color: sc.textSecondary),
+              ],
             ],
           ),
           const SizedBox(height: 10),
@@ -172,6 +201,134 @@ class _MissionHeader extends StatelessWidget {
               sc: sc,
             ),
           ],
+          if (advice.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _StrategicAdviceCard(advice: advice, sc: sc),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static List<String> _buildAdvice(Goal g) {
+    if (g.status != 'active') return const [];
+    final advice = <String>[];
+    final now = DateTime.now();
+
+    final ref_ = g.updatedAt ?? g.createdAt;
+    final daysSinceUpdate = now.difference(ref_).inDays;
+    if (daysSinceUpdate >= 7 && goalProgress(g) < 100.0) {
+      advice.add(
+          'Цель не обновлялась $daysSinceUpdate дн. Выполни хотя бы одну задачу.');
+    }
+
+    int overdue = 0;
+    void countOverdue(List<SubGoal> sgs) {
+      for (final sg in sgs) {
+        for (final t in sg.tasks) {
+          if (!t.isCompleted && t.dueDate != null && now.isAfter(t.dueDate!)) {
+            overdue++;
+          }
+        }
+        countOverdue(sg.children);
+      }
+    }
+    countOverdue(g.subGoals);
+    if (overdue >= 2) {
+      advice.add('$overdue задач просрочено. Расставь приоритеты.');
+    }
+
+    if (g.deadline != null) {
+      final daysLeft = g.deadline!.difference(now).inDays;
+      if (daysLeft >= 0 && daysLeft <= 14 && goalProgress(g) < 50.0) {
+        advice.add(
+            'До дедлайна $daysLeft дн., прогресс ${goalProgress(g).round()}%. Ускоряйся!');
+      }
+    }
+    return advice;
+  }
+}
+
+IconData? _categoryIcon(GoalCategory? cat) => switch (cat) {
+      GoalCategory.learning   => Icons.school_outlined,
+      GoalCategory.health     => Icons.favorite_outline,
+      GoalCategory.project    => Icons.rocket_launch_outlined,
+      GoalCategory.lifestyle  => Icons.spa_outlined,
+      GoalCategory.discipline => Icons.bolt_outlined,
+      null                    => null,
+    };
+
+Color _categoryColor(GoalCategory cat) => switch (cat) {
+      GoalCategory.learning   => const Color(0xFF4A90D9),
+      GoalCategory.health     => const Color(0xFF5AAD6A),
+      GoalCategory.project    => const Color(0xFFE07830),
+      GoalCategory.lifestyle  => const Color(0xFF9B59B6),
+      GoalCategory.discipline => const Color(0xFFF4C430),
+    };
+
+String _categoryLabel(GoalCategory cat) => switch (cat) {
+      GoalCategory.learning   => 'Обучение',
+      GoalCategory.health     => 'Здоровье',
+      GoalCategory.project    => 'Проект',
+      GoalCategory.lifestyle  => 'Образ жизни',
+      GoalCategory.discipline => 'Дисциплина',
+    };
+
+class _StrategicAdviceCard extends StatelessWidget {
+  const _StrategicAdviceCard({required this.advice, required this.sc});
+
+  final List<String> advice;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.lightbulb_outline,
+                  color: Colors.orange, size: 14),
+              const SizedBox(width: 6),
+              Text(
+                'СОВЕТ',
+                style: TextStyle(
+                  color: Colors.orange,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ...advice.map((tip) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('• ',
+                        style: TextStyle(
+                            color: Colors.orange.withValues(alpha: 0.8),
+                            fontSize: 12)),
+                    Expanded(
+                      child: Text(
+                        tip,
+                        style: TextStyle(
+                            color: sc.textSecondary, fontSize: 12, height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
         ],
       ),
     );
@@ -319,12 +476,14 @@ class _DetailListView extends StatelessWidget {
     required this.sc,
     required this.selectedSubGoalId,
     required this.onSubGoalSelected,
+    this.isQuickEntryActive = false,
   });
 
   final Goal goal;
   final SieColors sc;
   final String? selectedSubGoalId;
   final void Function(String?) onSubGoalSelected;
+  final bool isQuickEntryActive;
 
   @override
   Widget build(BuildContext context) {
@@ -333,7 +492,7 @@ class _DetailListView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SubGoalsSection(goal: goal, sc: sc),
+          _SubGoalsSection(goal: goal, sc: sc, isQuickEntryActive: isQuickEntryActive),
           const SizedBox(height: 16),
           _MilestonesSection(goal: goal, sc: sc),
           const SizedBox(height: 16),
@@ -348,10 +507,15 @@ class _DetailListView extends StatelessWidget {
 // ─── Sub-goals Section ────────────────────────────────────────────────────────
 
 class _SubGoalsSection extends ConsumerStatefulWidget {
-  const _SubGoalsSection({required this.goal, required this.sc});
+  const _SubGoalsSection({
+    required this.goal,
+    required this.sc,
+    this.isQuickEntryActive = false,
+  });
 
   final Goal goal;
   final SieColors sc;
+  final bool isQuickEntryActive;
 
   @override
   ConsumerState<_SubGoalsSection> createState() => _SubGoalsSectionState();
@@ -359,11 +523,16 @@ class _SubGoalsSection extends ConsumerStatefulWidget {
 
 class _SubGoalsSectionState extends ConsumerState<_SubGoalsSection> {
   final Set<String> _expanded = {};
+  final Set<String> _scoutedIds = {};
 
   @override
   Widget build(BuildContext context) {
     final goal = widget.goal;
     final sc = widget.sc;
+    final fogEnabled =
+        goal.settings.isFogOfWarEnabled && !widget.isQuickEntryActive;
+    final visibleIds =
+        computeFogVisibleIds(goal.subGoals, _scoutedIds, fogEnabled);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -375,28 +544,44 @@ class _SubGoalsSectionState extends ConsumerState<_SubGoalsSection> {
           sc: sc,
           onAdd: () => _showAddSubGoalSheet(context, ref, goal, sc),
         ),
-        ...goal.subGoals.map((sg) => _SubGoalTile(
-              key: ValueKey(sg.id),
-              subGoal: sg,
-              goal: goal,
+        ...goal.subGoals.map((sg) {
+          final isVisible = visibleIds.contains(sg.id);
+          if (!isVisible && fogEnabled) {
+            return _LockedSubGoalSlot(
+              key: ValueKey('locked_${sg.id}'),
               sc: sc,
-              isExpanded: _expanded.contains(sg.id),
-              onToggle: () => setState(() {
-                if (_expanded.contains(sg.id)) {
-                  _expanded.remove(sg.id);
-                } else {
-                  _expanded.add(sg.id);
-                }
-              }),
-              expandedSet: _expanded,
-              onToggleChild: (id) => setState(() {
-                if (_expanded.contains(id)) {
-                  _expanded.remove(id);
-                } else {
-                  _expanded.add(id);
-                }
-              }),
-            )),
+              onScout: () => setState(() => _scoutedIds.add(sg.id)),
+            );
+          }
+          final isScouted =
+              _scoutedIds.contains(sg.id) && !computeFogVisibleIds(goal.subGoals, const {}, fogEnabled).contains(sg.id);
+          return _SubGoalTile(
+            key: ValueKey(sg.id),
+            subGoal: sg,
+            goal: goal,
+            sc: sc,
+            isExpanded: _expanded.contains(sg.id),
+            isScouted: isScouted,
+            visibleIds: visibleIds,
+            fogEnabled: fogEnabled,
+            onScoutChild: (id) => setState(() => _scoutedIds.add(id)),
+            onToggle: () => setState(() {
+              if (_expanded.contains(sg.id)) {
+                _expanded.remove(sg.id);
+              } else {
+                _expanded.add(sg.id);
+              }
+            }),
+            expandedSet: _expanded,
+            onToggleChild: (id) => setState(() {
+              if (_expanded.contains(id)) {
+                _expanded.remove(id);
+              } else {
+                _expanded.add(id);
+              }
+            }),
+          );
+        }),
       ],
     );
   }
@@ -413,6 +598,10 @@ class _SubGoalTile extends ConsumerWidget {
     this.depth = 0,
     required this.expandedSet,
     required this.onToggleChild,
+    this.isScouted = false,
+    this.visibleIds,
+    this.fogEnabled = false,
+    this.onScoutChild,
   });
 
   final SubGoal subGoal;
@@ -423,6 +612,10 @@ class _SubGoalTile extends ConsumerWidget {
   final int depth;
   final Set<String> expandedSet;
   final void Function(String) onToggleChild;
+  final bool isScouted;
+  final Set<String>? visibleIds;
+  final bool fogEnabled;
+  final void Function(String)? onScoutChild;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -431,7 +624,7 @@ class _SubGoalTile extends ConsumerWidget {
     final total = sg.tasks.length;
     final prog = subGoalProgress(sg);
 
-    return Container(
+    Widget tile = Container(
       margin: const EdgeInsets.fromLTRB(0, 4, 16, 4),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(10),
@@ -480,6 +673,12 @@ class _SubGoalTile extends ConsumerWidget {
                       ],
                     ),
                   ),
+                  if (isScouted)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Icon(Icons.lock_outline,
+                          size: 14, color: sc.textSecondary),
+                    ),
                   Icon(
                     isExpanded
                         ? Icons.expand_less
@@ -502,20 +701,37 @@ class _SubGoalTile extends ConsumerWidget {
                       sc: sc,
                     )),
                 if (sg.children.isNotEmpty) ...[
-                  ...sg.children.map((child) => Padding(
-                    padding: const EdgeInsets.only(left: 16),
-                    child: _SubGoalTile(
-                      key: ValueKey(child.id),
-                      subGoal: child,
-                      goal: goal,
-                      sc: sc,
-                      depth: depth + 1,
-                      isExpanded: expandedSet.contains(child.id),
-                      onToggle: () => onToggleChild(child.id),
-                      expandedSet: expandedSet,
-                      onToggleChild: onToggleChild,
-                    ),
-                  )),
+                  ...sg.children.map((child) {
+                    final childVisible =
+                        visibleIds == null || visibleIds!.contains(child.id);
+                    if (!childVisible && fogEnabled) {
+                      return Padding(
+                        padding: const EdgeInsets.only(left: 16),
+                        child: _LockedSubGoalSlot(
+                          key: ValueKey('locked_${child.id}'),
+                          sc: sc,
+                          onScout: () => onScoutChild?.call(child.id),
+                        ),
+                      );
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(left: 16),
+                      child: _SubGoalTile(
+                        key: ValueKey(child.id),
+                        subGoal: child,
+                        goal: goal,
+                        sc: sc,
+                        depth: depth + 1,
+                        isExpanded: expandedSet.contains(child.id),
+                        onToggle: () => onToggleChild(child.id),
+                        expandedSet: expandedSet,
+                        onToggleChild: onToggleChild,
+                        visibleIds: visibleIds,
+                        fogEnabled: fogEnabled,
+                        onScoutChild: onScoutChild,
+                      ),
+                    );
+                  }),
                 ],
                 _AddTaskRow(subGoal: sg, goal: goal, sc: sc),
                 _AddChildSubGoalRow(subGoal: sg, goal: goal, sc: sc),
@@ -525,6 +741,11 @@ class _SubGoalTile extends ConsumerWidget {
         ],
       ),
     );
+
+    if (isScouted) {
+      return Opacity(opacity: 0.5, child: tile);
+    }
+    return tile;
   }
 }
 
@@ -548,6 +769,51 @@ class _SubGoalDot extends StatelessWidget {
           progress: subGoalProgress(sg) / 100,
           color: goalColor,
           trackColor: sc.border,
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Locked SubGoal Slot ──────────────────────────────────────────────────────
+
+class _LockedSubGoalSlot extends StatelessWidget {
+  const _LockedSubGoalSlot({super.key, required this.sc, required this.onScout});
+
+  final SieColors sc;
+  final VoidCallback onScout;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onScout,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(0, 4, 16, 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: sc.border.withValues(alpha: 0.4)),
+          color: sc.surface.withValues(alpha: 0.5),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.lock_outline, color: sc.textSecondary, size: 16),
+            const SizedBox(width: 10),
+            Text(
+              'ЗАБЛОКИРОВАНО',
+              style: TextStyle(
+                color: sc.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 2.0,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              'Разведать',
+              style: TextStyle(color: sc.accent, fontSize: 11),
+            ),
+          ],
         ),
       ),
     );
@@ -2036,4 +2302,418 @@ class _SheetSubmitButton extends StatelessWidget {
           ),
         ),
       );
+}
+
+// ─── Goal Settings Sheet ──────────────────────────────────────────────────────
+
+void _showGoalSettingsSheet(BuildContext context, Goal goal, SieColors sc) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (_) => _GoalSettingsSheet(goal: goal, sc: sc),
+  );
+}
+
+class _GoalSettingsSheet extends ConsumerStatefulWidget {
+  const _GoalSettingsSheet({required this.goal, required this.sc});
+
+  final Goal goal;
+  final SieColors sc;
+
+  @override
+  ConsumerState<_GoalSettingsSheet> createState() => _GoalSettingsSheetState();
+}
+
+class _GoalSettingsSheetState extends ConsumerState<_GoalSettingsSheet> {
+  late GoalSettings _settings;
+
+  @override
+  void initState() {
+    super.initState();
+    _settings = widget.goal.settings;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sc = widget.sc;
+    final goal = widget.goal;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final isFrozen = goal.status == 'frozen';
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
+      decoration: BoxDecoration(
+        color: sc.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: sc.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: sc.border, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SheetTitle('НАСТРОЙКИ МИССИИ', sc),
+          const SizedBox(height: 16),
+          // Mission name + creation date
+          Text(
+            goal.name,
+            style: TextStyle(
+                color: sc.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w600),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Создано: ${_formatDate(goal.createdAt)}',
+            style: TextStyle(color: sc.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 20),
+          Divider(height: 1, color: sc.border),
+          const SizedBox(height: 16),
+          // Fog of War toggle
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Туман войны',
+                      style: TextStyle(
+                          color: sc.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Скрывает этапы до их разблокировки',
+                      style:
+                          TextStyle(color: sc.textSecondary, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _settings.isFogOfWarEnabled,
+                onChanged: (v) =>
+                    setState(() => _settings = _settings.copyWith(isFogOfWarEnabled: v)),
+                activeColor: sc.accent,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Hide completed tasks toggle
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Скрыть выполненные задачи',
+                  style: TextStyle(
+                      color: sc.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500),
+                ),
+              ),
+              Switch(
+                value: _settings.hideCompletedTasks,
+                onChanged: (v) => setState(
+                    () => _settings = _settings.copyWith(hideCompletedTasks: v)),
+                activeColor: sc.accent,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Remind before deadline stepper
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Напомнить за дней до дедлайна',
+                  style: TextStyle(
+                      color: sc.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500),
+                ),
+              ),
+              _StepperWidget(
+                value: _settings.remindBeforeDeadlineDays,
+                min: 1,
+                max: 30,
+                sc: sc,
+                onChanged: (v) => setState(() =>
+                    _settings = _settings.copyWith(remindBeforeDeadlineDays: v)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Divider(height: 1, color: sc.border),
+          const SizedBox(height: 16),
+          // Category picker
+          Text(
+            'Категория миссии',
+            style: TextStyle(
+                color: sc.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _CategoryChip(
+                label: 'Нет',
+                icon: Icons.remove_circle_outline,
+                color: sc.textSecondary,
+                selected: _settings.category == null,
+                onTap: () => setState(
+                    () => _settings = _settings.copyWith(category: null)),
+                sc: sc,
+              ),
+              ...GoalCategory.values.map((cat) => _CategoryChip(
+                    label: _categoryLabel(cat),
+                    icon: _categoryIcon(cat)!,
+                    color: _categoryColor(cat),
+                    selected: _settings.category == cat,
+                    onTap: () => setState(
+                        () => _settings = _settings.copyWith(category: cat)),
+                    sc: sc,
+                  )),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Divider(height: 1, color: sc.border),
+          const SizedBox(height: 12),
+          // Status actions
+          _SettingsActionRow(
+            icon: isFrozen ? Icons.play_arrow_outlined : Icons.ac_unit,
+            label: isFrozen ? 'Разморозить миссию' : 'Заморозить миссию',
+            color: const Color(0xFF6A8ED8),
+            onTap: () {
+              final newStatus = isFrozen ? 'active' : 'frozen';
+              ref
+                  .read(planningProvider.notifier)
+                  .updateGoalStatus(goal.id, newStatus);
+              Navigator.pop(context);
+            },
+          ),
+          if (goal.status != 'completed')
+            _SettingsActionRow(
+              icon: Icons.check_circle_outline,
+              label: 'Завершить миссию',
+              color: const Color(0xFF5AADA0),
+              onTap: () async {
+                final medal = await ref
+                    .read(planningProvider.notifier)
+                    .updateGoalStatus(goal.id, 'completed');
+                if (!context.mounted) return;
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => MissionAccomplishedScreen(
+                      xpGained: 2000 + (medal?.xpBonus ?? 100),
+                      dpGained: _categoryDp(goal.settings.category),
+                      medal: medal,
+                    ),
+                  ),
+                );
+              },
+            ),
+          const SizedBox(height: 16),
+          _SheetSubmitButton(
+            label: 'ПРИМЕНИТЬ',
+            sc: sc,
+            onTap: () {
+              ref
+                  .read(planningProvider.notifier)
+                  .updateGoalSettings(goal.id, _settings);
+              Navigator.pop(context);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StepperWidget extends StatelessWidget {
+  const _StepperWidget({
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.sc,
+    required this.onChanged,
+  });
+
+  final int value;
+  final int min;
+  final int max;
+  final SieColors sc;
+  final void Function(int) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _StepBtn(
+          icon: Icons.remove,
+          enabled: value > min,
+          sc: sc,
+          onTap: () => onChanged(value - 1),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Text(
+            '$value',
+            style: TextStyle(
+                color: sc.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w600),
+          ),
+        ),
+        _StepBtn(
+          icon: Icons.add,
+          enabled: value < max,
+          sc: sc,
+          onTap: () => onChanged(value + 1),
+        ),
+      ],
+    );
+  }
+}
+
+class _StepBtn extends StatelessWidget {
+  const _StepBtn(
+      {required this.icon,
+      required this.enabled,
+      required this.sc,
+      required this.onTap});
+
+  final IconData icon;
+  final bool enabled;
+  final SieColors sc;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+              color: enabled
+                  ? sc.accent.withValues(alpha: 0.5)
+                  : sc.border),
+        ),
+        child: Icon(icon,
+            size: 14,
+            color: enabled ? sc.accent : sc.textSecondary),
+      ),
+    );
+  }
+}
+
+class _CategoryChip extends StatelessWidget {
+  const _CategoryChip({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+    required this.sc,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: selected ? color.withValues(alpha: 0.15) : Colors.transparent,
+          border: Border.all(
+            color: selected ? color : sc.border,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: selected ? color : sc.textSecondary),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? color : sc.textSecondary,
+                fontSize: 12,
+                fontWeight:
+                    selected ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsActionRow extends StatelessWidget {
+  const _SettingsActionRow({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 18),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(
+                  color: color, fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

@@ -6,8 +6,10 @@ import 'package:drift/drift.dart' show Value;
 import 'package:uuid/uuid.dart';
 import '../local/app_database.dart';
 import '../models/planning.dart';
+import '../models/mission_medal.dart';
 import 'auth_state_provider.dart';
 import 'connectivity_provider.dart';
+import 'habits_provider.dart';
 import 'user_profile_provider.dart';
 
 const _uuid = Uuid();
@@ -123,6 +125,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           progress: Value(g.progress),
           synced: const Value(true),
           createdAtMs: Value(g.createdAt.millisecondsSinceEpoch),
+          settingsJson: Value(jsonEncode(g.settings.toJson())),
         ));
       }
       for (final sg in _allSubGoals(g.subGoals)) {
@@ -265,6 +268,10 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         milestones: milestones,
         habitLinks: links,
         createdAt: DateTime.fromMillisecondsSinceEpoch(rg.createdAtMs),
+        settings: rg.settingsJson != null
+            ? GoalSettings.fromJson(
+                jsonDecode(rg.settingsJson!) as Map<String, dynamic>)
+            : GoalSettings.defaults,
       ));
     }
 
@@ -361,11 +368,14 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
   // ── Update Goal Status ────────────────────────────────────────────────────
 
-  Future<void> updateGoalStatus(String id, String newStatus) async {
+  Future<MissionMedal?> updateGoalStatus(String id, String newStatus) async {
     final client = Supabase.instance.client;
+    final session = client.auth.currentSession;
     final db = ref.read(appDatabaseProvider);
     final current = state.valueOrNull;
-    if (current == null) return;
+    if (current == null) return null;
+
+    final goal = current.goals.where((g) => g.id == id).firstOrNull;
 
     final updated = current.goals
         .map((g) => g.id == id ? g.copyWith(status: newStatus) : g)
@@ -376,7 +386,81 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         status: Value(newStatus), synced: const Value(false)));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
-    if (newStatus == 'completed') await _awardXp(2000, 0);
+
+    MissionMedal? medal;
+    if (newStatus == 'completed' && goal != null && session != null) {
+      // Compute stats
+      int totalWeight = 0;
+      for (final sg in _allSubGoals(goal.subGoals)) {
+        for (final t in sg.tasks) totalWeight += t.weight;
+      }
+      final durationDays =
+          DateTime.now().difference(goal.createdAt).inDays;
+
+      // Determine level
+      final level = (totalWeight > 40 && durationDays > 30)
+          ? 3
+          : (totalWeight >= 15 || durationDays > 14)
+              ? 2
+              : 1;
+
+      // Category-based DP
+      final dp = switch (goal.settings.category) {
+        GoalCategory.project    => 50,
+        GoalCategory.learning   => 40,
+        GoalCategory.health     => 35,
+        GoalCategory.discipline => 30,
+        GoalCategory.lifestyle  => 25,
+        null                    => 20,
+      };
+
+      final xpBonus = medalXpBonus(level);
+      await _awardXp(2000 + xpBonus, dp);
+
+      medal = MissionMedal(
+        id: _uuid.v4(),
+        userId: session.user.id,
+        goalId: id,
+        goalName: goal.name,
+        category: goal.settings.category,
+        level: level,
+        name: medalName(goal.settings.category, level),
+        earnedAt: DateTime.now(),
+        totalTaskWeight: totalWeight,
+        durationDays: durationDays,
+      );
+
+      await db.upsertMedalLocally(LocalMissionMedalsCompanion(
+        id: Value(medal.id),
+        userId: Value(medal.userId),
+        goalId: Value(medal.goalId),
+        goalName: Value(medal.goalName),
+        category: Value(medal.category?.name ?? 'none'),
+        level: Value(medal.level),
+        name: Value(medal.name),
+        earnedAtMs: Value(medal.earnedAt.millisecondsSinceEpoch),
+        totalTaskWeight: Value(medal.totalTaskWeight),
+        durationDays: Value(medal.durationDays),
+        synced: const Value(false),
+      ));
+
+      if (isOnline) {
+        try {
+          await client
+              .from('mission_medals')
+              .insert(medal.toInsertMap());
+          await db.markMedalSynced(medal.id);
+        } catch (_) {
+          await db.enqueueSyncOp(
+              'award_mission_medal', jsonEncode(medal.toInsertMap()));
+        }
+      } else {
+        await db.enqueueSyncOp(
+            'award_mission_medal', jsonEncode(medal.toInsertMap()));
+      }
+    } else if (newStatus == 'completed' && goal != null) {
+      await _awardXp(2000, 20);
+    }
 
     if (isOnline) {
       try {
@@ -385,11 +469,12 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             .update({'status': newStatus}).eq('id', id);
         await db.updateGoal(id,
             const LocalGoalsCompanion(synced: Value(true)));
-        return;
+        return medal;
       } catch (_) {}
     }
     await db.enqueueSyncOp(
         'update_goal_status', jsonEncode({'id': id, 'status': newStatus}));
+    return medal;
   }
 
   // ── State helper ──────────────────────────────────────────────────────────
@@ -903,6 +988,44 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         jsonEncode({'id': linkId, 'goal_id': goalId}));
   }
 
+  // ── Strategic Advice ──────────────────────────────────────────────────────
+
+  List<String> getStrategicAdvice(Goal g) {
+    if (g.status != 'active') return const [];
+    final advice = <String>[];
+    final now = DateTime.now();
+
+    final ref_ = g.updatedAt ?? g.createdAt;
+    final daysSinceUpdate = now.difference(ref_).inDays;
+    if (daysSinceUpdate >= 7 && g.progress < 100.0) {
+      advice.add(
+          'Цель не обновлялась $daysSinceUpdate дн. Попробуй выполнить хотя бы одну задачу.');
+    }
+
+    int overdue = 0;
+    for (final sg in _allSubGoals(g.subGoals)) {
+      for (final t in sg.tasks) {
+        if (!t.isCompleted && t.dueDate != null && now.isAfter(t.dueDate!)) {
+          overdue++;
+        }
+      }
+    }
+    if (overdue >= 2) {
+      advice.add(
+          '$overdue задач просрочено. Расставь приоритеты или перенеси дедлайны.');
+    }
+
+    if (g.deadline != null) {
+      final daysLeft = g.deadline!.difference(now).inDays;
+      if (daysLeft >= 0 && daysLeft <= 14 && g.progress < 50.0) {
+        advice.add(
+            'До дедлайна $daysLeft дн., а прогресс только ${g.progress.round()}%. Нужно ускориться!');
+      }
+    }
+
+    return advice;
+  }
+
   // ── XP helper ─────────────────────────────────────────────────────────────
 
   Future<void> _awardXp(int xp, int dp) async {
@@ -923,14 +1046,49 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     ));
   }
 
+  // ── Update Goal Settings ──────────────────────────────────────────────────
+
+  Future<void> updateGoalSettings(String goalId, GoalSettings settings) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+
+    _updateGoalInState(goalId, (g) => g.copyWith(settings: settings));
+
+    await db.updateGoalSettings(goalId, jsonEncode(settings.toJson()));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client
+            .from('goals')
+            .update({'settings': settings.toJson()}).eq('id', goalId);
+        await db.updateGoal(
+            goalId, const LocalGoalsCompanion(synced: Value(true)));
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('update_goal_settings',
+        jsonEncode({'id': goalId, 'settings': settings.toJson()}));
+  }
+
   // ── Habit Boost ───────────────────────────────────────────────────────────
 
-  Future<void> applyHabitBoost(String goalId, double boost) async {
+  Future<void> applyHabitBoost(String goalId, double boost,
+      {String? habitId}) async {
     final current = state.valueOrNull;
     if (current == null) return;
     final goal = current.goals.where((g) => g.id == goalId).firstOrNull;
     if (goal == null || goal.status != 'active') return;
-    final newProgress = (goal.progress + boost).clamp(0.0, 100.0);
+
+    double multiplier = 1.0;
+    if (habitId != null) {
+      final streak =
+          ref.read(habitsProvider).valueOrNull?.streaks[habitId] ?? 0;
+      multiplier = streak >= 30 ? 2.0 : streak >= 7 ? 1.5 : 1.0;
+    }
+    final boosted = boost * multiplier;
+
+    final newProgress = (goal.progress + boosted).clamp(0.0, 100.0);
     final now = DateTime.now();
     _updateGoalInState(
         goalId, (g) => g.copyWith(progress: newProgress, updatedAt: now));

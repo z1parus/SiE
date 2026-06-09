@@ -19,6 +19,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
   final Map<String, Offset> _positions = {};
   final _tc = TransformationController();
   String? _draggingId;
+  final Set<String> _scoutedMapIds = {};
 
   static const double _cx = 1200.0;
   static const double _cs = 2400.0;
@@ -349,16 +350,24 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
 
     _ensurePositions(goal);
 
+    final fogEnabled = goal.settings.isFogOfWarEnabled;
+    final visibleIds = fogEnabled
+        ? computeFogVisibleIds(goal.subGoals, _scoutedMapIds, true)
+        : null;
+    bool isHidden(String id) => visibleIds != null && !visibleIds.contains(id);
+
     final goalPos = _positions[goal.id] ?? Offset.zero;
 
     final edges = <_Edge>[];
     void addSubGoalEdges(SubGoal sg, Offset parentPos, _EType edgeType) {
       final sgPos = _positions[sg.id];
       if (sgPos == null) return;
-      edges.add(_Edge(parentPos, sgPos, edgeType));
+      edges.add(_Edge(parentPos, sgPos, edgeType, fogHidden: isHidden(sg.id)));
       for (final t in sg.tasks) {
         final tp = _positions[t.id];
-        if (tp != null) edges.add(_Edge(sgPos, tp, _EType.subTask));
+        if (tp != null) {
+          edges.add(_Edge(sgPos, tp, _EType.subTask, fogHidden: isHidden(sg.id)));
+        }
       }
       for (final child in sg.children) {
         addSubGoalEdges(child, sgPos, _EType.subSub);
@@ -415,7 +424,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
             // Tasks and nested sub-goals (all depths)
             for (final sg in _flatSubGoals(goal.subGoals)) ...[
               for (final t in sg.tasks)
-                _taskPosNode(t, sg.id, goal, c),
+                _taskPosNode(t, sg.id, goal, c, hidden: isHidden(sg.id)),
               _posNode(
                 sg.id,
                 158,
@@ -427,6 +436,8 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
                   dragging: _draggingId == sg.id,
                   onAdd: () => _showSubGoalSheet(sg, goal, c),
                 ),
+                hidden: isHidden(sg.id),
+                onHiddenTap: () => setState(() => _scoutedMapIds.add(sg.id)),
               ),
             ],
             // Goal (fixed, topmost)
@@ -447,31 +458,33 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
 
   double _taskW(int w) => switch (w) { 5 => 124, 3 => 104, _ => 84 };
 
-  Widget _taskPosNode(PlanningTask task, String currentSgId, Goal goal, SieColors c) {
+  Widget _taskPosNode(PlanningTask task, String currentSgId, Goal goal, SieColors c, {bool hidden = false}) {
     final pos = _positions[task.id];
     if (pos == null) return const SizedBox.shrink();
     final w = _taskW(task.weight);
     const h = 40.0;
+    Widget node = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _onTap(task.id, goal),
+      onPanStart: hidden ? null : (_) => setState(() => _draggingId = task.id),
+      onPanUpdate: hidden ? null : (d) {
+        final scale = _tc.value.getMaxScaleOnAxis();
+        setState(() => _positions[task.id] = _positions[task.id]! + d.delta / scale);
+      },
+      onPanEnd: hidden ? null : (_) {
+        _tryReparentTask(task.id, currentSgId, goal);
+        _resolveCollisions(task.id, goal);
+        setState(() => _draggingId = null);
+      },
+      child: _TaskNode(task: task, sc: c, dragging: _draggingId == task.id),
+    );
+    if (hidden) node = Opacity(opacity: 0.25, child: node);
     return Positioned(
       left: _cx + pos.dx - w / 2,
       top: _cx + pos.dy - h / 2,
       width: w,
       height: h,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => _onTap(task.id, goal),
-        onPanStart: (_) => setState(() => _draggingId = task.id),
-        onPanUpdate: (d) {
-          final scale = _tc.value.getMaxScaleOnAxis();
-          setState(() => _positions[task.id] = _positions[task.id]! + d.delta / scale);
-        },
-        onPanEnd: (_) {
-          _tryReparentTask(task.id, currentSgId, goal);
-          _resolveCollisions(task.id, goal);
-          setState(() => _draggingId = null);
-        },
-        child: _TaskNode(task: task, sc: c, dragging: _draggingId == task.id),
-      ),
+      child: node,
     );
   }
 
@@ -495,29 +508,31 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
     }
   }
 
-  Widget _posNode(String id, double w, double h, Goal goal, Widget child) {
+  Widget _posNode(String id, double w, double h, Goal goal, Widget child,
+      {bool hidden = false, VoidCallback? onHiddenTap}) {
     final pos = _positions[id];
     if (pos == null) return const SizedBox.shrink();
+    Widget inner = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: hidden ? onHiddenTap : () => _onTap(id, goal),
+      onPanStart: hidden ? null : (_) => setState(() => _draggingId = id),
+      onPanUpdate: hidden ? null : (d) {
+        final scale = _tc.value.getMaxScaleOnAxis();
+        setState(() => _positions[id] = _positions[id]! + d.delta / scale);
+      },
+      onPanEnd: hidden ? null : (_) {
+        _resolveCollisions(id, goal);
+        setState(() => _draggingId = null);
+      },
+      child: child,
+    );
+    if (hidden) inner = Opacity(opacity: 0.25, child: inner);
     return Positioned(
       left: _cx + pos.dx - w / 2,
       top: _cx + pos.dy - h / 2,
       width: w,
       height: h,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => _onTap(id, goal),
-        onPanStart: (_) => setState(() => _draggingId = id),
-        onPanUpdate: (d) {
-          final scale = _tc.value.getMaxScaleOnAxis();
-          setState(
-              () => _positions[id] = _positions[id]! + d.delta / scale);
-        },
-        onPanEnd: (_) {
-          _resolveCollisions(id, goal);
-          setState(() => _draggingId = null);
-        },
-        child: child,
-      ),
+      child: inner,
     );
   }
 }
@@ -527,10 +542,11 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
 enum _EType { goalSub, subSub, subTask, goalMs, goalHabit }
 
 class _Edge {
-  const _Edge(this.src, this.dst, this.type);
+  const _Edge(this.src, this.dst, this.type, {this.fogHidden = false});
   final Offset src;
   final Offset dst;
   final _EType type;
+  final bool fogHidden;
 }
 
 // ─── Grid painter ─────────────────────────────────────────────────────────────
@@ -571,13 +587,17 @@ class _EdgePainter extends CustomPainter {
       final src = Offset(center + e.src.dx, center + e.src.dy);
       final dst = Offset(center + e.dst.dx, center + e.dst.dy);
 
-      final (color, width, dashed) = switch (e.type) {
+      var (color, width, dashed) = switch (e.type) {
         _EType.goalSub => (c.accent.withOpacity(0.38), 2.0, false),
         _EType.subSub => (c.border.withOpacity(0.9), 1.5, true),
         _EType.subTask => (c.border.withOpacity(0.8), 1.5, false),
         _EType.goalMs => (c.accentSecondary.withOpacity(0.45), 1.5, true),
         _EType.goalHabit => (c.dp.withOpacity(0.35), 1.2, false),
       };
+      if (e.fogHidden) {
+        color = color.withOpacity(color.opacity * 0.4);
+        dashed = true;
+      }
 
       final paint = Paint()
         ..color = color

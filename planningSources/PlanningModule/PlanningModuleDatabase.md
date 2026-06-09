@@ -53,6 +53,16 @@
 *   `habit_id`: `uuid` (Foreign Key -> habits.id)
 *   `boost_value`: `float` (Значение бонуса к прогрессу за выполнение)
 
+### Е. Таблица `mission_medals` (Медали за Миссии)
+Динамические награды за завершение глобальных целей.
+*   `id`: `uuid` (Primary Key)
+*   `user_id`: `uuid` (Foreign Key -> profiles.id)
+*   `goal_id`: `uuid` (Foreign Key -> goals.id)
+*   `category`: `text` (Категория миссии)
+*   `level`: `int` (1 - Bronze, 2 - Silver, 3 - Gold)
+*   `name`: `text` (Название награды)
+*   `earned_at`: `timestamp with time zone`
+
 ---
 
 ## 2. Связи (Relationships)

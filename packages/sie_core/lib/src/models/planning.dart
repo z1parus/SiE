@@ -2,6 +2,69 @@ import 'package:flutter/material.dart';
 
 const _unset = Object();
 
+// ─── GoalCategory ─────────────────────────────────────────────────────────────
+
+enum GoalCategory { learning, health, project, lifestyle, discipline }
+
+// ─── GoalSettings ─────────────────────────────────────────────────────────────
+
+class GoalSettings {
+  const GoalSettings({
+    this.isFogOfWarEnabled = false,
+    this.autoRescheduleTasks = false,
+    this.remindBeforeDeadlineDays = 1,
+    this.hideCompletedTasks = false,
+    this.category,
+  });
+
+  final bool isFogOfWarEnabled;
+  final bool autoRescheduleTasks;
+  final int remindBeforeDeadlineDays;
+  final bool hideCompletedTasks;
+  final GoalCategory? category;
+
+  static const defaults = GoalSettings();
+
+  GoalSettings copyWith({
+    bool? isFogOfWarEnabled,
+    bool? autoRescheduleTasks,
+    int? remindBeforeDeadlineDays,
+    bool? hideCompletedTasks,
+    Object? category = _unset,
+  }) =>
+      GoalSettings(
+        isFogOfWarEnabled: isFogOfWarEnabled ?? this.isFogOfWarEnabled,
+        autoRescheduleTasks: autoRescheduleTasks ?? this.autoRescheduleTasks,
+        remindBeforeDeadlineDays:
+            remindBeforeDeadlineDays ?? this.remindBeforeDeadlineDays,
+        hideCompletedTasks: hideCompletedTasks ?? this.hideCompletedTasks,
+        category: category == _unset ? this.category : category as GoalCategory?,
+      );
+
+  factory GoalSettings.fromJson(Map<String, dynamic> j) {
+    final catStr = j['category'] as String?;
+    final cat = catStr != null
+        ? GoalCategory.values.where((e) => e.name == catStr).firstOrNull
+        : null;
+    return GoalSettings(
+      isFogOfWarEnabled: j['is_fog_of_war_enabled'] as bool? ?? false,
+      autoRescheduleTasks: j['auto_reschedule_tasks'] as bool? ?? false,
+      remindBeforeDeadlineDays:
+          (j['remind_before_deadline_days'] as num?)?.toInt() ?? 1,
+      hideCompletedTasks: j['hide_completed_tasks'] as bool? ?? false,
+      category: cat,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'is_fog_of_war_enabled': isFogOfWarEnabled,
+        'auto_reschedule_tasks': autoRescheduleTasks,
+        'remind_before_deadline_days': remindBeforeDeadlineDays,
+        'hide_completed_tasks': hideCompletedTasks,
+        if (category != null) 'category': category!.name,
+      };
+}
+
 // ─── Task ─────────────────────────────────────────────────────────────────────
 
 class PlanningTask {
@@ -222,6 +285,7 @@ class Goal {
     this.description,
     this.deadline,
     this.updatedAt,
+    this.settings = GoalSettings.defaults,
   });
 
   final String id;
@@ -238,6 +302,7 @@ class Goal {
   final List<GoalHabitLink> habitLinks;
   final DateTime createdAt;
   final DateTime? updatedAt;
+  final GoalSettings settings;
 
   Color get color =>
       Color(int.parse('0xFF${colorHex.replaceAll('#', '')}'));
@@ -268,6 +333,7 @@ class Goal {
     List<Milestone>? milestones,
     List<GoalHabitLink>? habitLinks,
     DateTime? updatedAt,
+    GoalSettings? settings,
   }) =>
       Goal(
         id: id,
@@ -284,6 +350,7 @@ class Goal {
         habitLinks: habitLinks ?? this.habitLinks,
         createdAt: createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
+        settings: settings ?? this.settings,
       );
 
   factory Goal.fromJson(Map<String, dynamic> j) {
@@ -327,6 +394,9 @@ class Goal {
       updatedAt: j['updated_at'] != null
           ? DateTime.parse(j['updated_at'] as String)
           : null,
+      settings: j['settings'] is Map<String, dynamic>
+          ? GoalSettings.fromJson(j['settings'] as Map<String, dynamic>)
+          : GoalSettings.defaults,
     );
   }
 
@@ -340,6 +410,7 @@ class Goal {
         'status': status,
         'color_hex': colorHex,
         'progress': progress,
+        'settings': settings.toJson(),
       };
 }
 

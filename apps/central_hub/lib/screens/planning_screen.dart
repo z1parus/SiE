@@ -3,8 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 import 'mission_detail_screen.dart';
+import 'mission_accomplished_screen.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
+
+int _categoryDp(GoalCategory? cat) => switch (cat) {
+      GoalCategory.project    => 50,
+      GoalCategory.learning   => 40,
+      GoalCategory.health     => 35,
+      GoalCategory.discipline => 30,
+      GoalCategory.lifestyle  => 25,
+      null                    => 20,
+    };
 
 Color _priorityColor(int p) => switch (p) {
       1 => const Color(0xFF888898),
@@ -12,6 +22,31 @@ Color _priorityColor(int p) => switch (p) {
       3 => const Color(0xFFE07830),
       4 => const Color(0xFFE03050),
       _ => const Color(0xFFC8A84B),
+    };
+
+IconData? _categoryIcon(GoalCategory? cat) => switch (cat) {
+      GoalCategory.learning   => Icons.school_outlined,
+      GoalCategory.health     => Icons.favorite_outline,
+      GoalCategory.project    => Icons.rocket_launch_outlined,
+      GoalCategory.lifestyle  => Icons.spa_outlined,
+      GoalCategory.discipline => Icons.bolt_outlined,
+      null                    => null,
+    };
+
+Color _categoryColor(GoalCategory cat) => switch (cat) {
+      GoalCategory.learning   => const Color(0xFF4A90D9),
+      GoalCategory.health     => const Color(0xFF5AAD6A),
+      GoalCategory.project    => const Color(0xFFE07830),
+      GoalCategory.lifestyle  => const Color(0xFF9B59B6),
+      GoalCategory.discipline => const Color(0xFFF4C430),
+    };
+
+String _categoryLabel(GoalCategory cat) => switch (cat) {
+      GoalCategory.learning   => 'Обучение',
+      GoalCategory.health     => 'Здоровье',
+      GoalCategory.project    => 'Проект',
+      GoalCategory.lifestyle  => 'Образ жизни',
+      GoalCategory.discipline => 'Дисциплина',
     };
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -127,10 +162,21 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
               .read(planningProvider.notifier)
               .updateGoalStatus(goal.id, newStatus);
         },
-        onComplete: () {
-          ref
+        onComplete: () async {
+          final medal = await ref
               .read(planningProvider.notifier)
               .updateGoalStatus(goal.id, 'completed');
+          if (!context.mounted) return;
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => MissionAccomplishedScreen(
+                xpGained: 2000 + (medal?.xpBonus ?? 100),
+                dpGained: _categoryDp(goal.settings.category),
+                medal: medal,
+              ),
+            ),
+          );
         },
         onDelete: () async {
           final confirm = await showDialog<bool>(
@@ -354,6 +400,11 @@ class _GoalCard extends ConsumerWidget {
                           height: 1.2,
                         ),
                       ),
+                      if (goal.settings.category != null) ...[
+                        const SizedBox(height: 6),
+                        _CategoryBadge(
+                            category: goal.settings.category!, sc: sc),
+                      ],
                       const SizedBox(height: 16),
                       // Progress arc
                       Center(
@@ -1017,4 +1068,32 @@ class _ArcPainter extends CustomPainter {
   @override
   bool shouldRepaint(_ArcPainter old) =>
       old.progress != progress || old.color != color;
+}
+
+// ─── Category Badge ───────────────────────────────────────────────────────────
+
+class _CategoryBadge extends StatelessWidget {
+  const _CategoryBadge({required this.category, required this.sc});
+
+  final GoalCategory category;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = _categoryIcon(category)!;
+    final color = _categoryColor(category);
+    final label = _categoryLabel(category);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(
+              fontSize: 11, color: color, fontWeight: FontWeight.w500),
+        ),
+      ],
+    );
+  }
 }

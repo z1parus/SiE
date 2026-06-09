@@ -136,6 +136,7 @@ class LocalGoals extends Table {
   BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
   IntColumn  get createdAtMs    => integer()();
   IntColumn  get updatedAtMs    => integer().nullable()();
+  TextColumn get settingsJson   => text().nullable()();
   @override Set<Column> get primaryKey => {id};
 }
 
@@ -182,6 +183,22 @@ class LocalPlanningTasks extends Table {
   @override Set<Column> get primaryKey => {id};
 }
 
+@DataClassName('LocalMissionMedal')
+class LocalMissionMedals extends Table {
+  TextColumn get id              => text()();
+  TextColumn get userId          => text()();
+  TextColumn get goalId          => text()();
+  TextColumn get goalName        => text().withDefault(const Constant(''))();
+  TextColumn get category        => text().withDefault(const Constant('none'))();
+  IntColumn  get level           => integer()();
+  TextColumn get name            => text()();
+  IntColumn  get earnedAtMs      => integer()();
+  IntColumn  get totalTaskWeight => integer().withDefault(const Constant(0))();
+  IntColumn  get durationDays    => integer().withDefault(const Constant(0))();
+  BoolColumn get synced          => boolean().withDefault(const Constant(false))();
+  @override Set<Column> get primaryKey => {id};
+}
+
 @DataClassName('LocalGoalHabitLink')
 class LocalGoalHabitLinks extends Table {
   TextColumn get id             => text()();
@@ -210,12 +227,13 @@ class LocalGoalHabitLinks extends Table {
   LocalMilestones,
   LocalPlanningTasks,
   LocalGoalHabitLinks,
+  LocalMissionMedals,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -247,6 +265,12 @@ class AppDatabase extends _$AppDatabase {
         await m.issueCustomQuery(
             'ALTER TABLE local_goal_habit_links ADD COLUMN boost_value REAL NOT NULL DEFAULT 0.5',
             const []);
+      }
+      if (from < 8) {
+        await m.addColumn(localGoals, localGoals.settingsJson);
+      }
+      if (from < 9) {
+        await m.createTable(localMissionMedals);
       }
     },
   );
@@ -530,6 +554,12 @@ class AppDatabase extends _$AppDatabase {
   Future<void> updateGoal(String id, LocalGoalsCompanion changes) =>
       (update(localGoals)..where((g) => g.id.equals(id))).write(changes);
 
+  Future<void> updateGoalSettings(String id, String? settingsJson) =>
+      updateGoal(id, LocalGoalsCompanion(
+        settingsJson: Value(settingsJson),
+        synced: const Value(false),
+      ));
+
   Future<void> upsertGoalHabitLink(LocalGoalHabitLinksCompanion row) =>
       into(localGoalHabitLinks).insertOnConflictUpdate(row);
 
@@ -602,6 +632,22 @@ class AppDatabase extends _$AppDatabase {
 
   Future<LocalMilestone?> getMilestone(String id) =>
       (select(localMilestones)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  // ── Mission Medals ────────────────────────────────────────────────────────
+
+  Future<void> upsertMedalLocally(LocalMissionMedalsCompanion row) =>
+      into(localMissionMedals).insertOnConflictUpdate(row);
+
+  Future<List<LocalMissionMedal>> medalsForUser(String userId) =>
+      (select(localMissionMedals)
+            ..where((t) => t.userId.equals(userId))
+            ..orderBy(
+                [(t) => OrderingTerm(expression: t.earnedAtMs, mode: OrderingMode.desc)]))
+          .get();
+
+  Future<void> markMedalSynced(String id) =>
+      (update(localMissionMedals)..where((t) => t.id.equals(id)))
+          .write(const LocalMissionMedalsCompanion(synced: Value(true)));
 
   Future<Set<String>> unsyncedPlanningIds() async {
     final goals = await (select(localGoals)..where((t) => t.synced.equals(false))).get();

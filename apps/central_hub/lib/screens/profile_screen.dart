@@ -214,6 +214,10 @@ class _ProfileContent extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 28),
+                  const SectionHeader(title: 'AWARDS'),
+                  const SizedBox(height: 16),
+                  const _AchievementsGrid(),
+                  const SizedBox(height: 28),
                   const SectionHeader(title: 'MEDALS VAULT'),
                 const SizedBox(height: 4),
                 Text(
@@ -554,14 +558,14 @@ class _SquareNavButton extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Medals Vault — 3-column achievement grid
+// Achievements grid (regular unlockable achievements)
 // ─────────────────────────────────────────────────────────────────────────────
-class _MedalsVault extends ConsumerWidget {
-  const _MedalsVault();
+class _AchievementsGrid extends ConsumerWidget {
+  const _AchievementsGrid();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c                = ref.watch(sieColorsProvider);
+    final c                 = ref.watch(sieColorsProvider);
     final achievementsAsync = ref.watch(userAchievementsProvider);
 
     return achievementsAsync.when(
@@ -573,21 +577,13 @@ class _MedalsVault extends ConsumerWidget {
       ),
       error: (_, _) => Text(
         'NO ACHIEVEMENTS DEFINED IN DATABASE',
-        style: TextStyle(
-          color: c.textSecondary,
-          fontSize: 11,
-          letterSpacing: 1,
-        ),
+        style: TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),
       ),
       data: (achievements) {
         if (achievements.isEmpty) {
           return Text(
-            'NO MEDALS YET — COMPLETE MISSIONS TO EARN COMMENDATIONS',
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 11,
-              letterSpacing: 1,
-            ),
+            'NO ACHIEVEMENTS YET',
+            style: TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),
           );
         }
         return GridView.builder(
@@ -600,10 +596,176 @@ class _MedalsVault extends ConsumerWidget {
             childAspectRatio: 0.88,
           ),
           itemCount: achievements.length,
-          itemBuilder: (_, i) =>
-              AchievementBadge(userAchievement: achievements[i]),
+          itemBuilder: (_, i) => AchievementBadge(userAchievement: achievements[i]),
         );
       },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Medals Vault — 3-column mission medals grid
+// ─────────────────────────────────────────────────────────────────────────────
+class _MedalsVault extends ConsumerWidget {
+  const _MedalsVault();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c           = ref.watch(sieColorsProvider);
+    final medalsAsync = ref.watch(missionMedalsProvider);
+
+    return medalsAsync.when(
+      loading: () => SizedBox(
+        height: 80,
+        child: Center(
+          child: CircularProgressIndicator(color: c.accent, strokeWidth: 1.5),
+        ),
+      ),
+      error: (_, _) => Text(
+        'ОШИБКА ЗАГРУЗКИ МЕДАЛЕЙ',
+        style: TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),
+      ),
+      data: (medals) {
+        if (medals.isEmpty) {
+          return Text(
+            'NO MEDALS YET — COMPLETE MISSIONS TO EARN COMMENDATIONS',
+            style:
+                TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),
+          );
+        }
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 0.82,
+          ),
+          itemCount: medals.length,
+          itemBuilder: (_, i) => MissionMedalBadge(
+            medal: medals[i],
+            onTap: () => _showMedalSheet(context, medals[i], c),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showMedalSheet(BuildContext context, MissionMedal medal, SieColors c) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _MedalDetailSheet(medal: medal, c: c),
+    );
+  }
+}
+
+class _MedalDetailSheet extends StatelessWidget {
+  const _MedalDetailSheet({required this.medal, required this.c});
+
+  final MissionMedal medal;
+  final SieColors c;
+
+  @override
+  Widget build(BuildContext context) {
+    final levelColor = medalLevelColor(medal.level);
+    final levelLabel = medalLevelLabel(medal.level);
+    final d = medal.earnedAt;
+    final dateStr =
+        '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: levelColor.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+                color: c.border, borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(height: 20),
+          MissionMedalBadge(medal: medal, size: 80),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              color: levelColor.withValues(alpha: 0.12),
+              border: Border.all(color: levelColor.withValues(alpha: 0.35)),
+            ),
+            child: Text(
+              levelLabel,
+              style: TextStyle(
+                  color: levelColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5),
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (medal.goalName.isNotEmpty) ...[
+            Text(
+              medal.goalName,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 6),
+          ],
+          Text(
+            'Завершено: $dateStr',
+            style: TextStyle(color: c.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _StatChip(
+                  icon: Icons.fitness_center,
+                  label: 'Вес: ${medal.totalTaskWeight}',
+                  c: c),
+              _StatChip(
+                  icon: Icons.calendar_today_outlined,
+                  label: '${medal.durationDays} дн.',
+                  c: c),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatChip extends StatelessWidget {
+  const _StatChip({required this.icon, required this.label, required this.c});
+
+  final IconData icon;
+  final String label;
+  final SieColors c;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: c.textSecondary),
+        const SizedBox(width: 5),
+        Text(label,
+            style: TextStyle(color: c.textSecondary, fontSize: 12)),
+      ],
     );
   }
 }
