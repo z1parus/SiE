@@ -12,6 +12,7 @@
 *   `priority`: `int` (1 - Low, 2 - Medium, 3 - High, 4 - Critical)
 *   `status`: `text` (active, completed, archived, frozen)
 *   `color_hex`: `text` (Цветовой код для UI)
+*   `settings`: `jsonb` (Индивидуальные настройки: туман войны, уведомления и т.д.)
 *   `created_at`: `timestamp with time zone`
 *   `updated_at`: `timestamp with time zone`
 
