@@ -64,27 +64,22 @@ void main() {
   );
   float clouds = fbm(sUV * 2.2 + 3.5 * q);
 
-  // Edge vignette — darker at sphere perimeter for 3D depth
-  float vignette = pow(1.0 - smoothstep(0.28, 0.50, r), 0.55);
-
   vec3 col;
   if (isDark > 0.5) {
-    // Dark theme: deep navy base, blue-grey cloud wisps
+    // Dark theme: deep navy base, blue-grey cloud wisps, no vignette
     vec3 base   = vec3(0.110, 0.126, 0.208);  // #1C2035
     vec3 cloud  = vec3(0.212, 0.282, 0.416);  // #36486A
     vec3 bright = vec3(0.290, 0.369, 0.502);  // #4A5E80
     col  = mix(base, cloud, clouds);
     col  = mix(col, bright, clouds * clouds * 0.55);
   } else {
-    // Light theme: pearl white base, soft grey cloud wisps
+    // Light theme: pearl white base, soft grey cloud wisps (+20% contrast)
     vec3 base   = vec3(0.945, 0.945, 0.961);  // #F1F1F5
     vec3 cloud  = vec3(0.753, 0.761, 0.800);  // #C0C2CC
     vec3 bright = vec3(0.996, 0.996, 1.000);  // #FEFEFF
-    col  = mix(base, cloud, clouds * 0.75);
+    col  = mix(base, cloud, clouds * 0.90);
     col  = mix(col, bright, (1.0 - clouds) * 0.30);
   }
-
-  col *= vignette;
 
   fragColor = vec4(col, 1.0);
 }
