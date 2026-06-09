@@ -6,12 +6,14 @@ class MissionAccomplishedScreen extends ConsumerStatefulWidget {
   final int xpGained;
   final int dpGained;
   final Achievement? achievement;
+  final MissionMedal? medal;
 
   const MissionAccomplishedScreen({
     super.key,
     required this.xpGained,
     this.dpGained = 0,
     this.achievement,
+    this.medal,
   });
 
   @override
@@ -88,7 +90,9 @@ class _MissionAccomplishedScreenState
                   scale: _medalScale,
                   child: FadeTransition(
                     opacity: _medalOpacity,
-                    child: const _MedalWidget(),
+                    child: widget.medal != null
+                        ? _GoalMedalWidget(medal: widget.medal!)
+                        : const _MedalWidget(),
                   ),
                 ),
                 const SizedBox(height: 52),
@@ -133,6 +137,40 @@ class _MissionAccomplishedScreenState
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Goal Medal Widget ─────────────────────────────────────────
+
+class _GoalMedalWidget extends StatelessWidget {
+  const _GoalMedalWidget({required this.medal});
+
+  final MissionMedal medal;
+
+  @override
+  Widget build(BuildContext context) {
+    final levelColor = medalLevelColor(medal.level);
+    final icon       = categoryIconData(medal.category);
+    final catColor   = categoryIconColor(medal.category);
+    final isGold     = medal.level == 3;
+
+    return Container(
+      width: 128,
+      height: 128,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: levelColor.withValues(alpha: 0.1),
+        border: Border.all(color: levelColor, width: isGold ? 3 : 2),
+        boxShadow: [
+          BoxShadow(
+            color: (isGold ? catColor : levelColor).withValues(alpha: 0.3),
+            blurRadius: 24,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: Icon(icon, size: 52, color: catColor),
     );
   }
 }

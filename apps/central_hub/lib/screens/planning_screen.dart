@@ -3,8 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 import 'mission_detail_screen.dart';
+import 'mission_accomplished_screen.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
+
+int _categoryDp(GoalCategory? cat) => switch (cat) {
+      GoalCategory.project    => 50,
+      GoalCategory.learning   => 40,
+      GoalCategory.health     => 35,
+      GoalCategory.discipline => 30,
+      GoalCategory.lifestyle  => 25,
+      null                    => 20,
+    };
 
 Color _priorityColor(int p) => switch (p) {
       1 => const Color(0xFF888898),
@@ -152,10 +162,21 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
               .read(planningProvider.notifier)
               .updateGoalStatus(goal.id, newStatus);
         },
-        onComplete: () {
-          ref
+        onComplete: () async {
+          final medal = await ref
               .read(planningProvider.notifier)
               .updateGoalStatus(goal.id, 'completed');
+          if (!context.mounted) return;
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => MissionAccomplishedScreen(
+                xpGained: 2000 + (medal?.xpBonus ?? 100),
+                dpGained: _categoryDp(goal.settings.category),
+                medal: medal,
+              ),
+            ),
+          );
         },
         onDelete: () async {
           final confirm = await showDialog<bool>(

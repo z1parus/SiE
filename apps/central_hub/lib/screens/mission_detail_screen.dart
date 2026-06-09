@@ -3,8 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 import 'tactical_map_view.dart';
+import 'mission_accomplished_screen.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
+
+int _categoryDp(GoalCategory? cat) => switch (cat) {
+      GoalCategory.project    => 50,
+      GoalCategory.learning   => 40,
+      GoalCategory.health     => 35,
+      GoalCategory.discipline => 30,
+      GoalCategory.lifestyle  => 25,
+      null                    => 20,
+    };
 
 Color _priorityColor(int p) => switch (p) {
       1 => const Color(0xFF888898),
@@ -2504,11 +2514,22 @@ class _GoalSettingsSheetState extends ConsumerState<_GoalSettingsSheet> {
               icon: Icons.check_circle_outline,
               label: 'Завершить миссию',
               color: const Color(0xFF5AADA0),
-              onTap: () {
-                ref
+              onTap: () async {
+                final medal = await ref
                     .read(planningProvider.notifier)
                     .updateGoalStatus(goal.id, 'completed');
+                if (!context.mounted) return;
                 Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => MissionAccomplishedScreen(
+                      xpGained: 2000 + (medal?.xpBonus ?? 100),
+                      dpGained: _categoryDp(goal.settings.category),
+                      medal: medal,
+                    ),
+                  ),
+                );
               },
             ),
           const SizedBox(height: 16),

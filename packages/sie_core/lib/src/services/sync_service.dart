@@ -248,6 +248,11 @@ class SyncService {
                 .eq('user_id', userId);
             await _db.updateGoal(payload['id'] as String,
                 const LocalGoalsCompanion(synced: Value(true)));
+          case 'award_mission_medal':
+            await client
+                .from('mission_medals')
+                .upsert(payload, onConflict: 'id');
+            await _db.markMedalSynced(payload['id'] as String);
 
           default:
             debugPrint(

@@ -6,6 +6,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:uuid/uuid.dart';
 import '../local/app_database.dart';
 import '../models/planning.dart';
+import '../models/mission_medal.dart';
 import 'auth_state_provider.dart';
 import 'connectivity_provider.dart';
 import 'habits_provider.dart';
@@ -367,11 +368,14 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
   // ── Update Goal Status ────────────────────────────────────────────────────
 
-  Future<void> updateGoalStatus(String id, String newStatus) async {
+  Future<MissionMedal?> updateGoalStatus(String id, String newStatus) async {
     final client = Supabase.instance.client;
+    final session = client.auth.currentSession;
     final db = ref.read(appDatabaseProvider);
     final current = state.valueOrNull;
-    if (current == null) return;
+    if (current == null) return null;
+
+    final goal = current.goals.where((g) => g.id == id).firstOrNull;
 
     final updated = current.goals
         .map((g) => g.id == id ? g.copyWith(status: newStatus) : g)
@@ -382,9 +386,26 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         status: Value(newStatus), synced: const Value(false)));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
-    if (newStatus == 'completed') {
-      final goal = current.goals.where((g) => g.id == id).firstOrNull;
-      final dp = switch (goal?.settings.category) {
+
+    MissionMedal? medal;
+    if (newStatus == 'completed' && goal != null && session != null) {
+      // Compute stats
+      int totalWeight = 0;
+      for (final sg in _allSubGoals(goal.subGoals)) {
+        for (final t in sg.tasks) totalWeight += t.weight;
+      }
+      final durationDays =
+          DateTime.now().difference(goal.createdAt).inDays;
+
+      // Determine level
+      final level = (totalWeight > 40 && durationDays > 30)
+          ? 3
+          : (totalWeight >= 15 || durationDays > 14)
+              ? 2
+              : 1;
+
+      // Category-based DP
+      final dp = switch (goal.settings.category) {
         GoalCategory.project    => 50,
         GoalCategory.learning   => 40,
         GoalCategory.health     => 35,
@@ -392,7 +413,53 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         GoalCategory.lifestyle  => 25,
         null                    => 20,
       };
-      await _awardXp(2000, dp);
+
+      final xpBonus = medalXpBonus(level);
+      await _awardXp(2000 + xpBonus, dp);
+
+      medal = MissionMedal(
+        id: _uuid.v4(),
+        userId: session.user.id,
+        goalId: id,
+        goalName: goal.name,
+        category: goal.settings.category,
+        level: level,
+        name: medalName(goal.settings.category, level),
+        earnedAt: DateTime.now(),
+        totalTaskWeight: totalWeight,
+        durationDays: durationDays,
+      );
+
+      await db.upsertMedalLocally(LocalMissionMedalsCompanion(
+        id: Value(medal.id),
+        userId: Value(medal.userId),
+        goalId: Value(medal.goalId),
+        goalName: Value(medal.goalName),
+        category: Value(medal.category?.name ?? 'none'),
+        level: Value(medal.level),
+        name: Value(medal.name),
+        earnedAtMs: Value(medal.earnedAt.millisecondsSinceEpoch),
+        totalTaskWeight: Value(medal.totalTaskWeight),
+        durationDays: Value(medal.durationDays),
+        synced: const Value(false),
+      ));
+
+      if (isOnline) {
+        try {
+          await client
+              .from('mission_medals')
+              .insert(medal.toInsertMap());
+          await db.markMedalSynced(medal.id);
+        } catch (_) {
+          await db.enqueueSyncOp(
+              'award_mission_medal', jsonEncode(medal.toInsertMap()));
+        }
+      } else {
+        await db.enqueueSyncOp(
+            'award_mission_medal', jsonEncode(medal.toInsertMap()));
+      }
+    } else if (newStatus == 'completed' && goal != null) {
+      await _awardXp(2000, 20);
     }
 
     if (isOnline) {
@@ -402,11 +469,12 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             .update({'status': newStatus}).eq('id', id);
         await db.updateGoal(id,
             const LocalGoalsCompanion(synced: Value(true)));
-        return;
+        return medal;
       } catch (_) {}
     }
     await db.enqueueSyncOp(
         'update_goal_status', jsonEncode({'id': id, 'status': newStatus}));
+    return medal;
   }
 
   // ── State helper ──────────────────────────────────────────────────────────

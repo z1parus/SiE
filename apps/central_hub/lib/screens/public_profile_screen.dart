@@ -49,6 +49,10 @@ class PublicProfileScreen extends ConsumerWidget {
                         const SectionHeader(title: 'AWARDS'),
                         const SizedBox(height: 16),
                         _AchievementsSection(userId: profile.id),
+                        const SizedBox(height: 28),
+                        const SectionHeader(title: 'MISSION MEDALS'),
+                        const SizedBox(height: 16),
+                        _PublicMedalsSection(userId: profile.id),
                       ],
                     ),
                   ),
@@ -683,4 +687,43 @@ class _AchievementSheet extends ConsumerWidget {
 
   static String _formatDate(DateTime dt) =>
       '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}.${dt.year}';
+}
+
+// ── Public Medals Section ─────────────────────────────────────────────────────
+
+class _PublicMedalsSection extends ConsumerWidget {
+  const _PublicMedalsSection({required this.userId});
+
+  final String userId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c           = ref.watch(sieColorsProvider);
+    final medalsAsync = ref.watch(publicMissionMedalsProvider(userId));
+
+    return medalsAsync.when(
+      loading: () => SizedBox(
+        height: 60,
+        child: Center(
+            child: CircularProgressIndicator(color: c.accent, strokeWidth: 1.5)),
+      ),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (medals) {
+        if (medals.isEmpty) {
+          return Text(
+            'НЕТ МЕДАЛЕЙ',
+            style:
+                TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),
+          );
+        }
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: medals
+              .map((m) => MissionMedalBadge(medal: m, size: 56))
+              .toList(),
+        );
+      },
+    );
+  }
 }
