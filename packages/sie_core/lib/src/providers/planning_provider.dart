@@ -123,6 +123,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           progress: Value(g.progress),
           synced: const Value(true),
           createdAtMs: Value(g.createdAt.millisecondsSinceEpoch),
+          settingsJson: Value(jsonEncode(g.settings.toJson())),
         ));
       }
       for (final sg in _allSubGoals(g.subGoals)) {
@@ -265,6 +266,10 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         milestones: milestones,
         habitLinks: links,
         createdAt: DateTime.fromMillisecondsSinceEpoch(rg.createdAtMs),
+        settings: rg.settingsJson != null
+            ? GoalSettings.fromJson(
+                jsonDecode(rg.settingsJson!) as Map<String, dynamic>)
+            : GoalSettings.defaults,
       ));
     }
 
@@ -921,6 +926,31 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       updatedAtMs: Value(now.millisecondsSinceEpoch),
       synced: const Value(false),
     ));
+  }
+
+  // ── Update Goal Settings ──────────────────────────────────────────────────
+
+  Future<void> updateGoalSettings(String goalId, GoalSettings settings) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+
+    _updateGoalInState(goalId, (g) => g.copyWith(settings: settings));
+
+    await db.updateGoalSettings(goalId, jsonEncode(settings.toJson()));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client
+            .from('goals')
+            .update({'settings': settings.toJson()}).eq('id', goalId);
+        await db.updateGoal(
+            goalId, const LocalGoalsCompanion(synced: Value(true)));
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('update_goal_settings',
+        jsonEncode({'id': goalId, 'settings': settings.toJson()}));
   }
 
   // ── Habit Boost ───────────────────────────────────────────────────────────

@@ -136,6 +136,7 @@ class LocalGoals extends Table {
   BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
   IntColumn  get createdAtMs    => integer()();
   IntColumn  get updatedAtMs    => integer().nullable()();
+  TextColumn get settingsJson   => text().nullable()();
   @override Set<Column> get primaryKey => {id};
 }
 
@@ -215,7 +216,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -247,6 +248,9 @@ class AppDatabase extends _$AppDatabase {
         await m.issueCustomQuery(
             'ALTER TABLE local_goal_habit_links ADD COLUMN boost_value REAL NOT NULL DEFAULT 0.5',
             const []);
+      }
+      if (from < 8) {
+        await m.addColumn(localGoals, localGoals.settingsJson);
       }
     },
   );
@@ -529,6 +533,12 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> updateGoal(String id, LocalGoalsCompanion changes) =>
       (update(localGoals)..where((g) => g.id.equals(id))).write(changes);
+
+  Future<void> updateGoalSettings(String id, String? settingsJson) =>
+      updateGoal(id, LocalGoalsCompanion(
+        settingsJson: Value(settingsJson),
+        synced: const Value(false),
+      ));
 
   Future<void> upsertGoalHabitLink(LocalGoalHabitLinksCompanion row) =>
       into(localGoalHabitLinks).insertOnConflictUpdate(row);
