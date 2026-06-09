@@ -48,8 +48,13 @@ final missionMedalsProvider =
     }
   }
 
-  final local = await db.medalsForUser(userId);
-  return local.map(_fromLocal).toList();
+  // Guard against local DB not yet migrated (build_runner not run).
+  try {
+    final local = await db.medalsForUser(userId);
+    return local.map(_fromLocal).toList();
+  } catch (_) {
+    return [];
+  }
 });
 
 final publicMissionMedalsProvider =
