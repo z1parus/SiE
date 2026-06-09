@@ -214,6 +214,10 @@ class _ProfileContent extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 28),
+                  const SectionHeader(title: 'AWARDS'),
+                  const SizedBox(height: 16),
+                  const _AchievementsGrid(),
+                  const SizedBox(height: 28),
                   const SectionHeader(title: 'MEDALS VAULT'),
                 const SizedBox(height: 4),
                 Text(
@@ -549,6 +553,52 @@ class _SquareNavButton extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Achievements grid (regular unlockable achievements)
+// ─────────────────────────────────────────────────────────────────────────────
+class _AchievementsGrid extends ConsumerWidget {
+  const _AchievementsGrid();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c                 = ref.watch(sieColorsProvider);
+    final achievementsAsync = ref.watch(userAchievementsProvider);
+
+    return achievementsAsync.when(
+      loading: () => SizedBox(
+        height: 80,
+        child: Center(
+          child: CircularProgressIndicator(color: c.accent, strokeWidth: 1.5),
+        ),
+      ),
+      error: (_, _) => Text(
+        'NO ACHIEVEMENTS DEFINED IN DATABASE',
+        style: TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),
+      ),
+      data: (achievements) {
+        if (achievements.isEmpty) {
+          return Text(
+            'NO ACHIEVEMENTS YET',
+            style: TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),
+          );
+        }
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 0.88,
+          ),
+          itemCount: achievements.length,
+          itemBuilder: (_, i) => AchievementBadge(userAchievement: achievements[i]),
+        );
+      },
     );
   }
 }
