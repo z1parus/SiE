@@ -113,6 +113,8 @@ class _MissionHeader extends StatelessWidget {
     final progress = goalProgress(goal);
     final goalColor = goal.color;
     final fatigued = isGoalFatigued(goal);
+    final advice = _MissionHeader._buildAdvice(goal);
+    final catIcon = _categoryIcon(goal.settings.category);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 16, 12),
@@ -173,6 +175,10 @@ class _MissionHeader extends StatelessWidget {
                   ),
                 ),
               ),
+              if (catIcon != null) ...[
+                const SizedBox(width: 8),
+                Icon(catIcon, size: 18, color: sc.textSecondary),
+              ],
             ],
           ),
           const SizedBox(height: 10),
@@ -185,6 +191,134 @@ class _MissionHeader extends StatelessWidget {
               sc: sc,
             ),
           ],
+          if (advice.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _StrategicAdviceCard(advice: advice, sc: sc),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static List<String> _buildAdvice(Goal g) {
+    if (g.status != 'active') return const [];
+    final advice = <String>[];
+    final now = DateTime.now();
+
+    final ref_ = g.updatedAt ?? g.createdAt;
+    final daysSinceUpdate = now.difference(ref_).inDays;
+    if (daysSinceUpdate >= 7 && goalProgress(g) < 100.0) {
+      advice.add(
+          'Цель не обновлялась $daysSinceUpdate дн. Выполни хотя бы одну задачу.');
+    }
+
+    int overdue = 0;
+    void countOverdue(List<SubGoal> sgs) {
+      for (final sg in sgs) {
+        for (final t in sg.tasks) {
+          if (!t.isCompleted && t.dueDate != null && now.isAfter(t.dueDate!)) {
+            overdue++;
+          }
+        }
+        countOverdue(sg.children);
+      }
+    }
+    countOverdue(g.subGoals);
+    if (overdue >= 2) {
+      advice.add('$overdue задач просрочено. Расставь приоритеты.');
+    }
+
+    if (g.deadline != null) {
+      final daysLeft = g.deadline!.difference(now).inDays;
+      if (daysLeft >= 0 && daysLeft <= 14 && goalProgress(g) < 50.0) {
+        advice.add(
+            'До дедлайна $daysLeft дн., прогресс ${goalProgress(g).round()}%. Ускоряйся!');
+      }
+    }
+    return advice;
+  }
+}
+
+IconData? _categoryIcon(GoalCategory? cat) => switch (cat) {
+      GoalCategory.learning   => Icons.school_outlined,
+      GoalCategory.health     => Icons.favorite_outline,
+      GoalCategory.project    => Icons.rocket_launch_outlined,
+      GoalCategory.lifestyle  => Icons.spa_outlined,
+      GoalCategory.discipline => Icons.bolt_outlined,
+      null                    => null,
+    };
+
+Color _categoryColor(GoalCategory cat) => switch (cat) {
+      GoalCategory.learning   => const Color(0xFF4A90D9),
+      GoalCategory.health     => const Color(0xFF5AAD6A),
+      GoalCategory.project    => const Color(0xFFE07830),
+      GoalCategory.lifestyle  => const Color(0xFF9B59B6),
+      GoalCategory.discipline => const Color(0xFFF4C430),
+    };
+
+String _categoryLabel(GoalCategory cat) => switch (cat) {
+      GoalCategory.learning   => 'Обучение',
+      GoalCategory.health     => 'Здоровье',
+      GoalCategory.project    => 'Проект',
+      GoalCategory.lifestyle  => 'Образ жизни',
+      GoalCategory.discipline => 'Дисциплина',
+    };
+
+class _StrategicAdviceCard extends StatelessWidget {
+  const _StrategicAdviceCard({required this.advice, required this.sc});
+
+  final List<String> advice;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.lightbulb_outline,
+                  color: Colors.orange, size: 14),
+              const SizedBox(width: 6),
+              Text(
+                'СОВЕТ',
+                style: TextStyle(
+                  color: Colors.orange,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ...advice.map((tip) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('• ',
+                        style: TextStyle(
+                            color: Colors.orange.withValues(alpha: 0.8),
+                            fontSize: 12)),
+                    Expanded(
+                      child: Text(
+                        tip,
+                        style: TextStyle(
+                            color: sc.textSecondary, fontSize: 12, height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
         ],
       ),
     );
@@ -2315,6 +2449,42 @@ class _GoalSettingsSheetState extends ConsumerState<_GoalSettingsSheet> {
           ),
           const SizedBox(height: 20),
           Divider(height: 1, color: sc.border),
+          const SizedBox(height: 16),
+          // Category picker
+          Text(
+            'Категория миссии',
+            style: TextStyle(
+                color: sc.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _CategoryChip(
+                label: 'Нет',
+                icon: Icons.remove_circle_outline,
+                color: sc.textSecondary,
+                selected: _settings.category == null,
+                onTap: () => setState(
+                    () => _settings = _settings.copyWith(category: null)),
+                sc: sc,
+              ),
+              ...GoalCategory.values.map((cat) => _CategoryChip(
+                    label: _categoryLabel(cat),
+                    icon: _categoryIcon(cat)!,
+                    color: _categoryColor(cat),
+                    selected: _settings.category == cat,
+                    onTap: () => setState(
+                        () => _settings = _settings.copyWith(category: cat)),
+                    sc: sc,
+                  )),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Divider(height: 1, color: sc.border),
           const SizedBox(height: 12),
           // Status actions
           _SettingsActionRow(
@@ -2434,6 +2604,58 @@ class _StepBtn extends StatelessWidget {
         child: Icon(icon,
             size: 14,
             color: enabled ? sc.accent : sc.textSecondary),
+      ),
+    );
+  }
+}
+
+class _CategoryChip extends StatelessWidget {
+  const _CategoryChip({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+    required this.sc,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: selected ? color.withValues(alpha: 0.15) : Colors.transparent,
+          border: Border.all(
+            color: selected ? color : sc.border,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: selected ? color : sc.textSecondary),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? color : sc.textSecondary,
+                fontSize: 12,
+                fontWeight:
+                    selected ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -14,6 +14,31 @@ Color _priorityColor(int p) => switch (p) {
       _ => const Color(0xFFC8A84B),
     };
 
+IconData? _categoryIcon(GoalCategory? cat) => switch (cat) {
+      GoalCategory.learning   => Icons.school_outlined,
+      GoalCategory.health     => Icons.favorite_outline,
+      GoalCategory.project    => Icons.rocket_launch_outlined,
+      GoalCategory.lifestyle  => Icons.spa_outlined,
+      GoalCategory.discipline => Icons.bolt_outlined,
+      null                    => null,
+    };
+
+Color _categoryColor(GoalCategory cat) => switch (cat) {
+      GoalCategory.learning   => const Color(0xFF4A90D9),
+      GoalCategory.health     => const Color(0xFF5AAD6A),
+      GoalCategory.project    => const Color(0xFFE07830),
+      GoalCategory.lifestyle  => const Color(0xFF9B59B6),
+      GoalCategory.discipline => const Color(0xFFF4C430),
+    };
+
+String _categoryLabel(GoalCategory cat) => switch (cat) {
+      GoalCategory.learning   => 'Обучение',
+      GoalCategory.health     => 'Здоровье',
+      GoalCategory.project    => 'Проект',
+      GoalCategory.lifestyle  => 'Образ жизни',
+      GoalCategory.discipline => 'Дисциплина',
+    };
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 class PlanningScreen extends ConsumerStatefulWidget {
@@ -354,6 +379,11 @@ class _GoalCard extends ConsumerWidget {
                           height: 1.2,
                         ),
                       ),
+                      if (goal.settings.category != null) ...[
+                        const SizedBox(height: 6),
+                        _CategoryBadge(
+                            category: goal.settings.category!, sc: sc),
+                      ],
                       const SizedBox(height: 16),
                       // Progress arc
                       Center(
@@ -1017,4 +1047,32 @@ class _ArcPainter extends CustomPainter {
   @override
   bool shouldRepaint(_ArcPainter old) =>
       old.progress != progress || old.color != color;
+}
+
+// ─── Category Badge ───────────────────────────────────────────────────────────
+
+class _CategoryBadge extends StatelessWidget {
+  const _CategoryBadge({required this.category, required this.sc});
+
+  final GoalCategory category;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = _categoryIcon(category)!;
+    final color = _categoryColor(category);
+    final label = _categoryLabel(category);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(
+              fontSize: 11, color: color, fontWeight: FontWeight.w500),
+        ),
+      ],
+    );
+  }
 }

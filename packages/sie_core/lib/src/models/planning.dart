@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 
 const _unset = Object();
 
+// ─── GoalCategory ─────────────────────────────────────────────────────────────
+
+enum GoalCategory { learning, health, project, lifestyle, discipline }
+
 // ─── GoalSettings ─────────────────────────────────────────────────────────────
 
 class GoalSettings {
@@ -10,12 +14,14 @@ class GoalSettings {
     this.autoRescheduleTasks = false,
     this.remindBeforeDeadlineDays = 1,
     this.hideCompletedTasks = false,
+    this.category,
   });
 
   final bool isFogOfWarEnabled;
   final bool autoRescheduleTasks;
   final int remindBeforeDeadlineDays;
   final bool hideCompletedTasks;
+  final GoalCategory? category;
 
   static const defaults = GoalSettings();
 
@@ -24,6 +30,7 @@ class GoalSettings {
     bool? autoRescheduleTasks,
     int? remindBeforeDeadlineDays,
     bool? hideCompletedTasks,
+    Object? category = _unset,
   }) =>
       GoalSettings(
         isFogOfWarEnabled: isFogOfWarEnabled ?? this.isFogOfWarEnabled,
@@ -31,21 +38,30 @@ class GoalSettings {
         remindBeforeDeadlineDays:
             remindBeforeDeadlineDays ?? this.remindBeforeDeadlineDays,
         hideCompletedTasks: hideCompletedTasks ?? this.hideCompletedTasks,
+        category: category == _unset ? this.category : category as GoalCategory?,
       );
 
-  factory GoalSettings.fromJson(Map<String, dynamic> j) => GoalSettings(
-        isFogOfWarEnabled: j['is_fog_of_war_enabled'] as bool? ?? false,
-        autoRescheduleTasks: j['auto_reschedule_tasks'] as bool? ?? false,
-        remindBeforeDeadlineDays:
-            (j['remind_before_deadline_days'] as num?)?.toInt() ?? 1,
-        hideCompletedTasks: j['hide_completed_tasks'] as bool? ?? false,
-      );
+  factory GoalSettings.fromJson(Map<String, dynamic> j) {
+    final catStr = j['category'] as String?;
+    final cat = catStr != null
+        ? GoalCategory.values.where((e) => e.name == catStr).firstOrNull
+        : null;
+    return GoalSettings(
+      isFogOfWarEnabled: j['is_fog_of_war_enabled'] as bool? ?? false,
+      autoRescheduleTasks: j['auto_reschedule_tasks'] as bool? ?? false,
+      remindBeforeDeadlineDays:
+          (j['remind_before_deadline_days'] as num?)?.toInt() ?? 1,
+      hideCompletedTasks: j['hide_completed_tasks'] as bool? ?? false,
+      category: cat,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'is_fog_of_war_enabled': isFogOfWarEnabled,
         'auto_reschedule_tasks': autoRescheduleTasks,
         'remind_before_deadline_days': remindBeforeDeadlineDays,
         'hide_completed_tasks': hideCompletedTasks,
+        if (category != null) 'category': category!.name,
       };
 }
 

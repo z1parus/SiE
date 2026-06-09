@@ -8,6 +8,7 @@ import '../local/app_database.dart';
 import '../models/planning.dart';
 import 'auth_state_provider.dart';
 import 'connectivity_provider.dart';
+import 'habits_provider.dart';
 import 'user_profile_provider.dart';
 
 const _uuid = Uuid();
@@ -381,7 +382,18 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         status: Value(newStatus), synced: const Value(false)));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
-    if (newStatus == 'completed') await _awardXp(2000, 0);
+    if (newStatus == 'completed') {
+      final goal = current.goals.where((g) => g.id == id).firstOrNull;
+      final dp = switch (goal?.settings.category) {
+        GoalCategory.project    => 50,
+        GoalCategory.learning   => 40,
+        GoalCategory.health     => 35,
+        GoalCategory.discipline => 30,
+        GoalCategory.lifestyle  => 25,
+        null                    => 20,
+      };
+      await _awardXp(2000, dp);
+    }
 
     if (isOnline) {
       try {
@@ -908,6 +920,44 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         jsonEncode({'id': linkId, 'goal_id': goalId}));
   }
 
+  // ── Strategic Advice ──────────────────────────────────────────────────────
+
+  List<String> getStrategicAdvice(Goal g) {
+    if (g.status != 'active') return const [];
+    final advice = <String>[];
+    final now = DateTime.now();
+
+    final ref_ = g.updatedAt ?? g.createdAt;
+    final daysSinceUpdate = now.difference(ref_).inDays;
+    if (daysSinceUpdate >= 7 && g.progress < 100.0) {
+      advice.add(
+          'Цель не обновлялась $daysSinceUpdate дн. Попробуй выполнить хотя бы одну задачу.');
+    }
+
+    int overdue = 0;
+    for (final sg in _allSubGoals(g.subGoals)) {
+      for (final t in sg.tasks) {
+        if (!t.isCompleted && t.dueDate != null && now.isAfter(t.dueDate!)) {
+          overdue++;
+        }
+      }
+    }
+    if (overdue >= 2) {
+      advice.add(
+          '$overdue задач просрочено. Расставь приоритеты или перенеси дедлайны.');
+    }
+
+    if (g.deadline != null) {
+      final daysLeft = g.deadline!.difference(now).inDays;
+      if (daysLeft >= 0 && daysLeft <= 14 && g.progress < 50.0) {
+        advice.add(
+            'До дедлайна $daysLeft дн., а прогресс только ${g.progress.round()}%. Нужно ускориться!');
+      }
+    }
+
+    return advice;
+  }
+
   // ── XP helper ─────────────────────────────────────────────────────────────
 
   Future<void> _awardXp(int xp, int dp) async {
@@ -955,12 +1005,22 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
   // ── Habit Boost ───────────────────────────────────────────────────────────
 
-  Future<void> applyHabitBoost(String goalId, double boost) async {
+  Future<void> applyHabitBoost(String goalId, double boost,
+      {String? habitId}) async {
     final current = state.valueOrNull;
     if (current == null) return;
     final goal = current.goals.where((g) => g.id == goalId).firstOrNull;
     if (goal == null || goal.status != 'active') return;
-    final newProgress = (goal.progress + boost).clamp(0.0, 100.0);
+
+    double multiplier = 1.0;
+    if (habitId != null) {
+      final streak =
+          ref.read(habitsProvider).valueOrNull?.streaks[habitId] ?? 0;
+      multiplier = streak >= 30 ? 2.0 : streak >= 7 ? 1.5 : 1.0;
+    }
+    final boosted = boost * multiplier;
+
+    final newProgress = (goal.progress + boosted).clamp(0.0, 100.0);
     final now = DateTime.now();
     _updateGoalInState(
         goalId, (g) => g.copyWith(progress: newProgress, updatedAt: now));
