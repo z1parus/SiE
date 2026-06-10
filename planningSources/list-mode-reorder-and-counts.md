@@ -197,7 +197,7 @@ int _totalSubGoals(SubGoal sg) {
 
 ## Открытые вопросы
 
-1. **Drag handle по зажатию или сразу?** — `ReorderableDelayedDragStartListener` (долгое нажатие активирует drag) или `ReorderableDragStartListener` (drag с первого движения)? Рекомендуется `ReorderableDelayedDragStartListener` чтобы не конфликтовать с tap/longPress на плитке.
+1. **Drag handle по зажатию или сразу?** — ✅ **Решено: `ReorderableDelayedDragStartListener`** (зажатие активирует drag, не конфликтует с tap/longPress на плитке).
 
 2. **Миграция Supabase** — как обычно, файл создаётся, но применяется вручную через Dashboard (supabase db push недоступен без пароля).
 
