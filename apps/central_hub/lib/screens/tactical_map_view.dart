@@ -97,34 +97,51 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     final saved = goal.mapPositions;
 
     final sgs = goal.subGoals;
-    for (int i = 0; i < sgs.length; i++) {
-      final sg = sgs[i];
-      if (!_positions.containsKey(sg.id)) {
-        final angle =
-            (2 * math.pi * i / math.max(sgs.length, 1)) - math.pi / 2;
-        _positions[sg.id] = saved[sg.id] ??
-            Offset(240 * math.cos(angle), 240 * math.sin(angle));
+    final useRadialLayout = saved.isEmpty && sgs.isNotEmpty;
+
+    if (useRadialLayout) {
+      const rootRadius = 380.0;
+      final total = sgs.fold(0, (s, sg) => s + _subtreeSize(sg));
+      double cursor = -math.pi / 2;
+      for (final sg in sgs) {
+        final share = 2 * math.pi * _subtreeSize(sg) / total;
+        final angle = cursor + share / 2;
+        _positions[sg.id] = Offset(rootRadius * math.cos(angle), rootRadius * math.sin(angle));
+        _layoutSubGoalRadial(sg, cursor, cursor + share, 0);
+        cursor += share;
       }
-      _ensureSubGoalPositions(sg, saved);
+    } else {
+      for (int i = 0; i < sgs.length; i++) {
+        final sg = sgs[i];
+        if (!_positions.containsKey(sg.id)) {
+          final angle =
+              (2 * math.pi * i / math.max(sgs.length, 1)) - math.pi / 2;
+          _positions[sg.id] = saved[sg.id] ??
+              Offset(240 * math.cos(angle), 240 * math.sin(angle));
+        }
+        _ensureSubGoalPositions(sg, saved);
+      }
     }
 
     final mss = goal.milestones;
+    final msRadius = useRadialLayout ? 580.0 : 200.0;
     for (int i = 0; i < mss.length; i++) {
       if (!_positions.containsKey(mss[i].id)) {
         final angle =
             (2 * math.pi * i / math.max(mss.length, 1)) + math.pi / 4;
         _positions[mss[i].id] = saved[mss[i].id] ??
-            Offset(200 * math.cos(angle), 200 * math.sin(angle));
+            Offset(msRadius * math.cos(angle), msRadius * math.sin(angle));
       }
     }
 
     final links = goal.habitLinks;
+    final lkRadius = useRadialLayout ? 520.0 : 320.0;
     for (int i = 0; i < links.length; i++) {
       if (!_positions.containsKey(links[i].id)) {
         final angle =
             (2 * math.pi * i / math.max(links.length, 1)) + math.pi / 6;
         _positions[links[i].id] = saved[links[i].id] ??
-            Offset(320 * math.cos(angle), 320 * math.sin(angle));
+            Offset(lkRadius * math.cos(angle), lkRadius * math.sin(angle));
       }
     }
 
@@ -155,6 +172,69 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     }
     for (final sg in roots) visit(sg);
     return result;
+  }
+
+  int _subtreeSize(SubGoal sg) {
+    int n = 1 + sg.tasks.length;
+    for (final c in sg.children) n += _subtreeSize(c);
+    return n;
+  }
+
+  void _layoutSubGoalRadial(SubGoal sg, double fromAngle, double toAngle, int depth) {
+    final sgPos = _positions[sg.id]!;
+
+    final tasks = sg.tasks;
+    if (tasks.isNotEmpty) {
+      final radial = math.atan2(sgPos.dy, sgPos.dx);
+      const tSpread = math.pi * 0.65;
+      const tRadius = 130.0;
+      for (int j = 0; j < tasks.length; j++) {
+        final ta = tasks.length == 1
+            ? radial
+            : radial + (-tSpread / 2 + tSpread * j / (tasks.length - 1));
+        _positions[tasks[j].id] =
+            sgPos + Offset(tRadius * math.cos(ta), tRadius * math.sin(ta));
+      }
+    }
+
+    final children = sg.children;
+    if (children.isEmpty) return;
+
+    final childRadius = depth == 0 ? 220.0 : 180.0;
+    final midAngle = (fromAngle + toAngle) / 2;
+    final fan = math.min(toAngle - fromAngle, math.pi * 1.4);
+    final totalSize = children.fold(0, (s, c) => s + _subtreeSize(c));
+    double cursor = midAngle - fan / 2;
+
+    for (final child in children) {
+      final share = fan * _subtreeSize(child) / totalSize;
+      final angle = cursor + share / 2;
+      _positions[child.id] =
+          sgPos + Offset(childRadius * math.cos(angle), childRadius * math.sin(angle));
+      _layoutSubGoalRadial(child, cursor, cursor + share, depth + 1);
+      cursor += share;
+    }
+  }
+
+  void _handleEdgeZoom(double dy) {
+    final factor = 1.0 - dy * 0.007;
+    final current = _tc.value.getMaxScaleOnAxis();
+    final next = (current * factor).clamp(0.15, 3.0);
+    if (next == current) return;
+    final ratio = next / current;
+
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final center = box.size.center(Offset.zero);
+
+    final m = _tc.value.clone()
+      ..translate(center.dx, center.dy)
+      ..scale(ratio, ratio)
+      ..translate(-center.dx, -center.dy);
+
+    if (m.getMaxScaleOnAxis().clamp(0.15, 3.0) == m.getMaxScaleOnAxis()) {
+      _tc.value = m;
+    }
   }
 
   // ── Collision resolution ──────────────────────────────────────────────────
@@ -245,6 +325,17 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       }
     }
     return result;
+  }
+
+  List<String> _childPositionIds(SubGoal sg) {
+    final ids = <String>[];
+    void collect(SubGoal s) {
+      ids.add(s.id);
+      for (final t in s.tasks) ids.add(t.id);
+      for (final c in s.children) collect(c);
+    }
+    for (final c in sg.children) collect(c);
+    return ids;
   }
 
   // ── Interactions ──────────────────────────────────────────────────────────
@@ -462,7 +553,9 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       if (lp != null) edges.add(_Edge(goalPos, lp, _EType.goalHabit));
     }
 
-    return InteractiveViewer(
+    return Stack(
+      children: [
+        InteractiveViewer(
       transformationController: _tc,
       constrained: false,
       boundaryMargin: const EdgeInsets.all(800),
@@ -524,6 +617,28 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
           ],
         ),
       ),
+        ),
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 24,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onVerticalDragUpdate: (d) => _handleEdgeZoom(d.delta.dy),
+          ),
+        ),
+        Positioned(
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: 24,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onVerticalDragUpdate: (d) => _handleEdgeZoom(d.delta.dy),
+          ),
+        ),
+      ],
     );
   }
 
@@ -620,7 +735,14 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
           ? null
           : (d) {
               final scale = _tc.value.getMaxScaleOnAxis();
-              setState(() => _positions[sg.id] = _positions[sg.id]! + d.delta / scale);
+              final delta = d.delta / scale;
+              setState(() {
+                _positions[sg.id] = _positions[sg.id]! + delta;
+                for (final id in _childPositionIds(sg)) {
+                  final p = _positions[id];
+                  if (p != null) _positions[id] = p + delta;
+                }
+              });
               final excluded = {sg.id, ..._descendantIds(sg.id, goal.subGoals)};
               _setHoverTarget(_nearestSubGoalFor(sg.id, goal, exclude: excluded));
             },
