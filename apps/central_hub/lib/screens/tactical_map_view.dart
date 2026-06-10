@@ -333,17 +333,6 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     return result;
   }
 
-  List<String> _childPositionIds(SubGoal sg) {
-    final ids = <String>[];
-    void collect(SubGoal s) {
-      ids.add(s.id);
-      for (final t in s.tasks) ids.add(t.id);
-      for (final c in s.children) collect(c);
-    }
-    for (final c in sg.children) collect(c);
-    return ids;
-  }
-
   // ── Interactions ──────────────────────────────────────────────────────────
 
   void _onTap(String nodeId, Goal goal) {
@@ -744,10 +733,19 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               final delta = d.delta / scale;
               setState(() {
                 _positions[sg.id] = _positions[sg.id]! + delta;
-                for (final id in _childPositionIds(sg)) {
-                  final p = _positions[id];
-                  if (p != null) _positions[id] = p + delta;
+                // Move own tasks + all descendants (sub-goals and their tasks) with the same delta
+                void moveFamily(SubGoal s) {
+                  for (final t in s.tasks) {
+                    final p = _positions[t.id];
+                    if (p != null) _positions[t.id] = p + delta;
+                  }
+                  for (final child in s.children) {
+                    final p = _positions[child.id];
+                    if (p != null) _positions[child.id] = p + delta;
+                    moveFamily(child);
+                  }
                 }
+                moveFamily(sg);
               });
               final excluded = {sg.id, ..._descendantIds(sg.id, goal.subGoals)};
               _setHoverTarget(_nearestSubGoalFor(sg.id, goal, exclude: excluded));
