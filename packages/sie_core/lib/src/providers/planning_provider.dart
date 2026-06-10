@@ -1160,4 +1160,63 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     await db.enqueueSyncOp(
         'move_task', jsonEncode({'id': taskId, 'sub_goal_id': newSubGoalId}));
   }
+
+  // ── Move SubGoal (re-parent) ──────────────────────────────────────────────
+
+  Future<void> moveSubGoal(String subGoalId, String newParentSubGoalId) async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+
+    SubGoal? sg;
+    String? oldParentId;
+    for (final g in current.goals) {
+      for (final s in _allSubGoals(g.subGoals)) {
+        if (s.id == subGoalId) {
+          sg = s;
+          oldParentId = s.parentSubGoalId;
+          break;
+        }
+      }
+      if (sg != null) break;
+    }
+    if (sg == null || oldParentId == newParentSubGoalId) return;
+
+    final moved = sg.copyWith(parentSubGoalId: newParentSubGoalId);
+    state = AsyncData(current.copyWith(
+      goals: current.goals.map((g) {
+        final allIds = _allSubGoals(g.subGoals).map((s) => s.id).toSet();
+        if (!allIds.contains(subGoalId)) return g;
+        List<SubGoal> updated;
+        if (oldParentId == null) {
+          updated = g.subGoals.where((s) => s.id != subGoalId).toList();
+        } else {
+          updated = _updateSubGoalInTree(g.subGoals, oldParentId!, (s) =>
+              s.copyWith(children: s.children.where((c) => c.id != subGoalId).toList()));
+        }
+        updated = _updateSubGoalInTree(updated, newParentSubGoalId, (s) =>
+            s.copyWith(children: [...s.children, moved]));
+        return g.copyWith(subGoals: updated);
+      }).toList(),
+    ));
+
+    final db = ref.read(appDatabaseProvider);
+    await db.updateSubGoal(subGoalId, LocalSubGoalsCompanion(
+      parentSubGoalId: Value(newParentSubGoalId),
+      synced: const Value(false),
+    ));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await Supabase.instance.client
+            .from('sub_goals')
+            .update({'parent_sub_goal_id': newParentSubGoalId}).eq('id', subGoalId);
+        await db.updateSubGoal(subGoalId,
+            const LocalSubGoalsCompanion(synced: Value(true)));
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp(
+        'move_sub_goal', jsonEncode({'id': subGoalId, 'parent_sub_goal_id': newParentSubGoalId}));
+  }
 }

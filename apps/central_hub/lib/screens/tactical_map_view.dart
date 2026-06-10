@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 
@@ -15,10 +16,13 @@ class TacticalMapView extends ConsumerStatefulWidget {
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
-class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
+class _TacticalMapViewState extends ConsumerState<TacticalMapView>
+    with SingleTickerProviderStateMixin {
   final Map<String, Offset> _positions = {};
   final _tc = TransformationController();
   String? _draggingId;
+  String? _hoverTargetId;
+  late AnimationController _hoverAnim;
   final Set<String> _scoutedMapIds = {};
 
   static const double _cx = 1200.0;
@@ -29,11 +33,16 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
   @override
   void initState() {
     super.initState();
+    _hoverAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) => _centerView());
   }
 
   @override
   void dispose() {
+    _hoverAnim.dispose();
     _tc.dispose();
     super.dispose();
   }
@@ -174,6 +183,57 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
       }
       if (!any) break;
     }
+  }
+
+  // ── Hover target ──────────────────────────────────────────────────────────
+
+  void _setHoverTarget(String? id) {
+    if (id == _hoverTargetId) return;
+    setState(() => _hoverTargetId = id);
+    if (id != null) {
+      HapticFeedback.selectionClick();
+      _hoverAnim
+        ..reset()
+        ..repeat(reverse: true);
+    } else {
+      _hoverAnim.reverse();
+    }
+  }
+
+  String? _nearestSubGoalFor(String draggingId, Goal goal,
+      {Set<String> exclude = const {}, double threshold = 200.0}) {
+    final pos = _positions[draggingId];
+    if (pos == null) return null;
+    String? nearest;
+    double nearestDist = threshold;
+    for (final sg in _flatSubGoals(goal.subGoals)) {
+      if (exclude.contains(sg.id)) continue;
+      final sgPos = _positions[sg.id];
+      if (sgPos == null) continue;
+      final dist = (pos - sgPos).distance;
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearest = sg.id;
+      }
+    }
+    return nearest;
+  }
+
+  Set<String> _descendantIds(String sgId, List<SubGoal> subGoals) {
+    final result = <String>{};
+    void collect(SubGoal sg) {
+      for (final c in sg.children) {
+        result.add(c.id);
+        collect(c);
+      }
+    }
+    for (final sg in _flatSubGoals(subGoals)) {
+      if (sg.id == sgId) {
+        collect(sg);
+        break;
+      }
+    }
+    return result;
   }
 
   // ── Interactions ──────────────────────────────────────────────────────────
@@ -391,6 +451,8 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
       boundaryMargin: const EdgeInsets.all(800),
       minScale: 0.15,
       maxScale: 3.0,
+      panEnabled: _draggingId == null,
+      scaleEnabled: _draggingId == null,
       child: SizedBox(
         width: _cs,
         height: _cs,
@@ -425,20 +487,9 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
             for (final sg in _flatSubGoals(goal.subGoals)) ...[
               for (final t in sg.tasks)
                 _taskPosNode(t, sg.id, goal, c, hidden: isHidden(sg.id)),
-              _posNode(
-                sg.id,
-                158,
-                68,
-                goal,
-                _SubGoalNode(
-                  sg: sg,
-                  sc: c,
-                  dragging: _draggingId == sg.id,
-                  onAdd: () => _showSubGoalSheet(sg, goal, c),
-                ),
-                hidden: isHidden(sg.id),
-                onHiddenTap: () => setState(() => _scoutedMapIds.add(sg.id)),
-              ),
+              _subGoalPosNode(sg, goal, c,
+                  hidden: isHidden(sg.id),
+                  onHiddenTap: () => setState(() => _scoutedMapIds.add(sg.id))),
             ],
             // Goal (fixed, topmost)
             Positioned(
@@ -447,7 +498,10 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
               child: _GoalNode(
                 goal: goal,
                 sc: c,
-                onTap: () => _showGoalSheet(goal, c),
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  _showGoalSheet(goal, c);
+                },
               ),
             ),
           ],
@@ -458,24 +512,40 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
 
   double _taskW(int w) => switch (w) { 5 => 124, 3 => 104, _ => 84 };
 
-  Widget _taskPosNode(PlanningTask task, String currentSgId, Goal goal, SieColors c, {bool hidden = false}) {
+  Widget _taskPosNode(PlanningTask task, String currentSgId, Goal goal, SieColors c,
+      {bool hidden = false}) {
     final pos = _positions[task.id];
     if (pos == null) return const SizedBox.shrink();
     final w = _taskW(task.weight);
     const h = 40.0;
     Widget node = GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => _onTap(task.id, goal),
-      onPanStart: hidden ? null : (_) => setState(() => _draggingId = task.id),
-      onPanUpdate: hidden ? null : (d) {
-        final scale = _tc.value.getMaxScaleOnAxis();
-        setState(() => _positions[task.id] = _positions[task.id]! + d.delta / scale);
+      onTap: () {
+        HapticFeedback.selectionClick();
+        _onTap(task.id, goal);
       },
-      onPanEnd: hidden ? null : (_) {
-        _tryReparentTask(task.id, currentSgId, goal);
-        _resolveCollisions(task.id, goal);
-        setState(() => _draggingId = null);
-      },
+      onPanStart: hidden
+          ? null
+          : (_) {
+              HapticFeedback.lightImpact();
+              setState(() => _draggingId = task.id);
+            },
+      onPanUpdate: hidden
+          ? null
+          : (d) {
+              final scale = _tc.value.getMaxScaleOnAxis();
+              setState(() => _positions[task.id] = _positions[task.id]! + d.delta / scale);
+              _setHoverTarget(_nearestSubGoalFor(task.id, goal, exclude: {task.id}));
+            },
+      onPanEnd: hidden
+          ? null
+          : (_) {
+              _tryReparentTask(task.id, currentSgId, goal);
+              _resolveCollisions(task.id, goal);
+              HapticFeedback.lightImpact();
+              _setHoverTarget(null);
+              setState(() => _draggingId = null);
+            },
       child: _TaskNode(task: task, sc: c, dragging: _draggingId == task.id),
     );
     if (hidden) node = Opacity(opacity: 0.25, child: node);
@@ -504,7 +574,72 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
       }
     }
     if (nearestSgId != null && nearestSgId != currentSgId) {
+      HapticFeedback.mediumImpact();
       ref.read(planningProvider.notifier).moveTask(taskId, nearestSgId);
+    }
+  }
+
+  Widget _subGoalPosNode(SubGoal sg, Goal goal, SieColors c,
+      {bool hidden = false, VoidCallback? onHiddenTap}) {
+    final pos = _positions[sg.id];
+    if (pos == null) return const SizedBox.shrink();
+    const w = 158.0, h = 68.0;
+    Widget node = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: hidden
+          ? onHiddenTap
+          : () {
+              HapticFeedback.selectionClick();
+              _onTap(sg.id, goal);
+            },
+      onPanStart: hidden
+          ? null
+          : (_) {
+              HapticFeedback.lightImpact();
+              setState(() => _draggingId = sg.id);
+            },
+      onPanUpdate: hidden
+          ? null
+          : (d) {
+              final scale = _tc.value.getMaxScaleOnAxis();
+              setState(() => _positions[sg.id] = _positions[sg.id]! + d.delta / scale);
+              final excluded = {sg.id, ..._descendantIds(sg.id, goal.subGoals)};
+              _setHoverTarget(_nearestSubGoalFor(sg.id, goal, exclude: excluded));
+            },
+      onPanEnd: hidden
+          ? null
+          : (_) {
+              _tryReparentSubGoal(sg, goal);
+              _resolveCollisions(sg.id, goal);
+              HapticFeedback.lightImpact();
+              _setHoverTarget(null);
+              setState(() => _draggingId = null);
+            },
+      child: _SubGoalNode(
+        sg: sg,
+        sc: c,
+        dragging: _draggingId == sg.id,
+        isHoverTarget: _hoverTargetId == sg.id,
+        hoverAnim: _hoverTargetId == sg.id ? _hoverAnim : null,
+        onAdd: () => _showSubGoalSheet(sg, goal, c),
+      ),
+    );
+    if (hidden) node = Opacity(opacity: 0.25, child: node);
+    return Positioned(
+      left: _cx + pos.dx - w / 2,
+      top: _cx + pos.dy - h / 2,
+      width: w,
+      height: h,
+      child: node,
+    );
+  }
+
+  void _tryReparentSubGoal(SubGoal sg, Goal goal) {
+    final excluded = {sg.id, ..._descendantIds(sg.id, goal.subGoals)};
+    final nearest = _nearestSubGoalFor(sg.id, goal, exclude: excluded);
+    if (nearest != null && nearest != sg.parentSubGoalId) {
+      HapticFeedback.mediumImpact();
+      ref.read(planningProvider.notifier).moveSubGoal(sg.id, nearest);
     }
   }
 
@@ -514,16 +649,31 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView> {
     if (pos == null) return const SizedBox.shrink();
     Widget inner = GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: hidden ? onHiddenTap : () => _onTap(id, goal),
-      onPanStart: hidden ? null : (_) => setState(() => _draggingId = id),
-      onPanUpdate: hidden ? null : (d) {
-        final scale = _tc.value.getMaxScaleOnAxis();
-        setState(() => _positions[id] = _positions[id]! + d.delta / scale);
-      },
-      onPanEnd: hidden ? null : (_) {
-        _resolveCollisions(id, goal);
-        setState(() => _draggingId = null);
-      },
+      onTap: hidden
+          ? onHiddenTap
+          : () {
+              HapticFeedback.selectionClick();
+              _onTap(id, goal);
+            },
+      onPanStart: hidden
+          ? null
+          : (_) {
+              HapticFeedback.lightImpact();
+              setState(() => _draggingId = id);
+            },
+      onPanUpdate: hidden
+          ? null
+          : (d) {
+              final scale = _tc.value.getMaxScaleOnAxis();
+              setState(() => _positions[id] = _positions[id]! + d.delta / scale);
+            },
+      onPanEnd: hidden
+          ? null
+          : (_) {
+              _resolveCollisions(id, goal);
+              HapticFeedback.lightImpact();
+              setState(() => _draggingId = null);
+            },
       child: child,
     );
     if (hidden) inner = Opacity(opacity: 0.25, child: inner);
@@ -754,25 +904,51 @@ class _SubGoalNode extends StatelessWidget {
     required this.sg,
     required this.sc,
     required this.dragging,
+    required this.isHoverTarget,
     required this.onAdd,
+    this.hoverAnim,
   });
   final SubGoal sg;
   final SieColors sc;
   final bool dragging;
+  final bool isHoverTarget;
+  final Animation<double>? hoverAnim;
   final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context) {
+    if (hoverAnim != null) {
+      return AnimatedBuilder(
+        animation: hoverAnim!,
+        builder: (_, __) => _buildBody(hoverAnim!.value),
+      );
+    }
+    return _buildBody(0.0);
+  }
+
+  Widget _buildBody(double t) {
     final prog = subGoalProgress(sg);
     final done = sg.isCompleted;
     final c = sc;
 
-    final fill = done
+    final baseFill = done
         ? c.accent.withOpacity(0.28)
         : prog > 0
             ? c.accent.withOpacity(0.12)
             : c.surface;
-    final border = done ? c.accent : prog > 0 ? c.accent.withOpacity(0.5) : c.border;
+    final fill = isHoverTarget
+        ? Color.lerp(baseFill, c.accent.withOpacity(0.22), t) ?? baseFill
+        : baseFill;
+
+    final borderColor =
+        (dragging || isHoverTarget) ? c.accent : (done ? c.accent : prog > 0 ? c.accent.withOpacity(0.5) : c.border);
+    final borderWidth = dragging ? 2.5 : (isHoverTarget ? 1.5 + t * 1.5 : 1.5);
+
+    final shadow = dragging
+        ? [BoxShadow(color: c.accent.withOpacity(0.3), blurRadius: 14, spreadRadius: 2)]
+        : isHoverTarget
+            ? [BoxShadow(color: c.accent.withOpacity(0.15 + t * 0.15), blurRadius: 14)]
+            : null;
 
     final completedTasks = sg.tasks.where((t) => t.isCompleted).length;
 
@@ -783,10 +959,8 @@ class _SubGoalNode extends StatelessWidget {
           decoration: BoxDecoration(
             color: fill,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: border, width: dragging ? 2.0 : 1.5),
-            boxShadow: dragging
-                ? [BoxShadow(color: c.accent.withOpacity(0.3), blurRadius: 14, spreadRadius: 2)]
-                : null,
+            border: Border.all(color: borderColor, width: borderWidth),
+            boxShadow: shadow,
           ),
           child: Stack(
             children: [
@@ -883,9 +1057,9 @@ class _TaskNode extends StatelessWidget {
       decoration: BoxDecoration(
         color: fill,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: border, width: dragging ? 2.0 : 1.5),
+        border: Border.all(color: dragging ? c.accent : border, width: dragging ? 2.5 : 1.5),
         boxShadow: dragging
-            ? [BoxShadow(color: c.accent.withOpacity(0.22), blurRadius: 10)]
+            ? [BoxShadow(color: c.accent.withOpacity(0.3), blurRadius: 14, spreadRadius: 2)]
             : null,
       ),
       child: Stack(
