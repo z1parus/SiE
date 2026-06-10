@@ -27,8 +27,8 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   Timer? _saveTimer;
   final Set<String> _scoutedMapIds = {};
 
-  static const double _cx = 1200.0;
-  static const double _cs = 2400.0;
+  static const double _cx = 2400.0;
+  static const double _cs = 4800.0;
 
   Goal get _goal => widget.goal;
 
