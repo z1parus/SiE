@@ -318,6 +318,12 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                     .completeSubGoal(sg.id, goal.id);
                 Navigator.pop(ctx);
               },
+        onUnparent: sg.parentSubGoalId == null
+            ? null
+            : () {
+                ref.read(planningProvider.notifier).unparentSubGoal(sg.id);
+                Navigator.pop(ctx);
+              },
         onDelete: () {
           ref.read(planningProvider.notifier).deleteSubGoal(sg.id, goal.id);
           Navigator.pop(ctx);
@@ -1287,6 +1293,7 @@ class _SubGoalSheet extends StatefulWidget {
     required this.onAddTask,
     required this.onAddSubGoal,
     this.onComplete,
+    this.onUnparent,
     required this.onDelete,
   });
   final SubGoal sg;
@@ -1294,6 +1301,7 @@ class _SubGoalSheet extends StatefulWidget {
   final void Function(String name, int weight) onAddTask;
   final ValueChanged<String> onAddSubGoal;
   final VoidCallback? onComplete;
+  final VoidCallback? onUnparent;
   final VoidCallback onDelete;
 
   @override
@@ -1353,6 +1361,15 @@ class _SubGoalSheetState extends State<_SubGoalSheet> {
                 color: c.accent,
                 sc: c,
                 onTap: () => setState(() => _addingSubGoal = true)),
+            if (widget.onUnparent != null) ...[
+              const SizedBox(height: 8),
+              _ActionBtn(
+                  label: 'Вынести на уровень выше',
+                  icon: Icons.arrow_upward_outlined,
+                  color: c.textSecondary,
+                  sc: c,
+                  onTap: widget.onUnparent!),
+            ],
             const SizedBox(height: 8),
             _ActionBtn(
                 label: 'Удалить',

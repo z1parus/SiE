@@ -1219,4 +1219,73 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     await db.enqueueSyncOp(
         'move_sub_goal', jsonEncode({'id': subGoalId, 'parent_sub_goal_id': newParentSubGoalId}));
   }
+
+  // ── Unparent SubGoal (move up one level) ─────────────────────────────────
+
+  Future<void> unparentSubGoal(String subGoalId) async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+
+    SubGoal? sg;
+    String? goalId;
+    for (final g in current.goals) {
+      for (final s in _allSubGoals(g.subGoals)) {
+        if (s.id == subGoalId) {
+          sg = s;
+          goalId = g.id;
+          break;
+        }
+      }
+      if (sg != null) break;
+    }
+    if (sg == null || sg.parentSubGoalId == null) return;
+
+    final oldParentId = sg.parentSubGoalId!;
+    // Determine grandparent (the new parent after moving up)
+    String? grandParentId;
+    for (final g in current.goals) {
+      for (final s in _allSubGoals(g.subGoals)) {
+        if (s.id == oldParentId) { grandParentId = s.parentSubGoalId; break; }
+      }
+      if (grandParentId != null) break;
+    }
+
+    final moved = sg.copyWith(parentSubGoalId: grandParentId);
+    state = AsyncData(current.copyWith(
+      goals: current.goals.map((g) {
+        if (g.id != goalId) return g;
+        // Remove from old parent's children
+        List<SubGoal> updated = _updateSubGoalInTree(g.subGoals, oldParentId, (s) =>
+            s.copyWith(children: s.children.where((c) => c.id != subGoalId).toList()));
+        // Add to grandparent or root
+        if (grandParentId == null) {
+          updated = [...updated, moved];
+        } else {
+          updated = _updateSubGoalInTree(updated, grandParentId!, (s) =>
+              s.copyWith(children: [...s.children, moved]));
+        }
+        return g.copyWith(subGoals: updated);
+      }).toList(),
+    ));
+
+    final db = ref.read(appDatabaseProvider);
+    await db.updateSubGoal(subGoalId, LocalSubGoalsCompanion(
+      parentSubGoalId: Value(grandParentId),
+      synced: const Value(false),
+    ));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await Supabase.instance.client
+            .from('sub_goals')
+            .update({'parent_sub_goal_id': grandParentId}).eq('id', subGoalId);
+        await db.updateSubGoal(subGoalId,
+            const LocalSubGoalsCompanion(synced: Value(true)));
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp(
+        'move_sub_goal', jsonEncode({'id': subGoalId, 'parent_sub_goal_id': grandParentId}));
+  }
 }

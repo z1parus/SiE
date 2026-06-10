@@ -1610,6 +1610,12 @@ void _showSubGoalOptionsSheet(BuildContext context, WidgetRef ref,
             .read(planningProvider.notifier)
             .completeSubGoal(sg.id, goal.id);
       },
+      onUnparent: sg.parentSubGoalId == null
+          ? null
+          : () {
+              Navigator.pop(context);
+              ref.read(planningProvider.notifier).unparentSubGoal(sg.id);
+            },
       onDelete: () async {
         Navigator.pop(context);
         final confirm = await showDialog<bool>(
@@ -2094,6 +2100,7 @@ class _SubGoalOptionsSheet extends StatelessWidget {
     required this.sc,
     required this.onComplete,
     required this.onDelete,
+    this.onUnparent,
   });
 
   final SubGoal subGoal;
@@ -2101,6 +2108,7 @@ class _SubGoalOptionsSheet extends StatelessWidget {
   final SieColors sc;
   final VoidCallback onComplete;
   final VoidCallback onDelete;
+  final VoidCallback? onUnparent;
 
   @override
   Widget build(BuildContext context) {
@@ -2141,6 +2149,13 @@ class _SubGoalOptionsSheet extends StatelessWidget {
               label: 'Завершить этап',
               color: const Color(0xFF5AADA0),
               onTap: onComplete,
+            ),
+          if (onUnparent != null)
+            _OptionTile(
+              icon: Icons.arrow_upward_outlined,
+              label: 'Вынести на уровень выше',
+              color: const Color(0xFF888898),
+              onTap: onUnparent!,
             ),
           _OptionTile(
             icon: Icons.delete_outline,
