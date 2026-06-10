@@ -2630,7 +2630,7 @@ class _GoalSettingsSheetState extends ConsumerState<_GoalSettingsSheet> {
                   context,
                   MaterialPageRoute(
                     builder: (_) => MissionAccomplishedScreen(
-                      xpGained: 2000 + (medal?.xpBonus ?? 100),
+                      xpGained: goalCompletionBaseXp(goal) + (medal?.xpBonus ?? 100),
                       dpGained: _categoryDp(goal.settings.category),
                       medal: medal,
                     ),

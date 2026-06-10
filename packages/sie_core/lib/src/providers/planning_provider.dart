@@ -422,7 +422,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       };
 
       final xpBonus = medalXpBonus(level);
-      await _awardXp(2000 + xpBonus, dp);
+      await _awardXp(goalCompletionBaseXp(goal) + xpBonus, dp);
 
       medal = MissionMedal(
         id: _uuid.v4(),
@@ -466,7 +466,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             'award_mission_medal', jsonEncode(medal.toInsertMap()));
       }
     } else if (newStatus == 'completed' && goal != null) {
-      await _awardXp(2000, 20);
+      await _awardXp(goalCompletionBaseXp(goal), 20);
     }
 
     if (isOnline) {

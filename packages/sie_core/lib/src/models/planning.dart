@@ -520,6 +520,14 @@ double goalProgress(Goal g) {
   return list.reduce((a, b) => a + b) / list.length;
 }
 
+// Returns 2000 only when goal qualifies (age ≥ 1 day, has tasks, all done).
+int goalCompletionBaseXp(Goal goal) {
+  final ageQualifies = DateTime.now().difference(goal.createdAt).inDays >= 1;
+  final hasTasks = goal.totalTasks > 0;
+  final allTasksDone = goal.completedTasks == goal.totalTasks;
+  return (ageQualifies && hasTasks && allTasksDone) ? 2000 : 0;
+}
+
 int taskXp(int weight) => switch (weight) {
       1 => 5,
       3 => 10,
