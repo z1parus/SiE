@@ -1552,7 +1552,7 @@ class _ToggleRow extends ConsumerWidget {
               style: TextStyle(color: c.textSecondary, fontSize: 12),
             ),
           ),
-          Switch(value: value, onChanged: onChanged, activeThumbColor: c.accent),
+          Switch(value: value, onChanged: onChanged, activeColor: c.accent),
         ],
       ),
     );

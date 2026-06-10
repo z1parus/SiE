@@ -69,9 +69,9 @@ class RoutineEditorScreen extends ConsumerWidget {
                         padding:
                             const EdgeInsets.fromLTRB(20, 8, 20, 0),
                         buildDefaultDragHandles: false,
-                        proxyDecorator: (child, _, _) =>
+                        proxyDecorator: (child, _, __) =>
                             Material(color: Colors.transparent, child: child),
-                        onReorderItem: (oldIdx, newIdx) {
+                        onReorder: (oldIdx, newIdx) {
                           if (routine == null) return;
                           final reordered = [...habits];
                           final moved = reordered.removeAt(oldIdx);
