@@ -10,6 +10,7 @@ import 'habit_tracker_screen.dart';
 import 'leaderboard_screen.dart';
 import 'planning_screen.dart';
 import 'profile_screen.dart';
+import 'public_profile_screen.dart';
 import 'user_search_screen.dart';
 
 const _kOrange = Color(0xFFFF8C42);
@@ -1104,7 +1105,7 @@ class _ScreenHeader extends ConsumerWidget {
                 ],
               ),
             ),
-            const _GlassHeaderBtn(icon: Icons.notifications_outlined),
+            const _NotificationBell(),
             const SizedBox(width: 8),
             _GlassHeaderBtn(
               icon: Icons.search,
@@ -1230,4 +1231,274 @@ class _XpBar extends StatelessWidget {
       ],
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notification Bell with unread badge
+// ─────────────────────────────────────────────────────────────────────────────
+class _NotificationBell extends ConsumerWidget {
+  const _NotificationBell();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final unread =
+        ref.watch(notificationsProvider).valueOrNull?.unreadCount ?? 0;
+
+    return GestureDetector(
+      onTap: () => showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => const _NotificationsSheet(),
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: c.flatCard(radius: 19),
+            child: Center(
+              child: Icon(Icons.notifications_outlined,
+                  color: c.textSecondary, size: 18),
+            ),
+          ),
+          if (unread > 0)
+            Positioned(
+              top: -2,
+              right: -2,
+              child: Container(
+                width: 16,
+                height: 16,
+                decoration: const BoxDecoration(
+                    color: Colors.red, shape: BoxShape.circle),
+                child: Center(
+                  child: Text(
+                    unread > 9 ? '9+' : '$unread',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications Sheet
+// ─────────────────────────────────────────────────────────────────────────────
+class _NotificationsSheet extends ConsumerWidget {
+  const _NotificationsSheet();
+
+  static String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inDays >= 1) return '${diff.inDays}д назад';
+    if (diff.inHours >= 1) return '${diff.inHours}ч назад';
+    if (diff.inMinutes >= 1) return '${diff.inMinutes}м назад';
+    return 'только что';
+  }
+
+  static String _notifText(AppNotification n) {
+    final name = n.fromUser?.username ?? 'Кто-то';
+    return switch (n.type) {
+      'friend_request' => '$name отправил вам запрос в друзья',
+      'friend_request_accepted' => '$name принял ваш запрос в друзья',
+      _ => n.type,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final notifier = ref.read(notificationsProvider.notifier);
+    final stateAsync = ref.watch(notificationsProvider);
+    final notifications = stateAsync.valueOrNull?.notifications ?? [];
+    final unread = stateAsync.valueOrNull?.unreadCount ?? 0;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.55,
+      maxChildSize: 0.9,
+      minChildSize: 0.3,
+      expand: false,
+      builder: (_, controller) => Container(
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border.all(color: c.border),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: c.border, borderRadius: BorderRadius.circular(2)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 8, 8),
+              child: Row(
+                children: [
+                  Text(
+                    'УВЕДОМЛЕНИЯ',
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 11,
+                      letterSpacing: 1.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (unread > 0)
+                    TextButton(
+                      onPressed: notifier.markAllAsRead,
+                      child: const Text('Прочитать все',
+                          style: TextStyle(fontSize: 12)),
+                    ),
+                ],
+              ),
+            ),
+            Divider(color: c.border, height: 1),
+            Expanded(
+              child: notifications.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.notifications_none,
+                              size: 48,
+                              color:
+                                  c.textSecondary.withValues(alpha: 0.3)),
+                          const SizedBox(height: 12),
+                          Text('Нет уведомлений',
+                              style: TextStyle(
+                                  color: c.textSecondary, fontSize: 14)),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: controller,
+                      itemCount: notifications.length,
+                      itemBuilder: (ctx, i) {
+                        final n = notifications[i];
+                        return _NotifTile(
+                          notification: n,
+                          onTap: () {
+                            notifier.markAsRead(n.id);
+                            if (n.fromUser != null) {
+                              Navigator.pop(context);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PublicProfileScreen(
+                                      profile: n.fromUser!),
+                                ),
+                              );
+                            }
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NotifTile extends ConsumerWidget {
+  final AppNotification notification;
+  final VoidCallback onTap;
+
+  const _NotifTile({required this.notification, required this.onTap});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final n = notification;
+    final url = n.fromUser?.avatarUrl;
+    final name = n.fromUser?.username ?? '?';
+    final letter = name.isNotEmpty ? name[0].toUpperCase() : '?';
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            // Avatar
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: c.surface,
+                border: Border.all(color: c.border),
+              ),
+              child: ClipOval(
+                child: url != null && url.isNotEmpty
+                    ? Image.network(url,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => _NAvatar(letter, c))
+                    : _NAvatar(letter, c),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _NotificationsSheet._notifText(n),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: c.textPrimary,
+                      fontWeight: n.isRead
+                          ? FontWeight.normal
+                          : FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _NotificationsSheet._timeAgo(n.createdAt),
+                    style:
+                        TextStyle(fontSize: 11, color: c.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            if (!n.isRead)
+              Container(
+                width: 8,
+                height: 8,
+                decoration:
+                    BoxDecoration(color: c.accent, shape: BoxShape.circle),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NAvatar extends StatelessWidget {
+  final String letter;
+  final SieColors c;
+  const _NAvatar(this.letter, this.c);
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Text(letter,
+            style: TextStyle(
+                color: c.accent, fontSize: 16, fontWeight: FontWeight.w200)),
+      );
 }

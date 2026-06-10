@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PublicProfileScreen
@@ -34,6 +35,9 @@ class PublicProfileScreen extends ConsumerWidget {
               slivers: [
                 SliverToBoxAdapter(
                   child: _HeroSection(profile: profile, equipped: equipped),
+                ),
+                SliverToBoxAdapter(
+                  child: _FriendActionSection(profile: profile),
                 ),
                 SliverToBoxAdapter(
                   child: Padding(
@@ -724,6 +728,160 @@ class _PublicMedalsSection extends ConsumerWidget {
               .toList(),
         );
       },
+    );
+  }
+}
+
+// ── Friend Action Section ─────────────────────────────────────────────────────
+
+class _FriendActionSection extends ConsumerWidget {
+  final PublicProfile profile;
+  const _FriendActionSection({required this.profile});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final myId = Supabase.instance.client.auth.currentUser?.id;
+    if (myId == null || myId == profile.id) return const SizedBox.shrink();
+
+    final friendsState = ref.watch(friendsProvider).valueOrNull;
+    if (friendsState == null) return const SizedBox.shrink();
+
+    final friend = friendsState.friends
+        .where((r) => r.otherUser.id == profile.id)
+        .firstOrNull;
+    final sent = friendsState.sentRequests
+        .where((r) => r.otherUser.id == profile.id)
+        .firstOrNull;
+    final received = friendsState.receivedRequests
+        .where((r) => r.otherUser.id == profile.id)
+        .firstOrNull;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: _buildButtons(context, ref, friend, sent, received),
+    );
+  }
+
+  Widget _buildButtons(
+    BuildContext ctx,
+    WidgetRef ref,
+    FriendRow? friend,
+    FriendRow? sent,
+    FriendRow? received,
+  ) {
+    final notifier = ref.read(friendsProvider.notifier);
+
+    if (friend != null) {
+      return _SocialBtn(
+        label: 'Удалить из друзей',
+        icon: Icons.person_remove_outlined,
+        filled: false,
+        onTap: () => _confirmRemove(ctx, ref, friend.friendshipId),
+      );
+    }
+    if (sent != null) {
+      return _SocialBtn(
+        label: 'Отменить запрос',
+        icon: Icons.cancel_outlined,
+        filled: false,
+        onTap: () => notifier.cancelRequest(sent.friendshipId),
+      );
+    }
+    if (received != null) {
+      return Row(children: [
+        Expanded(
+          child: _SocialBtn(
+            label: 'Принять запрос',
+            icon: Icons.check,
+            filled: true,
+            onTap: () => notifier.acceptRequest(received.friendshipId),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _SocialBtn(
+            label: 'Отклонить',
+            icon: Icons.close,
+            filled: false,
+            onTap: () => notifier.declineRequest(received.friendshipId),
+          ),
+        ),
+      ]);
+    }
+    return _SocialBtn(
+      label: 'Добавить в друзья',
+      icon: Icons.person_add_outlined,
+      filled: true,
+      onTap: () => notifier.sendRequest(profile.id),
+    );
+  }
+
+  Future<void> _confirmRemove(
+      BuildContext ctx, WidgetRef ref, String friendshipId) async {
+    final ok = await showDialog<bool>(
+      context: ctx,
+      builder: (d) => AlertDialog(
+        title: const Text('Удалить из друзей?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(d, false),
+              child: const Text('Отмена')),
+          TextButton(
+              onPressed: () => Navigator.pop(d, true),
+              child: const Text('Удалить')),
+        ],
+      ),
+    );
+    if (ok == true) {
+      ref.read(friendsProvider.notifier).removeFriend(friendshipId);
+    }
+  }
+}
+
+class _SocialBtn extends ConsumerWidget {
+  final String label;
+  final IconData icon;
+  final bool filled;
+  final VoidCallback onTap;
+
+  const _SocialBtn({
+    required this.label,
+    required this.icon,
+    required this.filled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 40,
+        decoration: BoxDecoration(
+          color: filled ? c.accent.withValues(alpha: 0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: filled
+                  ? c.accent.withValues(alpha: 0.5)
+                  : c.border),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: filled ? c.accent : c.textSecondary, size: 15),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: filled ? c.accent : c.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
