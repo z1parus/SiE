@@ -100,15 +100,20 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     final useRadialLayout = saved.isEmpty && sgs.isNotEmpty;
 
     if (useRadialLayout) {
-      const rootRadius = 380.0;
-      final total = sgs.fold(0, (s, sg) => s + _subtreeSize(sg));
-      double cursor = -math.pi / 2;
-      for (final sg in sgs) {
-        final share = 2 * math.pi * _subtreeSize(sg) / total;
-        final angle = cursor + share / 2;
-        _positions[sg.id] = Offset(rootRadius * math.cos(angle), rootRadius * math.sin(angle));
-        _layoutSubGoalRadial(sg, cursor, cursor + share, 0);
-        cursor += share;
+      // Only compute layout once — don't overwrite positions already set by drag
+      if (sgs.any((sg) => !_positions.containsKey(sg.id))) {
+        const rootRadius = 380.0;
+        final total = sgs.fold(0, (s, sg) => s + _subtreeSize(sg));
+        double cursor = -math.pi / 2;
+        for (final sg in sgs) {
+          final share = 2 * math.pi * _subtreeSize(sg) / total;
+          final angle = cursor + share / 2;
+          if (!_positions.containsKey(sg.id)) {
+            _positions[sg.id] = Offset(rootRadius * math.cos(angle), rootRadius * math.sin(angle));
+          }
+          _layoutSubGoalRadial(sg, cursor, cursor + share, 0);
+          cursor += share;
+        }
       }
     } else {
       for (int i = 0; i < sgs.length; i++) {
@@ -189,6 +194,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       const tSpread = math.pi * 0.65;
       const tRadius = 130.0;
       for (int j = 0; j < tasks.length; j++) {
+        if (_positions.containsKey(tasks[j].id)) continue;
         final ta = tasks.length == 1
             ? radial
             : radial + (-tSpread / 2 + tSpread * j / (tasks.length - 1));
@@ -209,8 +215,10 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     for (final child in children) {
       final share = fan * _subtreeSize(child) / totalSize;
       final angle = cursor + share / 2;
-      _positions[child.id] =
-          sgPos + Offset(childRadius * math.cos(angle), childRadius * math.sin(angle));
+      if (!_positions.containsKey(child.id)) {
+        _positions[child.id] =
+            sgPos + Offset(childRadius * math.cos(angle), childRadius * math.sin(angle));
+      }
       _layoutSubGoalRadial(child, cursor, cursor + share, depth + 1);
       cursor += share;
     }
@@ -220,21 +228,19 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     final factor = 1.0 - dy * 0.007;
     final current = _tc.value.getMaxScaleOnAxis();
     final next = (current * factor).clamp(0.15, 3.0);
-    if (next == current) return;
+    if ((next - current).abs() < 0.0001) return;
     final ratio = next / current;
 
     final box = context.findRenderObject() as RenderBox?;
     if (box == null) return;
     final center = box.size.center(Offset.zero);
 
-    final m = _tc.value.clone()
+    // T(C) * S(ratio) * T(-C) * current — scale about screen-space centre
+    final scaleM = Matrix4.identity()
       ..translate(center.dx, center.dy)
       ..scale(ratio, ratio)
       ..translate(-center.dx, -center.dy);
-
-    if (m.getMaxScaleOnAxis().clamp(0.15, 3.0) == m.getMaxScaleOnAxis()) {
-      _tc.value = m;
-    }
+    _tc.value = scaleM * _tc.value;
   }
 
   // ── Collision resolution ──────────────────────────────────────────────────
