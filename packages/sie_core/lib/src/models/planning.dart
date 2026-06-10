@@ -76,6 +76,7 @@ class PlanningTask {
     required this.name,
     required this.weight,
     required this.isCompleted,
+    required this.orderIndex,
     required this.createdAt,
     this.completedAt,
     this.dueDate,
@@ -87,6 +88,7 @@ class PlanningTask {
   final String name;
   final int weight; // 1 / 3 / 5
   final bool isCompleted;
+  final int orderIndex;
   final DateTime? completedAt;
   final DateTime? dueDate;
   final DateTime createdAt;
@@ -95,6 +97,7 @@ class PlanningTask {
     String? subGoalId,
     String? name,
     bool? isCompleted,
+    int? orderIndex,
     Object? completedAt = _unset,
     DateTime? dueDate,
   }) =>
@@ -105,6 +108,7 @@ class PlanningTask {
         name: name ?? this.name,
         weight: weight,
         isCompleted: isCompleted ?? this.isCompleted,
+        orderIndex: orderIndex ?? this.orderIndex,
         completedAt:
             completedAt == _unset ? this.completedAt : completedAt as DateTime?,
         dueDate: dueDate ?? this.dueDate,
@@ -118,6 +122,7 @@ class PlanningTask {
         name: j['name'] as String,
         weight: (j['weight'] as num?)?.toInt() ?? 1,
         isCompleted: j['is_completed'] as bool? ?? false,
+        orderIndex: (j['order_index'] as num?)?.toInt() ?? 0,
         completedAt: j['completed_at'] != null
             ? DateTime.parse(j['completed_at'] as String)
             : null,
@@ -167,6 +172,7 @@ class SubGoal {
   SubGoal copyWith({
     String? name,
     bool? isCompleted,
+    int? orderIndex,
     List<PlanningTask>? tasks,
     List<SubGoal>? children,
     String? parentSubGoalId,
@@ -177,7 +183,7 @@ class SubGoal {
         parentSubGoalId: parentSubGoalId ?? this.parentSubGoalId,
         name: name ?? this.name,
         isCompleted: isCompleted ?? this.isCompleted,
-        orderIndex: orderIndex,
+        orderIndex: orderIndex ?? this.orderIndex,
         tasks: tasks ?? this.tasks,
         children: children ?? this.children,
         createdAt: createdAt,

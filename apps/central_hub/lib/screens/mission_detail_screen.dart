@@ -504,6 +504,20 @@ class _DetailListView extends StatelessWidget {
   }
 }
 
+// ─── Recursive task count helpers ────────────────────────────────────────────
+
+int _totalTasks(SubGoal sg) {
+  int n = sg.tasks.length;
+  for (final c in sg.children) { n += _totalTasks(c); }
+  return n;
+}
+
+int _completedTasks(SubGoal sg) {
+  int n = sg.tasks.where((t) => t.isCompleted).length;
+  for (final c in sg.children) { n += _completedTasks(c); }
+  return n;
+}
+
 // ─── Sub-goals Section ────────────────────────────────────────────────────────
 
 class _SubGoalsSection extends ConsumerStatefulWidget {
@@ -544,44 +558,58 @@ class _SubGoalsSectionState extends ConsumerState<_SubGoalsSection> {
           sc: sc,
           onAdd: () => _showAddSubGoalSheet(context, ref, goal, sc),
         ),
-        ...goal.subGoals.map((sg) {
-          final isVisible = visibleIds.contains(sg.id);
-          if (!isVisible && fogEnabled) {
-            return _LockedSubGoalSlot(
-              key: ValueKey('locked_${sg.id}'),
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          itemCount: goal.subGoals.length,
+          onReorder: (oldIdx, newIdx) {
+            if (newIdx > oldIdx) newIdx--;
+            final ids = goal.subGoals.map((sg) => sg.id).toList();
+            ids.insert(newIdx, ids.removeAt(oldIdx));
+            ref.read(planningProvider.notifier).reorderSubGoals(goal.id, null, ids);
+          },
+          itemBuilder: (ctx, i) {
+            final sg = goal.subGoals[i];
+            final isVisible = visibleIds.contains(sg.id);
+            if (!isVisible && fogEnabled) {
+              return _LockedSubGoalSlot(
+                key: ValueKey('locked_${sg.id}'),
+                sc: sc,
+                onScout: () => setState(() => _scoutedIds.add(sg.id)),
+              );
+            }
+            final isScouted = _scoutedIds.contains(sg.id) &&
+                !computeFogVisibleIds(goal.subGoals, const {}, fogEnabled).contains(sg.id);
+            return _SubGoalTile(
+              key: ValueKey(sg.id),
+              subGoal: sg,
+              goal: goal,
               sc: sc,
-              onScout: () => setState(() => _scoutedIds.add(sg.id)),
+              reorderIndex: i,
+              isExpanded: _expanded.contains(sg.id),
+              isScouted: isScouted,
+              visibleIds: visibleIds,
+              fogEnabled: fogEnabled,
+              onScoutChild: (id) => setState(() => _scoutedIds.add(id)),
+              onToggle: () => setState(() {
+                if (_expanded.contains(sg.id)) {
+                  _expanded.remove(sg.id);
+                } else {
+                  _expanded.add(sg.id);
+                }
+              }),
+              expandedSet: _expanded,
+              onToggleChild: (id) => setState(() {
+                if (_expanded.contains(id)) {
+                  _expanded.remove(id);
+                } else {
+                  _expanded.add(id);
+                }
+              }),
             );
-          }
-          final isScouted =
-              _scoutedIds.contains(sg.id) && !computeFogVisibleIds(goal.subGoals, const {}, fogEnabled).contains(sg.id);
-          return _SubGoalTile(
-            key: ValueKey(sg.id),
-            subGoal: sg,
-            goal: goal,
-            sc: sc,
-            isExpanded: _expanded.contains(sg.id),
-            isScouted: isScouted,
-            visibleIds: visibleIds,
-            fogEnabled: fogEnabled,
-            onScoutChild: (id) => setState(() => _scoutedIds.add(id)),
-            onToggle: () => setState(() {
-              if (_expanded.contains(sg.id)) {
-                _expanded.remove(sg.id);
-              } else {
-                _expanded.add(sg.id);
-              }
-            }),
-            expandedSet: _expanded,
-            onToggleChild: (id) => setState(() {
-              if (_expanded.contains(id)) {
-                _expanded.remove(id);
-              } else {
-                _expanded.add(id);
-              }
-            }),
-          );
-        }),
+          },
+        ),
       ],
     );
   }
@@ -596,6 +624,7 @@ class _SubGoalTile extends ConsumerWidget {
     required this.isExpanded,
     required this.onToggle,
     this.depth = 0,
+    this.reorderIndex = 0,
     required this.expandedSet,
     required this.onToggleChild,
     this.isScouted = false,
@@ -610,6 +639,7 @@ class _SubGoalTile extends ConsumerWidget {
   final bool isExpanded;
   final VoidCallback onToggle;
   final int depth;
+  final int reorderIndex;
   final Set<String> expandedSet;
   final void Function(String) onToggleChild;
   final bool isScouted;
@@ -620,8 +650,10 @@ class _SubGoalTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sg = subGoal;
-    final done = sg.tasks.where((t) => t.isCompleted).length;
-    final total = sg.tasks.length;
+    final done = _completedTasks(sg);
+    final total = _totalTasks(sg);
+    final childCount = sg.children.length;
+    final childPart = childCount > 0 ? ' · $childCount эт.' : '';
     final prog = subGoalProgress(sg);
 
     Widget tile = Container(
@@ -645,6 +677,13 @@ class _SubGoalTile extends ConsumerWidget {
               padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
+                  ReorderableDragStartListener(
+                    index: reorderIndex,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Icon(Icons.drag_handle, size: 18, color: sc.textSecondary),
+                    ),
+                  ),
                   _SubGoalDot(sg: sg, goalColor: goal.color, sc: sc),
                   const SizedBox(width: 10),
                   Expanded(
@@ -666,7 +705,7 @@ class _SubGoalTile extends ConsumerWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '$done/$total задач · ${prog.round()}%',
+                          '$done/$total задач$childPart · ${prog.round()}%',
                           style: TextStyle(
                               color: sc.textSecondary, fontSize: 11),
                         ),
@@ -694,45 +733,72 @@ class _SubGoalTile extends ConsumerWidget {
             Divider(height: 1, color: sc.border),
             Column(
               children: [
-                ...sg.tasks.map((t) => _TaskTile(
-                      task: t,
-                      subGoal: sg,
-                      goal: goal,
-                      sc: sc,
-                    )),
-                if (sg.children.isNotEmpty) ...[
-                  ...sg.children.map((child) {
-                    final childVisible =
-                        visibleIds == null || visibleIds!.contains(child.id);
-                    if (!childVisible && fogEnabled) {
-                      return Padding(
-                        padding: const EdgeInsets.only(left: 16),
-                        child: _LockedSubGoalSlot(
+                ReorderableListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  buildDefaultDragHandles: false,
+                  itemCount: sg.tasks.length,
+                  onReorder: (oldIdx, newIdx) {
+                    if (newIdx > oldIdx) newIdx--;
+                    final ids = sg.tasks.map((t) => t.id).toList();
+                    ids.insert(newIdx, ids.removeAt(oldIdx));
+                    ref.read(planningProvider.notifier).reorderTasks(goal.id, sg.id, ids);
+                  },
+                  itemBuilder: (ctx, i) => _TaskTile(
+                    key: ValueKey(sg.tasks[i].id),
+                    task: sg.tasks[i],
+                    subGoal: sg,
+                    goal: goal,
+                    sc: sc,
+                    reorderIndex: i,
+                  ),
+                ),
+                if (sg.children.isNotEmpty)
+                  ReorderableListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    buildDefaultDragHandles: false,
+                    itemCount: sg.children.length,
+                    onReorder: (oldIdx, newIdx) {
+                      if (newIdx > oldIdx) newIdx--;
+                      final ids = sg.children.map((c) => c.id).toList();
+                      ids.insert(newIdx, ids.removeAt(oldIdx));
+                      ref.read(planningProvider.notifier).reorderSubGoals(goal.id, sg.id, ids);
+                    },
+                    itemBuilder: (ctx, i) {
+                      final child = sg.children[i];
+                      final childVisible =
+                          visibleIds == null || visibleIds!.contains(child.id);
+                      if (!childVisible && fogEnabled) {
+                        return Padding(
                           key: ValueKey('locked_${child.id}'),
+                          padding: const EdgeInsets.only(left: 16),
+                          child: _LockedSubGoalSlot(
+                            sc: sc,
+                            onScout: () => onScoutChild?.call(child.id),
+                          ),
+                        );
+                      }
+                      return Padding(
+                        key: ValueKey(child.id),
+                        padding: const EdgeInsets.only(left: 16),
+                        child: _SubGoalTile(
+                          subGoal: child,
+                          goal: goal,
                           sc: sc,
-                          onScout: () => onScoutChild?.call(child.id),
+                          depth: depth + 1,
+                          reorderIndex: i,
+                          isExpanded: expandedSet.contains(child.id),
+                          onToggle: () => onToggleChild(child.id),
+                          expandedSet: expandedSet,
+                          onToggleChild: onToggleChild,
+                          visibleIds: visibleIds,
+                          fogEnabled: fogEnabled,
+                          onScoutChild: onScoutChild,
                         ),
                       );
-                    }
-                    return Padding(
-                      padding: const EdgeInsets.only(left: 16),
-                      child: _SubGoalTile(
-                        key: ValueKey(child.id),
-                        subGoal: child,
-                        goal: goal,
-                        sc: sc,
-                        depth: depth + 1,
-                        isExpanded: expandedSet.contains(child.id),
-                        onToggle: () => onToggleChild(child.id),
-                        expandedSet: expandedSet,
-                        onToggleChild: onToggleChild,
-                        visibleIds: visibleIds,
-                        fogEnabled: fogEnabled,
-                        onScoutChild: onScoutChild,
-                      ),
-                    );
-                  }),
-                ],
+                    },
+                  ),
                 _AddTaskRow(subGoal: sg, goal: goal, sc: sc),
                 _AddChildSubGoalRow(subGoal: sg, goal: goal, sc: sc),
               ],
@@ -824,16 +890,19 @@ class _LockedSubGoalSlot extends StatelessWidget {
 
 class _TaskTile extends ConsumerWidget {
   const _TaskTile({
+    super.key,
     required this.task,
     required this.subGoal,
     required this.goal,
     required this.sc,
+    this.reorderIndex = 0,
   });
 
   final PlanningTask task;
   final SubGoal subGoal;
   final Goal goal;
   final SieColors sc;
+  final int reorderIndex;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -842,6 +911,11 @@ class _TaskTile extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
+          ReorderableDragStartListener(
+            index: reorderIndex,
+            child: Icon(Icons.drag_handle, size: 16, color: sc.textSecondary),
+          ),
+          const SizedBox(width: 6),
           GestureDetector(
             onTap: () => ref
                 .read(planningProvider.notifier)

@@ -167,6 +167,7 @@ class SyncService {
               'user_id': payload['user_id'],
               'name': payload['name'],
               'weight': payload['weight'] ?? 1,
+              'order_index': payload['order_index'] ?? localTask?.orderIndex ?? 0,
               if (payload['due_date'] != null) 'due_date': payload['due_date'],
               'is_completed': localTask?.isCompleted ?? false,
               if (localTask?.completedAtMs != null)
@@ -253,6 +254,20 @@ class SyncService {
                 .from('mission_medals')
                 .upsert(payload, onConflict: 'id');
             await _db.markMedalSynced(payload['id'] as String);
+          case 'reorder_sub_goal':
+            await client
+                .from('sub_goals')
+                .update({'order_index': payload['order_index'] as int})
+                .eq('id', payload['id'] as String);
+            await _db.updateSubGoal(payload['id'] as String,
+                const LocalSubGoalsCompanion(synced: Value(true)));
+          case 'reorder_task':
+            await client
+                .from('planning_tasks')
+                .update({'order_index': payload['order_index'] as int})
+                .eq('id', payload['id'] as String);
+            await _db.updatePlanningTask(payload['id'] as String,
+                const LocalPlanningTasksCompanion(synced: Value(true)));
 
           default:
             debugPrint(

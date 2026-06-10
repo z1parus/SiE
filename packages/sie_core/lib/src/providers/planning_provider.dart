@@ -153,6 +153,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
               isCompleted: Value(t.isCompleted),
               completedAtMs: Value(t.completedAt?.millisecondsSinceEpoch),
               dueDateMs: Value(t.dueDate?.millisecondsSinceEpoch),
+              orderIndex: Value(t.orderIndex),
               synced: const Value(true),
               createdAtMs: Value(t.createdAt.millisecondsSinceEpoch),
             ));
@@ -204,6 +205,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
                   name: rt.name,
                   weight: rt.weight,
                   isCompleted: rt.isCompleted,
+                  orderIndex: rt.orderIndex,
                   completedAt: rt.completedAtMs != null
                       ? DateTime.fromMillisecondsSinceEpoch(rt.completedAtMs!)
                       : null,
@@ -497,7 +499,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
   // ── Add Sub-goal ──────────────────────────────────────────────────────────
 
   Future<void> addSubGoal(String goalId, String name,
-      {int orderIndex = 0, String? parentSubGoalId}) async {
+      {String? parentSubGoalId}) async {
     final client = Supabase.instance.client;
     final session = client.auth.currentSession;
     if (session == null) return;
@@ -505,6 +507,14 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final db = ref.read(appDatabaseProvider);
     final now = DateTime.now();
     final id = _uuid.v4();
+
+    final currentGoal = state.valueOrNull?.goals
+        .where((g) => g.id == goalId).firstOrNull;
+    final orderIndex = parentSubGoalId == null
+        ? (currentGoal?.subGoals.length ?? 0)
+        : (_allSubGoals(currentGoal?.subGoals ?? [])
+              .where((s) => s.id == parentSubGoalId)
+              .firstOrNull?.children.length ?? 0);
 
     final newSg = SubGoal(
       id: id,
@@ -638,6 +648,11 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final id = _uuid.v4();
     final userId = session.user.id;
 
+    final currentSg = _allSubGoals(
+            state.valueOrNull?.goals.expand((g) => g.subGoals).toList() ?? [])
+        .where((s) => s.id == subGoalId).firstOrNull;
+    final taskOrderIndex = currentSg?.tasks.length ?? 0;
+
     final newTask = PlanningTask(
       id: id,
       subGoalId: subGoalId,
@@ -645,6 +660,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       name: name,
       weight: weight,
       isCompleted: false,
+      orderIndex: taskOrderIndex,
       completedAt: null,
       dueDate: dueDate,
       createdAt: now,
@@ -660,6 +676,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       userId: Value(userId),
       name: Value(name),
       weight: Value(weight),
+      orderIndex: Value(taskOrderIndex),
       dueDateMs: Value(dueDate?.millisecondsSinceEpoch),
       synced: const Value(false),
       createdAtMs: Value(now.millisecondsSinceEpoch),
@@ -674,6 +691,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           'user_id': userId,
           'name': name,
           'weight': weight,
+          'order_index': taskOrderIndex,
           'due_date': dueDate?.toIso8601String(),
           'created_at': now.toIso8601String(),
         });
@@ -690,6 +708,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           'user_id': userId,
           'name': name,
           'weight': weight,
+          'order_index': taskOrderIndex,
         }));
   }
 
@@ -1049,6 +1068,72 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       updatedAtMs: Value(now.millisecondsSinceEpoch),
       synced: const Value(false),
     ));
+  }
+
+  // ── Reorder Sub-goals ─────────────────────────────────────────────────────
+
+  Future<void> reorderSubGoals(
+      String goalId, String? parentId, List<String> newOrder) async {
+    _updateGoalInState(goalId, (g) {
+      final flat = _allSubGoals(g.subGoals).map((sg) {
+        final idx = newOrder.indexOf(sg.id);
+        return idx >= 0 ? sg.copyWith(orderIndex: idx) : sg;
+      }).toList()
+        ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+      return g.copyWith(subGoals: buildSubGoalTree(flat));
+    });
+    final db = ref.read(appDatabaseProvider);
+    for (int i = 0; i < newOrder.length; i++) {
+      await db.updateSubGoalOrderIndex(newOrder[i], i);
+    }
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    for (int i = 0; i < newOrder.length; i++) {
+      if (isOnline) {
+        try {
+          await Supabase.instance.client
+              .from('sub_goals').update({'order_index': i}).eq('id', newOrder[i]);
+          await db.updateSubGoal(newOrder[i],
+              const LocalSubGoalsCompanion(synced: Value(true)));
+          continue;
+        } catch (_) {}
+      }
+      await db.enqueueSyncOp('reorder_sub_goal',
+          jsonEncode({'id': newOrder[i], 'order_index': i}));
+    }
+  }
+
+  // ── Reorder Tasks ──────────────────────────────────────────────────────────
+
+  Future<void> reorderTasks(
+      String goalId, String subGoalId, List<String> newOrder) async {
+    _updateGoalInState(goalId, (g) => g.copyWith(
+        subGoals: _updateSubGoalInTree(g.subGoals, subGoalId, (sg) {
+          final reordered = List.of(sg.tasks)
+            ..sort((a, b) =>
+                newOrder.indexOf(a.id).compareTo(newOrder.indexOf(b.id)));
+          return sg.copyWith(
+              tasks: reordered.indexed
+                  .map((e) => e.$2.copyWith(orderIndex: e.$1))
+                  .toList());
+        })));
+    final db = ref.read(appDatabaseProvider);
+    for (int i = 0; i < newOrder.length; i++) {
+      await db.updateTaskOrderIndex(newOrder[i], i);
+    }
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    for (int i = 0; i < newOrder.length; i++) {
+      if (isOnline) {
+        try {
+          await Supabase.instance.client
+              .from('planning_tasks').update({'order_index': i}).eq('id', newOrder[i]);
+          await db.updatePlanningTask(newOrder[i],
+              const LocalPlanningTasksCompanion(synced: Value(true)));
+          continue;
+        } catch (_) {}
+      }
+      await db.enqueueSyncOp('reorder_task',
+          jsonEncode({'id': newOrder[i], 'order_index': i}));
+    }
   }
 
   // ── Update Goal Settings ──────────────────────────────────────────────────

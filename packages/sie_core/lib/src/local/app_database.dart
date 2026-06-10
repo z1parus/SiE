@@ -178,6 +178,7 @@ class LocalPlanningTasks extends Table {
   BoolColumn get isCompleted    => boolean().withDefault(const Constant(false))();
   IntColumn  get completedAtMs  => integer().nullable()();
   IntColumn  get dueDateMs      => integer().nullable()();
+  IntColumn  get orderIndex     => integer().withDefault(const Constant(0))();
   BoolColumn get synced         => boolean().withDefault(const Constant(false))();
   BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
   IntColumn  get createdAtMs    => integer()();
@@ -234,7 +235,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -275,6 +276,9 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 10) {
         await m.addColumn(localGoals, localGoals.mapPositionsJson);
+      }
+      if (from < 11) {
+        await m.addColumn(localPlanningTasks, localPlanningTasks.orderIndex);
       }
     },
   );
@@ -570,6 +574,16 @@ class AppDatabase extends _$AppDatabase {
         synced: const Value(false),
       ));
 
+  Future<void> updateSubGoalOrderIndex(String id, int idx) =>
+      (update(localSubGoals)..where((t) => t.id.equals(id)))
+          .write(LocalSubGoalsCompanion(
+              orderIndex: Value(idx), synced: const Value(false)));
+
+  Future<void> updateTaskOrderIndex(String id, int idx) =>
+      (update(localPlanningTasks)..where((t) => t.id.equals(id)))
+          .write(LocalPlanningTasksCompanion(
+              orderIndex: Value(idx), synced: const Value(false)));
+
   Future<void> upsertGoalHabitLink(LocalGoalHabitLinksCompanion row) =>
       into(localGoalHabitLinks).insertOnConflictUpdate(row);
 
@@ -592,7 +606,7 @@ class AppDatabase extends _$AppDatabase {
             ..where((t) =>
                 t.subGoalId.equals(subGoalId) &
                 t.deletedLocally.equals(false))
-            ..orderBy([(t) => OrderingTerm(expression: t.createdAtMs)]))
+            ..orderBy([(t) => OrderingTerm(expression: t.orderIndex)]))
           .get();
 
   Future<List<LocalMilestone>> milestonesForGoal(String goalId) =>
