@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 import 'tactical_map_view.dart';
 import 'mission_accomplished_screen.dart';
+import 'goal_stats_screen.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -69,6 +70,12 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
                 sc: sc,
                 onBack: () => Navigator.pop(context),
                 onSettings: () => _showGoalSettingsSheet(context, goal, sc),
+                onStats: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => GoalStatsScreen(goal: goal),
+                  ),
+                ),
               ),
               Expanded(
                 child: _mapMode
@@ -109,6 +116,7 @@ class _MissionHeader extends StatelessWidget {
     required this.sc,
     required this.onBack,
     required this.onSettings,
+    required this.onStats,
   });
 
   final Goal goal;
@@ -117,6 +125,7 @@ class _MissionHeader extends StatelessWidget {
   final SieColors sc;
   final VoidCallback onBack;
   final VoidCallback onSettings;
+  final VoidCallback onStats;
 
   @override
   Widget build(BuildContext context) {
@@ -154,6 +163,14 @@ class _MissionHeader extends StatelessWidget {
                 icon: Icon(Icons.settings_outlined,
                     color: sc.textSecondary, size: 20),
                 onPressed: onSettings,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: Icon(Icons.bar_chart_outlined,
+                    color: sc.textSecondary, size: 20),
+                onPressed: onStats,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
               ),

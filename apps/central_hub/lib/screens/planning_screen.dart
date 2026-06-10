@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 import 'mission_detail_screen.dart';
 import 'mission_accomplished_screen.dart';
+import 'goal_stats_screen.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -155,6 +156,12 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
       builder: (_) => _GoalOptionsSheet(
         goal: goal,
         sc: sc,
+        onStats: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => GoalStatsScreen(goal: goal),
+          ),
+        ),
         onFreeze: () {
           final newStatus =
               goal.status == 'frozen' ? 'active' : 'frozen';
@@ -627,6 +634,7 @@ class _GoalOptionsSheet extends StatelessWidget {
   const _GoalOptionsSheet({
     required this.goal,
     required this.sc,
+    required this.onStats,
     required this.onFreeze,
     required this.onComplete,
     required this.onDelete,
@@ -634,6 +642,7 @@ class _GoalOptionsSheet extends StatelessWidget {
 
   final Goal goal;
   final SieColors sc;
+  final VoidCallback onStats;
   final VoidCallback onFreeze;
   final VoidCallback onComplete;
   final VoidCallback onDelete;
@@ -673,6 +682,15 @@ class _GoalOptionsSheet extends StatelessWidget {
             ),
           ),
           Divider(height: 1, color: sc.border),
+          _OptionTile(
+            icon: Icons.bar_chart_outlined,
+            label: 'Статистика миссии',
+            color: const Color(0xFF6A8ED8),
+            onTap: () {
+              Navigator.pop(context);
+              onStats();
+            },
+          ),
           _OptionTile(
             icon: isFrozen ? Icons.play_arrow_outlined : Icons.ac_unit,
             label:
