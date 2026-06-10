@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ui' show Offset;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -272,6 +273,10 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             ? GoalSettings.fromJson(
                 jsonDecode(rg.settingsJson!) as Map<String, dynamic>)
             : GoalSettings.defaults,
+        mapPositions: rg.mapPositionsJson != null
+            ? positionsFromJson(
+                jsonDecode(rg.mapPositionsJson!) as Map<String, dynamic>)
+            : const {},
       ));
     }
 
@@ -1287,5 +1292,29 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     }
     await db.enqueueSyncOp(
         'move_sub_goal', jsonEncode({'id': subGoalId, 'parent_sub_goal_id': grandParentId}));
+  }
+
+  // ── Save map positions ────────────────────────────────────────────────────
+
+  Future<void> saveMapPositions(String goalId, Map<String, Offset> positions) async {
+    final posJson = positionsToJson(positions);
+
+    _updateGoalInState(goalId, (g) => g.copyWith(mapPositions: positions));
+
+    final db = ref.read(appDatabaseProvider);
+    await db.updateGoalMapPositions(goalId, jsonEncode(posJson));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await Supabase.instance.client
+            .from('goals')
+            .update({'map_positions': posJson}).eq('id', goalId);
+        await db.updateGoal(goalId, const LocalGoalsCompanion(synced: Value(true)));
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('save_map_positions',
+        jsonEncode({'id': goalId, 'map_positions': posJson}));
   }
 }

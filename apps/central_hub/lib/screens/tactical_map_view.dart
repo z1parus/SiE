@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,6 +24,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   String? _draggingId;
   String? _hoverTargetId;
   late AnimationController _hoverAnim;
+  Timer? _saveTimer;
   final Set<String> _scoutedMapIds = {};
 
   static const double _cx = 1200.0;
@@ -42,6 +44,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
 
   @override
   void dispose() {
+    _saveTimer?.cancel();
     _hoverAnim.dispose();
     _tc.dispose();
     super.dispose();
@@ -57,8 +60,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
 
   // ── Layout ────────────────────────────────────────────────────────────────
 
-  void _ensureSubGoalPositions(SubGoal sg) {
-    // Position child sub-goals around this sub-goal
+  void _ensureSubGoalPositions(SubGoal sg, Map<String, Offset> saved) {
     final children = sg.children;
     for (int i = 0; i < children.length; i++) {
       final child = children[i];
@@ -69,12 +71,11 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
         final angle = children.length <= 1
             ? base
             : base + (-spread / 2 + spread * i / (children.length - 1));
-        _positions[child.id] =
+        _positions[child.id] = saved[child.id] ??
             sgPos + Offset(160 * math.cos(angle), 160 * math.sin(angle));
       }
-      _ensureSubGoalPositions(child);
+      _ensureSubGoalPositions(child, saved);
     }
-    // Position tasks for this sub-goal
     final tasks = sg.tasks;
     for (int j = 0; j < tasks.length; j++) {
       final t = tasks[j];
@@ -85,7 +86,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
         final ta = tasks.length <= 1
             ? base
             : base + (-spread / 2 + spread * j / (tasks.length - 1));
-        _positions[t.id] =
+        _positions[t.id] = saved[t.id] ??
             sgPos + Offset(145 * math.cos(ta), 145 * math.sin(ta));
       }
     }
@@ -93,6 +94,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
 
   void _ensurePositions(Goal goal) {
     _positions[goal.id] = Offset.zero;
+    final saved = goal.mapPositions;
 
     final sgs = goal.subGoals;
     for (int i = 0; i < sgs.length; i++) {
@@ -100,9 +102,10 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       if (!_positions.containsKey(sg.id)) {
         final angle =
             (2 * math.pi * i / math.max(sgs.length, 1)) - math.pi / 2;
-        _positions[sg.id] = Offset(240 * math.cos(angle), 240 * math.sin(angle));
+        _positions[sg.id] = saved[sg.id] ??
+            Offset(240 * math.cos(angle), 240 * math.sin(angle));
       }
-      _ensureSubGoalPositions(sg);
+      _ensureSubGoalPositions(sg, saved);
     }
 
     final mss = goal.milestones;
@@ -110,7 +113,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       if (!_positions.containsKey(mss[i].id)) {
         final angle =
             (2 * math.pi * i / math.max(mss.length, 1)) + math.pi / 4;
-        _positions[mss[i].id] =
+        _positions[mss[i].id] = saved[mss[i].id] ??
             Offset(200 * math.cos(angle), 200 * math.sin(angle));
       }
     }
@@ -120,7 +123,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       if (!_positions.containsKey(links[i].id)) {
         final angle =
             (2 * math.pi * i / math.max(links.length, 1)) + math.pi / 6;
-        _positions[links[i].id] =
+        _positions[links[i].id] = saved[links[i].id] ??
             Offset(320 * math.cos(angle), 320 * math.sin(angle));
       }
     }
@@ -134,6 +137,14 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       ...goal.habitLinks.map((l) => l.id),
     };
     _positions.removeWhere((k, _) => !all.contains(k));
+  }
+
+  void _scheduleSave(Goal goal) {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      ref.read(planningProvider.notifier).saveMapPositions(goal.id, Map.of(_positions));
+    });
   }
 
   List<SubGoal> _flatSubGoals(List<SubGoal> roots) {
@@ -550,6 +561,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               _resolveCollisions(task.id, goal);
               HapticFeedback.lightImpact();
               _setHoverTarget(null);
+              _scheduleSave(goal);
               setState(() => _draggingId = null);
             },
       child: _TaskNode(task: task, sc: c, dragging: _draggingId == task.id),
@@ -619,6 +631,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               _resolveCollisions(sg.id, goal);
               HapticFeedback.lightImpact();
               _setHoverTarget(null);
+              _scheduleSave(goal);
               setState(() => _draggingId = null);
             },
       child: _SubGoalNode(
@@ -678,6 +691,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
           : (_) {
               _resolveCollisions(id, goal);
               HapticFeedback.lightImpact();
+              _scheduleSave(goal);
               setState(() => _draggingId = null);
             },
       child: child,

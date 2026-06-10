@@ -136,7 +136,8 @@ class LocalGoals extends Table {
   BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
   IntColumn  get createdAtMs    => integer()();
   IntColumn  get updatedAtMs    => integer().nullable()();
-  TextColumn get settingsJson   => text().nullable()();
+  TextColumn get settingsJson      => text().nullable()();
+  TextColumn get mapPositionsJson  => text().nullable()();
   @override Set<Column> get primaryKey => {id};
 }
 
@@ -233,7 +234,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -271,6 +272,9 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 9) {
         await m.createTable(localMissionMedals);
+      }
+      if (from < 10) {
+        await m.addColumn(localGoals, localGoals.mapPositionsJson);
       }
     },
   );
@@ -557,6 +561,12 @@ class AppDatabase extends _$AppDatabase {
   Future<void> updateGoalSettings(String id, String? settingsJson) =>
       updateGoal(id, LocalGoalsCompanion(
         settingsJson: Value(settingsJson),
+        synced: const Value(false),
+      ));
+
+  Future<void> updateGoalMapPositions(String id, String? json) =>
+      updateGoal(id, LocalGoalsCompanion(
+        mapPositionsJson: Value(json),
         synced: const Value(false),
       ));
 

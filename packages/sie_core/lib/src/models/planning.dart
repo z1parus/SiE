@@ -1,3 +1,4 @@
+import 'dart:ui' show Offset;
 import 'package:flutter/material.dart';
 
 const _unset = Object();
@@ -287,6 +288,7 @@ class Goal {
     this.deadline,
     this.updatedAt,
     this.settings = GoalSettings.defaults,
+    this.mapPositions = const {},
   });
 
   final String id;
@@ -304,6 +306,7 @@ class Goal {
   final DateTime createdAt;
   final DateTime? updatedAt;
   final GoalSettings settings;
+  final Map<String, Offset> mapPositions;
 
   Color get color =>
       Color(int.parse('0xFF${colorHex.replaceAll('#', '')}'));
@@ -335,6 +338,7 @@ class Goal {
     List<GoalHabitLink>? habitLinks,
     DateTime? updatedAt,
     GoalSettings? settings,
+    Map<String, Offset>? mapPositions,
   }) =>
       Goal(
         id: id,
@@ -352,6 +356,7 @@ class Goal {
         createdAt: createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
         settings: settings ?? this.settings,
+        mapPositions: mapPositions ?? this.mapPositions,
       );
 
   factory Goal.fromJson(Map<String, dynamic> j) {
@@ -398,6 +403,7 @@ class Goal {
       settings: j['settings'] is Map<String, dynamic>
           ? GoalSettings.fromJson(j['settings'] as Map<String, dynamic>)
           : GoalSettings.defaults,
+      mapPositions: positionsFromJson(j['map_positions'] as Map<String, dynamic>?),
     );
   }
 
@@ -412,6 +418,7 @@ class Goal {
         'color_hex': colorHex,
         'progress': progress,
         'settings': settings.toJson(),
+        if (mapPositions.isNotEmpty) 'map_positions': positionsToJson(mapPositions),
       };
 }
 
@@ -462,6 +469,17 @@ List<SubGoal> buildSubGoalTree(List<SubGoal> flat) {
       .map((sg) => _buildNode(sg.id, byId, flat))
       .toList();
 }
+
+Map<String, Offset> positionsFromJson(Map<String, dynamic>? j) {
+  if (j == null) return const {};
+  return j.map((k, v) {
+    final m = v as Map<String, dynamic>;
+    return MapEntry(k, Offset((m['x'] as num).toDouble(), (m['y'] as num).toDouble()));
+  });
+}
+
+Map<String, dynamic> positionsToJson(Map<String, Offset> pos) =>
+    pos.map((k, v) => MapEntry(k, {'x': v.dx, 'y': v.dy}));
 
 double subGoalProgress(SubGoal sg) {
   final hasTasks    = sg.tasks.isNotEmpty;
