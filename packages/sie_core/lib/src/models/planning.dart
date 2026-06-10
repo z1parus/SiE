@@ -168,11 +168,12 @@ class SubGoal {
     bool? isCompleted,
     List<PlanningTask>? tasks,
     List<SubGoal>? children,
+    String? parentSubGoalId,
   }) =>
       SubGoal(
         id: id,
         goalId: goalId,
-        parentSubGoalId: parentSubGoalId,
+        parentSubGoalId: parentSubGoalId ?? this.parentSubGoalId,
         name: name ?? this.name,
         isCompleted: isCompleted ?? this.isCompleted,
         orderIndex: orderIndex,
