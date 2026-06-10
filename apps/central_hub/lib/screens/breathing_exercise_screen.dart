@@ -8,9 +8,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sie_core/sie_core.dart';
 import 'mission_accomplished_screen.dart';
 
-// ── Gold palette ───────────────────────────────────────────────
-const _kAmberGold  = Color(0xFFFFBF00);
-const _kLightGold  = Color(0xFFFFFACD);
+// ── Gold palette (matches c.accent / c.accentSecondary) ────────
+const _kRimGold    = Color(0xFFC8A84B);   // accent — Gold Sand
+const _kRimBronze  = Color(0xFFAA7744);   // accentSecondary — Bronze Gold
+const _kRimLight   = Color(0xFFD9BB65);   // highlight at bright spot
 
 // ── Settings ──────────────────────────────────────────────────
 
@@ -662,10 +663,10 @@ class _BreathingExerciseScreenState
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: _kAmberGold.withValues(
-                        alpha: (glow * (c.isLightMode ? 0.18 : 0.30))
+                    color: _kRimGold.withValues(
+                        alpha: (glow * (c.isLightMode ? 0.07 : 0.14))
                             .clamp(0.0, 1.0)),
-                    blurRadius: c.isLightMode ? 45 : 60,
+                    blurRadius: c.isLightMode ? 18 : 22,
                   ),
                 ],
               ),
@@ -728,8 +729,8 @@ class _BreathingExerciseScreenState
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
                           colors: [
-                            _kLightGold.withValues(alpha: 0.25),
-                            _kLightGold.withValues(alpha: 0.0),
+                            _kRimLight.withValues(alpha: 0.25),
+                            _kRimLight.withValues(alpha: 0.0),
                           ],
                         ),
                       ),
@@ -1869,26 +1870,33 @@ class SphereRimPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 1.0;
-    final rect   = Rect.fromCircle(center: center, radius: radius);
+    final center    = Offset(size.width / 2, size.height / 2);
+    final radius    = size.width / 2 - 1.0;
+    final rect      = Rect.fromCircle(center: center, radius: radius);
+    final baseAlpha = (0.75 + intensity * 0.15).clamp(0.0, 1.0);
 
-    // Solid gold ring — clean and uniform like the reference
+    // Peak brightness where light hits (top-left of sphere)
+    final peakAngle = lightAngle - pi / 2;
+
+    // Gradient mirrors RECRUIT badge: Bronze → Gold Sand → Light peak → Gold Sand → Bronze
+    final gradient = SweepGradient(
+      startAngle: peakAngle - pi,
+      endAngle:   peakAngle + pi,
+      colors: [
+        _kRimBronze.withValues(alpha: baseAlpha * 0.80),
+        _kRimGold  .withValues(alpha: baseAlpha * 0.92),
+        _kRimLight .withValues(alpha: baseAlpha * 1.00),
+        _kRimGold  .withValues(alpha: baseAlpha * 0.92),
+        _kRimBronze.withValues(alpha: baseAlpha * 0.80),
+      ],
+      stops: const [0.0, 0.28, 0.50, 0.72, 1.0],
+    );
+
     final rimPaint = Paint()
       ..style       = PaintingStyle.stroke
-      ..strokeWidth = 2.0
-      ..color       = const Color(0xFFC8A84B).withValues(
-          alpha: (0.80 + intensity * 0.20).clamp(0.0, 1.0));
+      ..strokeWidth = 3.0
+      ..shader      = gradient.createShader(rect);
     canvas.drawCircle(center, radius, rimPaint);
-
-    // Subtle metallic highlight arc at top-left
-    final highlightPaint = Paint()
-      ..style       = PaintingStyle.stroke
-      ..strokeWidth = 1.0
-      ..color       = _kLightGold.withValues(
-          alpha: (0.25 + intensity * 0.25).clamp(0.0, 0.55))
-      ..maskFilter  = const MaskFilter.blur(BlurStyle.normal, 1.5);
-    canvas.drawArc(rect, lightAngle - pi * 0.5 - 0.5, 1.2, false, highlightPaint);
   }
 
   @override
