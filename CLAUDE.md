@@ -39,6 +39,52 @@
 
 ---
 
+## Команда "Делай релиз"
+
+**Активация:** когда пользователь говорит **"Делай релиз"**, выполнить следующие шаги строго по порядку.
+
+### Шаги релиза
+
+1. **Коммит и пуш всех изменений**
+   - Закоммитить все незакоммиченные изменения в ветку `dev`
+   - Запушить в GitHub (`git push -u origin dev`)
+
+2. **Проверка кода**
+   - Запустить `flutter analyze` в `apps/central_hub`
+   - Если есть **ошибки** (`error`) — исправить, закоммитить и запушить снова
+   - Предупреждения уровня `info`/`warning` не блокируют релиз
+
+3. **Определить следующую версию**
+   - Прочитать текущую версию из `apps/central_hub/pubspec.yaml` (поле `version: X.Y.Z+N`)
+   - Следующая версия: увеличить patch (`Z + 1`), build number (`N + 1`)
+   - Обновить `version` в `pubspec.yaml` и закоммитить
+
+4. **Сборка APK**
+   ```bash
+   export PATH="/opt/flutter/bin:/opt/android/cmdline-tools/latest/bin:/opt/android/platform-tools:$PATH"
+   export ANDROID_HOME=/opt/android
+   git config --global --add safe.directory /opt/flutter
+   cd apps/central_hub
+   flutter build apk --release
+   ```
+   - Готовый файл: `apps/central_hub/build/app/outputs/flutter-apk/app-release.apk`
+   - Переименовать в `SiE-Hub-vX.Y.Z.apk` (по новой версии)
+   - Скопировать в корень репозитория
+
+5. **Создать релиз на GitHub**
+   - Использовать MCP-инструменты GitHub (`mcp__github__*`) или `gh` CLI
+   - Тег: `vX.Y.Z`
+   - Название: `SiE Hub vX.Y.Z`
+   - Описание релиза: **на русском языке**, перечислить что было добавлено/исправлено в этой версии (изучить коммиты с прошлого релиза через `git log`)
+   - Прикрепить APK-файл к релизу
+
+### Важно
+- Всегда работать в ветке `dev`
+- APK копируется в корень репозитория и коммитится вместе с обновлённым `pubspec.yaml`
+- Если сборка APK упала — разобраться с ошибкой до создания релиза
+
+---
+
 ## Структура проекта
 
 - `apps/central_hub` — основное Flutter-приложение
