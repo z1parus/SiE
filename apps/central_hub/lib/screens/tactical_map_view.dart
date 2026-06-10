@@ -201,7 +201,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   }
 
   String? _nearestSubGoalFor(String draggingId, Goal goal,
-      {Set<String> exclude = const {}, double threshold = 30.0}) {
+      {Set<String> exclude = const {}, double threshold = 75.0}) {
     final pos = _positions[draggingId];
     if (pos == null) return null;
     String? nearest;
@@ -561,7 +561,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   void _tryReparentTask(String taskId, String currentSgId, Goal goal) {
     final taskPos = _positions[taskId];
     if (taskPos == null) return;
-    const threshold = 30.0;
+    const threshold = 75.0;
     String? nearestSgId;
     double nearestDist = threshold;
     for (final sg in _flatSubGoals(goal.subGoals)) {
