@@ -44,7 +44,9 @@ class NotificationsNotifier extends AsyncNotifier<NotificationsState>
           schema: 'public',
           table: 'notifications',
           filter: PostgresChangeFilter(
-              type: FilterType.eq, column: 'user_id', value: userId),
+              type: PostgresChangeFilterType.eq,
+              column: 'user_id',
+              value: userId),
           callback: (_) async {
             final fresh = await _load();
             state = AsyncData(fresh);
