@@ -127,6 +127,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           synced: const Value(true),
           createdAtMs: Value(g.createdAt.millisecondsSinceEpoch),
           settingsJson: Value(jsonEncode(g.settings.toJson())),
+          isPinned: Value(g.isPinned),
         ));
       }
       for (final sg in _allSubGoals(g.subGoals)) {
@@ -279,6 +280,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             ? positionsFromJson(
                 jsonDecode(rg.mapPositionsJson!) as Map<String, dynamic>)
             : const {},
+        isPinned: rg.isPinned,
       ));
     }
 
@@ -1159,6 +1161,50 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     }
     await db.enqueueSyncOp('update_goal_settings',
         jsonEncode({'id': goalId, 'settings': settings.toJson()}));
+  }
+
+  // ── Pin Goal ──────────────────────────────────────────────────────────────
+
+  Future<void> toggleGoalPin(String goalId) async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+
+    final goal = current.goals.where((g) => g.id == goalId).firstOrNull;
+    if (goal == null) return;
+    final newPinned = !goal.isPinned;
+
+    // Optimistic update + re-sort (pinned first, then by createdAt)
+    final updated = current.goals
+        .map((g) => g.id == goalId ? g.copyWith(isPinned: newPinned) : g)
+        .toList()
+      ..sort((a, b) {
+        if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+        return a.createdAt.compareTo(b.createdAt);
+      });
+    state = AsyncData(current.copyWith(goals: updated));
+
+    final db = ref.read(appDatabaseProvider);
+    await db.updateGoal(goalId, LocalGoalsCompanion(
+        isPinned: Value(newPinned), synced: const Value(false)));
+
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await Supabase.instance.client
+            .from('goals')
+            .update({'is_pinned': newPinned})
+            .eq('id', goalId)
+            .eq('user_id', userId);
+        await db.updateGoal(goalId,
+            const LocalGoalsCompanion(synced: Value(true)));
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('update_goal_pin',
+        jsonEncode({'id': goalId, 'is_pinned': newPinned}));
   }
 
   // ── Habit Boost ───────────────────────────────────────────────────────────

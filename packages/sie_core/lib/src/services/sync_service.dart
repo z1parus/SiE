@@ -268,6 +268,14 @@ class SyncService {
                 .eq('id', payload['id'] as String);
             await _db.updatePlanningTask(payload['id'] as String,
                 const LocalPlanningTasksCompanion(synced: Value(true)));
+          case 'update_goal_pin':
+            await client
+                .from('goals')
+                .update({'is_pinned': payload['is_pinned'] as bool})
+                .eq('id', payload['id'] as String)
+                .eq('user_id', userId);
+            await _db.updateGoal(payload['id'] as String,
+                const LocalGoalsCompanion(synced: Value(true)));
 
           default:
             debugPrint(

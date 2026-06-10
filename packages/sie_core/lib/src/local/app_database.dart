@@ -138,6 +138,7 @@ class LocalGoals extends Table {
   IntColumn  get updatedAtMs    => integer().nullable()();
   TextColumn get settingsJson      => text().nullable()();
   TextColumn get mapPositionsJson  => text().nullable()();
+  BoolColumn get isPinned          => boolean().withDefault(const Constant(false))();
   @override Set<Column> get primaryKey => {id};
 }
 
@@ -235,7 +236,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -279,6 +280,9 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 11) {
         await m.addColumn(localPlanningTasks, localPlanningTasks.orderIndex);
+      }
+      if (from < 12) {
+        await m.addColumn(localGoals, localGoals.isPinned);
       }
     },
   );
@@ -591,7 +595,10 @@ class AppDatabase extends _$AppDatabase {
       (select(localGoals)
             ..where((t) =>
                 t.userId.equals(uid) & t.deletedLocally.equals(false))
-            ..orderBy([(t) => OrderingTerm(expression: t.createdAtMs)]))
+            ..orderBy([
+              (t) => OrderingTerm(expression: t.isPinned, mode: OrderingMode.desc),
+              (t) => OrderingTerm(expression: t.createdAtMs),
+            ]))
           .get();
 
   Future<List<LocalSubGoal>> subGoalsForGoal(String goalId) =>

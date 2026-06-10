@@ -162,6 +162,8 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
             builder: (_) => GoalStatsScreen(goal: goal),
           ),
         ),
+        onPin: () =>
+            ref.read(planningProvider.notifier).toggleGoalPin(goal.id),
         onFreeze: () {
           final newStatus =
               goal.status == 'frozen' ? 'active' : 'frozen';
@@ -386,10 +388,15 @@ class _GoalCard extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Row 1: Status chip + fatigue indicator
+                      // Row 1: Status chip + pin + fatigue indicator
                       Row(
                         children: [
                           _StatusChip(status: goal.status, sc: sc),
+                          if (goal.isPinned) ...[
+                            const SizedBox(width: 6),
+                            const Icon(Icons.push_pin,
+                                size: 12, color: Color(0xFFF4C430)),
+                          ],
                           const Spacer(),
                           if (fatigued)
                             Icon(Icons.warning_amber_rounded,
@@ -635,6 +642,7 @@ class _GoalOptionsSheet extends StatelessWidget {
     required this.goal,
     required this.sc,
     required this.onStats,
+    required this.onPin,
     required this.onFreeze,
     required this.onComplete,
     required this.onDelete,
@@ -643,6 +651,7 @@ class _GoalOptionsSheet extends StatelessWidget {
   final Goal goal;
   final SieColors sc;
   final VoidCallback onStats;
+  final VoidCallback onPin;
   final VoidCallback onFreeze;
   final VoidCallback onComplete;
   final VoidCallback onDelete;
@@ -689,6 +698,15 @@ class _GoalOptionsSheet extends StatelessWidget {
             onTap: () {
               Navigator.pop(context);
               onStats();
+            },
+          ),
+          _OptionTile(
+            icon: goal.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+            label: goal.isPinned ? 'Открепить миссию' : 'Закрепить миссию',
+            color: const Color(0xFFF4C430),
+            onTap: () {
+              Navigator.pop(context);
+              onPin();
             },
           ),
           _OptionTile(

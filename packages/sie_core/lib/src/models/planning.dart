@@ -295,6 +295,7 @@ class Goal {
     this.updatedAt,
     this.settings = GoalSettings.defaults,
     this.mapPositions = const {},
+    this.isPinned = false,
   });
 
   final String id;
@@ -313,6 +314,7 @@ class Goal {
   final DateTime? updatedAt;
   final GoalSettings settings;
   final Map<String, Offset> mapPositions;
+  final bool isPinned;
 
   Color get color =>
       Color(int.parse('0xFF${colorHex.replaceAll('#', '')}'));
@@ -345,6 +347,7 @@ class Goal {
     DateTime? updatedAt,
     GoalSettings? settings,
     Map<String, Offset>? mapPositions,
+    bool? isPinned,
   }) =>
       Goal(
         id: id,
@@ -363,6 +366,7 @@ class Goal {
         updatedAt: updatedAt ?? this.updatedAt,
         settings: settings ?? this.settings,
         mapPositions: mapPositions ?? this.mapPositions,
+        isPinned: isPinned ?? this.isPinned,
       );
 
   factory Goal.fromJson(Map<String, dynamic> j) {
@@ -410,6 +414,7 @@ class Goal {
           ? GoalSettings.fromJson(j['settings'] as Map<String, dynamic>)
           : GoalSettings.defaults,
       mapPositions: positionsFromJson(j['map_positions'] as Map<String, dynamic>?),
+      isPinned: j['is_pinned'] as bool? ?? false,
     );
   }
 
