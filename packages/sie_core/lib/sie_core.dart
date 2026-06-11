@@ -45,6 +45,7 @@ export 'src/utils/fog_of_war_utils.dart';
 export 'src/providers/user_timezone_provider.dart';
 export 'src/models/planning.dart';
 export 'src/models/mission_medal.dart';
+export 'src/models/vanguard_result.dart';
 export 'src/providers/planning_provider.dart';
 export 'src/providers/mission_medals_provider.dart';
 export 'src/widgets/mission_medal_badge.dart';

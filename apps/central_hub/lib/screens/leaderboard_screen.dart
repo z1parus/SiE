@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sie_core/sie_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'public_profile_screen.dart';
 
 // Rank medal colors — universal across all themes
@@ -8,27 +10,109 @@ const _kGold   = Color(0xFFFFD700);
 const _kSilver = Color(0xFFC0C0C0);
 const _kBronze = Color(0xFFCD7F32);
 
+const _kLastVanguardShownKey = 'last_vanguard_shown_date';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // LeaderboardScreen
 // ─────────────────────────────────────────────────────────────────────────────
-class LeaderboardScreen extends ConsumerWidget {
+class LeaderboardScreen extends ConsumerStatefulWidget {
   const LeaderboardScreen({super.key, this.asTab = false});
 
   final bool asTab;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LeaderboardScreen> createState() => _LeaderboardScreenState();
+}
+
+class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkVanguard());
+  }
+
+  Future<void> _checkVanguard() async {
+    try {
+      final tzOffset = await ref.read(userTimezoneProvider.future);
+      final utcNow = DateTime.now().toUtc();
+      final localNow = utcNow.add(tzOffset);
+      final todayStr = _dateStr(localNow);
+
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getString(_kLastVanguardShownKey) == todayStr) return;
+
+      // Competition date = yesterday in user's timezone
+      final yesterday = localNow.subtract(const Duration(days: 1));
+      final yesterdayStr = _dateStr(yesterday);
+
+      final raw = await Supabase.instance.client.rpc('award_vanguard_cycle',
+          params: {
+            'p_competition_date': yesterdayStr,
+            'p_tz_offset_minutes': tzOffset.inMinutes,
+          });
+
+      // Mark as shown regardless of results (even empty cycle)
+      await prefs.setString(_kLastVanguardShownKey, todayStr);
+
+      if (!mounted) return;
+      final results = (raw as List?)
+              ?.map((r) => VanguardResult.fromJson(r as Map<String, dynamic>))
+              .toList() ??
+          [];
+
+      if (results.isEmpty) return;
+
+      // Refresh profile/medals for any DP or medal we just received
+      ref.invalidate(userProfileProvider);
+      ref.invalidate(missionMedalsProvider);
+
+      final myId = ref.read(userProfileProvider).valueOrNull?.id;
+      final myUsername = ref.read(userProfileProvider).valueOrNull?.username;
+
+      await showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        isDismissible: false,
+        enableDrag: false,
+        builder: (_) => _VanguardSummarySheet(
+          results: results,
+          competitionDate: yesterday,
+          currentUserId: myId,
+          currentUsername: myUsername,
+        ),
+      );
+    } catch (e) {
+      debugPrint('Vanguard check failed: $e');
+    }
+  }
+
+  static String _dateStr(DateTime dt) =>
+      '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) {
     final c                = ref.watch(sieColorsProvider);
     final leaderboardAsync = ref.watch(leaderboardProvider);
     final profileAsync     = ref.watch(userProfileProvider);
     final currentUserId    = profileAsync.valueOrNull?.id;
     final frames = ref.watch(avatarFramesProvider).valueOrNull ?? <CosmeticAsset>[];
 
+    // When the cycle resets (timer → 0), refresh the leaderboard.
+    ref.listen<AsyncValue<Duration>>(countdownProvider, (prev, curr) {
+      final p = prev?.valueOrNull;
+      final c = curr.valueOrNull;
+      if (p != null && p > Duration.zero &&
+          c != null && c <= Duration.zero) {
+        ref.invalidate(leaderboardProvider);
+      }
+    });
+
     final body = SafeArea(
       bottom: false,
       child: Column(
         children: [
-          _Header(showBackButton: !asTab),
+          _Header(showBackButton: !widget.asTab),
           const SizedBox(height: 12),
           const _CountdownPanel(),
           const SizedBox(height: 8),
@@ -55,7 +139,7 @@ class LeaderboardScreen extends ConsumerWidget {
       ),
     );
 
-    if (asTab) {
+    if (widget.asTab) {
       return Scaffold(backgroundColor: Colors.transparent, body: body);
     }
 
@@ -667,6 +751,279 @@ class _NoConnectionMessage extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vanguard Summary Sheet
+// ─────────────────────────────────────────────────────────────────────────────
+class _VanguardSummarySheet extends ConsumerWidget {
+  final List<VanguardResult> results;
+  final DateTime competitionDate;
+  final String? currentUserId;
+  final String? currentUsername;
+
+  const _VanguardSummarySheet({
+    required this.results,
+    required this.competitionDate,
+    this.currentUserId,
+    this.currentUsername,
+  });
+
+  static String _fmtDate(DateTime d) {
+    const months = [
+      '', 'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+      'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+    ];
+    return '${d.day} ${months[d.month]} ${d.year}';
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+
+    final isWinner = results.any((r) => r.userId == currentUserId);
+    final myUsername = currentUsername ?? 'Оперативник';
+
+    final sheetBg = c.isLightMode
+        ? const Color(0xFFF5F7FA)
+        : const Color(0xFF0D1525);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: sheetBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border.all(
+          color: _kGold.withValues(alpha: 0.25),
+          width: 0.8,
+        ),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        24, 20, 24,
+        MediaQuery.of(context).viewInsets.bottom + 32,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Drag handle
+          Container(
+            width: 36,
+            height: 3,
+            decoration: BoxDecoration(
+              color: c.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Trophy icon
+          Icon(Icons.emoji_events, color: _kGold, size: 40,
+              shadows: [Shadow(color: _kGold.withValues(alpha: 0.5), blurRadius: 16)]),
+          const SizedBox(height: 12),
+
+          // Title
+          Text(
+            'ИТОГИ АВАНГАРДА',
+            style: TextStyle(
+              color: _kGold,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 2.5,
+              shadows: c.isLightMode
+                  ? null
+                  : [Shadow(color: _kGold.withValues(alpha: 0.5), blurRadius: 10)],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _fmtDate(competitionDate),
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 11,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Winners list
+          ...results.map((r) => _WinnerRow(result: r, c: c)),
+
+          // Congrats message
+          if (isWinner) ...[
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: _kGold.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _kGold.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.star_outline, color: _kGold, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Так держать, $myUsername! Сегодня вы вошли в тройку лучших оперативников!',
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 28),
+
+          // CTA button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: c.accent,
+                foregroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1525),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                elevation: 0,
+              ),
+              child: const Text(
+                'НАЧАТЬ СЛЕДУЮЩИЙ АВАНГАРД',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WinnerRow extends StatelessWidget {
+  final VanguardResult result;
+  final SieColors c;
+
+  const _WinnerRow({required this.result, required this.c});
+
+  static Color _placeColor(int place) => switch (place) {
+        1 => _kGold,
+        2 => _kSilver,
+        _ => _kBronze,
+      };
+
+  static IconData _placeIcon(int place) => switch (place) {
+        1 => Icons.emoji_events,
+        2 => Icons.workspace_premium,
+        _ => Icons.military_tech,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _placeColor(result.place);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.22), width: 0.8),
+        ),
+        child: Row(
+          children: [
+            // Rank badge
+            SizedBox(
+              width: 32,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(_placeIcon(result.place), color: color, size: 18),
+                  Text(
+                    '#${result.place}',
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+
+            // Avatar
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: c.surface,
+                border: Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
+              ),
+              child: ClipOval(
+                child: result.avatarUrl != null && result.avatarUrl!.isNotEmpty
+                    ? Image.network(result.avatarUrl!, fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Icon(Icons.person,
+                            color: c.textSecondary, size: 20))
+                    : Icon(Icons.person, color: c.textSecondary, size: 20),
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // Username
+            Expanded(
+              child: Text(
+                (result.username ?? 'OPERATIVE').toUpperCase(),
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ),
+
+            // DP awarded
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '+${result.dpAwarded}',
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                Text(
+                  'DP',
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 9,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -60,9 +60,10 @@ class MissionMedalBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final levelColor = medalLevelColor(medal.level);
-    final catColor   = categoryIconColor(medal.category);
-    final icon       = categoryIconData(medal.category);
     final isGold     = medal.level == 3;
+    // Vanguard medals: lightning bolt in level color; goal medals: category icon
+    final catColor = medal.isVanguard ? levelColor : categoryIconColor(medal.category);
+    final icon     = medal.isVanguard ? Icons.bolt : categoryIconData(medal.category);
 
     final circle = Container(
       width: size,

@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 const _kKey = 'user_timezone_offset_min';
 
@@ -8,19 +10,30 @@ class UserTimezoneNotifier extends AsyncNotifier<Duration> {
   Future<Duration> build() async {
     final prefs = await SharedPreferences.getInstance();
     final stored = prefs.getInt(_kKey);
+    Duration offset;
     if (stored == null) {
-      // Auto-detect on first use.
-      final offset = DateTime.now().timeZoneOffset;
+      offset = DateTime.now().timeZoneOffset;
       await prefs.setInt(_kKey, offset.inMinutes);
-      return offset;
+    } else {
+      offset = Duration(minutes: stored);
     }
-    return Duration(minutes: stored);
+    // Sync to Supabase profile so the server-side leaderboard can filter by tz.
+    _syncToSupabase(offset.inMinutes);
+    return offset;
   }
 
   Future<void> setOffset(Duration offset) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_kKey, offset.inMinutes);
     state = AsyncData(offset);
+    _syncToSupabase(offset.inMinutes);
+  }
+
+  void _syncToSupabase(int minutes) {
+    Supabase.instance.client
+        .rpc('update_timezone_offset', params: {'p_offset_minutes': minutes})
+        .then((_) {})
+        .catchError((e) => debugPrint('tz sync error: $e'));
   }
 }
 

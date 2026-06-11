@@ -192,7 +192,7 @@ class LocalPlanningTasks extends Table {
 class LocalMissionMedals extends Table {
   TextColumn get id              => text()();
   TextColumn get userId          => text()();
-  TextColumn get goalId          => text()();
+  TextColumn get goalId          => text().withDefault(const Constant(''))();
   TextColumn get goalName        => text().withDefault(const Constant(''))();
   TextColumn get category        => text().withDefault(const Constant('none'))();
   IntColumn  get level           => integer()();
@@ -201,6 +201,7 @@ class LocalMissionMedals extends Table {
   IntColumn  get totalTaskWeight => integer().withDefault(const Constant(0))();
   IntColumn  get durationDays    => integer().withDefault(const Constant(0))();
   BoolColumn get synced          => boolean().withDefault(const Constant(false))();
+  TextColumn get medalType       => text().withDefault(const Constant('goal'))();
   @override Set<Column> get primaryKey => {id};
 }
 
@@ -238,7 +239,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -289,6 +290,9 @@ class AppDatabase extends _$AppDatabase {
       if (from < 13) {
         await m.addColumn(localGoals, localGoals.isShared);
         await m.addColumn(localGoals, localGoals.myRole);
+      }
+      if (from < 14) {
+        await m.addColumn(localMissionMedals, localMissionMedals.medalType);
       }
     },
   );

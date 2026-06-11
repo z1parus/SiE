@@ -648,10 +648,12 @@ class _MedalsVault extends ConsumerWidget {
           );
         }
 
-        // Group by type (category + level) — same visual appearance
+        // Group by type (category + level); vanguard medals grouped separately
         final Map<String, List<MissionMedal>> groupMap = {};
         for (final medal in medals) {
-          final key = '${medal.category?.name ?? '_'}_${medal.level}';
+          final key = medal.isVanguard
+              ? 'vanguard_${medal.level}'
+              : '${medal.category?.name ?? '_'}_${medal.level}';
           groupMap.putIfAbsent(key, () => []).add(medal);
         }
         // Higher level first
