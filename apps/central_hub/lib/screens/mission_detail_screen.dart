@@ -3035,10 +3035,18 @@ class _CollaboratorPickerSheetState
     } catch (e) {
       if (mounted) {
         setState(() => _invitingUserId = null);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка: $e'),
-            backgroundColor: Colors.red,
+        showDialog<void>(
+          context: context,
+          useRootNavigator: true,
+          builder: (dialogCtx) => AlertDialog(
+            title: const Text('Ошибка приглашения'),
+            content: SingleChildScrollView(child: Text('$e')),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogCtx, rootNavigator: true).pop(),
+                child: const Text('OK'),
+              ),
+            ],
           ),
         );
       }
