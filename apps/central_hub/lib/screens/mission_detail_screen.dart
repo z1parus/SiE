@@ -3029,28 +3029,8 @@ class _CollaboratorPickerSheetState
 
   Future<void> _invite(BuildContext context, String goalId, String userId) async {
     setState(() => _invitingUserId = userId);
-    try {
-      await ref.read(goalCollaborationProvider).invite(goalId, userId, _selectedRole);
-      if (mounted) Navigator.of(context, rootNavigator: true).pop();
-    } catch (e) {
-      if (mounted) {
-        setState(() => _invitingUserId = null);
-        showDialog<void>(
-          context: context,
-          useRootNavigator: true,
-          builder: (dialogCtx) => AlertDialog(
-            title: const Text('Ошибка приглашения'),
-            content: SingleChildScrollView(child: Text('$e')),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogCtx, rootNavigator: true).pop(),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      }
-    }
+    await ref.read(goalCollaborationProvider).invite(goalId, userId, _selectedRole);
+    if (mounted) Navigator.of(context, rootNavigator: true).pop();
   }
 
   @override
