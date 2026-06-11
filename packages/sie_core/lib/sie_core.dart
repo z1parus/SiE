@@ -54,3 +54,5 @@ export 'src/providers/friends_provider.dart';
 export 'src/providers/notifications_provider.dart';
 export 'src/models/goal_collaborator.dart';
 export 'src/providers/goal_collaboration_provider.dart';
+export 'src/models/ai_decomposition.dart';
+export 'src/services/groq_service.dart';

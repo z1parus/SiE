@@ -7,6 +7,7 @@ import 'tactical_map_view.dart';
 import 'mission_accomplished_screen.dart';
 import 'goal_stats_screen.dart';
 import 'public_profile_screen.dart';
+import 'ai_decomposition_sheet.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -123,6 +124,9 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
                     builder: (_) => GoalStatsScreen(goal: goal),
                   ),
                 ),
+                onAiDecompose: canEdit && goal.status == 'active' && GroqService.isInitialized
+                    ? () => showAiDecompositionSheet(context, goal)
+                    : null,
                 isShared: !isOwner,
               ),
               Expanded(
@@ -169,6 +173,7 @@ class _MissionHeader extends StatelessWidget {
     required this.onBack,
     this.onSettings,
     required this.onStats,
+    this.onAiDecompose,
     this.isShared = false,
   });
 
@@ -179,6 +184,7 @@ class _MissionHeader extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback? onSettings;
   final VoidCallback onStats;
+  final VoidCallback? onAiDecompose;
   final bool isShared;
 
   @override
@@ -218,7 +224,17 @@ class _MissionHeader extends StatelessWidget {
                     color: sc.accent.withValues(alpha: 0.8)),
               ],
               const Spacer(),
-              if (onSettings != null)
+              if (onAiDecompose != null)
+                IconButton(
+                  icon: Icon(Icons.auto_awesome_outlined,
+                      color: sc.accent, size: 20),
+                  onPressed: onAiDecompose,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'AI-план',
+                ),
+              if (onSettings != null) ...[
+                const SizedBox(width: 8),
                 IconButton(
                   icon: Icon(Icons.settings_outlined,
                       color: sc.textSecondary, size: 20),
@@ -226,6 +242,7 @@ class _MissionHeader extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
+              ],
               const SizedBox(width: 8),
               IconButton(
                 icon: Icon(Icons.bar_chart_outlined,

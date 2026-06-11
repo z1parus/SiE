@@ -6,6 +6,7 @@ import 'package:sie_core/sie_core.dart';
 import 'screens/auth_screen.dart';
 import 'screens/main_navigation_shell.dart';
 import 'screens/splash_screen.dart';
+import 'config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +20,7 @@ void main() async {
     url: 'https://bvqlqvzcqfgojzxztvrm.supabase.co',
     anonKey: 'sb_publishable_x54jsqL5s9ohcOJoyOTklw_5G8lbd9l',
   );
+  GroqService.initialize(groqApiKey);
   runApp(const ProviderScope(child: SieApp()));
 }
 
