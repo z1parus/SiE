@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'breathing_exercise_screen.dart';
 import 'focus_protocol_screen.dart';
@@ -1530,29 +1531,33 @@ class _NotifTile extends ConsumerWidget {
 class _CollabInviteActions extends ConsumerStatefulWidget {
   final String goalId;
   final String notificationId;
-  const _CollabInviteActions({required this.goalId, required this.notificationId});
+  const _CollabInviteActions(
+      {required this.goalId, required this.notificationId});
 
   @override
-  ConsumerState<_CollabInviteActions> createState() => _CollabInviteActionsState();
+  ConsumerState<_CollabInviteActions> createState() =>
+      _CollabInviteActionsState();
 }
 
 class _CollabInviteActionsState extends ConsumerState<_CollabInviteActions> {
   bool _loading = false;
-  bool _done = false;
-  String? _result;
 
   Future<void> _handle(bool accept) async {
     setState(() => _loading = true);
     try {
       final collab = ref.read(goalCollaborationProvider);
+      final status = accept ? 'accepted' : 'declined';
       if (accept) {
         await collab.accept(widget.goalId);
-        setState(() { _done = true; _result = 'Принято'; });
       } else {
         await collab.decline(widget.goalId);
-        setState(() { _done = true; _result = 'Отклонено'; });
       }
-      await ref.read(notificationsProvider.notifier).markAsRead(widget.notificationId);
+      await ref
+          .read(notificationsProvider.notifier)
+          .markAsRead(widget.notificationId);
+      ref
+          .read(notificationsProvider.notifier)
+          .resolveInvite(widget.notificationId, status);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -1560,10 +1565,32 @@ class _CollabInviteActionsState extends ConsumerState<_CollabInviteActions> {
 
   @override
   Widget build(BuildContext context) {
-    if (_done) {
-      return Text(_result ?? '',
-          style: TextStyle(fontSize: 12, color: ref.watch(sieColorsProvider).textSecondary));
+    final c = ref.watch(sieColorsProvider);
+
+    // Check in-memory resolution stored in notification payload
+    final notifications =
+        ref.watch(notificationsProvider).valueOrNull?.notifications ?? [];
+    final notif = notifications
+        .cast<AppNotification?>()
+        .firstWhere((n) => n?.id == widget.notificationId, orElse: () => null);
+    final inviteStatus = notif?.payload['invite_status'] as String?;
+
+    // Fallback for accepted: check if goal already appears in user's planning list
+    final myId = Supabase.instance.client.auth.currentUser?.id;
+    final goals = ref.watch(planningProvider).valueOrNull?.goals ?? [];
+    final isAcceptedViaPlanning = myId != null &&
+        goals.any((g) => g.id == widget.goalId && g.userId != myId);
+
+    final isAccepted = inviteStatus == 'accepted' || isAcceptedViaPlanning;
+    final isDeclined = inviteStatus == 'declined';
+
+    if (isAccepted || isDeclined) {
+      final label =
+          isAccepted ? 'Предложение принято' : 'Предложение отклонено';
+      return Text(label,
+          style: TextStyle(fontSize: 12, color: c.textSecondary));
     }
+
     if (_loading) {
       return const SizedBox(
         height: 20,
@@ -1571,6 +1598,7 @@ class _CollabInviteActionsState extends ConsumerState<_CollabInviteActions> {
         child: CircularProgressIndicator(strokeWidth: 2),
       );
     }
+
     return Row(
       children: [
         FilledButton(
