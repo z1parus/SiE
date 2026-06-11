@@ -3025,6 +3025,25 @@ class _CollaboratorPickerSheet extends ConsumerStatefulWidget {
 class _CollaboratorPickerSheetState
     extends ConsumerState<_CollaboratorPickerSheet> {
   String _selectedRole = 'viewer';
+  String? _invitingUserId;
+
+  Future<void> _invite(BuildContext context, String goalId, String userId) async {
+    setState(() => _invitingUserId = userId);
+    try {
+      await ref.read(goalCollaborationProvider).invite(goalId, userId, _selectedRole);
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _invitingUserId = null);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -3042,7 +3061,7 @@ class _CollaboratorPickerSheetState
       maxChildSize: 0.9,
       minChildSize: 0.3,
       expand: false,
-      builder: (_, controller) => Container(
+      builder: (sheetContext, controller) => Container(
         decoration: BoxDecoration(
           color: sc.surface,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -3114,6 +3133,7 @@ class _CollaboratorPickerSheetState
                         final letter = name.isNotEmpty
                             ? name[0].toUpperCase()
                             : '?';
+                        final isInviting = _invitingUserId == profile.id;
                         return ListTile(
                           leading: Container(
                             width: 40,
@@ -3146,22 +3166,26 @@ class _CollaboratorPickerSheetState
                               'LVL ${profile.level} · ${profile.totalXp} XP',
                               style: TextStyle(
                                   color: sc.textSecondary, fontSize: 11)),
-                          trailing: FilledButton(
-                            onPressed: () async {
-                              await ref
-                                  .read(goalCollaborationProvider)
-                                  .invite(goal.id, profile.id,
-                                      _selectedRole);
-                              if (context.mounted) Navigator.pop(context);
-                            },
-                            style: FilledButton.styleFrom(
-                              backgroundColor: sc.accent,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 8),
-                              minimumSize: Size.zero,
+                          trailing: SizedBox(
+                            height: 36,
+                            child: FilledButton(
+                              onPressed: (_invitingUserId != null)
+                                  ? null
+                                  : () => _invite(context, goal.id, profile.id),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: sc.accent,
+                                disabledBackgroundColor: sc.accent.withValues(alpha: 0.4),
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                minimumSize: const Size(72, 36),
+                              ),
+                              child: isInviting
+                                  ? const SizedBox(
+                                      width: 16, height: 16,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2, color: Colors.white))
+                                  : const Text('Позвать',
+                                      style: TextStyle(fontSize: 12)),
                             ),
-                            child: const Text('Позвать',
-                                style: TextStyle(fontSize: 12)),
                           ),
                         );
                       },
