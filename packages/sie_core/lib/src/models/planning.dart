@@ -1,5 +1,7 @@
 import 'dart:ui' show Offset;
 import 'package:flutter/material.dart';
+import 'goal_collaborator.dart';
+import 'public_profile.dart';
 
 const _unset = Object();
 
@@ -296,6 +298,8 @@ class Goal {
     this.settings = GoalSettings.defaults,
     this.mapPositions = const {},
     this.isPinned = false,
+    this.collaborators = const [],
+    this.ownerProfile,
   });
 
   final String id;
@@ -315,6 +319,8 @@ class Goal {
   final GoalSettings settings;
   final Map<String, Offset> mapPositions;
   final bool isPinned;
+  final List<GoalCollaborator> collaborators;
+  final PublicProfile? ownerProfile; // populated for shared goals
 
   Color get color =>
       Color(int.parse('0xFF${colorHex.replaceAll('#', '')}'));
@@ -348,6 +354,8 @@ class Goal {
     GoalSettings? settings,
     Map<String, Offset>? mapPositions,
     bool? isPinned,
+    List<GoalCollaborator>? collaborators,
+    PublicProfile? ownerProfile,
   }) =>
       Goal(
         id: id,
@@ -367,6 +375,8 @@ class Goal {
         settings: settings ?? this.settings,
         mapPositions: mapPositions ?? this.mapPositions,
         isPinned: isPinned ?? this.isPinned,
+        collaborators: collaborators ?? this.collaborators,
+        ownerProfile: ownerProfile ?? this.ownerProfile,
       );
 
   factory Goal.fromJson(Map<String, dynamic> j) {
@@ -390,6 +400,13 @@ class Goal {
             .map((l) => GoalHabitLink.fromJson(l as Map<String, dynamic>))
             .toList()
         : <GoalHabitLink>[];
+
+    final rawCollabs = j['goal_collaborators'];
+    final collaborators = rawCollabs is List
+        ? rawCollabs
+            .map((c) => GoalCollaborator.fromJson(c as Map<String, dynamic>))
+            .toList()
+        : <GoalCollaborator>[];
 
     return Goal(
       id: j['id'] as String,
@@ -415,6 +432,7 @@ class Goal {
           : GoalSettings.defaults,
       mapPositions: positionsFromJson(j['map_positions'] as Map<String, dynamic>?),
       isPinned: j['is_pinned'] as bool? ?? false,
+      collaborators: collaborators,
     );
   }
 

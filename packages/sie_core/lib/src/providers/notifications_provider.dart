@@ -61,7 +61,7 @@ class NotificationsNotifier extends AsyncNotifier<NotificationsState>
 
     final data = await SupabaseService.client
         .from('notifications')
-        .select('id, type, from_user_id, is_read, created_at')
+        .select('id, type, from_user_id, is_read, created_at, payload')
         .eq('user_id', userId)
         .order('created_at', ascending: false)
         .limit(50);
@@ -92,6 +92,7 @@ class NotificationsNotifier extends AsyncNotifier<NotificationsState>
         fromUser: fromId != null ? profileMap[fromId] : null,
         isRead: r['is_read'] as bool,
         createdAt: DateTime.parse(r['created_at'] as String),
+        payload: (r['payload'] as Map<String, dynamic>?) ?? {},
       );
     }).toList();
 

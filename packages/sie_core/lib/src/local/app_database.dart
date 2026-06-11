@@ -139,6 +139,8 @@ class LocalGoals extends Table {
   TextColumn get settingsJson      => text().nullable()();
   TextColumn get mapPositionsJson  => text().nullable()();
   BoolColumn get isPinned          => boolean().withDefault(const Constant(false))();
+  BoolColumn get isShared          => boolean().withDefault(const Constant(false))();
+  TextColumn get myRole            => text().nullable()();
   @override Set<Column> get primaryKey => {id};
 }
 
@@ -236,7 +238,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -283,6 +285,10 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 12) {
         await m.addColumn(localGoals, localGoals.isPinned);
+      }
+      if (from < 13) {
+        await m.addColumn(localGoals, localGoals.isShared);
+        await m.addColumn(localGoals, localGoals.myRole);
       }
     },
   );
@@ -594,12 +600,24 @@ class AppDatabase extends _$AppDatabase {
   Future<List<LocalGoal>> goalsForUser(String uid) =>
       (select(localGoals)
             ..where((t) =>
-                t.userId.equals(uid) & t.deletedLocally.equals(false))
+                (t.userId.equals(uid) | t.isShared.equals(true)) &
+                t.deletedLocally.equals(false))
             ..orderBy([
               (t) => OrderingTerm(expression: t.isPinned, mode: OrderingMode.desc),
               (t) => OrderingTerm(expression: t.createdAtMs),
             ]))
           .get();
+
+  Future<void> cleanupRemovedSharedGoals(Set<String> currentServerIds) async {
+    final shared = await (select(localGoals)
+          ..where((t) => t.isShared.equals(true)))
+        .get();
+    for (final g in shared) {
+      if (!currentServerIds.contains(g.id)) {
+        await deleteGoalLocally(g.id);
+      }
+    }
+  }
 
   Future<List<LocalSubGoal>> subGoalsForGoal(String goalId) =>
       (select(localSubGoals)

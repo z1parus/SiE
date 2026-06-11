@@ -6,6 +6,7 @@ class AppNotification {
   final PublicProfile? fromUser;
   final bool isRead;
   final DateTime createdAt;
+  final Map<String, dynamic> payload;
 
   const AppNotification({
     required this.id,
@@ -13,6 +14,7 @@ class AppNotification {
     this.fromUser,
     required this.isRead,
     required this.createdAt,
+    this.payload = const {},
   });
 
   AppNotification copyWith({bool? isRead}) => AppNotification(
@@ -21,6 +23,7 @@ class AppNotification {
         fromUser: fromUser,
         isRead: isRead ?? this.isRead,
         createdAt: createdAt,
+        payload: payload,
       );
 }
 

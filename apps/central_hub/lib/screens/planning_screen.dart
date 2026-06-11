@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'mission_detail_screen.dart';
 import 'mission_accomplished_screen.dart';
 import 'goal_stats_screen.dart';
@@ -419,6 +420,38 @@ class _GoalCard extends ConsumerWidget {
                         _CategoryBadge(
                             category: goal.settings.category!, sc: sc),
                       ],
+                      Builder(builder: (context) {
+                        final myId = Supabase.instance.client.auth.currentUser?.id;
+                        if (myId != null && goal.userId != myId) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 6),
+                              Row(children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: sc.accent.withValues(alpha: 0.4)),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                    Icon(Icons.people_outlined, size: 10, color: sc.accent),
+                                    const SizedBox(width: 4),
+                                    Text('СОВМЕСТНАЯ',
+                                        style: TextStyle(fontSize: 9, color: sc.accent, letterSpacing: 0.5)),
+                                  ]),
+                                ),
+                              ]),
+                              if (goal.ownerProfile != null) ...[
+                                const SizedBox(height: 2),
+                                Text('Владелец: ${goal.ownerProfile!.username ?? 'Unknown'}',
+                                    style: TextStyle(fontSize: 11, color: sc.textSecondary)),
+                              ],
+                            ],
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      }),
                       const SizedBox(height: 16),
                       // Progress arc
                       Center(

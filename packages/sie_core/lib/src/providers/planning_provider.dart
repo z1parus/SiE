@@ -7,6 +7,8 @@ import 'package:drift/drift.dart' show Value;
 import 'package:uuid/uuid.dart';
 import '../local/app_database.dart';
 import '../models/planning.dart';
+import '../models/goal_collaborator.dart';
+import '../models/public_profile.dart';
 import '../models/mission_medal.dart';
 import 'auth_state_provider.dart';
 import 'connectivity_provider.dart';
@@ -89,8 +91,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         final raw = await client
             .from('goals')
             .select(
-                '*, sub_goals(*, planning_tasks(*)), milestones(*), goal_habit_links(*)')
-            .eq('user_id', userId)
+                '*, sub_goals(*, planning_tasks(*)), milestones(*), goal_habit_links(*), goal_collaborators(*)')
             .neq('status', 'deleted')
             .order('created_at');
 
@@ -98,8 +99,56 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             .map((r) => Goal.fromJson(r as Map<String, dynamic>))
             .toList();
 
-        await _mirrorToLocal(db, goals);
-        return _loadFromLocal(db, userId);
+        // Batch-load owner profiles for shared goals
+        final sharedOwnerIds = goals
+            .where((g) => g.userId != userId)
+            .map((g) => g.userId)
+            .toSet()
+            .toList();
+        final ownerProfileMap = <String, PublicProfile>{};
+        if (sharedOwnerIds.isNotEmpty) {
+          final profiles = await client
+              .from('profiles')
+              .select('id, username, avatar_url, equipped_frame_id, '
+                  'equipped_background_id, equipped_stat_style_id, total_xp, design_points')
+              .inFilter('id', sharedOwnerIds);
+          for (final p in profiles) {
+            ownerProfileMap[p['id'] as String] = PublicProfile.fromJson(p);
+          }
+        }
+
+        // Batch-load collaborator profiles
+        final collabUserIds = goals
+            .expand((g) => g.collaborators.map((c) => c.userId))
+            .toSet()
+            .toList();
+        final collabProfileMap = <String, PublicProfile>{};
+        if (collabUserIds.isNotEmpty) {
+          final profiles = await client
+              .from('profiles')
+              .select('id, username, avatar_url, equipped_frame_id, '
+                  'equipped_background_id, equipped_stat_style_id, total_xp, design_points')
+              .inFilter('id', collabUserIds);
+          for (final p in profiles) {
+            collabProfileMap[p['id'] as String] = PublicProfile.fromJson(p);
+          }
+        }
+
+        // Attach profiles to goals
+        final enrichedGoals = goals.map((g) {
+          final isShared = g.userId != userId;
+          final enrichedCollabs = g.collaborators.map((c) =>
+              c.copyWith(profile: collabProfileMap[c.userId])).toList();
+          return g.copyWith(
+            collaborators: enrichedCollabs,
+            ownerProfile: isShared ? ownerProfileMap[g.userId] : null,
+          );
+        }).toList();
+
+        await _mirrorToLocal(db, enrichedGoals, userId);
+        await db.cleanupRemovedSharedGoals(
+            enrichedGoals.map((g) => g.id).toSet());
+        return _loadFromLocal(db, userId, enrichedGoals);
       } catch (_) {
         // fall through to local
       }
@@ -108,12 +157,22 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     return _loadFromLocal(db, userId);
   }
 
-  Future<void> _mirrorToLocal(AppDatabase db, List<Goal> goals) async {
+  Future<void> _mirrorToLocal(AppDatabase db, List<Goal> goals, String userId) async {
     // Collect IDs that have local unsynced changes — server data must not overwrite them.
     final unsyncedIds = await db.unsyncedPlanningIds();
 
     for (final g in goals) {
-      if (!unsyncedIds.contains(g.id)) {
+      final isShared = g.userId != userId;
+      // Determine current user's role in this shared goal
+      String? myRole;
+      if (isShared) {
+        final myCollab = g.collaborators
+            .where((c) => c.userId == userId && c.status == 'accepted')
+            .firstOrNull;
+        myRole = myCollab?.role;
+      }
+
+      if (!unsyncedIds.contains(g.id) || isShared) {
         await db.upsertGoal(LocalGoalsCompanion(
           id: Value(g.id),
           userId: Value(g.userId),
@@ -128,6 +187,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           createdAtMs: Value(g.createdAt.millisecondsSinceEpoch),
           settingsJson: Value(jsonEncode(g.settings.toJson())),
           isPinned: Value(g.isPinned),
+          isShared: Value(isShared),
+          myRole: Value(myRole),
         ));
       }
       for (final sg in _allSubGoals(g.subGoals)) {
@@ -188,7 +249,12 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     }
   }
 
-  Future<PlanningState> _loadFromLocal(AppDatabase db, String userId) async {
+  Future<PlanningState> _loadFromLocal(AppDatabase db, String userId,
+      [List<Goal>? serverGoals]) async {
+    // Build a lookup map from server data for collaborator/owner enrichment
+    final serverMap = serverGoals != null
+        ? {for (final g in serverGoals) g.id: g}
+        : <String, Goal>{};
     final rawGoals = await db.goalsForUser(userId);
     final goals = <Goal>[];
 
@@ -281,6 +347,9 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
                 jsonDecode(rg.mapPositionsJson!) as Map<String, dynamic>)
             : const {},
         isPinned: rg.isPinned,
+        // Restore collaborators and ownerProfile from server data if available
+        collaborators: serverMap[rg.id]?.collaborators ?? const [],
+        ownerProfile: serverMap[rg.id]?.ownerProfile,
       ));
     }
 

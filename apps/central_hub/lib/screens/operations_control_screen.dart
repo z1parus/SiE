@@ -1307,9 +1307,14 @@ class _NotificationsSheet extends ConsumerWidget {
 
   static String _notifText(AppNotification n) {
     final name = n.fromUser?.username ?? 'Кто-то';
+    final goalName = n.payload['goal_name'] as String?;
     return switch (n.type) {
       'friend_request' => '$name отправил вам запрос в друзья',
       'friend_request_accepted' => '$name принял ваш запрос в друзья',
+      'goal_collaboration_invite' =>
+          goalName != null ? '$name приглашает вас к цели «$goalName»' : '$name приглашает вас к совместной работе',
+      'goal_collaboration_accepted' =>
+          goalName != null ? '$name принял приглашение к цели «$goalName»' : '$name принял ваше приглашение',
       _ => n.type,
     };
   }
@@ -1393,7 +1398,8 @@ class _NotificationsSheet extends ConsumerWidget {
                           notification: n,
                           onTap: () {
                             notifier.markAsRead(n.id);
-                            if (n.fromUser != null) {
+                            if (n.type != 'goal_collaboration_invite' &&
+                                n.fromUser != null) {
                               Navigator.pop(context);
                               Navigator.push(
                                 context,
@@ -1428,12 +1434,15 @@ class _NotifTile extends ConsumerWidget {
     final url = n.fromUser?.avatarUrl;
     final name = n.fromUser?.username ?? '?';
     final letter = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    final isCollabInvite = n.type == 'goal_collaboration_invite';
+    final goalId = n.payload['goal_id'] as String?;
 
     return InkWell(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Avatar
             Container(
@@ -1473,10 +1482,17 @@ class _NotifTile extends ConsumerWidget {
                     style:
                         TextStyle(fontSize: 11, color: c.textSecondary),
                   ),
+                  if (isCollabInvite && goalId != null) ...[
+                    const SizedBox(height: 8),
+                    _CollabInviteActions(
+                      goalId: goalId,
+                      notificationId: n.id,
+                    ),
+                  ],
                 ],
               ),
             ),
-            if (!n.isRead)
+            if (!n.isRead && !isCollabInvite)
               Container(
                 width: 8,
                 height: 8,
@@ -1486,6 +1502,76 @@ class _NotifTile extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CollabInviteActions extends ConsumerStatefulWidget {
+  final String goalId;
+  final String notificationId;
+  const _CollabInviteActions({required this.goalId, required this.notificationId});
+
+  @override
+  ConsumerState<_CollabInviteActions> createState() => _CollabInviteActionsState();
+}
+
+class _CollabInviteActionsState extends ConsumerState<_CollabInviteActions> {
+  bool _loading = false;
+  bool _done = false;
+  String? _result;
+
+  Future<void> _handle(bool accept) async {
+    setState(() => _loading = true);
+    try {
+      final collab = ref.read(goalCollaborationProvider);
+      if (accept) {
+        await collab.accept(widget.goalId);
+        setState(() { _done = true; _result = 'Принято'; });
+      } else {
+        await collab.decline(widget.goalId);
+        setState(() { _done = true; _result = 'Отклонено'; });
+      }
+      await ref.read(notificationsProvider.notifier).markAsRead(widget.notificationId);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_done) {
+      return Text(_result ?? '',
+          style: TextStyle(fontSize: 12, color: ref.watch(sieColorsProvider).textSecondary));
+    }
+    if (_loading) {
+      return const SizedBox(
+        height: 20,
+        width: 20,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+    return Row(
+      children: [
+        FilledButton(
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 28),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            textStyle: const TextStyle(fontSize: 12),
+          ),
+          onPressed: () => _handle(true),
+          child: const Text('Принять'),
+        ),
+        const SizedBox(width: 8),
+        OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(0, 28),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            textStyle: const TextStyle(fontSize: 12),
+          ),
+          onPressed: () => _handle(false),
+          child: const Text('Отклонить'),
+        ),
+      ],
     );
   }
 }

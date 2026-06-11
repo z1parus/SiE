@@ -52,3 +52,5 @@ export 'src/models/friendship.dart';
 export 'src/models/app_notification.dart';
 export 'src/providers/friends_provider.dart';
 export 'src/providers/notifications_provider.dart';
+export 'src/models/goal_collaborator.dart';
+export 'src/providers/goal_collaboration_provider.dart';
