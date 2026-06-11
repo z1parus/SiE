@@ -3006,6 +3006,7 @@ void _showCollaboratorPickerSheet(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
+    useRootNavigator: true,
     builder: (_) => _CollaboratorPickerSheet(goal: goal, sc: sc),
   );
 }
