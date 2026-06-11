@@ -2,8 +2,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'mission_detail_screen.dart';
 import 'mission_accomplished_screen.dart';
+import 'goal_stats_screen.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -155,6 +157,14 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
       builder: (_) => _GoalOptionsSheet(
         goal: goal,
         sc: sc,
+        onStats: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => GoalStatsScreen(goal: goal),
+          ),
+        ),
+        onPin: () =>
+            ref.read(planningProvider.notifier).toggleGoalPin(goal.id),
         onFreeze: () {
           final newStatus =
               goal.status == 'frozen' ? 'active' : 'frozen';
@@ -171,7 +181,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
             context,
             MaterialPageRoute(
               builder: (_) => MissionAccomplishedScreen(
-                xpGained: 2000 + (medal?.xpBonus ?? 100),
+                xpGained: goalCompletionBaseXp(goal) + (medal?.xpBonus ?? 100),
                 dpGained: _categoryDp(goal.settings.category),
                 medal: medal,
               ),
@@ -379,10 +389,15 @@ class _GoalCard extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Row 1: Status chip + fatigue indicator
+                      // Row 1: Status chip + pin + fatigue indicator
                       Row(
                         children: [
                           _StatusChip(status: goal.status, sc: sc),
+                          if (goal.isPinned) ...[
+                            const SizedBox(width: 6),
+                            const Icon(Icons.push_pin,
+                                size: 12, color: Color(0xFFF4C430)),
+                          ],
                           const Spacer(),
                           if (fatigued)
                             Icon(Icons.warning_amber_rounded,
@@ -405,6 +420,38 @@ class _GoalCard extends ConsumerWidget {
                         _CategoryBadge(
                             category: goal.settings.category!, sc: sc),
                       ],
+                      Builder(builder: (context) {
+                        final myId = Supabase.instance.client.auth.currentUser?.id;
+                        if (myId != null && goal.userId != myId) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 6),
+                              Row(children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: sc.accent.withValues(alpha: 0.4)),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                    Icon(Icons.people_outlined, size: 10, color: sc.accent),
+                                    const SizedBox(width: 4),
+                                    Text('СОВМЕСТНАЯ',
+                                        style: TextStyle(fontSize: 9, color: sc.accent, letterSpacing: 0.5)),
+                                  ]),
+                                ),
+                              ]),
+                              if (goal.ownerProfile != null) ...[
+                                const SizedBox(height: 2),
+                                Text('Владелец: ${goal.ownerProfile!.username ?? 'Unknown'}',
+                                    style: TextStyle(fontSize: 11, color: sc.textSecondary)),
+                              ],
+                            ],
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      }),
                       const SizedBox(height: 16),
                       // Progress arc
                       Center(
@@ -627,6 +674,8 @@ class _GoalOptionsSheet extends StatelessWidget {
   const _GoalOptionsSheet({
     required this.goal,
     required this.sc,
+    required this.onStats,
+    required this.onPin,
     required this.onFreeze,
     required this.onComplete,
     required this.onDelete,
@@ -634,6 +683,8 @@ class _GoalOptionsSheet extends StatelessWidget {
 
   final Goal goal;
   final SieColors sc;
+  final VoidCallback onStats;
+  final VoidCallback onPin;
   final VoidCallback onFreeze;
   final VoidCallback onComplete;
   final VoidCallback onDelete;
@@ -673,6 +724,24 @@ class _GoalOptionsSheet extends StatelessWidget {
             ),
           ),
           Divider(height: 1, color: sc.border),
+          _OptionTile(
+            icon: Icons.bar_chart_outlined,
+            label: 'Статистика миссии',
+            color: const Color(0xFF6A8ED8),
+            onTap: () {
+              Navigator.pop(context);
+              onStats();
+            },
+          ),
+          _OptionTile(
+            icon: goal.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+            label: goal.isPinned ? 'Открепить миссию' : 'Закрепить миссию',
+            color: const Color(0xFFF4C430),
+            onTap: () {
+              Navigator.pop(context);
+              onPin();
+            },
+          ),
           _OptionTile(
             icon: isFrozen ? Icons.play_arrow_outlined : Icons.ac_unit,
             label:

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ui' show Offset;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -6,6 +7,8 @@ import 'package:drift/drift.dart' show Value;
 import 'package:uuid/uuid.dart';
 import '../local/app_database.dart';
 import '../models/planning.dart';
+import '../models/goal_collaborator.dart';
+import '../models/public_profile.dart';
 import '../models/mission_medal.dart';
 import 'auth_state_provider.dart';
 import 'connectivity_provider.dart';
@@ -88,8 +91,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         final raw = await client
             .from('goals')
             .select(
-                '*, sub_goals(*, planning_tasks(*)), milestones(*), goal_habit_links(*)')
-            .eq('user_id', userId)
+                '*, sub_goals(*, planning_tasks(*)), milestones(*), goal_habit_links(*), goal_collaborators(*)')
             .neq('status', 'deleted')
             .order('created_at');
 
@@ -97,8 +99,56 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             .map((r) => Goal.fromJson(r as Map<String, dynamic>))
             .toList();
 
-        await _mirrorToLocal(db, goals);
-        return _loadFromLocal(db, userId);
+        // Batch-load owner profiles for shared goals
+        final sharedOwnerIds = goals
+            .where((g) => g.userId != userId)
+            .map((g) => g.userId)
+            .toSet()
+            .toList();
+        final ownerProfileMap = <String, PublicProfile>{};
+        if (sharedOwnerIds.isNotEmpty) {
+          final profiles = await client
+              .from('profiles')
+              .select('id, username, avatar_url, equipped_frame_id, '
+                  'equipped_background_id, equipped_stat_style_id, total_xp, design_points')
+              .inFilter('id', sharedOwnerIds);
+          for (final p in profiles) {
+            ownerProfileMap[p['id'] as String] = PublicProfile.fromJson(p);
+          }
+        }
+
+        // Batch-load collaborator profiles
+        final collabUserIds = goals
+            .expand((g) => g.collaborators.map((c) => c.userId))
+            .toSet()
+            .toList();
+        final collabProfileMap = <String, PublicProfile>{};
+        if (collabUserIds.isNotEmpty) {
+          final profiles = await client
+              .from('profiles')
+              .select('id, username, avatar_url, equipped_frame_id, '
+                  'equipped_background_id, equipped_stat_style_id, total_xp, design_points')
+              .inFilter('id', collabUserIds);
+          for (final p in profiles) {
+            collabProfileMap[p['id'] as String] = PublicProfile.fromJson(p);
+          }
+        }
+
+        // Attach profiles to goals
+        final enrichedGoals = goals.map((g) {
+          final isShared = g.userId != userId;
+          final enrichedCollabs = g.collaborators.map((c) =>
+              c.copyWith(profile: collabProfileMap[c.userId])).toList();
+          return g.copyWith(
+            collaborators: enrichedCollabs,
+            ownerProfile: isShared ? ownerProfileMap[g.userId] : null,
+          );
+        }).toList();
+
+        await _mirrorToLocal(db, enrichedGoals, userId);
+        await db.cleanupRemovedSharedGoals(
+            enrichedGoals.map((g) => g.id).toSet());
+        return _loadFromLocal(db, userId, enrichedGoals);
       } catch (_) {
         // fall through to local
       }
@@ -107,12 +157,22 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     return _loadFromLocal(db, userId);
   }
 
-  Future<void> _mirrorToLocal(AppDatabase db, List<Goal> goals) async {
+  Future<void> _mirrorToLocal(AppDatabase db, List<Goal> goals, String userId) async {
     // Collect IDs that have local unsynced changes — server data must not overwrite them.
     final unsyncedIds = await db.unsyncedPlanningIds();
 
     for (final g in goals) {
-      if (!unsyncedIds.contains(g.id)) {
+      final isShared = g.userId != userId;
+      // Determine current user's role in this shared goal
+      String? myRole;
+      if (isShared) {
+        final myCollab = g.collaborators
+            .where((c) => c.userId == userId && c.status == 'accepted')
+            .firstOrNull;
+        myRole = myCollab?.role;
+      }
+
+      if (!unsyncedIds.contains(g.id) || isShared) {
         await db.upsertGoal(LocalGoalsCompanion(
           id: Value(g.id),
           userId: Value(g.userId),
@@ -126,6 +186,9 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           synced: const Value(true),
           createdAtMs: Value(g.createdAt.millisecondsSinceEpoch),
           settingsJson: Value(jsonEncode(g.settings.toJson())),
+          isPinned: Value(g.isPinned),
+          isShared: Value(isShared),
+          myRole: Value(myRole),
         ));
       }
       for (final sg in _allSubGoals(g.subGoals)) {
@@ -152,6 +215,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
               isCompleted: Value(t.isCompleted),
               completedAtMs: Value(t.completedAt?.millisecondsSinceEpoch),
               dueDateMs: Value(t.dueDate?.millisecondsSinceEpoch),
+              orderIndex: Value(t.orderIndex),
               synced: const Value(true),
               createdAtMs: Value(t.createdAt.millisecondsSinceEpoch),
             ));
@@ -185,7 +249,12 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     }
   }
 
-  Future<PlanningState> _loadFromLocal(AppDatabase db, String userId) async {
+  Future<PlanningState> _loadFromLocal(AppDatabase db, String userId,
+      [List<Goal>? serverGoals]) async {
+    // Build a lookup map from server data for collaborator/owner enrichment
+    final serverMap = serverGoals != null
+        ? {for (final g in serverGoals) g.id: g}
+        : <String, Goal>{};
     final rawGoals = await db.goalsForUser(userId);
     final goals = <Goal>[];
 
@@ -203,6 +272,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
                   name: rt.name,
                   weight: rt.weight,
                   isCompleted: rt.isCompleted,
+                  orderIndex: rt.orderIndex,
                   completedAt: rt.completedAtMs != null
                       ? DateTime.fromMillisecondsSinceEpoch(rt.completedAtMs!)
                       : null,
@@ -272,6 +342,14 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             ? GoalSettings.fromJson(
                 jsonDecode(rg.settingsJson!) as Map<String, dynamic>)
             : GoalSettings.defaults,
+        mapPositions: rg.mapPositionsJson != null
+            ? positionsFromJson(
+                jsonDecode(rg.mapPositionsJson!) as Map<String, dynamic>)
+            : const {},
+        isPinned: rg.isPinned,
+        // Restore collaborators and ownerProfile from server data if available
+        collaborators: serverMap[rg.id]?.collaborators ?? const [],
+        ownerProfile: serverMap[rg.id]?.ownerProfile,
       ));
     }
 
@@ -415,7 +493,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       };
 
       final xpBonus = medalXpBonus(level);
-      await _awardXp(2000 + xpBonus, dp);
+      await _awardXp(goalCompletionBaseXp(goal) + xpBonus, dp);
 
       medal = MissionMedal(
         id: _uuid.v4(),
@@ -459,7 +537,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             'award_mission_medal', jsonEncode(medal.toInsertMap()));
       }
     } else if (newStatus == 'completed' && goal != null) {
-      await _awardXp(2000, 20);
+      await _awardXp(goalCompletionBaseXp(goal), 20);
     }
 
     if (isOnline) {
@@ -492,7 +570,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
   // ── Add Sub-goal ──────────────────────────────────────────────────────────
 
   Future<void> addSubGoal(String goalId, String name,
-      {int orderIndex = 0, String? parentSubGoalId}) async {
+      {String? parentSubGoalId}) async {
     final client = Supabase.instance.client;
     final session = client.auth.currentSession;
     if (session == null) return;
@@ -500,6 +578,14 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final db = ref.read(appDatabaseProvider);
     final now = DateTime.now();
     final id = _uuid.v4();
+
+    final currentGoal = state.valueOrNull?.goals
+        .where((g) => g.id == goalId).firstOrNull;
+    final orderIndex = parentSubGoalId == null
+        ? (currentGoal?.subGoals.length ?? 0)
+        : (_allSubGoals(currentGoal?.subGoals ?? [])
+              .where((s) => s.id == parentSubGoalId)
+              .firstOrNull?.children.length ?? 0);
 
     final newSg = SubGoal(
       id: id,
@@ -633,6 +719,11 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final id = _uuid.v4();
     final userId = session.user.id;
 
+    final currentSg = _allSubGoals(
+            state.valueOrNull?.goals.expand((g) => g.subGoals).toList() ?? [])
+        .where((s) => s.id == subGoalId).firstOrNull;
+    final taskOrderIndex = currentSg?.tasks.length ?? 0;
+
     final newTask = PlanningTask(
       id: id,
       subGoalId: subGoalId,
@@ -640,6 +731,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       name: name,
       weight: weight,
       isCompleted: false,
+      orderIndex: taskOrderIndex,
       completedAt: null,
       dueDate: dueDate,
       createdAt: now,
@@ -655,6 +747,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       userId: Value(userId),
       name: Value(name),
       weight: Value(weight),
+      orderIndex: Value(taskOrderIndex),
       dueDateMs: Value(dueDate?.millisecondsSinceEpoch),
       synced: const Value(false),
       createdAtMs: Value(now.millisecondsSinceEpoch),
@@ -669,6 +762,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           'user_id': userId,
           'name': name,
           'weight': weight,
+          'order_index': taskOrderIndex,
           'due_date': dueDate?.toIso8601String(),
           'created_at': now.toIso8601String(),
         });
@@ -685,6 +779,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           'user_id': userId,
           'name': name,
           'weight': weight,
+          'order_index': taskOrderIndex,
         }));
   }
 
@@ -1046,6 +1141,72 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     ));
   }
 
+  // ── Reorder Sub-goals ─────────────────────────────────────────────────────
+
+  Future<void> reorderSubGoals(
+      String goalId, String? parentId, List<String> newOrder) async {
+    _updateGoalInState(goalId, (g) {
+      final flat = _allSubGoals(g.subGoals).map((sg) {
+        final idx = newOrder.indexOf(sg.id);
+        return idx >= 0 ? sg.copyWith(orderIndex: idx) : sg;
+      }).toList()
+        ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+      return g.copyWith(subGoals: buildSubGoalTree(flat));
+    });
+    final db = ref.read(appDatabaseProvider);
+    for (int i = 0; i < newOrder.length; i++) {
+      await db.updateSubGoalOrderIndex(newOrder[i], i);
+    }
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    for (int i = 0; i < newOrder.length; i++) {
+      if (isOnline) {
+        try {
+          await Supabase.instance.client
+              .from('sub_goals').update({'order_index': i}).eq('id', newOrder[i]);
+          await db.updateSubGoal(newOrder[i],
+              const LocalSubGoalsCompanion(synced: Value(true)));
+          continue;
+        } catch (_) {}
+      }
+      await db.enqueueSyncOp('reorder_sub_goal',
+          jsonEncode({'id': newOrder[i], 'order_index': i}));
+    }
+  }
+
+  // ── Reorder Tasks ──────────────────────────────────────────────────────────
+
+  Future<void> reorderTasks(
+      String goalId, String subGoalId, List<String> newOrder) async {
+    _updateGoalInState(goalId, (g) => g.copyWith(
+        subGoals: _updateSubGoalInTree(g.subGoals, subGoalId, (sg) {
+          final reordered = List.of(sg.tasks)
+            ..sort((a, b) =>
+                newOrder.indexOf(a.id).compareTo(newOrder.indexOf(b.id)));
+          return sg.copyWith(
+              tasks: reordered.indexed
+                  .map((e) => e.$2.copyWith(orderIndex: e.$1))
+                  .toList());
+        })));
+    final db = ref.read(appDatabaseProvider);
+    for (int i = 0; i < newOrder.length; i++) {
+      await db.updateTaskOrderIndex(newOrder[i], i);
+    }
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    for (int i = 0; i < newOrder.length; i++) {
+      if (isOnline) {
+        try {
+          await Supabase.instance.client
+              .from('planning_tasks').update({'order_index': i}).eq('id', newOrder[i]);
+          await db.updatePlanningTask(newOrder[i],
+              const LocalPlanningTasksCompanion(synced: Value(true)));
+          continue;
+        } catch (_) {}
+      }
+      await db.enqueueSyncOp('reorder_task',
+          jsonEncode({'id': newOrder[i], 'order_index': i}));
+    }
+  }
+
   // ── Update Goal Settings ──────────────────────────────────────────────────
 
   Future<void> updateGoalSettings(String goalId, GoalSettings settings) async {
@@ -1069,6 +1230,50 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     }
     await db.enqueueSyncOp('update_goal_settings',
         jsonEncode({'id': goalId, 'settings': settings.toJson()}));
+  }
+
+  // ── Pin Goal ──────────────────────────────────────────────────────────────
+
+  Future<void> toggleGoalPin(String goalId) async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+
+    final goal = current.goals.where((g) => g.id == goalId).firstOrNull;
+    if (goal == null) return;
+    final newPinned = !goal.isPinned;
+
+    // Optimistic update + re-sort (pinned first, then by createdAt)
+    final updated = current.goals
+        .map((g) => g.id == goalId ? g.copyWith(isPinned: newPinned) : g)
+        .toList()
+      ..sort((a, b) {
+        if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+        return a.createdAt.compareTo(b.createdAt);
+      });
+    state = AsyncData(current.copyWith(goals: updated));
+
+    final db = ref.read(appDatabaseProvider);
+    await db.updateGoal(goalId, LocalGoalsCompanion(
+        isPinned: Value(newPinned), synced: const Value(false)));
+
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await Supabase.instance.client
+            .from('goals')
+            .update({'is_pinned': newPinned})
+            .eq('id', goalId)
+            .eq('user_id', userId);
+        await db.updateGoal(goalId,
+            const LocalGoalsCompanion(synced: Value(true)));
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('update_goal_pin',
+        jsonEncode({'id': goalId, 'is_pinned': newPinned}));
   }
 
   // ── Habit Boost ───────────────────────────────────────────────────────────
@@ -1218,5 +1423,98 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     }
     await db.enqueueSyncOp(
         'move_sub_goal', jsonEncode({'id': subGoalId, 'parent_sub_goal_id': newParentSubGoalId}));
+  }
+
+  // ── Unparent SubGoal (move up one level) ─────────────────────────────────
+
+  Future<void> unparentSubGoal(String subGoalId) async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+
+    SubGoal? sg;
+    String? goalId;
+    for (final g in current.goals) {
+      for (final s in _allSubGoals(g.subGoals)) {
+        if (s.id == subGoalId) {
+          sg = s;
+          goalId = g.id;
+          break;
+        }
+      }
+      if (sg != null) break;
+    }
+    if (sg == null || sg.parentSubGoalId == null) return;
+
+    final oldParentId = sg.parentSubGoalId!;
+    // Determine grandparent (the new parent after moving up)
+    String? grandParentId;
+    for (final g in current.goals) {
+      for (final s in _allSubGoals(g.subGoals)) {
+        if (s.id == oldParentId) { grandParentId = s.parentSubGoalId; break; }
+      }
+      if (grandParentId != null) break;
+    }
+
+    final moved = sg.copyWith(parentSubGoalId: grandParentId);
+    state = AsyncData(current.copyWith(
+      goals: current.goals.map((g) {
+        if (g.id != goalId) return g;
+        // Remove from old parent's children
+        List<SubGoal> updated = _updateSubGoalInTree(g.subGoals, oldParentId, (s) =>
+            s.copyWith(children: s.children.where((c) => c.id != subGoalId).toList()));
+        // Add to grandparent or root
+        if (grandParentId == null) {
+          updated = [...updated, moved];
+        } else {
+          updated = _updateSubGoalInTree(updated, grandParentId!, (s) =>
+              s.copyWith(children: [...s.children, moved]));
+        }
+        return g.copyWith(subGoals: updated);
+      }).toList(),
+    ));
+
+    final db = ref.read(appDatabaseProvider);
+    await db.updateSubGoal(subGoalId, LocalSubGoalsCompanion(
+      parentSubGoalId: Value(grandParentId),
+      synced: const Value(false),
+    ));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await Supabase.instance.client
+            .from('sub_goals')
+            .update({'parent_sub_goal_id': grandParentId}).eq('id', subGoalId);
+        await db.updateSubGoal(subGoalId,
+            const LocalSubGoalsCompanion(synced: Value(true)));
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp(
+        'move_sub_goal', jsonEncode({'id': subGoalId, 'parent_sub_goal_id': grandParentId}));
+  }
+
+  // ── Save map positions ────────────────────────────────────────────────────
+
+  Future<void> saveMapPositions(String goalId, Map<String, Offset> positions) async {
+    final posJson = positionsToJson(positions);
+
+    _updateGoalInState(goalId, (g) => g.copyWith(mapPositions: positions));
+
+    final db = ref.read(appDatabaseProvider);
+    await db.updateGoalMapPositions(goalId, jsonEncode(posJson));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await Supabase.instance.client
+            .from('goals')
+            .update({'map_positions': posJson}).eq('id', goalId);
+        await db.updateGoal(goalId, const LocalGoalsCompanion(synced: Value(true)));
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('save_map_positions',
+        jsonEncode({'id': goalId, 'map_positions': posJson}));
   }
 }

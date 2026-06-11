@@ -136,7 +136,11 @@ class LocalGoals extends Table {
   BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
   IntColumn  get createdAtMs    => integer()();
   IntColumn  get updatedAtMs    => integer().nullable()();
-  TextColumn get settingsJson   => text().nullable()();
+  TextColumn get settingsJson      => text().nullable()();
+  TextColumn get mapPositionsJson  => text().nullable()();
+  BoolColumn get isPinned          => boolean().withDefault(const Constant(false))();
+  BoolColumn get isShared          => boolean().withDefault(const Constant(false))();
+  TextColumn get myRole            => text().nullable()();
   @override Set<Column> get primaryKey => {id};
 }
 
@@ -177,6 +181,7 @@ class LocalPlanningTasks extends Table {
   BoolColumn get isCompleted    => boolean().withDefault(const Constant(false))();
   IntColumn  get completedAtMs  => integer().nullable()();
   IntColumn  get dueDateMs      => integer().nullable()();
+  IntColumn  get orderIndex     => integer().withDefault(const Constant(0))();
   BoolColumn get synced         => boolean().withDefault(const Constant(false))();
   BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
   IntColumn  get createdAtMs    => integer()();
@@ -233,7 +238,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -271,6 +276,19 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 9) {
         await m.createTable(localMissionMedals);
+      }
+      if (from < 10) {
+        await m.addColumn(localGoals, localGoals.mapPositionsJson);
+      }
+      if (from < 11) {
+        await m.addColumn(localPlanningTasks, localPlanningTasks.orderIndex);
+      }
+      if (from < 12) {
+        await m.addColumn(localGoals, localGoals.isPinned);
+      }
+      if (from < 13) {
+        await m.addColumn(localGoals, localGoals.isShared);
+        await m.addColumn(localGoals, localGoals.myRole);
       }
     },
   );
@@ -560,15 +578,46 @@ class AppDatabase extends _$AppDatabase {
         synced: const Value(false),
       ));
 
+  Future<void> updateGoalMapPositions(String id, String? json) =>
+      updateGoal(id, LocalGoalsCompanion(
+        mapPositionsJson: Value(json),
+        synced: const Value(false),
+      ));
+
+  Future<void> updateSubGoalOrderIndex(String id, int idx) =>
+      (update(localSubGoals)..where((t) => t.id.equals(id)))
+          .write(LocalSubGoalsCompanion(
+              orderIndex: Value(idx), synced: const Value(false)));
+
+  Future<void> updateTaskOrderIndex(String id, int idx) =>
+      (update(localPlanningTasks)..where((t) => t.id.equals(id)))
+          .write(LocalPlanningTasksCompanion(
+              orderIndex: Value(idx), synced: const Value(false)));
+
   Future<void> upsertGoalHabitLink(LocalGoalHabitLinksCompanion row) =>
       into(localGoalHabitLinks).insertOnConflictUpdate(row);
 
   Future<List<LocalGoal>> goalsForUser(String uid) =>
       (select(localGoals)
             ..where((t) =>
-                t.userId.equals(uid) & t.deletedLocally.equals(false))
-            ..orderBy([(t) => OrderingTerm(expression: t.createdAtMs)]))
+                (t.userId.equals(uid) | t.isShared.equals(true)) &
+                t.deletedLocally.equals(false))
+            ..orderBy([
+              (t) => OrderingTerm(expression: t.isPinned, mode: OrderingMode.desc),
+              (t) => OrderingTerm(expression: t.createdAtMs),
+            ]))
           .get();
+
+  Future<void> cleanupRemovedSharedGoals(Set<String> currentServerIds) async {
+    final shared = await (select(localGoals)
+          ..where((t) => t.isShared.equals(true)))
+        .get();
+    for (final g in shared) {
+      if (!currentServerIds.contains(g.id)) {
+        await deleteGoalLocally(g.id);
+      }
+    }
+  }
 
   Future<List<LocalSubGoal>> subGoalsForGoal(String goalId) =>
       (select(localSubGoals)
@@ -582,7 +631,7 @@ class AppDatabase extends _$AppDatabase {
             ..where((t) =>
                 t.subGoalId.equals(subGoalId) &
                 t.deletedLocally.equals(false))
-            ..orderBy([(t) => OrderingTerm(expression: t.createdAtMs)]))
+            ..orderBy([(t) => OrderingTerm(expression: t.orderIndex)]))
           .get();
 
   Future<List<LocalMilestone>> milestonesForGoal(String goalId) =>

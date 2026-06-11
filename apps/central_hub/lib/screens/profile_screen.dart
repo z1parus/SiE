@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 
 import 'edit_profile_screen.dart';
+import 'friends_list_screen.dart';
 import 'knowledge_base_screen.dart';
 import 'progress_analytics_screen.dart';
 
@@ -82,16 +83,29 @@ class _TopBar extends StatelessWidget {
                   ),
             ),
           ),
-          _GlassCircleButton(
-            icon: Icons.edit_outlined,
-            onTap: () => Navigator.of(context).push(
-              PageRouteBuilder(
-                pageBuilder: (_, _, _) => const EditProfileScreen(),
-                transitionsBuilder: (_, anim, _, child) =>
-                    FadeTransition(opacity: anim, child: child),
-                transitionDuration: const Duration(milliseconds: 300),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _GlassCircleButton(
+                icon: Icons.people_outlined,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const FriendsListScreen()),
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              _GlassCircleButton(
+                icon: Icons.edit_outlined,
+                onTap: () => Navigator.of(context).push(
+                  PageRouteBuilder(
+                    pageBuilder: (_, _, _) => const EditProfileScreen(),
+                    transitionsBuilder: (_, anim, _, child) =>
+                        FadeTransition(opacity: anim, child: child),
+                    transitionDuration: const Duration(milliseconds: 300),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

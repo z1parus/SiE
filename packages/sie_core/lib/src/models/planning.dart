@@ -1,4 +1,7 @@
+import 'dart:ui' show Offset;
 import 'package:flutter/material.dart';
+import 'goal_collaborator.dart';
+import 'public_profile.dart';
 
 const _unset = Object();
 
@@ -75,6 +78,7 @@ class PlanningTask {
     required this.name,
     required this.weight,
     required this.isCompleted,
+    required this.orderIndex,
     required this.createdAt,
     this.completedAt,
     this.dueDate,
@@ -86,6 +90,7 @@ class PlanningTask {
   final String name;
   final int weight; // 1 / 3 / 5
   final bool isCompleted;
+  final int orderIndex;
   final DateTime? completedAt;
   final DateTime? dueDate;
   final DateTime createdAt;
@@ -94,6 +99,7 @@ class PlanningTask {
     String? subGoalId,
     String? name,
     bool? isCompleted,
+    int? orderIndex,
     Object? completedAt = _unset,
     DateTime? dueDate,
   }) =>
@@ -104,6 +110,7 @@ class PlanningTask {
         name: name ?? this.name,
         weight: weight,
         isCompleted: isCompleted ?? this.isCompleted,
+        orderIndex: orderIndex ?? this.orderIndex,
         completedAt:
             completedAt == _unset ? this.completedAt : completedAt as DateTime?,
         dueDate: dueDate ?? this.dueDate,
@@ -117,6 +124,7 @@ class PlanningTask {
         name: j['name'] as String,
         weight: (j['weight'] as num?)?.toInt() ?? 1,
         isCompleted: j['is_completed'] as bool? ?? false,
+        orderIndex: (j['order_index'] as num?)?.toInt() ?? 0,
         completedAt: j['completed_at'] != null
             ? DateTime.parse(j['completed_at'] as String)
             : null,
@@ -166,6 +174,7 @@ class SubGoal {
   SubGoal copyWith({
     String? name,
     bool? isCompleted,
+    int? orderIndex,
     List<PlanningTask>? tasks,
     List<SubGoal>? children,
     String? parentSubGoalId,
@@ -176,7 +185,7 @@ class SubGoal {
         parentSubGoalId: parentSubGoalId ?? this.parentSubGoalId,
         name: name ?? this.name,
         isCompleted: isCompleted ?? this.isCompleted,
-        orderIndex: orderIndex,
+        orderIndex: orderIndex ?? this.orderIndex,
         tasks: tasks ?? this.tasks,
         children: children ?? this.children,
         createdAt: createdAt,
@@ -287,6 +296,10 @@ class Goal {
     this.deadline,
     this.updatedAt,
     this.settings = GoalSettings.defaults,
+    this.mapPositions = const {},
+    this.isPinned = false,
+    this.collaborators = const [],
+    this.ownerProfile,
   });
 
   final String id;
@@ -304,6 +317,10 @@ class Goal {
   final DateTime createdAt;
   final DateTime? updatedAt;
   final GoalSettings settings;
+  final Map<String, Offset> mapPositions;
+  final bool isPinned;
+  final List<GoalCollaborator> collaborators;
+  final PublicProfile? ownerProfile; // populated for shared goals
 
   Color get color =>
       Color(int.parse('0xFF${colorHex.replaceAll('#', '')}'));
@@ -335,6 +352,10 @@ class Goal {
     List<GoalHabitLink>? habitLinks,
     DateTime? updatedAt,
     GoalSettings? settings,
+    Map<String, Offset>? mapPositions,
+    bool? isPinned,
+    List<GoalCollaborator>? collaborators,
+    PublicProfile? ownerProfile,
   }) =>
       Goal(
         id: id,
@@ -352,6 +373,10 @@ class Goal {
         createdAt: createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
         settings: settings ?? this.settings,
+        mapPositions: mapPositions ?? this.mapPositions,
+        isPinned: isPinned ?? this.isPinned,
+        collaborators: collaborators ?? this.collaborators,
+        ownerProfile: ownerProfile ?? this.ownerProfile,
       );
 
   factory Goal.fromJson(Map<String, dynamic> j) {
@@ -376,6 +401,13 @@ class Goal {
             .toList()
         : <GoalHabitLink>[];
 
+    final rawCollabs = j['goal_collaborators'];
+    final collaborators = rawCollabs is List
+        ? rawCollabs
+            .map((c) => GoalCollaborator.fromJson(c as Map<String, dynamic>))
+            .toList()
+        : <GoalCollaborator>[];
+
     return Goal(
       id: j['id'] as String,
       userId: j['user_id'] as String,
@@ -398,6 +430,9 @@ class Goal {
       settings: j['settings'] is Map<String, dynamic>
           ? GoalSettings.fromJson(j['settings'] as Map<String, dynamic>)
           : GoalSettings.defaults,
+      mapPositions: positionsFromJson(j['map_positions'] as Map<String, dynamic>?),
+      isPinned: j['is_pinned'] as bool? ?? false,
+      collaborators: collaborators,
     );
   }
 
@@ -412,6 +447,7 @@ class Goal {
         'color_hex': colorHex,
         'progress': progress,
         'settings': settings.toJson(),
+        if (mapPositions.isNotEmpty) 'map_positions': positionsToJson(mapPositions),
       };
 }
 
@@ -463,6 +499,17 @@ List<SubGoal> buildSubGoalTree(List<SubGoal> flat) {
       .toList();
 }
 
+Map<String, Offset> positionsFromJson(Map<String, dynamic>? j) {
+  if (j == null) return const {};
+  return j.map((k, v) {
+    final m = v as Map<String, dynamic>;
+    return MapEntry(k, Offset((m['x'] as num).toDouble(), (m['y'] as num).toDouble()));
+  });
+}
+
+Map<String, dynamic> positionsToJson(Map<String, Offset> pos) =>
+    pos.map((k, v) => MapEntry(k, {'x': v.dx, 'y': v.dy}));
+
 double subGoalProgress(SubGoal sg) {
   final hasTasks    = sg.tasks.isNotEmpty;
   final hasChildren = sg.children.isNotEmpty;
@@ -494,6 +541,14 @@ double goalProgress(Goal g) {
   if (g.subGoals.isEmpty) return g.progress;
   final list = g.subGoals.map(subGoalProgress).toList();
   return list.reduce((a, b) => a + b) / list.length;
+}
+
+// Returns 2000 only when goal qualifies (age ≥ 1 day, has tasks, all done).
+int goalCompletionBaseXp(Goal goal) {
+  final ageQualifies = DateTime.now().difference(goal.createdAt).inDays >= 1;
+  final hasTasks = goal.totalTasks > 0;
+  final allTasksDone = goal.completedTasks == goal.totalTasks;
+  return (ageQualifies && hasTasks && allTasksDone) ? 2000 : 0;
 }
 
 int taskXp(int weight) => switch (weight) {
