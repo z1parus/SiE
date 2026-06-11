@@ -494,7 +494,6 @@ class _ViewToggle extends StatelessWidget {
           children: [
             _ToggleSegment(
               icon: Icons.list,
-              label: 'Список',
               active: !mapMode,
               goalColor: goalColor,
               sc: sc,
@@ -502,7 +501,6 @@ class _ViewToggle extends StatelessWidget {
             ),
             _ToggleSegment(
               icon: Icons.map_outlined,
-              label: 'Карта',
               active: mapMode,
               goalColor: goalColor,
               sc: sc,
@@ -518,7 +516,6 @@ class _ViewToggle extends StatelessWidget {
 class _ToggleSegment extends StatelessWidget {
   const _ToggleSegment({
     required this.icon,
-    required this.label,
     required this.active,
     required this.goalColor,
     required this.sc,
@@ -526,7 +523,6 @@ class _ToggleSegment extends StatelessWidget {
   });
 
   final IconData icon;
-  final String label;
   final bool active;
   final Color goalColor;
   final SieColors sc;
@@ -535,7 +531,7 @@ class _ToggleSegment extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: active ? goalColor.withValues(alpha: 0.15) : Colors.transparent,
         borderRadius: BorderRadius.horizontal(
@@ -547,16 +543,7 @@ class _ToggleSegment extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon,
-              size: 14, color: active ? goalColor : sc.textSecondary),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: active ? goalColor : sc.textSecondary,
-              fontSize: 11,
-              fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-            ),
-          ),
+              size: 16, color: active ? goalColor : sc.textSecondary),
         ],
       ),
     );
