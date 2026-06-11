@@ -21,7 +21,7 @@ class GroqService {
   final String _apiKey;
   GroqService._(this._apiKey);
 
-  static const _model = 'llama3-8b-8192';
+  static const _model = 'llama-3.3-70b-versatile';
   static const _maxDailyRequests = 20;
   static const _prefKeyCount = 'groq_calls_count';
   static const _prefKeyDate = 'groq_calls_date';
