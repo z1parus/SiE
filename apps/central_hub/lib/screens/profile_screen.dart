@@ -191,6 +191,7 @@ class _ProfileContent extends ConsumerWidget {
                   _HeaderGlassCard(
                     profile: profile,
                     frameDecoration: frameDecoration,
+                    background: equipped.background,
                   ),
                   if (equipped.statStyle != null) ...[
                     const SizedBox(height: 12),
@@ -262,9 +263,28 @@ class _HeaderGlassCard extends ConsumerWidget {
   const _HeaderGlassCard({
     required this.profile,
     required this.frameDecoration,
+    this.background,
   });
   final Profile? profile;
   final BoxDecoration frameDecoration;
+  final CosmeticAsset? background;
+
+  static BoxDecoration _cardDecoration(SieColors c, CosmeticAsset? bg) {
+    if (bg?.backgroundColor != null) {
+      return BoxDecoration(
+        color: bg!.backgroundColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: bg.accentColor.withValues(alpha: 0.25)),
+      );
+    }
+    if (bg?.backgroundGradient != null) {
+      return BoxDecoration(
+        gradient: bg!.backgroundGradient,
+        borderRadius: BorderRadius.circular(24),
+      );
+    }
+    return c.flatCard(radius: 24);
+  }
 
   static String _rankLabel(int level) {
     if (level <= 5)  return 'Recruit';
@@ -275,133 +295,148 @@ class _HeaderGlassCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c          = ref.watch(sieColorsProvider);
-    final username   = profile?.username?.toUpperCase() ?? 'UNKNOWN';
-    final letter     = username.isNotEmpty ? username[0] : '?';
-    final xp         = profile?.totalXp ?? 0;
-    final level      = (xp ~/ 1000) + 1;
-    final xpInLevel  = xp % 1000;
-    final progress   = (xpInLevel / 1000.0).clamp(0.0, 1.0);
-    final xpToNext   = 1000 - xpInLevel;
+    final c           = ref.watch(sieColorsProvider);
+    final username    = profile?.username?.toUpperCase() ?? 'UNKNOWN';
+    final letter      = username.isNotEmpty ? username[0] : '?';
+    final xp          = profile?.totalXp ?? 0;
+    final level       = (xp ~/ 1000) + 1;
+    final xpInLevel   = xp % 1000;
+    final progress    = (xpInLevel / 1000.0).clamp(0.0, 1.0);
+    final xpToNext    = 1000 - xpInLevel;
+    final hasCustomBg = background != null &&
+        (background!.backgroundColor != null ||
+            background!.backgroundGradient != null);
+    final textMain    = hasCustomBg ? Colors.white : c.textPrimary;
+    final textSub     = hasCustomBg ? Colors.white60 : c.textSecondary;
+    final showNeural  = background != null &&
+        (background!.backgroundColor != null || background!.useNeuralPattern);
 
-    final inner = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 68,
-              height: 68,
-              decoration: frameDecoration,
-              child: ClipOval(
-                child: profile?.avatarUrl != null
-                    ? Image.network(
-                        profile!.avatarUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) =>
-                            _AvatarLetter(letter: letter),
-                      )
-                    : _AvatarLetter(letter: letter),
+    return Container(
+      clipBehavior: Clip.hardEdge,
+      decoration: _cardDecoration(c, background),
+      child: Stack(
+        children: [
+          if (showNeural)
+            Positioned.fill(
+              child: NeuralNetworkWidget(
+                color: (background?.accentColor ?? c.accent)
+                    .withValues(alpha: 0.40),
               ),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    username,
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineMedium
-                        ?.copyWith(
-                          fontSize: 18,
-                          shadows: null,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      _Chip(
-                        label: 'LEVEL $level',
-                        borderColor: c.accent.withValues(alpha: 0.5),
-                        textColor: c.accent,
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 68,
+                      height: 68,
+                      decoration: frameDecoration,
+                      child: ClipOval(
+                        child: profile?.avatarUrl != null
+                            ? Image.network(
+                                profile!.avatarUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) =>
+                                    _AvatarLetter(letter: letter),
+                              )
+                            : _AvatarLetter(letter: letter),
                       ),
-                      const SizedBox(width: 8),
-                      _Chip(
-                        label: '${profile?.designPoints ?? 0} DP',
-                        borderColor: c.dp.withValues(alpha: 0.45),
-                        textColor: c.dp,
-                        icon: Icons.palette_outlined,
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            username,
+                            style: TextStyle(
+                              color: textMain,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1,
+                              shadows: null,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              _Chip(
+                                label: 'LEVEL $level',
+                                borderColor: c.accent.withValues(alpha: 0.5),
+                                textColor: c.accent,
+                              ),
+                              const SizedBox(width: 8),
+                              _Chip(
+                                label: '${profile?.designPoints ?? 0} DP',
+                                borderColor: c.dp.withValues(alpha: 0.45),
+                                textColor: c.dp,
+                                icon: Icons.palette_outlined,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '$xp XP TOTAL',
+                      style: TextStyle(
+                        color: c.accent,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    Text(
+                      '$xpToNext XP TO LVL ${level + 1}',
+                      style: TextStyle(color: textSub, fontSize: 10),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: Stack(
+                    children: [
+                      Container(height: 6, color: c.border),
+                      FractionallySizedBox(
+                        widthFactor: progress,
+                        child: Container(
+                          height: 6,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [c.accent, c.accentSecondary],
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              '$xp XP TOTAL',
-              style: TextStyle(
-                color: c.accent,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1.2,
-              ),
-            ),
-            Text(
-              '$xpToNext XP TO LVL ${level + 1}',
-              style: TextStyle(
-                color: c.textSecondary,
-                fontSize: 10,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(3),
-          child: Stack(
-            children: [
-              Container(height: 6, color: c.border),
-              FractionallySizedBox(
-                widthFactor: progress,
-                child: Container(
-                  height: 6,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [c.accent, c.accentSecondary],
-                    ),
-                    boxShadow: null,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${(progress * 100).toStringAsFixed(0)}%  ·  '
+                  '${_rankLabel(level).toUpperCase()}  ·  '
+                  'LVL $level → LVL ${level + 1}',
+                  style: TextStyle(
+                    color: textSub,
+                    fontSize: 9,
+                    letterSpacing: 1,
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          '${(progress * 100).toStringAsFixed(0)}%  ·  '
-          '${_rankLabel(level).toUpperCase()}  ·  '
-          'LVL $level → LVL ${level + 1}',
-          style: TextStyle(
-            color: c.textSecondary,
-            fontSize: 9,
-            letterSpacing: 1,
-          ),
-        ),
-      ],
-    );
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: c.flatCard(radius: 24),
-      child: inner,
+        ],
+      ),
     );
   }
 }

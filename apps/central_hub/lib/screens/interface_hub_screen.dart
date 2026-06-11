@@ -825,18 +825,45 @@ class _BackgroundVisual extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ClipRRect(
         borderRadius: BorderRadius.circular(4),
-        child: Container(
+        child: _buildBgContainer(
           width: 84,
           height: 56,
-          decoration: BoxDecoration(
-            gradient: asset.backgroundGradient ??
-                const LinearGradient(
-                  colors: [Color(0xFF0D2A42), Color(0xFF071520)],
-                ),
-          ),
-          child: CustomPaint(painter: _GridPainter()),
+          asset: asset,
         ),
       );
+
+  Widget _buildBgContainer({
+    required double width,
+    required double height,
+    required CosmeticAsset asset,
+  }) {
+    Widget pattern;
+    if (asset.useNeuralPattern) {
+      pattern = NeuralNetworkWidget(color: asset.accentColor.withValues(alpha: 0.20));
+    } else {
+      pattern = CustomPaint(painter: _GridPainter());
+    }
+
+    if (asset.backgroundColor != null) {
+      return Container(
+        width: width,
+        height: height,
+        color: asset.backgroundColor,
+        child: pattern,
+      );
+    }
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        gradient: asset.backgroundGradient ??
+            const LinearGradient(
+              colors: [Color(0xFF0D2A42), Color(0xFF071520)],
+            ),
+      ),
+      child: NeuralNetworkWidget(color: asset.accentColor.withValues(alpha: 0.18)),
+    );
+  }
 }
 
 class _StatStyleVisual extends StatelessWidget {
@@ -898,6 +925,49 @@ class _GridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_GridPainter _) => false;
+}
+
+// ── Preview Background Box ────────────────────────────────────
+class _PreviewBgBox extends StatelessWidget {
+  final CosmeticAsset? bg;
+  final SieColors c;
+  final Widget child;
+  const _PreviewBgBox({required this.bg, required this.c, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    BoxDecoration decoration;
+    if (bg?.backgroundColor != null) {
+      decoration = BoxDecoration(
+        color: bg!.backgroundColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.accent.withValues(alpha: 0.3)),
+      );
+    } else {
+      decoration = BoxDecoration(
+        gradient: bg?.backgroundGradient ??
+            (c.isLightMode
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [c.border, c.surface],
+                  )
+                : const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF0D2A42), Color(0xFF071520)],
+                  )),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.accent.withValues(alpha: 0.3)),
+      );
+    }
+    return Container(
+      height: 130,
+      clipBehavior: Clip.hardEdge,
+      decoration: decoration,
+      child: child,
+    );
+  }
 }
 
 // ── Preview Sheet ─────────────────────────────────────────────
@@ -963,28 +1033,18 @@ class _PreviewSheet extends ConsumerWidget {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 16),
-          Container(
-            height: 130,
-            clipBehavior: Clip.hardEdge,
-            decoration: BoxDecoration(
-              gradient: previewEquipped.background?.backgroundGradient ??
-                  (c.isLightMode
-                      ? LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [c.border, c.surface],
-                        )
-                      : const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Color(0xFF0D2A42), Color(0xFF071520)],
-                        )),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: c.accent.withValues(alpha: 0.3)),
-            ),
+          _PreviewBgBox(
+            bg: previewEquipped.background,
+            c: c,
             child: Stack(
               children: [
-                CustomPaint(painter: _GridPainter(), size: Size.infinite),
+                if (previewEquipped.background?.useNeuralPattern ?? false)
+                  NeuralNetworkWidget(
+                    color: (previewEquipped.background?.accentColor ?? c.accent)
+                        .withValues(alpha: 0.20),
+                  )
+                else
+                  CustomPaint(painter: _GridPainter(), size: Size.infinite),
                 Positioned.fill(
                   child: Container(
                     decoration: BoxDecoration(

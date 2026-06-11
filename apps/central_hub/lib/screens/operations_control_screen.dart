@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -674,73 +675,151 @@ class _BreathSpherePreview extends ConsumerStatefulWidget {
 }
 
 class _BreathSpherePreviewState extends ConsumerState<_BreathSpherePreview>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _scale;
+    with TickerProviderStateMixin {
+  late final AnimationController _pulseCtrl;
+  late final AnimationController _shaderCtrl;
+  late final Animation<double> _pulse;
+  FragmentShader? _shader;
+
+  static const _size = 130.0;
+  static const _lightAngle = -math.pi / 4;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
+    _pulseCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 3600),
+      duration: const Duration(seconds: 4),
     )..repeat(reverse: true);
-    _scale = Tween<double>(begin: 0.82, end: 1.0).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    _pulse = Tween<double>(begin: 0.93, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
     );
+    _shaderCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 60),
+    )..repeat();
+    _loadShader();
+  }
+
+  Future<void> _loadShader() async {
+    try {
+      final program = await FragmentProgram.fromAsset(
+        'assets/shaders/breathing_sphere.frag',
+      );
+      if (mounted) setState(() => _shader = program.fragmentShader());
+    } catch (_) {}
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _pulseCtrl.dispose();
+    _shaderCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final c = ref.watch(sieColorsProvider);
+    final fallbackColors = c.isLightMode
+        ? <Color>[const Color(0xFFF1F1F5), const Color(0xFFD0D2DC)]
+        : <Color>[const Color(0xFF1C2035), const Color(0xFF2A3048)];
+
     return Center(
       child: AnimatedBuilder(
-        animation: _scale,
-        builder: (_, _) => Transform.scale(
-          scale: _scale.value,
-          child: Container(
-            width: 130,
-            height: 130,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: c.isLightMode
-                  ? RadialGradient(
-                      colors: [
-                        Colors.white,
-                        const Color(0xFFB8E8E2),
-                        c.accent,
-                        c.surface,
-                      ],
-                      stops: const [0.0, 0.28, 0.65, 1.0],
-                    )
-                  : const RadialGradient(
-                      colors: [
-                        Color(0xFFCCF8FF),
-                        Color(0xFF00E5FF),
-                        Color(0xFF7000FF),
-                        Color(0x007000FF),
-                      ],
-                      stops: [0.0, 0.28, 0.68, 1.0],
-                    ),
-              boxShadow: [
-                BoxShadow(
-                  color: c.accent.withValues(alpha: c.isLightMode ? 0.15 : 0.20),
-                  blurRadius: 20,
-                  spreadRadius: c.isLightMode ? 2 : 4,
+        animation: Listenable.merge([_pulse, _shaderCtrl]),
+        builder: (_, _) {
+          final shaderTime = _shaderCtrl.value * 60.0;
+          return Transform.scale(
+            scale: _pulse.value,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Layer 1 — outer golden corona
+                Container(
+                  width: _size + 60,
+                  height: _size + 60,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFC8A84B).withValues(
+                            alpha: c.isLightMode ? 0.07 : 0.13),
+                        blurRadius: c.isLightMode ? 18 : 22,
+                      ),
+                    ],
+                  ),
+                ),
+                // Layer 2 — shader sphere
+                ClipOval(
+                  child: SizedBox(
+                    width: _size,
+                    height: _size,
+                    child: _shader != null
+                        ? CustomPaint(
+                            painter: _PreviewShaderPainter(
+                              shader: _shader!,
+                              time: shaderTime,
+                              sphereSize: _size,
+                              isDark: !c.isLightMode,
+                            ),
+                          )
+                        : Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: RadialGradient(
+                                colors: fallbackColors,
+                                stops: const [0.0, 1.0],
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+                // Layer 3 — golden rim
+                CustomPaint(
+                  size: const Size(_size, _size),
+                  painter: SphereRimPainter(
+                    lightAngle: _lightAngle,
+                    intensity: 0.6,
+                    isDark: !c.isLightMode,
+                  ),
                 ),
               ],
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
+}
+
+class _PreviewShaderPainter extends CustomPainter {
+  final FragmentShader shader;
+  final double time;
+  final double sphereSize;
+  final bool isDark;
+
+  const _PreviewShaderPainter({
+    required this.shader,
+    required this.time,
+    required this.sphereSize,
+    required this.isDark,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    try {
+      shader.setFloat(0, time);
+      shader.setFloat(1, 0.3); // idle breath position
+      shader.setFloat(2, size.width);
+      shader.setFloat(3, size.height);
+      shader.setFloat(4, isDark ? 1.0 : 0.0);
+      canvas.drawRect(Offset.zero & size, Paint()..shader = shader);
+    } catch (_) {}
+  }
+
+  @override
+  bool shouldRepaint(_PreviewShaderPainter old) =>
+      time != old.time || sphereSize != old.sphereSize || isDark != old.isDark;
 }
 
 class _HabitMatrixPreview extends ConsumerWidget {

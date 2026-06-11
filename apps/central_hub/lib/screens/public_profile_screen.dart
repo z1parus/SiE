@@ -48,15 +48,15 @@ class PublicProfileScreen extends ConsumerWidget {
                         _StatsRow(
                             profile: profile, statStyle: equipped.statStyle),
                         const SizedBox(height: 16),
-                        _XpPanel(profile: profile),
-                        const SizedBox(height: 28),
-                        const SectionHeader(title: 'AWARDS'),
+                        _SectionBlock(
+                          title: 'AWARDS',
+                          child: _AchievementsSection(userId: profile.id),
+                        ),
                         const SizedBox(height: 16),
-                        _AchievementsSection(userId: profile.id),
-                        const SizedBox(height: 28),
-                        const SectionHeader(title: 'MISSION MEDALS'),
-                        const SizedBox(height: 16),
-                        _PublicMedalsSection(userId: profile.id),
+                        _SectionBlock(
+                          title: 'MISSION MEDALS',
+                          child: _PublicMedalsSection(userId: profile.id),
+                        ),
                       ],
                     ),
                   ),
@@ -97,91 +97,213 @@ class _HeroSection extends ConsumerWidget {
   final EquippedAssets equipped;
   const _HeroSection({required this.profile, required this.equipped});
 
+  static String _rankLabel(int level) {
+    if (level <= 5)  return 'Recruit';
+    if (level <= 10) return 'Operative';
+    if (level <= 20) return 'Explorer';
+    return 'Commander';
+  }
+
+  static BoxDecoration _cardDecoration(SieColors c, CosmeticAsset? bg) {
+    if (bg?.backgroundColor != null) {
+      return BoxDecoration(
+        color: bg!.backgroundColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: bg.accentColor.withValues(alpha: 0.25)),
+      );
+    }
+    if (bg?.backgroundGradient != null) {
+      return BoxDecoration(
+        gradient: bg!.backgroundGradient,
+        borderRadius: BorderRadius.circular(24),
+      );
+    }
+    return c.flatCard(radius: 24);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c  = ref.watch(sieColorsProvider);
-    final bg = equipped.background;
-    Widget bgWidget;
-    if (bg != null && bg.imageUrl != null) {
-      bgWidget = Image.network(
-        bg.imageUrl!,
-        fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => _DefaultHeroBg(),
-      );
-    } else if (bg != null && bg.backgroundGradient != null) {
-      bgWidget = Container(
-        decoration: BoxDecoration(gradient: bg.backgroundGradient),
-        child: CustomPaint(painter: _GridPainter()),
-      );
-    } else {
-      bgWidget = _DefaultHeroBg();
-    }
+    final c          = ref.watch(sieColorsProvider);
+    final bg         = equipped.background;
+    final xp         = profile.totalXp;
+    final level      = profile.level;
+    final xpInLevel  = profile.xpInLevel;
+    final progress   = (xpInLevel / 1000.0).clamp(0.0, 1.0);
+    final xpToNext   = 1000 - xpInLevel;
+    final hasCustomBg = bg != null &&
+        (bg.backgroundColor != null || bg.backgroundGradient != null);
+    final textMain = hasCustomBg ? Colors.white : c.textPrimary;
+    final textSub  = hasCustomBg ? Colors.white60 : c.textSecondary;
+    final showNeural = bg != null &&
+        (bg.backgroundColor != null || bg.useNeuralPattern);
 
-    return SizedBox(
-      height: 280,
-      child: Stack(
-        fit: StackFit.expand,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      child: Column(
         children: [
-          bgWidget,
           Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  c.background.withValues(alpha: 0.4),
-                  c.background,
-                ],
-                stops: const [0.0, 0.55, 1.0],
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 60,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: _AvatarWithFrame(profile: profile, frame: equipped.frame),
-            ),
-          ),
-          Positioned(
-            bottom: 12,
-            left: 16,
-            right: 16,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+            clipBehavior: Clip.hardEdge,
+            decoration: _cardDecoration(c, bg),
+            child: Stack(
               children: [
-                Text(
-                  profile.username?.toUpperCase() ?? 'UNKNOWN',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 3,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    border:
-                        Border.all(color: c.accent.withValues(alpha: 0.5)),
-                    borderRadius: BorderRadius.circular(6),
-                    boxShadow: null,
-                  ),
-                  child: Text(
-                    'LEVEL ${profile.level}  ·  ${profile.totalXp} XP',
-                    style: TextStyle(
-                      color: c.accent,
-                      fontSize: 10,
-                      letterSpacing: 2,
+                if (showNeural)
+                  Positioned.fill(
+                    child: NeuralNetworkWidget(
+                      color: bg.accentColor.withValues(alpha: 0.40),
                     ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          _AvatarWithFrame(
+                              profile: profile, frame: equipped.frame),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  profile.username?.toUpperCase() ?? 'UNKNOWN',
+                                  style: TextStyle(
+                                    color: textMain,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    _HeroChip(
+                                      label: 'LEVEL $level',
+                                      borderColor:
+                                          c.accent.withValues(alpha: 0.5),
+                                      textColor: c.accent,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _HeroChip(
+                                      label: '${profile.designPoints} DP',
+                                      borderColor:
+                                          c.dp.withValues(alpha: 0.45),
+                                      textColor: c.dp,
+                                      icon: Icons.palette_outlined,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '$xp XP TOTAL',
+                            style: TextStyle(
+                              color: c.accent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          Text(
+                            '$xpToNext XP TO LVL ${level + 1}',
+                            style: TextStyle(color: textSub, fontSize: 10),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: Stack(
+                          children: [
+                            Container(height: 6, color: c.border),
+                            FractionallySizedBox(
+                              widthFactor: progress,
+                              child: Container(
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [c.accent, c.accentSecondary],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${(progress * 100).toStringAsFixed(0)}%  ·  '
+                        '${_rankLabel(level).toUpperCase()}  ·  '
+                        'LVL $level → LVL ${level + 1}',
+                        style: TextStyle(
+                          color: textSub,
+                          fontSize: 9,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
+            ),
+          ),
+          if (equipped.statStyle != null) ...[
+            const SizedBox(height: 12),
+            _StatStyleBanner(
+              statStyle: equipped.statStyle!,
+              level: level,
+              xp: xp,
+              c: c,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroChip extends StatelessWidget {
+  final String label;
+  final Color borderColor;
+  final Color textColor;
+  final IconData? icon;
+  const _HeroChip({
+    required this.label,
+    required this.borderColor,
+    required this.textColor,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        border: Border.all(color: borderColor),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 9, color: textColor),
+            const SizedBox(width: 3),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
             ),
           ),
         ],
@@ -190,46 +312,48 @@ class _HeroSection extends ConsumerWidget {
   }
 }
 
-class _DefaultHeroBg extends ConsumerWidget {
+class _StatStyleBanner extends StatelessWidget {
+  final CosmeticAsset statStyle;
+  final int level;
+  final int xp;
+  final SieColors c;
+  const _StatStyleBanner({
+    required this.statStyle,
+    required this.level,
+    required this.xp,
+    required this.c,
+  });
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c = ref.watch(sieColorsProvider);
+  Widget build(BuildContext context) {
+    final accent  = statStyle.accentColor;
+    final glowCol = c.isLightMode ? null : statStyle.styleGlowColor;
+    final glowRad = statStyle.styleGlowRadius;
     return Container(
-      decoration: BoxDecoration(
-        gradient: c.isLightMode
-            ? LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [c.border, c.surface],
-              )
-            : const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF0D2A42), Color(0xFF071520)],
-              ),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+      decoration: statStyle.buildStatCardDecoration(
+          surfaceColor: c.surface, isLightMode: c.isLightMode),
+      child: Row(
+        children: [
+          Icon(Icons.bolt, color: accent, size: 14),
+          const SizedBox(width: 8),
+          Text(
+            'LEVEL $level  ·  $xp XP',
+            style: TextStyle(
+              color: accent,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
+              shadows: (glowCol != null && glowRad > 0)
+                  ? [Shadow(color: glowCol, blurRadius: glowRad)]
+                  : null,
+            ),
+          ),
+        ],
       ),
-      child: c.isLightMode ? null : CustomPaint(painter: _GridPainter()),
     );
   }
-}
-
-class _GridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF00C8FF).withValues(alpha: 0.04)
-      ..strokeWidth = 0.5;
-    const step = 28.0;
-    for (var x = 0.0; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    for (var y = 0.0; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_GridPainter _) => false;
 }
 
 // ── Avatar with Frame ─────────────────────────────────────────
@@ -419,74 +543,6 @@ class _StatCardContent extends StatelessWidget {
           ),
         ],
       );
-}
-
-// ── XP Panel ─────────────────────────────────────────────────
-
-class _XpPanel extends ConsumerWidget {
-  final PublicProfile profile;
-  const _XpPanel({required this.profile});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c          = ref.watch(sieColorsProvider);
-    final xpInLevel  = profile.xpInLevel;
-    final progress   = xpInLevel / 1000.0;
-    final xpToNext   = 1000 - xpInLevel;
-
-    final inner = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionHeader(title: 'EXPERIENCE'),
-        const SizedBox(height: 14),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              '${profile.totalXp} XP TOTAL',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: c.accent,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1,
-                    fontSize: 11,
-                  ),
-            ),
-            Text(
-              '$xpToNext XP TO NEXT',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(fontSize: 10),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: progress,
-            minHeight: 3,
-            backgroundColor: c.border,
-            valueColor: AlwaysStoppedAnimation<Color>(c.accent),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          '${(progress * 100).toStringAsFixed(0)}%  ·  LVL ${profile.level} → LVL ${profile.level + 1}',
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(fontSize: 9, letterSpacing: 1),
-        ),
-      ],
-    );
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: c.flatCard(radius: 16),
-      child: inner,
-    );
-  }
 }
 
 // ── Achievements Section ──────────────────────────────────────
@@ -691,6 +747,32 @@ class _AchievementSheet extends ConsumerWidget {
 
   static String _formatDate(DateTime dt) =>
       '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}.${dt.year}';
+}
+
+// ── Section Block ─────────────────────────────────────────────────────────────
+
+class _SectionBlock extends ConsumerWidget {
+  final String title;
+  final Widget child;
+  const _SectionBlock({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+      decoration: c.flatCard(radius: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeader(title: title),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
 }
 
 // ── Public Medals Section ─────────────────────────────────────────────────────
