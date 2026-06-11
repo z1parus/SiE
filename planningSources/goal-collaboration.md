@@ -411,18 +411,107 @@ if (goal.userId != currentUserId)
 
 ---
 
-## Открытые вопросы
+## Решения по открытым вопросам
 
-1. **Оффлайн-доступ к shared-целям**: читатели и редакторы видят shared-цель без интернета или только онлайн? Рекомендация: кэшировать в `LocalGoals` (readonly), но не пускать в offline sync queue.
+1. **Оффлайн**: кэшировать shared-цели в `LocalGoals` (read-only). `isShared = true` + `myRole TEXT`. В offline sync queue изменения shared-целей не попадают — только онлайн.
 
-2. **Конфликты редактирования**: что если владелец и редактор одновременно изменяют одну подцель? Last-write-wins через Supabase upsert — достаточно ли, или нужна индикация «кто сейчас онлайн»?
+2. **Онлайн-индикация**: использовать **Supabase Realtime Presence**. Когда пользователь открывает `MissionDetailScreen`, он входит в Presence-канал `goal_presence:{goalId}` и публикует `{userId, username, avatarUrl}`. Канал закрывается при `onDispose`. Владелец и коллабораторы видят зелёные точки рядом с аватарами участников в разделе «СОВМЕСТНАЯ РАБОТА».
 
-3. **Real-time обновления**: когда редактор добавляет задачу — видит ли владелец это сразу без refresh? Потребует Realtime-подписки на `planning_tasks` с фильтром по goal_id. Стоит ли добавить в первой итерации?
+   Реализация:
+   ```dart
+   // В MissionDetailScreen (StatefulWidget или ConsumerStatefulWidget)
+   RealtimeChannel? _presenceChannel;
 
-4. **Видимость pending-приглашений**: видит ли владелец в разделе «СОВМЕСТНАЯ РАБОТА» участников со статусом `pending` (ещё не ответили)? Рекомендация: да, показывать с подписью «(ожидает ответа)» и возможностью отозвать.
+   @override
+   void initState() {
+     super.initState();
+     _joinPresence();
+   }
 
-5. **Что происходит с изменениями при удалении редактора**: его созданные задачи/подцели остаются или удаляются? Рекомендация: остаются (CASCADE только при удалении пользователя, не коллаборации).
+   void _joinPresence() {
+     final me = SupabaseService.client.auth.currentUser!;
+     _presenceChannel = SupabaseService.client
+       .channel('goal_presence:${widget.goal.id}')
+       .onPresenceSync((_) => setState(() {}))  // перестройка UI
+       .subscribe((status, _) async {
+         if (status == RealtimeSubscribeStatus.subscribed) {
+           await _presenceChannel!.track({'user_id': me.id});
+         }
+       });
+   }
 
-6. **Лимит участников**: ограничивать ли количество коллабораторов на одну цель (например, до 5)?
+   Set<String> get _onlineUserIds =>
+     _presenceChannel?.presenceState()
+       .values.expand((list) => list)
+       .map((p) => p.payload['user_id'] as String)
+       .toSet() ?? {};
 
-7. **Передача владения**: может ли владелец передать цель другому участнику? Не включать в первую итерацию.
+   @override
+   void dispose() {
+     _presenceChannel?.unsubscribe();
+     super.dispose();
+   }
+   ```
+
+   В `_CollaboratorRow`: если `collaborator.userId` в `_onlineUserIds` — показывать зелёный индикатор 8×8 поверх аватара.
+
+3. **Real-time обновления**: только через ручной refresh в первой итерации. Добавить кнопку/pull-to-refresh в `MissionDetailScreen` для shared-целей.
+
+4. **Pending-участники**: показывать в разделе «СОВМЕСТНАЯ РАБОТА» с пометкой «ожидает ответа» серым текстом и кнопкой «Отозвать» (DELETE из `goal_collaborators`).
+
+5. **Задачи удалённых редакторов**: остаются в цели. CASCADE DELETE срабатывает только при удалении пользователя из `auth.users`.
+
+6. **Лимит участников**: максимум **10 коллабораторов** на цель. Проверка на клиенте (кнопка «Пригласить» скрывается при `collaborators.length >= 10`) и в RLS/CHECK на сервере:
+   ```sql
+   CREATE OR REPLACE FUNCTION public.check_collaborator_limit()
+     RETURNS TRIGGER LANGUAGE plpgsql AS $$
+   BEGIN
+     IF (SELECT COUNT(*) FROM public.goal_collaborators
+         WHERE goal_id = NEW.goal_id AND status != 'declined') >= 10 THEN
+       RAISE EXCEPTION 'collaborator_limit_exceeded';
+     END IF;
+     RETURN NEW;
+   END;
+   $$;
+
+   CREATE TRIGGER collaborator_limit_check
+     BEFORE INSERT ON public.goal_collaborators
+     FOR EACH ROW EXECUTE FUNCTION public.check_collaborator_limit();
+   ```
+
+7. **Передача владения**: не реализуется в первой итерации.
+
+---
+
+## Дополнительные модули (уточнение после ответов)
+
+### `MissionDetailScreen` — Presence
+
+`MissionDetailScreen` становится `ConsumerStatefulWidget` (если ещё нет). Добавить `_presenceChannel` и логику из пункта 2 выше.
+
+### `_CollaboratorRow` — онлайн-индикатор
+
+```dart
+// Аватар с онлайн-точкой
+Stack(
+  children: [
+    _CollabAvatar(profile: collaborator.profile, size: 36),
+    if (isOnline)
+      Positioned(
+        right: 0, bottom: 0,
+        child: Container(
+          width: 10, height: 10,
+          decoration: BoxDecoration(
+            color: Colors.greenAccent,
+            shape: BoxShape.circle,
+            border: Border.all(color: sc.surface, width: 1.5),
+          ),
+        ),
+      ),
+  ],
+)
+```
+
+### Pull-to-refresh для shared-целей
+
+В `MissionDetailScreen` для shared-целей (goal.userId != currentUserId) добавить `RefreshIndicator` или `IconButton(Icons.refresh_outlined)` в AppBar, вызывающий `ref.invalidate(planningProvider)`.
