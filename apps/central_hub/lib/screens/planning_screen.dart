@@ -299,7 +299,7 @@ class _PlanningHeader extends StatelessWidget {
 
 // ─── Goal List ────────────────────────────────────────────────────────────────
 
-class _GoalList extends StatelessWidget {
+class _GoalList extends ConsumerWidget {
   const _GoalList({
     required this.goals,
     required this.sc,
@@ -311,17 +311,26 @@ class _GoalList extends StatelessWidget {
   final void Function(Goal) onLongPress;
 
   @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(0, 4, 0, 16),
-      child: Column(
-        children: goals
-            .map((g) => _GoalCard(
-                  goal: g,
-                  sc: sc,
-                  onLongPress: () => onLongPress(g),
-                ))
-            .toList(),
+  Widget build(BuildContext context, WidgetRef ref) {
+    return RefreshIndicator(
+      color: sc.accent,
+      backgroundColor: sc.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+      onRefresh: () async {
+        ref.invalidate(planningProvider);
+        await ref.read(planningProvider.future);
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(0, 4, 0, 16),
+        child: Column(
+          children: goals
+              .map((g) => _GoalCard(
+                    goal: g,
+                    sc: sc,
+                    onLongPress: () => onLongPress(g),
+                  ))
+              .toList(),
+        ),
       ),
     );
   }
