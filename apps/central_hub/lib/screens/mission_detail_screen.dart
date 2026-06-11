@@ -547,7 +547,7 @@ class _ToggleSegment extends StatelessWidget {
 
 // ─── Detail List View ─────────────────────────────────────────────────────────
 
-class _DetailListView extends StatelessWidget {
+class _DetailListView extends ConsumerWidget {
   const _DetailListView({
     required this.goal,
     required this.sc,
@@ -565,20 +565,29 @@ class _DetailListView extends StatelessWidget {
   final bool canEdit;
 
   @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SubGoalsSection(goal: goal, sc: sc,
-              isQuickEntryActive: isQuickEntryActive, canEdit: canEdit),
-          const SizedBox(height: 16),
-          _MilestonesSection(goal: goal, sc: sc, canEdit: canEdit),
-          const SizedBox(height: 16),
-          _HabitSynergySection(goal: goal, sc: sc),
-          const SizedBox(height: 24),
-        ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    return RefreshIndicator(
+      color: sc.accent,
+      backgroundColor: sc.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+      onRefresh: () async {
+        ref.invalidate(planningProvider);
+        await ref.read(planningProvider.future);
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SubGoalsSection(goal: goal, sc: sc,
+                isQuickEntryActive: isQuickEntryActive, canEdit: canEdit),
+            const SizedBox(height: 16),
+            _MilestonesSection(goal: goal, sc: sc, canEdit: canEdit),
+            const SizedBox(height: 16),
+            _HabitSynergySection(goal: goal, sc: sc),
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
     );
   }

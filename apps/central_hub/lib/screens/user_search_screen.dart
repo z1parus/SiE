@@ -236,12 +236,21 @@ class _Body extends ConsumerWidget {
             sub: 'Попробуйте другой запрос',
           );
         }
-        return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
-          itemCount: results.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 8),
-          itemBuilder: (context, i) => RepaintBoundary(
-            child: _UserTile(profile: results[i], query: query),
+        return RefreshIndicator(
+          color: c.accent,
+          backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+          onRefresh: () async {
+            ref.invalidate(userSearchProvider(query));
+            await ref.read(userSearchProvider(query).future);
+          },
+          child: ListView.separated(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+            itemCount: results.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
+            itemBuilder: (context, i) => RepaintBoundary(
+              child: _UserTile(profile: results[i], query: query),
+            ),
           ),
         );
       },

@@ -264,43 +264,71 @@ class _ShopGrid extends ConsumerWidget {
         AssetType.statStyle         => profile?.equippedStatStyleId == asset.id,
       };
 
+  Future<void> _onRefresh(WidgetRef ref) async {
+    ref.invalidate(avatarFramesProvider);
+    ref.invalidate(profileBackgroundsProvider);
+    ref.invalidate(statStylesProvider);
+    ref.invalidate(inventoryProvider);
+    ref.invalidate(userProfileProvider);
+    await ref.read(inventoryProvider.future);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
     if (assets.isEmpty) {
-      return Center(
-        child: CircularProgressIndicator(
-            color: c.accent, strokeWidth: 1.5),
+      return RefreshIndicator(
+        color: c.accent,
+        backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+        onRefresh: () => _onRefresh(ref),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(
+              height: 300,
+              child: Center(
+                child: CircularProgressIndicator(
+                    color: c.accent, strokeWidth: 1.5),
+              ),
+            ),
+          ],
+        ),
       );
     }
-    return GridView.builder(
-      padding: const EdgeInsets.all(14),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 0.70,
+    return RefreshIndicator(
+      color: c.accent,
+      backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+      onRefresh: () => _onRefresh(ref),
+      child: GridView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(14),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 0.70,
+        ),
+        itemCount: assets.length,
+        itemBuilder: (_, i) {
+          final asset      = assets[i];
+          final purchased  = inventory.owns(asset);
+          final accessible = purchased || asset.priceDP == 0;
+          final equipped   = _isEquipped(asset);
+          return RepaintBoundary(
+            child: _ShopCard(
+              asset: asset,
+              accessible: accessible,
+              purchased: purchased,
+              equipped: equipped,
+              loading: buyingId == asset.id,
+              dp: profile?.designPoints ?? 0,
+              onBuy: () => onBuy(asset),
+              onEquip: () => onEquip(asset),
+              onPreview: () => onPreview(asset),
+            ),
+          );
+        },
       ),
-      itemCount: assets.length,
-      itemBuilder: (_, i) {
-        final asset      = assets[i];
-        final purchased  = inventory.owns(asset);
-        final accessible = purchased || asset.priceDP == 0;
-        final equipped   = _isEquipped(asset);
-        return RepaintBoundary(
-          child: _ShopCard(
-            asset: asset,
-            accessible: accessible,
-            purchased: purchased,
-            equipped: equipped,
-            loading: buyingId == asset.id,
-            dp: profile?.designPoints ?? 0,
-            onBuy: () => onBuy(asset),
-            onEquip: () => onEquip(asset),
-            onPreview: () => onPreview(asset),
-          ),
-        );
-      },
     );
   }
 }

@@ -32,6 +32,15 @@ class _OperationsControlScreenState
     extends ConsumerState<OperationsControlScreen> {
   bool _welcomeShown = false;
 
+  Future<void> _onRefresh() async {
+    ref.invalidate(branchesProvider);
+    ref.invalidate(planningProvider);
+    ref.invalidate(habitsProvider);
+    ref.invalidate(userProfileProvider);
+    ref.invalidate(notificationsProvider);
+    await ref.read(branchesProvider.future);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c              = ref.watch(sieColorsProvider);
@@ -50,7 +59,7 @@ class _OperationsControlScreenState
       }
     });
 
-    final body = SafeArea(
+    final innerBody = SafeArea(
       bottom: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -112,6 +121,18 @@ class _OperationsControlScreenState
             },
           ),
         ],
+      ),
+    );
+
+    final body = LayoutBuilder(
+      builder: (_, constraints) => RefreshIndicator(
+        color: c.accent,
+        backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+        onRefresh: _onRefresh,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: SizedBox(height: constraints.maxHeight, child: innerBody),
+        ),
       ),
     );
 

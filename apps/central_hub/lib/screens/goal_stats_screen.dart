@@ -71,7 +71,16 @@ class GoalStatsScreen extends ConsumerWidget {
             children: [
               _StatsHeader(goal: liveGoal, sc: sc),
               Expanded(
-                child: ListView(
+                child: RefreshIndicator(
+                  color: sc.accent,
+                  backgroundColor: sc.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+                  onRefresh: () async {
+                    ref.invalidate(planningProvider);
+                    ref.invalidate(habitsProvider);
+                    await ref.read(planningProvider.future);
+                  },
+                  child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                   children: [
                     _ProgressRingCard(goal: liveGoal, sc: sc),
@@ -97,6 +106,7 @@ class GoalStatsScreen extends ConsumerWidget {
                     ],
                     if (advice.isNotEmpty) _AdviceCard(advice: advice, sc: sc),
                   ],
+                ),
                 ),
               ),
             ],
