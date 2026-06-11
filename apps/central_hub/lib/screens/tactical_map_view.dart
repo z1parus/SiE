@@ -1115,6 +1115,7 @@ class _SubGoalNode extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Row(
                       children: [
@@ -1126,7 +1127,7 @@ class _SubGoalNode extends StatelessWidget {
                         Expanded(
                           child: Text(
                             sg.name,
-                            maxLines: 2,
+                            maxLines: sg.tasks.isNotEmpty ? 1 : 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: c.textPrimary,
