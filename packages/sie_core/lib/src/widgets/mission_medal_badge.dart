@@ -48,11 +48,14 @@ class MissionMedalBadge extends StatelessWidget {
     required this.medal,
     this.size = 72,
     this.onTap,
+    this.count,
   });
 
   final MissionMedal medal;
   final double size;
   final VoidCallback? onTap;
+  /// When > 1, shows a count badge on the bottom-right of the circle.
+  final int? count;
 
   @override
   Widget build(BuildContext context) {
@@ -61,29 +64,65 @@ class MissionMedalBadge extends StatelessWidget {
     final icon       = categoryIconData(medal.category);
     final isGold     = medal.level == 3;
 
+    final circle = Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: levelColor.withValues(alpha: 0.1),
+        border: Border.all(color: levelColor, width: isGold ? 2.5 : 1.8),
+        boxShadow: isGold
+            ? [
+                BoxShadow(
+                  color: catColor.withValues(alpha: 0.35),
+                  blurRadius: 12,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
+      ),
+      child: Icon(icon, size: size * 0.42, color: catColor),
+    );
+
+    final showCount = count != null && count! > 1;
+
     return GestureDetector(
       onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
+          SizedBox(
             width: size,
             height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: levelColor.withValues(alpha: 0.1),
-              border: Border.all(color: levelColor, width: isGold ? 2.5 : 1.8),
-              boxShadow: isGold
-                  ? [
-                      BoxShadow(
-                        color: catColor.withValues(alpha: 0.35),
-                        blurRadius: 12,
-                        spreadRadius: 1,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                circle,
+                if (showCount)
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0D1525),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: levelColor, width: 1),
                       ),
-                    ]
-                  : null,
+                      child: Text(
+                        '×${count!}',
+                        style: TextStyle(
+                          color: levelColor,
+                          fontSize: 8,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-            child: Icon(icon, size: size * 0.42, color: catColor),
           ),
           const SizedBox(height: 5),
           SizedBox(
