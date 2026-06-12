@@ -225,6 +225,21 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     }
   }
 
+  void _stepZoom(double factor) {
+    final current = _tc.value.getMaxScaleOnAxis();
+    final next = (current * factor).clamp(0.15, 3.0);
+    final ratio = next / current;
+    if ((ratio - 1.0).abs() < 0.001) return;
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final center = box.size.center(Offset.zero);
+    final scaleM = Matrix4.identity()
+      ..translate(center.dx, center.dy)
+      ..scale(ratio, ratio)
+      ..translate(-center.dx, -center.dy);
+    setState(() => _tc.value = scaleM * _tc.value);
+  }
+
   void _handleEdgeZoom(double dy) {
     final factor = 1.0 - dy * 0.007;
     final current = _tc.value.getMaxScaleOnAxis();
@@ -647,6 +662,18 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onVerticalDragUpdate: (d) => _handleEdgeZoom(d.delta.dy),
+          ),
+        ),
+        Positioned(
+          right: 32,
+          bottom: 16,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ZoomButton(icon: Icons.add, onTap: () => _stepZoom(1.25), sc: c),
+              const SizedBox(height: 4),
+              _ZoomButton(icon: Icons.remove, onTap: () => _stepZoom(0.8), sc: c),
+            ],
           ),
         ),
       ],
@@ -1902,6 +1929,32 @@ class _Chip extends StatelessWidget {
             fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ─── Zoom Button ──────────────────────────────────────────────────────────────
+
+class _ZoomButton extends StatelessWidget {
+  const _ZoomButton({required this.icon, required this.onTap, required this.sc});
+  final IconData icon;
+  final VoidCallback onTap;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: sc.surface.withValues(alpha: 0.9),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: sc.border),
+        ),
+        child: Icon(icon, size: 16, color: sc.textSecondary),
       ),
     );
   }

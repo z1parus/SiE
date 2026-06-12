@@ -7,6 +7,7 @@ class MissionAccomplishedScreen extends ConsumerStatefulWidget {
   final int dpGained;
   final Achievement? achievement;
   final MissionMedal? medal;
+  final String subtitle;
 
   const MissionAccomplishedScreen({
     super.key,
@@ -14,6 +15,7 @@ class MissionAccomplishedScreen extends ConsumerStatefulWidget {
     this.dpGained = 0,
     this.achievement,
     this.medal,
+    this.subtitle = 'BREATHING PROTOCOL COMPLETE',
   });
 
   @override
@@ -81,7 +83,14 @@ class _MissionAccomplishedScreenState
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: MediaQuery.of(context).size.height
+                    - MediaQuery.of(context).padding.top
+                    - MediaQuery.of(context).padding.bottom,
+              ),
+              child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -109,7 +118,7 @@ class _MissionAccomplishedScreenState
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          'BREATHING PROTOCOL COMPLETE',
+                          widget.subtitle,
                           style: Theme.of(context).textTheme.bodyMedium,
                           textAlign: TextAlign.center,
                         ),
@@ -133,6 +142,8 @@ class _MissionAccomplishedScreenState
                   ),
                 ),
               ],
+            ),
+          ),
             ),
           ),
         ),
