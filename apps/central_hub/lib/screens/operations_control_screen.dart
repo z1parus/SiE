@@ -10,6 +10,7 @@ import 'breathing_exercise_screen.dart';
 import 'focus_protocol_screen.dart';
 import 'habit_tracker_screen.dart';
 import 'leaderboard_screen.dart';
+import 'meditation_hub_screen.dart';
 import 'planning_screen.dart';
 import 'profile_screen.dart';
 import 'public_profile_screen.dart';
@@ -371,6 +372,8 @@ void _onBranchTap(BuildContext context, Branch branch) {
     screen = const FocusProtocolScreen();
   } else if (branch.slug == 'planning') {
     screen = const PlanningScreen();
+  } else if (branch.slug == 'meditation') {
+    screen = const MeditationHubScreen();
   }
 
   if (screen != null) {

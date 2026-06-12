@@ -7,11 +7,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sie_core/sie_core.dart';
 import 'mission_accomplished_screen.dart';
+import 'session_orb_painters.dart';
 
-// ── Gold palette (matches c.accent / c.accentSecondary) ────────
-const _kRimGold    = Color(0xFFC8A84B);   // accent — Gold Sand
-const _kRimBronze  = Color(0xFFAA7744);   // accentSecondary — Bronze Gold
-const _kRimLight   = Color(0xFFD9BB65);   // highlight at bright spot
+const _kRimGold  = kRimGold;
+const _kRimLight = kRimLight;
 
 // ── Settings ──────────────────────────────────────────────────
 
@@ -1854,54 +1853,6 @@ class _SieButton extends ConsumerWidget {
       ),
     );
   }
-}
-
-// ── SphereRimPainter ────────────────────────────────────────────
-class SphereRimPainter extends CustomPainter {
-  final double lightAngle;
-  final double intensity;
-  final bool isDark;
-
-  const SphereRimPainter({
-    required this.lightAngle,
-    required this.intensity,
-    required this.isDark,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center    = Offset(size.width / 2, size.height / 2);
-    final radius    = size.width / 2 - 1.0;
-    final rect      = Rect.fromCircle(center: center, radius: radius);
-    final baseAlpha = (0.75 + intensity * 0.15).clamp(0.0, 1.0);
-
-    // Peak brightness where light hits (top-left of sphere)
-    final peakAngle = lightAngle - pi / 2;
-
-    // Gradient mirrors RECRUIT badge: Bronze → Gold Sand → Light peak → Gold Sand → Bronze
-    final gradient = SweepGradient(
-      startAngle: peakAngle - pi,
-      endAngle:   peakAngle + pi,
-      colors: [
-        _kRimBronze.withValues(alpha: baseAlpha * 0.80),
-        _kRimGold  .withValues(alpha: baseAlpha * 0.92),
-        _kRimLight .withValues(alpha: baseAlpha * 1.00),
-        _kRimGold  .withValues(alpha: baseAlpha * 0.92),
-        _kRimBronze.withValues(alpha: baseAlpha * 0.80),
-      ],
-      stops: const [0.0, 0.28, 0.50, 0.72, 1.0],
-    );
-
-    final rimPaint = Paint()
-      ..style       = PaintingStyle.stroke
-      ..strokeWidth = 3.0
-      ..shader      = gradient.createShader(rect);
-    canvas.drawCircle(center, radius, rimPaint);
-  }
-
-  @override
-  bool shouldRepaint(SphereRimPainter old) =>
-      lightAngle != old.lightAngle || intensity != old.intensity;
 }
 
 // ── _ShaderPainter ──────────────────────────────────────────────
