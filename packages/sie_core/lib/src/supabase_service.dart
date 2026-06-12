@@ -42,6 +42,12 @@ class SupabaseService {
     await client.auth.signOut();
   }
 
+  /// Sends a password-reset email to [email]. The recovery link is handled by
+  /// Supabase's configured redirect flow.
+  static Future<void> resetPassword({required String email}) async {
+    await client.auth.resetPasswordForEmail(email);
+  }
+
   static Future<void> _checkConnection() async {
     try {
       await client.from('branches').select('id').limit(1);

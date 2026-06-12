@@ -68,14 +68,15 @@ class _SieAppState extends ConsumerState<SieApp> {
       );
 }
 
-class _LoadingScreen extends StatelessWidget {
+class _LoadingScreen extends ConsumerWidget {
   const _LoadingScreen();
 
   @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: Color(0xFF1C1C22),
-      body: SizedBox.shrink(),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Scaffold(
+      backgroundColor: c.background,
+      body: const SizedBox.shrink(),
     );
   }
 }
