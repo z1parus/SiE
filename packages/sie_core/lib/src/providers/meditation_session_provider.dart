@@ -493,11 +493,6 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
     _mixerHideTimer = null;
   }
 
-  @override
-  void dispose() {
-    _cancelTimers();
-    super.dispose();
-  }
 }
 
 final meditationSessionProvider =

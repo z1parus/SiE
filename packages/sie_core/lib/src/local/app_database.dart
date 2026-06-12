@@ -781,7 +781,7 @@ class AppDatabase extends _$AppDatabase {
               t.userId.equals(userId) &
               t.completedAtMs.isBiggerOrEqualValue(startMs)))
         .get();
-    return rows.fold(0, (sum, r) => sum + r.durationSeconds);
+    return rows.fold<int>(0, (sum, r) => sum + r.durationSeconds);
   }
 
   // ── Meditation Presets ────────────────────────────────────────────────────

@@ -159,7 +159,6 @@ class _MeditationSessionScreenState
         backgroundColor: Colors.black,
         body: Stack(
           children: [
-            const SieBackground(),
             // Progress arc
             Positioned.fill(
               child: Padding(
