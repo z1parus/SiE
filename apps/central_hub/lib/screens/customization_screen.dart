@@ -301,128 +301,217 @@ class _Preview extends ConsumerWidget {
   final EquippedAssets equipped;
   const _Preview({required this.profile, required this.equipped});
 
+  static BoxDecoration _cardDecoration(SieColors c, CosmeticAsset? bg) {
+    if (bg?.backgroundColor != null) {
+      return BoxDecoration(
+        color: bg!.backgroundColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: bg.accentColor.withValues(alpha: 0.25)),
+      );
+    }
+    if (bg?.backgroundGradient != null) {
+      return BoxDecoration(
+        gradient: bg!.backgroundGradient,
+        borderRadius: BorderRadius.circular(20),
+      );
+    }
+    return c.flatCard(radius: 20);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c      = ref.watch(sieColorsProvider);
-    final bg     = equipped.background;
-    final frame  = equipped.frame;
-    final style  = equipped.statStyle;
-    final letter = (profile.username?.isNotEmpty == true)
+    final c         = ref.watch(sieColorsProvider);
+    final bg        = equipped.background;
+    final frame     = equipped.frame;
+    final level     = (profile.totalXp ~/ 1000) + 1;
+    final xpInLevel = profile.totalXp % 1000;
+    final xpToNext  = 1000 - xpInLevel;
+    final progress  = (xpInLevel / 1000.0).clamp(0.0, 1.0);
+    final letter    = (profile.username?.isNotEmpty == true)
         ? profile.username![0].toUpperCase()
         : '?';
 
-    final defaultBg = c.isLightMode
-        ? LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [c.border, c.surface],
-          )
-        : const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF0D2A42), Color(0xFF071520)],
-          );
+    final hasCustomBg = bg != null &&
+        (bg.backgroundColor != null || bg.backgroundGradient != null);
+    final textMain   = hasCustomBg ? Colors.white : c.textPrimary;
+    final textSub    = hasCustomBg ? Colors.white60 : c.textSecondary;
+    final showNeural = bg != null &&
+        (bg.backgroundColor != null || bg.useNeuralPattern);
 
-    return Container(
-      height: 140,
-      clipBehavior: Clip.hardEdge,
-      decoration: BoxDecoration(
-        gradient: bg?.backgroundGradient ?? defaultBg,
-      ),
-      child: Stack(
-        children: [
-          if (!c.isLightMode)
-            CustomPaint(painter: _GridPainter(), size: Size.infinite),
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    c.background.withValues(alpha: 0.5),
-                  ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+      child: Container(
+        clipBehavior: Clip.hardEdge,
+        decoration: _cardDecoration(c, bg),
+        child: Stack(
+          children: [
+            if (showNeural)
+              Positioned.fill(
+                child: NeuralNetworkWidget(
+                  color: bg.accentColor.withValues(alpha: 0.40),
                 ),
               ),
-            ),
-          ),
-          Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: frame?.buildFrameDecoration() ??
-                      BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                            color: c.accent.withValues(alpha: 0.6), width: 1.5),
-                        color: c.surface,
-                        boxShadow: null,
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: frame?.buildFrameDecoration() ??
+                            BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                  color: c.accent.withValues(alpha: 0.6),
+                                  width: 1.5),
+                              color: c.surface,
+                            ),
+                        child: ClipOval(
+                          child: profile.avatarUrl != null
+                              ? CachedNetworkImage(
+                                  imageUrl: profile.avatarUrl!,
+                                  fit: BoxFit.cover,
+                                  errorWidget: (_, _, _) =>
+                                      _LetterFill(letter: letter),
+                                )
+                              : _LetterFill(letter: letter),
+                        ),
                       ),
-                  child: ClipOval(
-                    child: profile.avatarUrl != null
-                        ? CachedNetworkImage(
-                            imageUrl: profile.avatarUrl!,
-                            fit: BoxFit.cover,
-                            errorWidget: (_, _, _) =>
-                                _LetterFill(letter: letter),
-                          )
-                        : _LetterFill(letter: letter),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              (profile.username ?? 'OPERATIVE').toUpperCase(),
+                              style: TextStyle(
+                                color: textMain,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                _PreviewChip(
+                                  label: 'LEVEL $level',
+                                  borderColor: c.accent.withValues(alpha: 0.5),
+                                  textColor: c.accent,
+                                ),
+                                const SizedBox(width: 6),
+                                _PreviewChip(
+                                  label: '${profile.designPoints} DP',
+                                  borderColor: c.dp.withValues(alpha: 0.45),
+                                  textColor: c.dp,
+                                  icon: Icons.palette_outlined,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 16),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      (profile.username ?? 'OPERATIVE').toUpperCase(),
-                      style: TextStyle(
-                        color: c.textPrimary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: style?.buildStatCardDecoration() ??
-                          BoxDecoration(
-                            color: c.surface,
-                            border: Border.all(
-                                color: c.accent.withValues(alpha: 0.4)),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                      child: Text(
-                        'LVL ${(profile.totalXp ~/ 1000) + 1}  ·  ${profile.totalXp} XP',
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${profile.totalXp} XP TOTAL',
                         style: TextStyle(
-                          color: style?.accentColor ?? c.accent,
+                          color: c.accent,
                           fontSize: 10,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                           letterSpacing: 1,
                         ),
                       ),
+                      Text(
+                        '$xpToNext XP TO LVL ${level + 1}',
+                        style: TextStyle(color: textSub, fontSize: 9),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: Stack(
+                      children: [
+                        Container(height: 4, color: c.border),
+                        FractionallySizedBox(
+                          widthFactor: progress,
+                          child: Container(
+                            height: 4,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [c.accent, c.accentSecondary],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            bottom: 6,
-            right: 10,
-            child: Text(
-              'ПРЕДПРОСМОТР',
-              style: TextStyle(
-                color: c.accent.withValues(alpha: 0.6),
-                fontSize: 8,
-                letterSpacing: 1.5,
+                  ),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'ПРЕДПРОСМОТР',
+                      style: TextStyle(
+                        color: c.accent.withValues(alpha: 0.5),
+                        fontSize: 8,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviewChip extends StatelessWidget {
+  final String label;
+  final Color borderColor;
+  final Color textColor;
+  final IconData? icon;
+  const _PreviewChip({
+    required this.label,
+    required this.borderColor,
+    required this.textColor,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        border: Border.all(color: borderColor),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 8, color: textColor),
+            const SizedBox(width: 3),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1,
             ),
           ),
         ],
@@ -759,20 +848,33 @@ class _BackgroundPreview extends StatelessWidget {
   const _BackgroundPreview({required this.asset});
 
   @override
-  Widget build(BuildContext context) => ClipRRect(
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
-          width: 56,
-          height: 40,
-          decoration: BoxDecoration(
-            gradient: asset.backgroundGradient ??
-                const LinearGradient(
-                  colors: [Color(0xFF0D2A42), Color(0xFF071520)],
-                ),
-          ),
-          child: CustomPaint(painter: _GridPainter()),
-        ),
+  Widget build(BuildContext context) {
+    BoxDecoration decoration;
+    if (asset.backgroundColor != null) {
+      decoration = BoxDecoration(color: asset.backgroundColor);
+    } else {
+      decoration = BoxDecoration(
+        gradient: asset.backgroundGradient ??
+            const LinearGradient(
+              colors: [Color(0xFF0D2A42), Color(0xFF071520)],
+            ),
       );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        width: 56,
+        height: 40,
+        decoration: decoration,
+        child: asset.useNeuralPattern
+            ? NeuralNetworkWidget(
+                color: asset.accentColor.withValues(alpha: 0.35),
+              )
+            : CustomPaint(painter: _GridPainter()),
+      ),
+    );
+  }
 }
 
 class _StatStylePreview extends StatelessWidget {

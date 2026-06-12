@@ -49,6 +49,7 @@ export 'src/models/vanguard_result.dart';
 export 'src/providers/planning_provider.dart';
 export 'src/providers/mission_medals_provider.dart';
 export 'src/widgets/mission_medal_badge.dart';
+export 'src/widgets/neural_network_painter.dart';
 export 'src/models/friendship.dart';
 export 'src/models/app_notification.dart';
 export 'src/providers/friends_provider.dart';
