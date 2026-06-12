@@ -13,6 +13,7 @@ import 'habit_tracker_screen.dart';
 import 'leaderboard_screen.dart';
 import 'meditation_hub_screen.dart';
 import 'planning_screen.dart';
+import 'session_orb_painters.dart';
 import 'profile_screen.dart';
 import 'public_profile_screen.dart';
 import 'user_search_screen.dart';
