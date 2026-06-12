@@ -31,7 +31,18 @@ class PublicProfileScreen extends ConsumerWidget {
         backgroundColor: Colors.transparent,
         body: Stack(
           children: [
-            CustomScrollView(
+            RefreshIndicator(
+              color: c.accent,
+              backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+              onRefresh: () async {
+                ref.invalidate(publicStatsProvider(profile.id));
+                ref.invalidate(publicAchievementsProvider(profile.id));
+                ref.invalidate(publicMissionMedalsProvider(profile.id));
+                ref.invalidate(friendsProvider);
+                await ref.read(publicStatsProvider(profile.id).future);
+              },
+              child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 SliverToBoxAdapter(
                   child: _HeroSection(profile: profile, equipped: equipped),
@@ -62,6 +73,7 @@ class PublicProfileScreen extends ConsumerWidget {
                   ),
                 ),
               ],
+            ),
             ),
             SafeArea(
               child: Padding(

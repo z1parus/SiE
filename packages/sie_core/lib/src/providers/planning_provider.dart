@@ -10,6 +10,7 @@ import '../models/planning.dart';
 import '../models/goal_collaborator.dart';
 import '../models/public_profile.dart';
 import '../models/mission_medal.dart';
+import '../models/ai_decomposition.dart';
 import 'auth_state_provider.dart';
 import 'connectivity_provider.dart';
 import 'habits_provider.dart';
@@ -1492,6 +1493,27 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     }
     await db.enqueueSyncOp(
         'move_sub_goal', jsonEncode({'id': subGoalId, 'parent_sub_goal_id': grandParentId}));
+  }
+
+  // ── AI Decomposition ─────────────────────────────────────────────────────
+
+  Future<void> applyAiDecomposition(
+      String goalId, DecompositionResult result) async {
+    for (final sg in result.subGoals) {
+      await addSubGoal(goalId, sg.name);
+      final goal = state.valueOrNull?.goals
+          .where((g) => g.id == goalId)
+          .firstOrNull;
+      final newSg = goal?.subGoals.lastOrNull;
+      if (newSg == null) continue;
+      for (final t in sg.tasks) {
+        await addTask(
+            goalId: goalId, subGoalId: newSg.id, name: t.name, weight: t.weight);
+      }
+    }
+    for (final m in result.milestones) {
+      await addMilestone(goalId, m.name);
+    }
   }
 
   // ── Save map positions ────────────────────────────────────────────────────

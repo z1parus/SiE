@@ -17,13 +17,14 @@ class AppNotification {
     this.payload = const {},
   });
 
-  AppNotification copyWith({bool? isRead}) => AppNotification(
+  AppNotification copyWith({bool? isRead, Map<String, dynamic>? payload}) =>
+      AppNotification(
         id: id,
         type: type,
         fromUser: fromUser,
         isRead: isRead ?? this.isRead,
         createdAt: createdAt,
-        payload: payload,
+        payload: payload ?? this.payload,
       );
 }
 

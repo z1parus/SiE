@@ -24,6 +24,14 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
   bool _showOnboardingManual = false;
   HabitViewMode _viewMode = HabitViewMode.today;
 
+  Future<void> _onRefresh() async {
+    ref.invalidate(habitsProvider);
+    ref.invalidate(habitRoutinesProvider);
+    ref.invalidate(archivedHabitsProvider);
+    ref.invalidate(userProfileProvider);
+    await ref.read(habitsProvider.future);
+  }
+
   static String _fmt(DateTime dt) =>
       '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
 
@@ -88,7 +96,11 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
             onChange: (m) => setState(() => _viewMode = m),
           ),
           Expanded(
-            child: habitsAsync.when(
+            child: RefreshIndicator(
+              color: sc.accent,
+              backgroundColor: sc.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+              onRefresh: _onRefresh,
+              child: habitsAsync.when(
               loading: () => Center(
                 child: CircularProgressIndicator(
                   color: sc.accent,
@@ -105,9 +117,13 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                     .where((h) => !routineHabitIds.contains(h.id))
                     .toList();
                 if (visibleHabits.isEmpty) {
-                  return _EmptyState(onAdd: () => _showHabitDialog(null));
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [_EmptyState(onAdd: () => _showHabitDialog(null))],
+                  );
                 }
                 return ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
                   itemCount: visibleHabits.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 12),
@@ -157,6 +173,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                   },
                 );
               },
+            ),
             ),
           ),
         ],

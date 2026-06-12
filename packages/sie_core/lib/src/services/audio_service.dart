@@ -382,6 +382,28 @@ class AudioService {
     }
   }
 
+  void fadeHumTo(double volumeFactor, {int durationMs = 1500}) {
+    _humFadeTimer?.cancel();
+    final target = (volumeFactor * 0.18).clamp(0.0, 1.0);
+    final start  = _humVolume;
+    if ((start - target).abs() < 0.001) return;
+    final steps = (durationMs / 80).round().clamp(1, 500);
+    var step = 0;
+    _humFadeTimer = Timer.periodic(
+      const Duration(milliseconds: 80),
+      (t) {
+        step++;
+        _humVolume = (start + (target - start) * step / steps).clamp(0.0, 1.0);
+        _hum.setVolume(_humVolume);
+        if (step >= steps) {
+          t.cancel();
+          _humVolume = target;
+          _hum.setVolume(_humVolume);
+        }
+      },
+    );
+  }
+
   Future<void> stopHum({int durationMs = 2000}) async {
     _humFadeTimer?.cancel();
     if (_humVolume <= 0.001) {

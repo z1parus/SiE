@@ -8,8 +8,9 @@ import 'package:sie_core/sie_core.dart';
 // ─── Public entry-point ───────────────────────────────────────────────────────
 
 class TacticalMapView extends ConsumerStatefulWidget {
-  const TacticalMapView({super.key, required this.goal});
+  const TacticalMapView({super.key, required this.goal, this.canEdit = true});
   final Goal goal;
+  final bool canEdit;
 
   @override
   ConsumerState<TacticalMapView> createState() => _TacticalMapViewState();
@@ -386,6 +387,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   }
 
   void _showSubGoalSheet(SubGoal sg, Goal goal, SieColors c) {
+    final canEdit = widget.canEdit;
     showModalBottomSheet(
       context: context,
       backgroundColor: c.surface,
@@ -395,41 +397,48 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       builder: (ctx) => _SubGoalSheet(
         sg: sg,
         sc: c,
-        onAddTask: (name, weight) {
-          ref
-              .read(planningProvider.notifier)
-              .addTask(goalId: goal.id, subGoalId: sg.id, name: name, weight: weight);
-          Navigator.pop(ctx);
-        },
-        onAddSubGoal: (name) {
-          ref
-              .read(planningProvider.notifier)
-              .addSubGoal(goal.id, name, parentSubGoalId: sg.id);
-          Navigator.pop(ctx);
-        },
-        onComplete: sg.isCompleted
-            ? null
-            : () {
+        onAddTask: canEdit
+            ? (name, weight) {
+                ref
+                    .read(planningProvider.notifier)
+                    .addTask(goalId: goal.id, subGoalId: sg.id, name: name, weight: weight);
+                Navigator.pop(ctx);
+              }
+            : null,
+        onAddSubGoal: canEdit
+            ? (name) {
+                ref
+                    .read(planningProvider.notifier)
+                    .addSubGoal(goal.id, name, parentSubGoalId: sg.id);
+                Navigator.pop(ctx);
+              }
+            : null,
+        onComplete: (canEdit && !sg.isCompleted)
+            ? () {
                 ref
                     .read(planningProvider.notifier)
                     .completeSubGoal(sg.id, goal.id);
                 Navigator.pop(ctx);
-              },
-        onUnparent: sg.parentSubGoalId == null
-            ? null
-            : () {
+              }
+            : null,
+        onUnparent: (canEdit && sg.parentSubGoalId != null)
+            ? () {
                 ref.read(planningProvider.notifier).unparentSubGoal(sg.id);
                 Navigator.pop(ctx);
-              },
-        onDelete: () {
-          ref.read(planningProvider.notifier).deleteSubGoal(sg.id, goal.id);
-          Navigator.pop(ctx);
-        },
+              }
+            : null,
+        onDelete: canEdit
+            ? () {
+                ref.read(planningProvider.notifier).deleteSubGoal(sg.id, goal.id);
+                Navigator.pop(ctx);
+              }
+            : null,
       ),
     );
   }
 
   void _showTaskSheet(PlanningTask task, SubGoal sg, Goal goal, SieColors c) {
+    final canEdit = widget.canEdit;
     showModalBottomSheet(
       context: context,
       backgroundColor: c.surface,
@@ -438,23 +447,28 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       builder: (ctx) => _TaskSheet(
         task: task,
         sc: c,
-        onToggle: () {
-          ref
-              .read(planningProvider.notifier)
-              .toggleTask(task.id, sg.id, goal.id);
-          Navigator.pop(ctx);
-        },
-        onDelete: () {
-          ref
-              .read(planningProvider.notifier)
-              .deleteTask(task.id, sg.id, goal.id);
-          Navigator.pop(ctx);
-        },
+        onToggle: canEdit
+            ? () {
+                ref
+                    .read(planningProvider.notifier)
+                    .toggleTask(task.id, sg.id, goal.id);
+                Navigator.pop(ctx);
+              }
+            : null,
+        onDelete: canEdit
+            ? () {
+                ref
+                    .read(planningProvider.notifier)
+                    .deleteTask(task.id, sg.id, goal.id);
+                Navigator.pop(ctx);
+              }
+            : null,
       ),
     );
   }
 
   void _showMilestoneSheet(Milestone ms, Goal goal, SieColors c) {
+    final canEdit = widget.canEdit;
     showModalBottomSheet(
       context: context,
       backgroundColor: c.surface,
@@ -463,20 +477,22 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       builder: (ctx) => _MilestoneSheet(
         ms: ms,
         sc: c,
-        onComplete: ms.isCompleted
-            ? null
-            : () {
+        onComplete: (canEdit && !ms.isCompleted)
+            ? () {
                 ref
                     .read(planningProvider.notifier)
                     .completeMilestone(ms.id, goal.id);
                 Navigator.pop(ctx);
-              },
-        onDelete: () {
-          ref
-              .read(planningProvider.notifier)
-              .deleteMilestone(ms.id, goal.id);
-          Navigator.pop(ctx);
-        },
+              }
+            : null,
+        onDelete: canEdit
+            ? () {
+                ref
+                    .read(planningProvider.notifier)
+                    .deleteMilestone(ms.id, goal.id);
+                Navigator.pop(ctx);
+              }
+            : null,
       ),
     );
   }
@@ -605,7 +621,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                 sc: c,
                 onTap: () {
                   HapticFeedback.selectionClick();
-                  _showGoalSheet(goal, c);
+                  if (widget.canEdit) _showGoalSheet(goal, c);
                 },
               ),
             ),
@@ -651,20 +667,20 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
         HapticFeedback.selectionClick();
         _onTap(task.id, goal);
       },
-      onPanStart: hidden
+      onPanStart: (hidden || !widget.canEdit)
           ? null
           : (_) {
               HapticFeedback.lightImpact();
               setState(() => _draggingId = task.id);
             },
-      onPanUpdate: hidden
+      onPanUpdate: (hidden || !widget.canEdit)
           ? null
           : (d) {
               final scale = _tc.value.getMaxScaleOnAxis();
               setState(() => _positions[task.id] = _positions[task.id]! + d.delta / scale);
               _setHoverTarget(_nearestSubGoalFor(task.id, goal, exclude: {task.id}));
             },
-      onPanEnd: hidden
+      onPanEnd: (hidden || !widget.canEdit)
           ? null
           : (_) {
               _tryReparentTask(task.id, currentSgId, goal);
@@ -720,13 +736,13 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               HapticFeedback.selectionClick();
               _onTap(sg.id, goal);
             },
-      onPanStart: hidden
+      onPanStart: (hidden || !widget.canEdit)
           ? null
           : (_) {
               HapticFeedback.lightImpact();
               setState(() => _draggingId = sg.id);
             },
-      onPanUpdate: hidden
+      onPanUpdate: (hidden || !widget.canEdit)
           ? null
           : (d) {
               final scale = _tc.value.getMaxScaleOnAxis();
@@ -750,7 +766,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               final excluded = {sg.id, ..._descendantIds(sg.id, goal.subGoals)};
               _setHoverTarget(_nearestSubGoalFor(sg.id, goal, exclude: excluded));
             },
-      onPanEnd: hidden
+      onPanEnd: (hidden || !widget.canEdit)
           ? null
           : (_) {
               _tryReparentSubGoal(sg, goal);
@@ -766,7 +782,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
         dragging: _draggingId == sg.id,
         isHoverTarget: _hoverTargetId == sg.id,
         hoverAnim: _hoverTargetId == sg.id ? _hoverAnim : null,
-        onAdd: () => _showSubGoalSheet(sg, goal, c),
+        onAdd: widget.canEdit ? () => _showSubGoalSheet(sg, goal, c) : null,
       ),
     );
     if (hidden) node = Opacity(opacity: 0.25, child: node);
@@ -800,19 +816,19 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               HapticFeedback.selectionClick();
               _onTap(id, goal);
             },
-      onPanStart: hidden
+      onPanStart: (hidden || !widget.canEdit)
           ? null
           : (_) {
               HapticFeedback.lightImpact();
               setState(() => _draggingId = id);
             },
-      onPanUpdate: hidden
+      onPanUpdate: (hidden || !widget.canEdit)
           ? null
           : (d) {
               final scale = _tc.value.getMaxScaleOnAxis();
               setState(() => _positions[id] = _positions[id]! + d.delta / scale);
             },
-      onPanEnd: hidden
+      onPanEnd: (hidden || !widget.canEdit)
           ? null
           : (_) {
               _resolveCollisions(id, goal);
@@ -1051,7 +1067,7 @@ class _SubGoalNode extends StatelessWidget {
     required this.sc,
     required this.dragging,
     required this.isHoverTarget,
-    required this.onAdd,
+    this.onAdd,
     this.hoverAnim,
   });
   final SubGoal sg;
@@ -1059,7 +1075,7 @@ class _SubGoalNode extends StatelessWidget {
   final bool dragging;
   final bool isHoverTarget;
   final Animation<double>? hoverAnim;
-  final VoidCallback onAdd;
+  final VoidCallback? onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -1115,6 +1131,7 @@ class _SubGoalNode extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Row(
                       children: [
@@ -1126,7 +1143,7 @@ class _SubGoalNode extends StatelessWidget {
                         Expanded(
                           child: Text(
                             sg.name,
-                            maxLines: 2,
+                            maxLines: sg.tasks.isNotEmpty ? 1 : 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: c.textPrimary,
@@ -1165,20 +1182,21 @@ class _SubGoalNode extends StatelessWidget {
             ],
           ),
         ),
-        Positioned(
-          top: -9,
-          right: -9,
-          child: GestureDetector(
-            onTap: onAdd,
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle),
-              child: Icon(Icons.add, size: 13, color: c.background),
+        if (onAdd != null)
+          Positioned(
+            top: -9,
+            right: -9,
+            child: GestureDetector(
+              onTap: onAdd,
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle),
+                child: Icon(Icons.add, size: 13, color: c.background),
+              ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -1430,19 +1448,19 @@ class _SubGoalSheet extends StatefulWidget {
   const _SubGoalSheet({
     required this.sg,
     required this.sc,
-    required this.onAddTask,
-    required this.onAddSubGoal,
+    this.onAddTask,
+    this.onAddSubGoal,
     this.onComplete,
     this.onUnparent,
-    required this.onDelete,
+    this.onDelete,
   });
   final SubGoal sg;
   final SieColors sc;
-  final void Function(String name, int weight) onAddTask;
-  final ValueChanged<String> onAddSubGoal;
+  final void Function(String name, int weight)? onAddTask;
+  final ValueChanged<String>? onAddSubGoal;
   final VoidCallback? onComplete;
   final VoidCallback? onUnparent;
-  final VoidCallback onDelete;
+  final VoidCallback? onDelete;
 
   @override
   State<_SubGoalSheet> createState() => _SubGoalSheetState();
@@ -1488,35 +1506,40 @@ class _SubGoalSheetState extends State<_SubGoalSheet> {
                   onTap: widget.onComplete!),
               const SizedBox(height: 8),
             ],
-            _ActionBtn(
-                label: 'Добавить задачу',
-                icon: Icons.add_task,
-                color: c.accent,
-                sc: c,
-                onTap: () => setState(() => _adding = true)),
-            const SizedBox(height: 8),
-            _ActionBtn(
-                label: 'Добавить под-этап',
-                icon: Icons.account_tree_outlined,
-                color: c.accent,
-                sc: c,
-                onTap: () => setState(() => _addingSubGoal = true)),
-            if (widget.onUnparent != null) ...[
+            if (widget.onAddTask != null) ...[
+              _ActionBtn(
+                  label: 'Добавить задачу',
+                  icon: Icons.add_task,
+                  color: c.accent,
+                  sc: c,
+                  onTap: () => setState(() => _adding = true)),
               const SizedBox(height: 8),
+            ],
+            if (widget.onAddSubGoal != null) ...[
+              _ActionBtn(
+                  label: 'Добавить под-этап',
+                  icon: Icons.account_tree_outlined,
+                  color: c.accent,
+                  sc: c,
+                  onTap: () => setState(() => _addingSubGoal = true)),
+              const SizedBox(height: 8),
+            ],
+            if (widget.onUnparent != null) ...[
               _ActionBtn(
                   label: 'Вынести на уровень выше',
                   icon: Icons.arrow_upward_outlined,
                   color: c.textSecondary,
                   sc: c,
                   onTap: widget.onUnparent!),
+              const SizedBox(height: 8),
             ],
-            const SizedBox(height: 8),
-            _ActionBtn(
-                label: 'Удалить',
-                icon: Icons.delete_outline,
-                color: const Color(0xFFE03050),
-                sc: c,
-                onTap: widget.onDelete),
+            if (widget.onDelete != null)
+              _ActionBtn(
+                  label: 'Удалить',
+                  icon: Icons.delete_outline,
+                  color: const Color(0xFFE03050),
+                  sc: c,
+                  onTap: widget.onDelete!),
           ] else if (_addingSubGoal) ...[
             _StyledTextField(ctrl: _sgCtrl, hint: 'Название под-этапа', sc: c,
                 onSubmit: _submitSubGoal),
@@ -1617,13 +1640,13 @@ class _SubGoalSheetState extends State<_SubGoalSheet> {
   void _submitTask([String? _]) {
     final v = _ctrl.text.trim();
     if (v.isEmpty) return;
-    widget.onAddTask(v, _weight);
+    widget.onAddTask?.call(v, _weight);
   }
 
   void _submitSubGoal([String? _]) {
     final v = _sgCtrl.text.trim();
     if (v.isEmpty) return;
-    widget.onAddSubGoal(v);
+    widget.onAddSubGoal?.call(v);
   }
 }
 
@@ -1633,12 +1656,12 @@ class _TaskSheet extends StatelessWidget {
   const _TaskSheet(
       {required this.task,
       required this.sc,
-      required this.onToggle,
-      required this.onDelete});
+      this.onToggle,
+      this.onDelete});
   final PlanningTask task;
   final SieColors sc;
-  final VoidCallback onToggle;
-  final VoidCallback onDelete;
+  final VoidCallback? onToggle;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1666,20 +1689,23 @@ class _TaskSheet extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          _ActionBtn(
-            label: task.isCompleted ? 'Отметить невыполненной' : 'Выполнено',
-            icon: task.isCompleted ? Icons.radio_button_unchecked : Icons.check_circle_outline,
-            color: c.accent,
-            sc: c,
-            onTap: onToggle,
-          ),
-          const SizedBox(height: 8),
-          _ActionBtn(
-              label: 'Удалить',
-              icon: Icons.delete_outline,
-              color: const Color(0xFFE03050),
+          if (onToggle != null) ...[
+            _ActionBtn(
+              label: task.isCompleted ? 'Отметить невыполненной' : 'Выполнено',
+              icon: task.isCompleted ? Icons.radio_button_unchecked : Icons.check_circle_outline,
+              color: c.accent,
               sc: c,
-              onTap: onDelete),
+              onTap: onToggle!,
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (onDelete != null)
+            _ActionBtn(
+                label: 'Удалить',
+                icon: Icons.delete_outline,
+                color: const Color(0xFFE03050),
+                sc: c,
+                onTap: onDelete!),
         ],
       ),
     );
@@ -1690,11 +1716,11 @@ class _TaskSheet extends StatelessWidget {
 
 class _MilestoneSheet extends StatelessWidget {
   const _MilestoneSheet(
-      {required this.ms, required this.sc, this.onComplete, required this.onDelete});
+      {required this.ms, required this.sc, this.onComplete, this.onDelete});
   final Milestone ms;
   final SieColors sc;
   final VoidCallback? onComplete;
-  final VoidCallback onDelete;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1728,12 +1754,13 @@ class _MilestoneSheet extends StatelessWidget {
                 onTap: onComplete!),
             const SizedBox(height: 8),
           ],
-          _ActionBtn(
-              label: 'Удалить',
-              icon: Icons.delete_outline,
-              color: const Color(0xFFE03050),
-              sc: c,
-              onTap: onDelete),
+          if (onDelete != null)
+            _ActionBtn(
+                label: 'Удалить',
+                icon: Icons.delete_outline,
+                color: const Color(0xFFE03050),
+                sc: c,
+                onTap: onDelete!),
         ],
       ),
     );
