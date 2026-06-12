@@ -117,29 +117,39 @@ class _ErrorState extends ConsumerWidget {
 
 // ── Main Body ─────────────────────────────────────────────────
 
-class _AnalyticsBody extends StatelessWidget {
+class _AnalyticsBody extends ConsumerWidget {
   final AnalyticsData data;
   const _AnalyticsBody({required this.data});
 
   @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
-      children: [
-        _StatsRow(data: data),
-        const SizedBox(height: 28),
-        const _SectionLabel(label: 'ACTIVITY MATRIX'),
-        const SizedBox(height: 12),
-        _HeatMap(heatMap: data.heatMap),
-        const SizedBox(height: 28),
-        const _SectionLabel(label: 'XP GROWTH — 7 DAYS'),
-        const SizedBox(height: 12),
-        _XpLineChart(points: data.xpHistory),
-        const SizedBox(height: 28),
-        const _SectionLabel(label: 'FOCUS TIME — 7 DAYS'),
-        const SizedBox(height: 12),
-        _FocusBarChart(points: data.focusByDay),
-      ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return RefreshIndicator(
+      color: c.accent,
+      backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+      onRefresh: () async {
+        ref.invalidate(analyticsProvider);
+        await ref.read(analyticsProvider.future);
+      },
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+        children: [
+          _StatsRow(data: data),
+          const SizedBox(height: 28),
+          const _SectionLabel(label: 'ACTIVITY MATRIX'),
+          const SizedBox(height: 12),
+          _HeatMap(heatMap: data.heatMap),
+          const SizedBox(height: 28),
+          const _SectionLabel(label: 'XP GROWTH — 7 DAYS'),
+          const SizedBox(height: 12),
+          _XpLineChart(points: data.xpHistory),
+          const SizedBox(height: 28),
+          const _SectionLabel(label: 'FOCUS TIME — 7 DAYS'),
+          const SizedBox(height: 12),
+          _FocusBarChart(points: data.focusByDay),
+        ],
+      ),
     );
   }
 }

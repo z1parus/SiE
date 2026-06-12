@@ -7,6 +7,7 @@ import 'tactical_map_view.dart';
 import 'mission_accomplished_screen.dart';
 import 'goal_stats_screen.dart';
 import 'public_profile_screen.dart';
+import 'ai_decomposition_sheet.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -123,11 +124,14 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
                     builder: (_) => GoalStatsScreen(goal: goal),
                   ),
                 ),
+                onAiDecompose: canEdit && goal.status == 'active' && GroqService.isInitialized
+                    ? () => showAiDecompositionSheet(context, goal)
+                    : null,
                 isShared: !isOwner,
               ),
               Expanded(
                 child: _mapMode
-                    ? TacticalMapView(goal: goal)
+                    ? TacticalMapView(goal: goal, canEdit: canEdit)
                     : _DetailListView(
                         goal: goal,
                         sc: sc,
@@ -169,6 +173,7 @@ class _MissionHeader extends StatelessWidget {
     required this.onBack,
     this.onSettings,
     required this.onStats,
+    this.onAiDecompose,
     this.isShared = false,
   });
 
@@ -179,6 +184,7 @@ class _MissionHeader extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback? onSettings;
   final VoidCallback onStats;
+  final VoidCallback? onAiDecompose;
   final bool isShared;
 
   @override
@@ -217,8 +223,19 @@ class _MissionHeader extends StatelessWidget {
                 Icon(Icons.people_outlined, size: 13,
                     color: sc.accent.withValues(alpha: 0.8)),
               ],
+              if (onAiDecompose != null) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: Icon(Icons.auto_awesome_outlined,
+                      color: sc.accent, size: 20),
+                  onPressed: onAiDecompose,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'AI-план',
+                ),
+              ],
               const Spacer(),
-              if (onSettings != null)
+              if (onSettings != null) ...[
                 IconButton(
                   icon: Icon(Icons.settings_outlined,
                       color: sc.textSecondary, size: 20),
@@ -226,7 +243,8 @@ class _MissionHeader extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
-              const SizedBox(width: 8),
+                const SizedBox(width: 4),
+              ],
               IconButton(
                 icon: Icon(Icons.bar_chart_outlined,
                     color: sc.textSecondary, size: 20),
@@ -234,7 +252,7 @@ class _MissionHeader extends StatelessWidget {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
               _ViewToggle(
                   mapMode: mapMode, onToggle: onToggle, goalColor: goalColor, sc: sc),
             ],
@@ -476,7 +494,6 @@ class _ViewToggle extends StatelessWidget {
           children: [
             _ToggleSegment(
               icon: Icons.list,
-              label: 'Список',
               active: !mapMode,
               goalColor: goalColor,
               sc: sc,
@@ -484,7 +501,6 @@ class _ViewToggle extends StatelessWidget {
             ),
             _ToggleSegment(
               icon: Icons.map_outlined,
-              label: 'Карта',
               active: mapMode,
               goalColor: goalColor,
               sc: sc,
@@ -500,7 +516,6 @@ class _ViewToggle extends StatelessWidget {
 class _ToggleSegment extends StatelessWidget {
   const _ToggleSegment({
     required this.icon,
-    required this.label,
     required this.active,
     required this.goalColor,
     required this.sc,
@@ -508,7 +523,6 @@ class _ToggleSegment extends StatelessWidget {
   });
 
   final IconData icon;
-  final String label;
   final bool active;
   final Color goalColor;
   final SieColors sc;
@@ -517,7 +531,7 @@ class _ToggleSegment extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: active ? goalColor.withValues(alpha: 0.15) : Colors.transparent,
         borderRadius: BorderRadius.horizontal(
@@ -529,16 +543,7 @@ class _ToggleSegment extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon,
-              size: 14, color: active ? goalColor : sc.textSecondary),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: active ? goalColor : sc.textSecondary,
-              fontSize: 11,
-              fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-            ),
-          ),
+              size: 16, color: active ? goalColor : sc.textSecondary),
         ],
       ),
     );
@@ -547,7 +552,7 @@ class _ToggleSegment extends StatelessWidget {
 
 // ─── Detail List View ─────────────────────────────────────────────────────────
 
-class _DetailListView extends StatelessWidget {
+class _DetailListView extends ConsumerWidget {
   const _DetailListView({
     required this.goal,
     required this.sc,
@@ -565,20 +570,29 @@ class _DetailListView extends StatelessWidget {
   final bool canEdit;
 
   @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SubGoalsSection(goal: goal, sc: sc,
-              isQuickEntryActive: isQuickEntryActive, canEdit: canEdit),
-          const SizedBox(height: 16),
-          _MilestonesSection(goal: goal, sc: sc, canEdit: canEdit),
-          const SizedBox(height: 16),
-          _HabitSynergySection(goal: goal, sc: sc),
-          const SizedBox(height: 24),
-        ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    return RefreshIndicator(
+      color: sc.accent,
+      backgroundColor: sc.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+      onRefresh: () async {
+        ref.invalidate(planningProvider);
+        await ref.read(planningProvider.future);
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SubGoalsSection(goal: goal, sc: sc,
+                isQuickEntryActive: isQuickEntryActive, canEdit: canEdit),
+            const SizedBox(height: 16),
+            _MilestonesSection(goal: goal, sc: sc, canEdit: canEdit),
+            const SizedBox(height: 16),
+            _HabitSynergySection(goal: goal, sc: sc),
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
     );
   }
@@ -832,12 +846,14 @@ class _SubGoalTile extends ConsumerWidget {
                   physics: const NeverScrollableScrollPhysics(),
                   buildDefaultDragHandles: false,
                   itemCount: sg.tasks.length,
-                  onReorder: (oldIdx, newIdx) {
-                    if (newIdx > oldIdx) newIdx--;
-                    final ids = sg.tasks.map((t) => t.id).toList();
-                    ids.insert(newIdx, ids.removeAt(oldIdx));
-                    ref.read(planningProvider.notifier).reorderTasks(goal.id, sg.id, ids);
-                  },
+                  onReorder: canEdit
+                      ? (oldIdx, newIdx) {
+                          if (newIdx > oldIdx) newIdx--;
+                          final ids = sg.tasks.map((t) => t.id).toList();
+                          ids.insert(newIdx, ids.removeAt(oldIdx));
+                          ref.read(planningProvider.notifier).reorderTasks(goal.id, sg.id, ids);
+                        }
+                      : (_, __) {},
                   itemBuilder: (ctx, i) => _TaskTile(
                     key: ValueKey(sg.tasks[i].id),
                     task: sg.tasks[i],
@@ -845,6 +861,7 @@ class _SubGoalTile extends ConsumerWidget {
                     goal: goal,
                     sc: sc,
                     reorderIndex: i,
+                    canEdit: canEdit,
                   ),
                 ),
                 if (sg.children.isNotEmpty)
@@ -853,12 +870,14 @@ class _SubGoalTile extends ConsumerWidget {
                     physics: const NeverScrollableScrollPhysics(),
                     buildDefaultDragHandles: false,
                     itemCount: sg.children.length,
-                    onReorder: (oldIdx, newIdx) {
-                      if (newIdx > oldIdx) newIdx--;
-                      final ids = sg.children.map((c) => c.id).toList();
-                      ids.insert(newIdx, ids.removeAt(oldIdx));
-                      ref.read(planningProvider.notifier).reorderSubGoals(goal.id, sg.id, ids);
-                    },
+                    onReorder: canEdit
+                        ? (oldIdx, newIdx) {
+                            if (newIdx > oldIdx) newIdx--;
+                            final ids = sg.children.map((c) => c.id).toList();
+                            ids.insert(newIdx, ids.removeAt(oldIdx));
+                            ref.read(planningProvider.notifier).reorderSubGoals(goal.id, sg.id, ids);
+                          }
+                        : (_, __) {},
                     itemBuilder: (ctx, i) {
                       final child = sg.children[i];
                       final childVisible =
@@ -889,12 +908,13 @@ class _SubGoalTile extends ConsumerWidget {
                           visibleIds: visibleIds,
                           fogEnabled: fogEnabled,
                           onScoutChild: onScoutChild,
+                          canEdit: canEdit,
                         ),
                       );
                     },
                   ),
-                _AddTaskRow(subGoal: sg, goal: goal, sc: sc),
-                _AddChildSubGoalRow(subGoal: sg, goal: goal, sc: sc),
+                _AddTaskRow(subGoal: sg, goal: goal, sc: sc, canEdit: canEdit),
+                _AddChildSubGoalRow(subGoal: sg, goal: goal, sc: sc, canEdit: canEdit),
               ],
             ),
           ],
@@ -990,6 +1010,7 @@ class _TaskTile extends ConsumerWidget {
     required this.goal,
     required this.sc,
     this.reorderIndex = 0,
+    this.canEdit = true,
   });
 
   final PlanningTask task;
@@ -997,6 +1018,7 @@ class _TaskTile extends ConsumerWidget {
   final Goal goal;
   final SieColors sc;
   final int reorderIndex;
+  final bool canEdit;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1005,15 +1027,19 @@ class _TaskTile extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
-          ReorderableDragStartListener(
-            index: reorderIndex,
-            child: Icon(Icons.drag_handle, size: 16, color: sc.textSecondary),
-          ),
-          const SizedBox(width: 6),
+          if (canEdit) ...[
+            ReorderableDragStartListener(
+              index: reorderIndex,
+              child: Icon(Icons.drag_handle, size: 16, color: sc.textSecondary),
+            ),
+            const SizedBox(width: 6),
+          ],
           GestureDetector(
-            onTap: () => ref
-                .read(planningProvider.notifier)
-                .toggleTask(t.id, subGoal.id, goal.id),
+            onTap: canEdit
+                ? () => ref
+                    .read(planningProvider.notifier)
+                    .toggleTask(t.id, subGoal.id, goal.id)
+                : null,
             child: Icon(
               t.isCompleted
                   ? Icons.check_circle
@@ -1045,12 +1071,13 @@ class _TaskTile extends ConsumerWidget {
             ),
           ),
           _WeightBadge(weight: t.weight, sc: sc),
-          const SizedBox(width: 6),
-          GestureDetector(
-            onTap: () => _confirmDeleteTask(context, ref, t.id, subGoal.id, goal.id, sc),
-            child:
-                Icon(Icons.close, size: 14, color: sc.textSecondary),
-          ),
+          if (canEdit) ...[
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: () => _confirmDeleteTask(context, ref, t.id, subGoal.id, goal.id, sc),
+              child: Icon(Icons.close, size: 14, color: sc.textSecondary),
+            ),
+          ],
         ],
       ),
     );
@@ -1087,14 +1114,16 @@ class _WeightBadge extends StatelessWidget {
 
 class _AddChildSubGoalRow extends ConsumerWidget {
   const _AddChildSubGoalRow(
-      {required this.subGoal, required this.goal, required this.sc});
+      {required this.subGoal, required this.goal, required this.sc, this.canEdit = true});
 
   final SubGoal subGoal;
   final Goal goal;
   final SieColors sc;
+  final bool canEdit;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (!canEdit) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       child: TextButton.icon(
@@ -1113,14 +1142,16 @@ class _AddChildSubGoalRow extends ConsumerWidget {
 
 class _AddTaskRow extends ConsumerWidget {
   const _AddTaskRow(
-      {required this.subGoal, required this.goal, required this.sc});
+      {required this.subGoal, required this.goal, required this.sc, this.canEdit = true});
 
   final SubGoal subGoal;
   final Goal goal;
   final SieColors sc;
+  final bool canEdit;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (!canEdit) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: TextButton.icon(
@@ -2504,31 +2535,32 @@ class _SheetSubmitButton extends StatelessWidget {
 
 void _showGoalSettingsSheet(BuildContext context, Goal goal, SieColors sc,
     {Set<String> onlineUserIds = const {}}) {
-  showModalBottomSheet(
-    context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (_) => _GoalSettingsSheet(
-        goal: goal, sc: sc, onlineUserIds: onlineUserIds),
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => GoalSettingsScreen(
+        goal: goal,
+        onlineUserIds: onlineUserIds,
+      ),
+    ),
   );
 }
 
-class _GoalSettingsSheet extends ConsumerStatefulWidget {
-  const _GoalSettingsSheet({
+class GoalSettingsScreen extends ConsumerStatefulWidget {
+  const GoalSettingsScreen({
+    super.key,
     required this.goal,
-    required this.sc,
     this.onlineUserIds = const {},
   });
 
   final Goal goal;
-  final SieColors sc;
   final Set<String> onlineUserIds;
 
   @override
-  ConsumerState<_GoalSettingsSheet> createState() => _GoalSettingsSheetState();
+  ConsumerState<GoalSettingsScreen> createState() => _GoalSettingsScreenState();
 }
 
-class _GoalSettingsSheetState extends ConsumerState<_GoalSettingsSheet> {
+class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
   late GoalSettings _settings;
 
   @override
@@ -2539,223 +2571,244 @@ class _GoalSettingsSheetState extends ConsumerState<_GoalSettingsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final sc = widget.sc;
-    final goal = widget.goal;
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final sc = ref.watch(sieColorsProvider);
+    final goal = ref.watch(planningProvider).valueOrNull
+            ?.goals.firstWhere((g) => g.id == widget.goal.id,
+                orElse: () => widget.goal) ??
+        widget.goal;
     final isFrozen = goal.status == 'frozen';
 
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
-      decoration: BoxDecoration(
-        color: sc.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: sc.border),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                  color: sc.border, borderRadius: BorderRadius.circular(2)),
+    return SieBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: sc.surface,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back, color: sc.textPrimary),
+            onPressed: () => Navigator.pop(context),
+            padding: EdgeInsets.zero,
+          ),
+          title: Text(
+            'НАСТРОЙКИ МИССИИ',
+            style: TextStyle(
+              color: sc.textSecondary,
+              fontSize: 12,
+              letterSpacing: 1.5,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 16),
-          _SheetTitle('НАСТРОЙКИ МИССИИ', sc),
-          const SizedBox(height: 16),
-          // Mission name + creation date
-          Text(
-            goal.name,
-            style: TextStyle(
-                color: sc.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Divider(height: 1, color: sc.border),
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Создано: ${_formatDate(goal.createdAt)}',
-            style: TextStyle(color: sc.textSecondary, fontSize: 12),
-          ),
-          const SizedBox(height: 20),
-          Divider(height: 1, color: sc.border),
-          const SizedBox(height: 16),
-          // Fog of War toggle
-          Row(
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Туман войны',
+              Text(
+                goal.name,
+                style: TextStyle(
+                    color: sc.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Создано: ${_formatDate(goal.createdAt)}',
+                style: TextStyle(color: sc.textSecondary, fontSize: 12),
+              ),
+              const SizedBox(height: 20),
+              Divider(height: 1, color: sc.border),
+              const SizedBox(height: 16),
+              // Fog of War toggle
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Туман войны',
+                          style: TextStyle(
+                              color: sc.textPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Скрывает этапы до их разблокировки',
+                          style: TextStyle(color: sc.textSecondary, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: _settings.isFogOfWarEnabled,
+                    onChanged: (v) => setState(
+                        () => _settings = _settings.copyWith(isFogOfWarEnabled: v)),
+                    activeColor: sc.accent,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Hide completed tasks toggle
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Скрыть выполненные задачи',
                       style: TextStyle(
                           color: sc.textPrimary,
                           fontSize: 14,
                           fontWeight: FontWeight.w500),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Скрывает этапы до их разблокировки',
-                      style:
-                          TextStyle(color: sc.textSecondary, fontSize: 11),
-                    ),
-                  ],
-                ),
+                  ),
+                  Switch(
+                    value: _settings.hideCompletedTasks,
+                    onChanged: (v) => setState(
+                        () => _settings = _settings.copyWith(hideCompletedTasks: v)),
+                    activeColor: sc.accent,
+                  ),
+                ],
               ),
-              Switch(
-                value: _settings.isFogOfWarEnabled,
-                onChanged: (v) =>
-                    setState(() => _settings = _settings.copyWith(isFogOfWarEnabled: v)),
-                activeColor: sc.accent,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Hide completed tasks toggle
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Скрыть выполненные задачи',
-                  style: TextStyle(
-                      color: sc.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500),
-                ),
-              ),
-              Switch(
-                value: _settings.hideCompletedTasks,
-                onChanged: (v) => setState(
-                    () => _settings = _settings.copyWith(hideCompletedTasks: v)),
-                activeColor: sc.accent,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Remind before deadline stepper
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Напомнить за дней до дедлайна',
-                  style: TextStyle(
-                      color: sc.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500),
-                ),
-              ),
-              _StepperWidget(
-                value: _settings.remindBeforeDeadlineDays,
-                min: 1,
-                max: 30,
-                sc: sc,
-                onChanged: (v) => setState(() =>
-                    _settings = _settings.copyWith(remindBeforeDeadlineDays: v)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Divider(height: 1, color: sc.border),
-          const SizedBox(height: 16),
-          // Category picker
-          Text(
-            'Категория миссии',
-            style: TextStyle(
-                color: sc.textPrimary,
-                fontSize: 14,
-                fontWeight: FontWeight.w500),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _CategoryChip(
-                label: 'Нет',
-                icon: Icons.remove_circle_outline,
-                color: sc.textSecondary,
-                selected: _settings.category == null,
-                onTap: () => setState(
-                    () => _settings = _settings.copyWith(category: null)),
-                sc: sc,
-              ),
-              ...GoalCategory.values.map((cat) => _CategoryChip(
-                    label: _categoryLabel(cat),
-                    icon: _categoryIcon(cat)!,
-                    color: _categoryColor(cat),
-                    selected: _settings.category == cat,
-                    onTap: () => setState(
-                        () => _settings = _settings.copyWith(category: cat)),
-                    sc: sc,
-                  )),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Divider(height: 1, color: sc.border),
-          const SizedBox(height: 12),
-          // Status actions
-          _SettingsActionRow(
-            icon: isFrozen ? Icons.play_arrow_outlined : Icons.ac_unit,
-            label: isFrozen ? 'Разморозить миссию' : 'Заморозить миссию',
-            color: const Color(0xFF6A8ED8),
-            onTap: () {
-              final newStatus = isFrozen ? 'active' : 'frozen';
-              ref
-                  .read(planningProvider.notifier)
-                  .updateGoalStatus(goal.id, newStatus);
-              Navigator.pop(context);
-            },
-          ),
-          if (goal.status != 'completed')
-            _SettingsActionRow(
-              icon: Icons.check_circle_outline,
-              label: 'Завершить миссию',
-              color: const Color(0xFF5AADA0),
-              onTap: () async {
-                final medal = await ref
-                    .read(planningProvider.notifier)
-                    .updateGoalStatus(goal.id, 'completed');
-                if (!context.mounted) return;
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => MissionAccomplishedScreen(
-                      xpGained: goalCompletionBaseXp(goal) + (medal?.xpBonus ?? 100),
-                      dpGained: _categoryDp(goal.settings.category),
-                      medal: medal,
+              const SizedBox(height: 12),
+              // Remind before deadline stepper
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Напомнить за дней до дедлайна',
+                      style: TextStyle(
+                          color: sc.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500),
                     ),
                   ),
-                );
+                  _StepperWidget(
+                    value: _settings.remindBeforeDeadlineDays,
+                    min: 1,
+                    max: 30,
+                    sc: sc,
+                    onChanged: (v) => setState(() =>
+                        _settings = _settings.copyWith(remindBeforeDeadlineDays: v)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Divider(height: 1, color: sc.border),
+              const SizedBox(height: 16),
+              // Category picker
+              Text(
+                'Категория миссии',
+                style: TextStyle(
+                    color: sc.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _CategoryChip(
+                    label: 'Нет',
+                    icon: Icons.remove_circle_outline,
+                    color: sc.textSecondary,
+                    selected: _settings.category == null,
+                    onTap: () => setState(
+                        () => _settings = _settings.copyWith(category: null)),
+                    sc: sc,
+                  ),
+                  ...GoalCategory.values.map((cat) => _CategoryChip(
+                        label: _categoryLabel(cat),
+                        icon: _categoryIcon(cat)!,
+                        color: _categoryColor(cat),
+                        selected: _settings.category == cat,
+                        onTap: () => setState(
+                            () => _settings = _settings.copyWith(category: cat)),
+                        sc: sc,
+                      )),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Divider(height: 1, color: sc.border),
+              const SizedBox(height: 12),
+              // Status actions
+              _SettingsActionRow(
+                icon: isFrozen ? Icons.play_arrow_outlined : Icons.ac_unit,
+                label: isFrozen ? 'Разморозить миссию' : 'Заморозить миссию',
+                color: const Color(0xFF6A8ED8),
+                onTap: () {
+                  final newStatus = isFrozen ? 'active' : 'frozen';
+                  ref
+                      .read(planningProvider.notifier)
+                      .updateGoalStatus(goal.id, newStatus);
+                  Navigator.pop(context);
+                },
+              ),
+              if (goal.status != 'completed')
+                _SettingsActionRow(
+                  icon: Icons.check_circle_outline,
+                  label: 'Завершить миссию',
+                  color: const Color(0xFF5AADA0),
+                  onTap: () async {
+                    final medal = await ref
+                        .read(planningProvider.notifier)
+                        .updateGoalStatus(goal.id, 'completed');
+                    if (!context.mounted) return;
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MissionAccomplishedScreen(
+                          xpGained: goalCompletionBaseXp(goal) + (medal?.xpBonus ?? 100),
+                          dpGained: _categoryDp(goal.settings.category),
+                          medal: medal,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              const SizedBox(height: 20),
+              Divider(height: 1, color: sc.border),
+              const SizedBox(height: 16),
+              _CollaborationSection(
+                goal: goal,
+                sc: sc,
+                onlineUserIds: widget.onlineUserIds,
+              ),
+            ],
+          ),
+        ),
+        bottomNavigationBar: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+            child: FilledButton(
+              onPressed: () {
+                ref
+                    .read(planningProvider.notifier)
+                    .updateGoalSettings(goal.id, _settings);
+                Navigator.pop(context);
               },
+              style: FilledButton.styleFrom(
+                backgroundColor: sc.accent,
+                minimumSize: const Size(double.infinity, 48),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text(
+                'ПРИМЕНИТЬ',
+                style: TextStyle(
+                    fontWeight: FontWeight.w700, letterSpacing: 1.5),
+              ),
             ),
-          // ── Collaboration section (owner only) ────────────────
-          const SizedBox(height: 20),
-          Divider(height: 1, color: sc.border),
-          const SizedBox(height: 16),
-          _CollaborationSection(
-            goal: goal,
-            sc: sc,
-            onlineUserIds: widget.onlineUserIds,
           ),
-          const SizedBox(height: 16),
-          _SheetSubmitButton(
-            label: 'ПРИМЕНИТЬ',
-            sc: sc,
-            onTap: () {
-              ref
-                  .read(planningProvider.notifier)
-                  .updateGoalSettings(goal.id, _settings);
-              Navigator.pop(context);
-            },
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -2777,10 +2830,14 @@ class _CollaborationSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(goalCollaborationProvider);
+    final liveGoal = ref.watch(planningProvider).valueOrNull
+            ?.goals.firstWhere((g) => g.id == goal.id,
+                orElse: () => goal) ??
+        goal;
     final accepted =
-        goal.collaborators.where((c) => c.status == 'accepted').toList();
+        liveGoal.collaborators.where((c) => c.status == 'accepted').toList();
     final pending =
-        goal.collaborators.where((c) => c.status == 'pending').toList();
+        liveGoal.collaborators.where((c) => c.status == 'pending').toList();
     final canInviteMore = (accepted.length + pending.length) < 10;
 
     return Column(
@@ -2806,7 +2863,7 @@ class _CollaborationSection extends ConsumerWidget {
               sc: sc,
               isOnline: onlineUserIds.contains(c.userId),
               onRoleChange: (newRole) =>
-                  notifier.updateRole(goal.id, c.userId, newRole),
+                  notifier.updateRole(liveGoal.id, c.userId, newRole),
               onRemove: () async {
                 final ok = await showDialog<bool>(
                   context: context,
@@ -2824,13 +2881,13 @@ class _CollaborationSection extends ConsumerWidget {
                     ],
                   ),
                 );
-                if (ok == true) notifier.remove(goal.id, c.userId);
+                if (ok == true) notifier.remove(liveGoal.id, c.userId);
               },
             )),
         ...pending.map((c) => _PendingCollaboratorRow(
               collaborator: c,
               sc: sc,
-              onRevoke: () => notifier.remove(goal.id, c.userId),
+              onRevoke: () => notifier.remove(liveGoal.id, c.userId),
             )),
         const SizedBox(height: 8),
         if (canInviteMore)
@@ -2838,7 +2895,7 @@ class _CollaborationSection extends ConsumerWidget {
             icon: Icon(Icons.person_add_outlined, size: 16, color: sc.accent),
             label: Text('Пригласить друга',
                 style: TextStyle(color: sc.accent, fontSize: 13)),
-            onPressed: () => _showCollaboratorPickerSheet(context, ref, goal, sc),
+            onPressed: () => _showCollaboratorPickerSheet(context, ref, liveGoal, sc),
             style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 0)),
           ),
@@ -3030,19 +3087,29 @@ class _CollaboratorPickerSheetState
   Future<void> _invite(BuildContext context, String goalId, String userId) async {
     setState(() => _invitingUserId = userId);
     await ref.read(goalCollaborationProvider).invite(goalId, userId, _selectedRole);
-    if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    await ref.read(planningProvider.future);
+    if (mounted) setState(() => _invitingUserId = null);
   }
 
   @override
   Widget build(BuildContext context) {
     final sc = widget.sc;
-    final goal = widget.goal;
+    final liveGoal = ref.watch(planningProvider).valueOrNull
+            ?.goals.firstWhere((g) => g.id == widget.goal.id,
+                orElse: () => widget.goal) ??
+        widget.goal;
     final friends =
         ref.watch(friendsProvider).valueOrNull?.friends ?? [];
-    final existingIds =
-        goal.collaborators.map((c) => c.userId).toSet();
+    final acceptedIds = liveGoal.collaborators
+        .where((c) => c.status == 'accepted')
+        .map((c) => c.userId)
+        .toSet();
+    final pendingIds = liveGoal.collaborators
+        .where((c) => c.status == 'pending')
+        .map((c) => c.userId)
+        .toSet();
     final available =
-        friends.where((f) => !existingIds.contains(f.otherUser.id)).toList();
+        friends.where((f) => !acceptedIds.contains(f.otherUser.id)).toList();
 
     return DraggableScrollableSheet(
       initialChildSize: 0.6,
@@ -3122,6 +3189,7 @@ class _CollaboratorPickerSheetState
                             ? name[0].toUpperCase()
                             : '?';
                         final isInviting = _invitingUserId == profile.id;
+                        final isPending = pendingIds.contains(profile.id);
                         return ListTile(
                           leading: Container(
                             width: 40,
@@ -3157,9 +3225,9 @@ class _CollaboratorPickerSheetState
                           trailing: SizedBox(
                             height: 36,
                             child: FilledButton(
-                              onPressed: (_invitingUserId != null)
+                              onPressed: (isPending || _invitingUserId != null)
                                   ? null
-                                  : () => _invite(context, goal.id, profile.id),
+                                  : () => _invite(context, liveGoal.id, profile.id),
                               style: FilledButton.styleFrom(
                                 backgroundColor: sc.accent,
                                 disabledBackgroundColor: sc.accent.withValues(alpha: 0.4),
@@ -3171,8 +3239,8 @@ class _CollaboratorPickerSheetState
                                       width: 16, height: 16,
                                       child: CircularProgressIndicator(
                                           strokeWidth: 2, color: Colors.white))
-                                  : const Text('Позвать',
-                                      style: TextStyle(fontSize: 12)),
+                                  : Text(isPending ? 'Отправлено' : 'Позвать',
+                                      style: const TextStyle(fontSize: 12)),
                             ),
                           ),
                         );

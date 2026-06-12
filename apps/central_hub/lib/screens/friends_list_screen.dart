@@ -192,25 +192,50 @@ class _FriendsList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
     if (rows.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+      return RefreshIndicator(
+        color: c.accent,
+        backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+        onRefresh: () async {
+          ref.invalidate(friendsProvider);
+          await ref.read(friendsProvider.future);
+        },
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            Icon(Icons.people_outline,
-                size: 48, color: c.textSecondary.withValues(alpha: 0.3)),
-            const SizedBox(height: 12),
-            Text(emptyText,
-                style: TextStyle(color: c.textSecondary, fontSize: 14)),
+            SizedBox(
+              height: 300,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.people_outline,
+                        size: 48, color: c.textSecondary.withValues(alpha: 0.3)),
+                    const SizedBox(height: 12),
+                    Text(emptyText,
+                        style: TextStyle(color: c.textSecondary, fontSize: 14)),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       );
     }
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
-      itemCount: rows.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 6),
-      itemBuilder: (_, i) =>
-          _FriendTile(row: rows[i], trailing: trailing(rows[i])),
+    return RefreshIndicator(
+      color: c.accent,
+      backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+      onRefresh: () async {
+        ref.invalidate(friendsProvider);
+        await ref.read(friendsProvider.future);
+      },
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
+        itemCount: rows.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 6),
+        itemBuilder: (_, i) =>
+            _FriendTile(row: rows[i], trailing: trailing(rows[i])),
+      ),
     );
   }
 }

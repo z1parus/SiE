@@ -2,18 +2,22 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sie_core/sie_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'breathing_exercise_screen.dart';
 import 'focus_protocol_screen.dart';
 import 'habit_tracker_screen.dart';
 import 'leaderboard_screen.dart';
+import 'meditation_hub_screen.dart';
 import 'planning_screen.dart';
 import 'profile_screen.dart';
 import 'public_profile_screen.dart';
 import 'user_search_screen.dart';
 
 const _kOrange = Color(0xFFFF8C42);
+const _kBranchOrderKey = 'branch_order';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OperationsControlScreen
@@ -31,6 +35,45 @@ class OperationsControlScreen extends ConsumerStatefulWidget {
 class _OperationsControlScreenState
     extends ConsumerState<OperationsControlScreen> {
   bool _welcomeShown = false;
+  List<String>? _orderedSlugs;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrder();
+  }
+
+  Future<void> _loadOrder() async {
+    final prefs = await SharedPreferences.getInstance();
+    final slugs = prefs.getStringList(_kBranchOrderKey);
+    if (mounted && slugs != null) setState(() => _orderedSlugs = slugs);
+  }
+
+  Future<void> _saveOrder(List<String> slugs) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_kBranchOrderKey, slugs);
+  }
+
+  List<Branch> _applyOrder(List<Branch> branches) {
+    final slugs = _orderedSlugs;
+    if (slugs == null || slugs.isEmpty) return branches;
+    final indexMap = {for (var i = 0; i < slugs.length; i++) slugs[i]: i};
+    return List<Branch>.from(branches)
+      ..sort((a, b) {
+        final aIdx = indexMap[a.slug] ?? 9999;
+        final bIdx = indexMap[b.slug] ?? 9999;
+        return aIdx.compareTo(bIdx);
+      });
+  }
+
+  Future<void> _onRefresh() async {
+    ref.invalidate(branchesProvider);
+    ref.invalidate(planningProvider);
+    ref.invalidate(habitsProvider);
+    ref.invalidate(userProfileProvider);
+    ref.invalidate(notificationsProvider);
+    await ref.read(branchesProvider.future);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +93,7 @@ class _OperationsControlScreenState
       }
     });
 
-    final body = SafeArea(
+    final innerBody = SafeArea(
       bottom: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -78,7 +121,8 @@ class _OperationsControlScreenState
                 final filtered = branches
                     .where((b) => b.slug != 'progress_hub')
                     .toList();
-                return filtered.isEmpty
+                final ordered = _applyOrder(filtered);
+                return ordered.isEmpty
                     ? Center(
                         child: Text(
                           'NO DEPARTMENTS AVAILABLE',
@@ -90,8 +134,18 @@ class _OperationsControlScreenState
                         ),
                       )
                     : _BranchCarousel(
-                        branches: filtered,
+                        branches: ordered,
                         onBranchTap: (b) => _onBranchTap(context, b),
+                        onReorder: (oldIndex, newIndex) {
+                          final reordered = List<Branch>.from(ordered);
+                          if (newIndex > oldIndex) newIndex--;
+                          final item = reordered.removeAt(oldIndex);
+                          reordered.insert(newIndex, item);
+                          final slugs =
+                              reordered.map((b) => b.slug).toList();
+                          setState(() => _orderedSlugs = slugs);
+                          _saveOrder(slugs);
+                        },
                       );
               },
               loading: () => Center(
@@ -112,6 +166,18 @@ class _OperationsControlScreenState
             },
           ),
         ],
+      ),
+    );
+
+    final body = LayoutBuilder(
+      builder: (_, constraints) => RefreshIndicator(
+        color: c.accent,
+        backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+        onRefresh: _onRefresh,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: SizedBox(height: constraints.maxHeight, child: innerBody),
+        ),
       ),
     );
 
@@ -306,6 +372,8 @@ void _onBranchTap(BuildContext context, Branch branch) {
     screen = const FocusProtocolScreen();
   } else if (branch.slug == 'planning') {
     screen = const PlanningScreen();
+  } else if (branch.slug == 'meditation') {
+    screen = const MeditationHubScreen();
   }
 
   if (screen != null) {
@@ -506,29 +574,53 @@ class _LeaderboardTile extends StatelessWidget {
 class _BranchCarousel extends StatelessWidget {
   final List<Branch> branches;
   final void Function(Branch) onBranchTap;
+  final void Function(int oldIndex, int newIndex) onReorder;
 
   const _BranchCarousel({
     required this.branches,
     required this.onBranchTap,
+    required this.onReorder,
   });
 
   @override
   Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: PageView.builder(
-        controller: PageController(viewportFraction: 0.78),
-        physics: const PageScrollPhysics(parent: BouncingScrollPhysics()),
-        itemCount: branches.length,
-        itemBuilder: (context, index) {
-          final branch = branches[index];
-          return RepaintBoundary(
-            child: _BranchCarouselCard(
-              branch: branch,
-              onTap: () => onBranchTap(branch),
+    final screenWidth = MediaQuery.of(context).size.width;
+    final itemWidth = screenWidth * 0.82;
+
+    return ReorderableListView.builder(
+      scrollDirection: Axis.horizontal,
+      padding: EdgeInsets.only(left: screenWidth * 0.09, right: 8),
+      onReorder: onReorder,
+      proxyDecorator: (child, _, animation) => AnimatedBuilder(
+        animation: animation,
+        builder: (_, ch) {
+          final t = CurvedAnimation(
+              parent: animation, curve: Curves.easeOut);
+          return Transform.scale(
+            scale: Tween<double>(begin: 1.0, end: 1.04).evaluate(t),
+            child: Material(
+              elevation: Tween<double>(begin: 0, end: 16).evaluate(t),
+              color: Colors.transparent,
+              shadowColor: Colors.black38,
+              borderRadius: BorderRadius.circular(20),
+              child: ch,
             ),
           );
         },
+        child: child,
       ),
+      itemCount: branches.length,
+      itemBuilder: (context, index) {
+        final branch = branches[index];
+        return SizedBox(
+          key: ValueKey(branch.slug),
+          width: itemWidth,
+          child: _BranchCarouselCard(
+            branch: branch,
+            onTap: () => onBranchTap(branch),
+          ),
+        );
+      },
     );
   }
 }
@@ -1509,29 +1601,33 @@ class _NotifTile extends ConsumerWidget {
 class _CollabInviteActions extends ConsumerStatefulWidget {
   final String goalId;
   final String notificationId;
-  const _CollabInviteActions({required this.goalId, required this.notificationId});
+  const _CollabInviteActions(
+      {required this.goalId, required this.notificationId});
 
   @override
-  ConsumerState<_CollabInviteActions> createState() => _CollabInviteActionsState();
+  ConsumerState<_CollabInviteActions> createState() =>
+      _CollabInviteActionsState();
 }
 
 class _CollabInviteActionsState extends ConsumerState<_CollabInviteActions> {
   bool _loading = false;
-  bool _done = false;
-  String? _result;
 
   Future<void> _handle(bool accept) async {
     setState(() => _loading = true);
     try {
       final collab = ref.read(goalCollaborationProvider);
+      final status = accept ? 'accepted' : 'declined';
       if (accept) {
         await collab.accept(widget.goalId);
-        setState(() { _done = true; _result = 'Принято'; });
       } else {
         await collab.decline(widget.goalId);
-        setState(() { _done = true; _result = 'Отклонено'; });
       }
-      await ref.read(notificationsProvider.notifier).markAsRead(widget.notificationId);
+      await ref
+          .read(notificationsProvider.notifier)
+          .markAsRead(widget.notificationId);
+      ref
+          .read(notificationsProvider.notifier)
+          .resolveInvite(widget.notificationId, status);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -1539,10 +1635,32 @@ class _CollabInviteActionsState extends ConsumerState<_CollabInviteActions> {
 
   @override
   Widget build(BuildContext context) {
-    if (_done) {
-      return Text(_result ?? '',
-          style: TextStyle(fontSize: 12, color: ref.watch(sieColorsProvider).textSecondary));
+    final c = ref.watch(sieColorsProvider);
+
+    // Check in-memory resolution stored in notification payload
+    final notifications =
+        ref.watch(notificationsProvider).valueOrNull?.notifications ?? [];
+    final notif = notifications
+        .cast<AppNotification?>()
+        .firstWhere((n) => n?.id == widget.notificationId, orElse: () => null);
+    final inviteStatus = notif?.payload['invite_status'] as String?;
+
+    // Fallback for accepted: check if goal already appears in user's planning list
+    final myId = Supabase.instance.client.auth.currentUser?.id;
+    final goals = ref.watch(planningProvider).valueOrNull?.goals ?? [];
+    final isAcceptedViaPlanning = myId != null &&
+        goals.any((g) => g.id == widget.goalId && g.userId != myId);
+
+    final isAccepted = inviteStatus == 'accepted' || isAcceptedViaPlanning;
+    final isDeclined = inviteStatus == 'declined';
+
+    if (isAccepted || isDeclined) {
+      final label =
+          isAccepted ? 'Предложение принято' : 'Предложение отклонено';
+      return Text(label,
+          style: TextStyle(fontSize: 12, color: c.textSecondary));
     }
+
     if (_loading) {
       return const SizedBox(
         height: 20,
@@ -1550,6 +1668,7 @@ class _CollabInviteActionsState extends ConsumerState<_CollabInviteActions> {
         child: CircularProgressIndicator(strokeWidth: 2),
       );
     }
+
     return Row(
       children: [
         FilledButton(

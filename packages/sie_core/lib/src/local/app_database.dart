@@ -192,7 +192,7 @@ class LocalPlanningTasks extends Table {
 class LocalMissionMedals extends Table {
   TextColumn get id              => text()();
   TextColumn get userId          => text()();
-  TextColumn get goalId          => text()();
+  TextColumn get goalId          => text().withDefault(const Constant(''))();
   TextColumn get goalName        => text().withDefault(const Constant(''))();
   TextColumn get category        => text().withDefault(const Constant('none'))();
   IntColumn  get level           => integer()();
@@ -201,6 +201,7 @@ class LocalMissionMedals extends Table {
   IntColumn  get totalTaskWeight => integer().withDefault(const Constant(0))();
   IntColumn  get durationDays    => integer().withDefault(const Constant(0))();
   BoolColumn get synced          => boolean().withDefault(const Constant(false))();
+  TextColumn get medalType       => text().withDefault(const Constant('goal'))();
   @override Set<Column> get primaryKey => {id};
 }
 
@@ -214,6 +215,52 @@ class LocalGoalHabitLinks extends Table {
   BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
   IntColumn  get createdAtMs    => integer()();
   @override Set<Column> get primaryKey => {id};
+}
+
+// ── Meditation Tables ──────────────────────────────────────────────────────
+
+@DataClassName('LocalMeditationSession')
+class LocalMeditationSessions extends Table {
+  TextColumn get id              => text()();
+  TextColumn get userId          => text()();
+  TextColumn get presetId        => text().nullable()();
+  IntColumn  get durationSeconds => integer()();
+  IntColumn  get completedAtMs   => integer()();
+  IntColumn  get xpAwarded       => integer()();
+  IntColumn  get dpAwarded       => integer()();
+  IntColumn  get stateBefore     => integer().nullable()();
+  IntColumn  get stateAfter      => integer().nullable()();
+  BoolColumn get synced          => boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('LocalMeditationPreset')
+class LocalMeditationPresets extends Table {
+  TextColumn get id                      => text()();
+  TextColumn get userId                  => text().nullable()();
+  TextColumn get name                    => text()();
+  TextColumn get description             => text().nullable()();
+  BoolColumn get isSystem                => boolean().withDefault(const Constant(false))();
+  BoolColumn get hasBreathing            => boolean().withDefault(const Constant(false))();
+  TextColumn get breathingPatternId      => text().nullable()();
+  IntColumn  get breathingDurationMin    => integer().withDefault(const Constant(5))();
+  TextColumn get meditationType          => text().withDefault(const Constant('unguided'))();
+  IntColumn  get meditationDurationMin   => integer().withDefault(const Constant(15))();
+  TextColumn get baseMusicId             => text().nullable()();
+  TextColumn get ambientFxId             => text().nullable()();
+  RealColumn get baseVolume              => real().withDefault(const Constant(0.7))();
+  RealColumn get ambientVolume           => real().withDefault(const Constant(0.5))();
+  RealColumn get voiceVolume             => real().withDefault(const Constant(0.6))();
+  TextColumn get affirmationPackId       => text().nullable()();
+  IntColumn  get affirmationIntervalSecs => integer().withDefault(const Constant(30))();
+  IntColumn  get createdAtMs             => integer()();
+  BoolColumn get synced                  => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally          => boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column> get primaryKey => {id};
 }
 
 // ── Database ───────────────────────────────────────────────────────────────
@@ -233,12 +280,14 @@ class LocalGoalHabitLinks extends Table {
   LocalPlanningTasks,
   LocalGoalHabitLinks,
   LocalMissionMedals,
+  LocalMeditationSessions,
+  LocalMeditationPresets,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -289,6 +338,13 @@ class AppDatabase extends _$AppDatabase {
       if (from < 13) {
         await m.addColumn(localGoals, localGoals.isShared);
         await m.addColumn(localGoals, localGoals.myRole);
+      }
+      if (from < 14) {
+        await m.addColumn(localMissionMedals, localMissionMedals.medalType);
+      }
+      if (from < 15) {
+        await m.createTable(localMeditationSessions);
+        await m.createTable(localMeditationPresets);
       }
     },
   );
@@ -697,6 +753,53 @@ class AppDatabase extends _$AppDatabase {
   Future<void> markMedalSynced(String id) =>
       (update(localMissionMedals)..where((t) => t.id.equals(id)))
           .write(const LocalMissionMedalsCompanion(synced: Value(true)));
+
+  // ── Meditation Sessions ───────────────────────────────────────────────────
+
+  Future<void> insertMeditationSession(LocalMeditationSessionsCompanion row) =>
+      into(localMeditationSessions).insertOnConflictUpdate(row);
+
+  Future<List<LocalMeditationSession>> unsyncedMeditationSessions(
+          String userId) =>
+      (select(localMeditationSessions)
+            ..where((t) =>
+                t.userId.equals(userId) & t.synced.equals(false)))
+          .get();
+
+  Future<void> markMeditationSessionSynced(String id) =>
+      (update(localMeditationSessions)..where((t) => t.id.equals(id)))
+          .write(
+              const LocalMeditationSessionsCompanion(synced: Value(true)));
+
+  Future<int> meditationSecondsThisWeek(String userId) async {
+    final now = DateTime.now();
+    final startOfWeek = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday - 1));
+    final startMs = startOfWeek.millisecondsSinceEpoch;
+    final rows = await (select(localMeditationSessions)
+          ..where((t) =>
+              t.userId.equals(userId) &
+              t.completedAtMs.isBiggerOrEqualValue(startMs)))
+        .get();
+    return rows.fold<int>(0, (sum, r) => sum + r.durationSeconds);
+  }
+
+  // ── Meditation Presets ────────────────────────────────────────────────────
+
+  Future<void> upsertMeditationPreset(LocalMeditationPresetsCompanion row) =>
+      into(localMeditationPresets).insertOnConflictUpdate(row);
+
+  Future<List<LocalMeditationPreset>> presetsForUser(String userId) =>
+      (select(localMeditationPresets)
+            ..where((t) =>
+                (t.userId.equals(userId) | t.isSystem.equals(true)) &
+                t.deletedLocally.equals(false)))
+          .get();
+
+  Future<void> deletePresetLocally(String id) =>
+      (update(localMeditationPresets)..where((t) => t.id.equals(id)))
+          .write(const LocalMeditationPresetsCompanion(
+              deletedLocally: Value(true)));
 
   Future<Set<String>> unsyncedPlanningIds() async {
     final goals = await (select(localGoals)..where((t) => t.synced.equals(false))).get();
