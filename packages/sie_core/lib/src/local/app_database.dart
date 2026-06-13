@@ -287,10 +287,32 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 16;
+
+  // Indexes for frequently-filtered foreign-key / user columns. Idempotent
+  // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
+  Future<void> _createIndexes(Migrator m) async {
+    const stmts = [
+      'CREATE INDEX IF NOT EXISTS idx_sub_goals_goal ON local_sub_goals(goal_id)',
+      'CREATE INDEX IF NOT EXISTS idx_tasks_sub_goal ON local_planning_tasks(sub_goal_id)',
+      'CREATE INDEX IF NOT EXISTS idx_tasks_user ON local_planning_tasks(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_milestones_goal ON local_milestones(goal_id)',
+      'CREATE INDEX IF NOT EXISTS idx_links_goal ON local_goal_habit_links(goal_id)',
+      'CREATE INDEX IF NOT EXISTS idx_links_habit ON local_goal_habit_links(habit_id)',
+      'CREATE INDEX IF NOT EXISTS idx_goals_user ON local_goals(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_habit_logs_user ON local_habit_logs(user_id)',
+    ];
+    for (final s in stmts) {
+      await m.issueCustomQuery(s, const []);
+    }
+  }
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) async {
+      await m.createAll();
+      await _createIndexes(m);
+    },
     onUpgrade: (m, from, to) async {
       if (from < 2) {
         await m.addColumn(localHabits, localHabits.isArchived);
@@ -345,6 +367,9 @@ class AppDatabase extends _$AppDatabase {
       if (from < 15) {
         await m.createTable(localMeditationSessions);
         await m.createTable(localMeditationPresets);
+      }
+      if (from < 16) {
+        await _createIndexes(m);
       }
     },
   );
@@ -650,6 +675,32 @@ class AppDatabase extends _$AppDatabase {
           .write(LocalPlanningTasksCompanion(
               orderIndex: Value(idx), synced: const Value(false)));
 
+  /// Writes new order indices for [idsInOrder] in a single transaction
+  /// (one batch instead of N individual UPDATEs).
+  Future<void> batchUpdateSubGoalOrder(List<String> idsInOrder) =>
+      batch((b) {
+        for (int i = 0; i < idsInOrder.length; i++) {
+          b.update(
+            localSubGoals,
+            LocalSubGoalsCompanion(
+                orderIndex: Value(i), synced: const Value(false)),
+            where: (t) => t.id.equals(idsInOrder[i]),
+          );
+        }
+      });
+
+  Future<void> batchUpdateTaskOrder(List<String> idsInOrder) =>
+      batch((b) {
+        for (int i = 0; i < idsInOrder.length; i++) {
+          b.update(
+            localPlanningTasks,
+            LocalPlanningTasksCompanion(
+                orderIndex: Value(i), synced: const Value(false)),
+            where: (t) => t.id.equals(idsInOrder[i]),
+          );
+        }
+      });
+
   Future<void> upsertGoalHabitLink(LocalGoalHabitLinksCompanion row) =>
       into(localGoalHabitLinks).insertOnConflictUpdate(row);
 
@@ -707,6 +758,35 @@ class AppDatabase extends _$AppDatabase {
       (select(localGoalHabitLinks)
             ..where((t) =>
                 t.habitId.equals(habitId) & t.deletedLocally.equals(false)))
+          .get();
+
+  // ── Batch planning loaders (avoid N+1 on offline load) ────────────────────
+
+  Future<List<LocalSubGoal>> subGoalsForGoals(List<String> goalIds) =>
+      (select(localSubGoals)
+            ..where((t) =>
+                t.goalId.isIn(goalIds) & t.deletedLocally.equals(false))
+            ..orderBy([(t) => OrderingTerm(expression: t.orderIndex)]))
+          .get();
+
+  Future<List<LocalPlanningTask>> tasksForSubGoals(List<String> subGoalIds) =>
+      (select(localPlanningTasks)
+            ..where((t) =>
+                t.subGoalId.isIn(subGoalIds) & t.deletedLocally.equals(false))
+            ..orderBy([(t) => OrderingTerm(expression: t.orderIndex)]))
+          .get();
+
+  Future<List<LocalMilestone>> milestonesForGoals(List<String> goalIds) =>
+      (select(localMilestones)
+            ..where((t) =>
+                t.goalId.isIn(goalIds) & t.deletedLocally.equals(false))
+            ..orderBy([(t) => OrderingTerm(expression: t.createdAtMs)]))
+          .get();
+
+  Future<List<LocalGoalHabitLink>> habitLinksForGoals(List<String> goalIds) =>
+      (select(localGoalHabitLinks)
+            ..where((t) =>
+                t.goalId.isIn(goalIds) & t.deletedLocally.equals(false)))
           .get();
 
   Future<void> deleteGoalLocally(String id) =>

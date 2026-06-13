@@ -264,72 +264,78 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         ? {for (final g in serverGoals) g.id: g}
         : <String, Goal>{};
     final rawGoals = await db.goalsForUser(userId);
+    if (rawGoals.isEmpty) return const PlanningState(goals: []);
+
+    // Batch-load every related table in one query each (5 total), then group in
+    // memory — replaces the previous N+1 cascade (1 + goals + sub-goals queries).
+    final goalIds = [for (final g in rawGoals) g.id];
+    final rawSubsAll = await db.subGoalsForGoals(goalIds);
+    final subGoalIds = [for (final s in rawSubsAll) s.id];
+    final rawTasksAll = await db.tasksForSubGoals(subGoalIds);
+    final rawMsAll = await db.milestonesForGoals(goalIds);
+    final rawLinksAll = await db.habitLinksForGoals(goalIds);
+
+    // Group by foreign key.
+    final tasksBySubGoal = <String, List<PlanningTask>>{};
+    for (final rt in rawTasksAll) {
+      (tasksBySubGoal[rt.subGoalId] ??= []).add(PlanningTask(
+        id: rt.id,
+        subGoalId: rt.subGoalId,
+        userId: rt.userId,
+        name: rt.name,
+        weight: rt.weight,
+        isCompleted: rt.isCompleted,
+        orderIndex: rt.orderIndex,
+        completedAt: rt.completedAtMs != null
+            ? DateTime.fromMillisecondsSinceEpoch(rt.completedAtMs!)
+            : null,
+        dueDate: rt.dueDateMs != null
+            ? DateTime.fromMillisecondsSinceEpoch(rt.dueDateMs!)
+            : null,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(rt.createdAtMs),
+      ));
+    }
+
+    final subsByGoal = <String, List<SubGoal>>{};
+    for (final rs in rawSubsAll) {
+      (subsByGoal[rs.goalId] ??= []).add(SubGoal(
+        id: rs.id,
+        goalId: rs.goalId,
+        parentSubGoalId: rs.parentSubGoalId,
+        name: rs.name,
+        isCompleted: rs.isCompleted,
+        orderIndex: rs.orderIndex,
+        tasks: tasksBySubGoal[rs.id] ?? const [],
+        createdAt: DateTime.fromMillisecondsSinceEpoch(rs.createdAtMs),
+      ));
+    }
+
+    final msByGoal = <String, List<Milestone>>{};
+    for (final rm in rawMsAll) {
+      (msByGoal[rm.goalId] ??= []).add(Milestone(
+        id: rm.id,
+        goalId: rm.goalId,
+        name: rm.name,
+        targetDate: rm.targetDateMs != null
+            ? DateTime.fromMillisecondsSinceEpoch(rm.targetDateMs!)
+            : null,
+        isCompleted: rm.isCompleted,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(rm.createdAtMs),
+      ));
+    }
+
+    final linksByGoal = <String, List<GoalHabitLink>>{};
+    for (final rl in rawLinksAll) {
+      (linksByGoal[rl.goalId] ??= []).add(GoalHabitLink(
+        id: rl.id,
+        goalId: rl.goalId,
+        habitId: rl.habitId,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(rl.createdAtMs),
+      ));
+    }
+
     final goals = <Goal>[];
-
     for (final rg in rawGoals) {
-      final rawSubs = await db.subGoalsForGoal(rg.id);
-      final subGoals = <SubGoal>[];
-
-      for (final rs in rawSubs) {
-        final rawTasks = await db.tasksForSubGoal(rs.id);
-        final tasks = rawTasks
-            .map((rt) => PlanningTask(
-                  id: rt.id,
-                  subGoalId: rt.subGoalId,
-                  userId: rt.userId,
-                  name: rt.name,
-                  weight: rt.weight,
-                  isCompleted: rt.isCompleted,
-                  orderIndex: rt.orderIndex,
-                  completedAt: rt.completedAtMs != null
-                      ? DateTime.fromMillisecondsSinceEpoch(rt.completedAtMs!)
-                      : null,
-                  dueDate: rt.dueDateMs != null
-                      ? DateTime.fromMillisecondsSinceEpoch(rt.dueDateMs!)
-                      : null,
-                  createdAt:
-                      DateTime.fromMillisecondsSinceEpoch(rt.createdAtMs),
-                ))
-            .toList();
-
-        subGoals.add(SubGoal(
-          id: rs.id,
-          goalId: rs.goalId,
-          parentSubGoalId: rs.parentSubGoalId,
-          name: rs.name,
-          isCompleted: rs.isCompleted,
-          orderIndex: rs.orderIndex,
-          tasks: tasks,
-          createdAt: DateTime.fromMillisecondsSinceEpoch(rs.createdAtMs),
-        ));
-      }
-
-      final rawMs = await db.milestonesForGoal(rg.id);
-      final milestones = rawMs
-          .map((rm) => Milestone(
-                id: rm.id,
-                goalId: rm.goalId,
-                name: rm.name,
-                targetDate: rm.targetDateMs != null
-                    ? DateTime.fromMillisecondsSinceEpoch(rm.targetDateMs!)
-                    : null,
-                isCompleted: rm.isCompleted,
-                createdAt:
-                    DateTime.fromMillisecondsSinceEpoch(rm.createdAtMs),
-              ))
-          .toList();
-
-      final rawLinks = await db.habitLinksForGoal(rg.id);
-      final links = rawLinks
-          .map((rl) => GoalHabitLink(
-                id: rl.id,
-                goalId: rl.goalId,
-                habitId: rl.habitId,
-                createdAt:
-                    DateTime.fromMillisecondsSinceEpoch(rl.createdAtMs),
-              ))
-          .toList();
-
       goals.add(Goal(
         id: rg.id,
         userId: rg.userId,
@@ -342,9 +348,9 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         status: rg.status,
         colorHex: rg.colorHex,
         progress: rg.progress,
-        subGoals: buildSubGoalTree(subGoals),
-        milestones: milestones,
-        habitLinks: links,
+        subGoals: buildSubGoalTree(subsByGoal[rg.id] ?? const []),
+        milestones: msByGoal[rg.id] ?? const [],
+        habitLinks: linksByGoal[rg.id] ?? const [],
         createdAt: DateTime.fromMillisecondsSinceEpoch(rg.createdAtMs),
         settings: rg.settingsJson != null
             ? GoalSettings.fromJson(
@@ -1162,23 +1168,27 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       return g.copyWith(subGoals: buildSubGoalTree(flat));
     });
     final db = ref.read(appDatabaseProvider);
-    for (int i = 0; i < newOrder.length; i++) {
-      await db.updateSubGoalOrderIndex(newOrder[i], i);
-    }
+    // Single transaction for all local order writes (was N separate UPDATEs).
+    await db.batchUpdateSubGoalOrder(newOrder);
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
-    for (int i = 0; i < newOrder.length; i++) {
-      if (isOnline) {
-        try {
-          await Supabase.instance.client
-              .from('sub_goals').update({'order_index': i}).eq('id', newOrder[i]);
-          await db.updateSubGoal(newOrder[i],
-              const LocalSubGoalsCompanion(synced: Value(true)));
-          continue;
-        } catch (_) {}
-      }
-      await db.enqueueSyncOp('reorder_sub_goal',
-          jsonEncode({'id': newOrder[i], 'order_index': i}));
-    }
+    // Push order updates concurrently rather than one sequential RTT per row.
+    await Future.wait([
+      for (int i = 0; i < newOrder.length; i++)
+        () async {
+          if (isOnline) {
+            try {
+              await Supabase.instance.client
+                  .from('sub_goals')
+                  .update({'order_index': i}).eq('id', newOrder[i]);
+              await db.updateSubGoal(newOrder[i],
+                  const LocalSubGoalsCompanion(synced: Value(true)));
+              return;
+            } catch (_) {}
+          }
+          await db.enqueueSyncOp('reorder_sub_goal',
+              jsonEncode({'id': newOrder[i], 'order_index': i}));
+        }(),
+    ]);
   }
 
   // ── Reorder Tasks ──────────────────────────────────────────────────────────
@@ -1196,23 +1206,25 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
                   .toList());
         })));
     final db = ref.read(appDatabaseProvider);
-    for (int i = 0; i < newOrder.length; i++) {
-      await db.updateTaskOrderIndex(newOrder[i], i);
-    }
+    await db.batchUpdateTaskOrder(newOrder);
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
-    for (int i = 0; i < newOrder.length; i++) {
-      if (isOnline) {
-        try {
-          await Supabase.instance.client
-              .from('planning_tasks').update({'order_index': i}).eq('id', newOrder[i]);
-          await db.updatePlanningTask(newOrder[i],
-              const LocalPlanningTasksCompanion(synced: Value(true)));
-          continue;
-        } catch (_) {}
-      }
-      await db.enqueueSyncOp('reorder_task',
-          jsonEncode({'id': newOrder[i], 'order_index': i}));
-    }
+    await Future.wait([
+      for (int i = 0; i < newOrder.length; i++)
+        () async {
+          if (isOnline) {
+            try {
+              await Supabase.instance.client
+                  .from('planning_tasks')
+                  .update({'order_index': i}).eq('id', newOrder[i]);
+              await db.updatePlanningTask(newOrder[i],
+                  const LocalPlanningTasksCompanion(synced: Value(true)));
+              return;
+            } catch (_) {}
+          }
+          await db.enqueueSyncOp('reorder_task',
+              jsonEncode({'id': newOrder[i], 'order_index': i}));
+        }(),
+    ]);
   }
 
   // ── Update Goal Settings ──────────────────────────────────────────────────
