@@ -521,10 +521,13 @@ class _PreviewChip extends StatelessWidget {
 }
 
 class _GridPainter extends CustomPainter {
+  final Color color;
+  const _GridPainter({required this.color});
+
   @override
   void paint(Canvas canvas, Size size) {
     final p = Paint()
-      ..color = const Color(0xFF00C8FF).withValues(alpha: 0.04)
+      ..color = color.withValues(alpha: 0.04)
       ..strokeWidth = 0.5;
     const step = 24.0;
     for (var x = 0.0; x < size.width; x += step) {
@@ -669,8 +672,19 @@ class _AssetCardState extends ConsumerState<_AssetCard>
             : Colors.transparent;
 
     final card = GestureDetector(
-      onTap: widget.onTap,
-      onTapDown: widget.onTap != null
+      onTap: widget.isOwned
+          ? widget.onTap
+          : () {
+              final msg = widget.asset.priceDP > 0
+                  ? 'Требуется ${widget.asset.priceDP} DP для разблокировки'
+                  : 'Этот элемент недоступен';
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(msg),
+                duration: const Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+              ));
+            },
+      onTapDown: widget.isOwned && widget.onTap != null
           ? (_) => _ctrl.animateTo(1.0,
               duration: const Duration(milliseconds: 80), curve: Curves.easeIn)
           : null,
@@ -770,6 +784,29 @@ class _AssetCardState extends ConsumerState<_AssetCard>
                   ),
                 ),
               ),
+              // Lock badge for unowned items
+              if (!widget.isOwned)
+                Positioned(
+                  top: 5,
+                  right: 5,
+                  child: Tooltip(
+                    message: widget.asset.priceDP > 0
+                        ? '${widget.asset.priceDP} DP'
+                        : 'Заблокировано',
+                    child: Container(
+                      width: 18,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        color: c.surface.withValues(alpha: 0.92),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                            color: c.warning.withValues(alpha: 0.5)),
+                      ),
+                      child: Icon(Icons.lock_outline,
+                          size: 10, color: c.warning),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -871,7 +908,7 @@ class _BackgroundPreview extends StatelessWidget {
             ? NeuralNetworkWidget(
                 color: asset.accentColor.withValues(alpha: 0.35),
               )
-            : CustomPaint(painter: _GridPainter()),
+            : CustomPaint(painter: _GridPainter(color: asset.accentColor)),
       ),
     );
   }

@@ -6,7 +6,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'tactical_map_view.dart';
 import 'mission_accomplished_screen.dart';
 import 'goal_stats_screen.dart';
-import 'public_profile_screen.dart';
 import 'ai_decomposition_sheet.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
@@ -18,14 +17,6 @@ int _categoryDp(GoalCategory? cat) => switch (cat) {
       GoalCategory.discipline => 30,
       GoalCategory.lifestyle  => 25,
       null                    => 20,
-    };
-
-Color _priorityColor(int p) => switch (p) {
-      1 => const Color(0xFF888898),
-      2 => const Color(0xFFC8A84B),
-      3 => const Color(0xFFE07830),
-      4 => const Color(0xFFE03050),
-      _ => const Color(0xFFC8A84B),
     };
 
 String _formatDate(DateTime d) =>
@@ -215,7 +206,7 @@ class _MissionHeader extends StatelessWidget {
               const SizedBox(width: 8),
               if (fatigued)
                 Icon(Icons.warning_amber_rounded,
-                    color: Colors.orange, size: 16),
+                    color: sc.warning, size: 16),
               if (fatigued) const SizedBox(width: 6),
               _StatusChip(status: goal.status, sc: sc),
               if (isShared) ...[
@@ -264,7 +255,7 @@ class _MissionHeader extends StatelessWidget {
                 width: 4,
                 height: 20,
                 decoration: BoxDecoration(
-                  color: _priorityColor(goal.priority),
+                  color: sc.priorityColor(goal.priority),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -381,22 +372,22 @@ class _StrategicAdviceCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.orange.withValues(alpha: 0.1),
+        color: sc.warning.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+        border: Border.all(color: sc.warning.withValues(alpha: 0.35)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.lightbulb_outline,
-                  color: Colors.orange, size: 14),
+              Icon(Icons.lightbulb_outline,
+                  color: sc.warning, size: 14),
               const SizedBox(width: 6),
               Text(
                 'СОВЕТ',
                 style: TextStyle(
-                  color: Colors.orange,
+                  color: sc.warning,
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.5,
@@ -412,7 +403,7 @@ class _StrategicAdviceCard extends StatelessWidget {
                   children: [
                     Text('• ',
                         style: TextStyle(
-                            color: Colors.orange.withValues(alpha: 0.8),
+                            color: sc.warning.withValues(alpha: 0.8),
                             fontSize: 12)),
                     Expanded(
                       child: Text(
@@ -652,6 +643,7 @@ class _SubGoalsSectionState extends ConsumerState<_SubGoalsSection> {
           icon: Icons.account_tree_outlined,
           count: goal.subGoals.length,
           sc: sc,
+          onInfo: fogEnabled ? () => _showFogOfWarInfo(context, sc) : null,
           onAdd: widget.canEdit
               ? () => _showAddSubGoalSheet(context, ref, goal, sc)
               : null,
@@ -1599,6 +1591,7 @@ class _SectionHeader extends StatelessWidget {
     required this.count,
     required this.sc,
     this.onAdd,
+    this.onInfo,
   });
 
   final String title;
@@ -1606,6 +1599,7 @@ class _SectionHeader extends StatelessWidget {
   final int count;
   final SieColors sc;
   final VoidCallback? onAdd;
+  final VoidCallback? onInfo;
 
   @override
   Widget build(BuildContext context) {
@@ -1638,6 +1632,17 @@ class _SectionHeader extends StatelessWidget {
             ),
           ),
           const Spacer(),
+          if (onInfo != null) ...[
+            GestureDetector(
+              onTap: onInfo,
+              child: Tooltip(
+                message: 'Туман войны активен',
+                child: Icon(Icons.info_outline,
+                    size: 14, color: sc.accent.withValues(alpha: 0.7)),
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
           if (onAdd != null)
             GestureDetector(
               onTap: onAdd,
@@ -1830,29 +1835,13 @@ void _showSubGoalOptionsSheet(BuildContext context, WidgetRef ref,
             },
       onDelete: () async {
         Navigator.pop(context);
-        final confirm = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            backgroundColor: sc.surface,
-            title: Text('Удалить этап?',
-                style: TextStyle(color: sc.textPrimary)),
-            content: Text('Этап «${sg.name}» и все его задачи будут удалены.',
-                style: TextStyle(color: sc.textSecondary)),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text('Отмена',
-                    style: TextStyle(color: sc.textSecondary)),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Удалить',
-                    style: TextStyle(color: Color(0xFFE03050))),
-              ),
-            ],
-          ),
+        final confirm = await confirmDestructive(
+          context,
+          ref,
+          title: 'Удалить этап?',
+          message: 'Этап «${sg.name}» и все его задачи будут удалены.',
         );
-        if (confirm == true) {
+        if (confirm) {
           ref
               .read(planningProvider.notifier)
               .deleteSubGoal(sg.id, goal.id);
@@ -1864,54 +1853,26 @@ void _showSubGoalOptionsSheet(BuildContext context, WidgetRef ref,
 
 Future<void> _confirmDeleteTask(BuildContext context, WidgetRef ref,
     String taskId, String subGoalId, String goalId, SieColors sc) async {
-  final confirm = await showDialog<bool>(
-    context: context,
-    builder: (_) => AlertDialog(
-      backgroundColor: sc.surface,
-      title:
-          Text('Удалить задачу?', style: TextStyle(color: sc.textPrimary)),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child:
-              Text('Отмена', style: TextStyle(color: sc.textSecondary)),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text('Удалить',
-              style: TextStyle(color: Color(0xFFE03050))),
-        ),
-      ],
-    ),
+  final confirm = await confirmDestructive(
+    context,
+    ref,
+    title: 'Удалить задачу?',
+    message: 'Задача будет удалена без возможности восстановления.',
   );
-  if (confirm == true) {
+  if (confirm) {
     ref.read(planningProvider.notifier).deleteTask(taskId, subGoalId, goalId);
   }
 }
 
 Future<void> _confirmDeleteMilestone(BuildContext context, WidgetRef ref,
     String milestoneId, String goalId, SieColors sc) async {
-  final confirm = await showDialog<bool>(
-    context: context,
-    builder: (_) => AlertDialog(
-      backgroundColor: sc.surface,
-      title: Text('Удалить контрольную точку?',
-          style: TextStyle(color: sc.textPrimary)),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child:
-              Text('Отмена', style: TextStyle(color: sc.textSecondary)),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text('Удалить',
-              style: TextStyle(color: Color(0xFFE03050))),
-        ),
-      ],
-    ),
+  final confirm = await confirmDestructive(
+    context,
+    ref,
+    title: 'Удалить контрольную точку?',
+    message: 'Контрольная точка будет удалена без возможности восстановления.',
   );
-  if (confirm == true) {
+  if (confirm) {
     ref
         .read(planningProvider.notifier)
         .deleteMilestone(milestoneId, goalId);
@@ -2416,6 +2377,86 @@ class _OptionTile extends StatelessWidget {
   }
 }
 
+// ─── Fog of War Info ──────────────────────────────────────────────────────────
+
+void _showFogOfWarInfo(BuildContext context, SieColors sc) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _FogOfWarInfoSheet(sc: sc),
+  );
+}
+
+class _FogOfWarInfoSheet extends StatelessWidget {
+  const _FogOfWarInfoSheet({required this.sc});
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: sc.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: sc.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: sc.border, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Icon(Icons.filter_drama_outlined, color: sc.accent, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'ТУМАН ВОЙНЫ',
+                style: TextStyle(
+                  color: sc.textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 2.0,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Режим «Туман войны» скрывает этапы операции до их разблокировки. '
+            'Чтобы увидеть следующий этап, нажми «Разведать» на заблокированном элементе.\n\n'
+            'Этот режим помогает сосредоточиться на текущих задачах, '
+            'постепенно раскрывая план по мере продвижения.',
+            style: TextStyle(color: sc.textSecondary, fontSize: 13, height: 1.5),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () => Navigator.pop(context),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: sc.border),
+                foregroundColor: sc.textSecondary,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('ПОНЯТНО'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Sheet helpers ────────────────────────────────────────────────────────────
 
 class _SheetContainer extends StatelessWidget {
@@ -2769,6 +2810,7 @@ class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
                           xpGained: goalCompletionBaseXp(goal) + (medal?.xpBonus ?? 100),
                           dpGained: _categoryDp(goal.settings.category),
                           medal: medal,
+                          subtitle: 'МИССИЯ ЗАВЕРШЕНА',
                         ),
                       ),
                     );

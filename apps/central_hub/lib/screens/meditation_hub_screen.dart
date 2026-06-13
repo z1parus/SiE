@@ -80,12 +80,30 @@ class _MeditationHubScreenState extends ConsumerState<MeditationHubScreen> {
                 data: (state) {
                   final filtered = _filteredPresets(state.presets);
                   if (filtered.isEmpty) {
-                    return Center(
-                      child: Text(
-                        'Пресеты не найдены',
-                        style: TextStyle(
-                            color: c.textSecondary, fontSize: 14),
-                      ),
+                    final noneAtAll = state.presets.isEmpty;
+                    return SieEmptyState(
+                      icon: Icons.self_improvement_rounded,
+                      title: noneAtAll
+                          ? 'Нет пресетов'
+                          : 'Ничего не найдено',
+                      subtitle: noneAtAll
+                          ? 'Создайте свой первый пресет медитации'
+                          : 'Под выбранный фильтр пресетов нет',
+                      action: noneAtAll
+                          ? null
+                          : TextButton(
+                              onPressed: () =>
+                                  setState(() => _filter = 'all'),
+                              child: Text(
+                                'СБРОСИТЬ ФИЛЬТР',
+                                style: TextStyle(
+                                  color: c.accent,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                            ),
                     );
                   }
                   return ListView.separated(
@@ -106,8 +124,10 @@ class _MeditationHubScreenState extends ConsumerState<MeditationHubScreen> {
                     ),
                   );
                 },
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
+                loading: () => const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 0),
+                  child: SieSkeletonList(itemCount: 4, itemHeight: 80),
+                ),
                 error: (e, _) => Center(
                   child: Text('Ошибка загрузки',
                       style: TextStyle(color: c.textSecondary)),
@@ -511,7 +531,21 @@ class _PresetCard extends ConsumerWidget {
                   ),
               ],
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 4),
+            GestureDetector(
+              onTap: () => _showActions(context, ref, c),
+              behavior: HitTestBehavior.opaque,
+              child: Semantics(
+                button: true,
+                label: 'Действия с пресетом',
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 8),
+                  child: Icon(Icons.more_vert,
+                      color: c.textSecondary, size: 18),
+                ),
+              ),
+            ),
             Icon(Icons.chevron_right_rounded,
                 color: c.textSecondary, size: 18),
           ],
@@ -567,8 +601,17 @@ class _PresetCard extends ConsumerWidget {
         },
         onDelete: preset.isSystem
             ? null
-            : () {
+            : () async {
                 Navigator.of(context).pop();
+                final ok = await confirmDestructive(
+                  context,
+                  ref,
+                  title: 'Удалить пресет?',
+                  message: 'Пресет «${preset.name}» будет удалён без '
+                      'возможности восстановления.',
+                  confirmLabel: 'Удалить',
+                );
+                if (!ok) return;
                 ref
                     .read(meditationPresetsProvider.notifier)
                     .deletePreset(preset.id);

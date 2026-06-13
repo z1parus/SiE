@@ -13,6 +13,7 @@ import 'habit_tracker_screen.dart';
 import 'leaderboard_screen.dart';
 import 'meditation_hub_screen.dart';
 import 'planning_screen.dart';
+import 'session_orb_painters.dart';
 import 'profile_screen.dart';
 import 'public_profile_screen.dart';
 import 'user_search_screen.dart';
@@ -138,6 +139,8 @@ class _OperationsControlScreenState
                         branches: ordered,
                         onBranchTap: (b) => _onBranchTap(context, b),
                         onReorder: (oldIndex, newIndex) {
+                          final prevSlugs =
+                              ordered.map((b) => b.slug).toList();
                           final reordered = List<Branch>.from(ordered);
                           if (newIndex > oldIndex) newIndex--;
                           final item = reordered.removeAt(oldIndex);
@@ -146,15 +149,19 @@ class _OperationsControlScreenState
                               reordered.map((b) => b.slug).toList();
                           setState(() => _orderedSlugs = slugs);
                           _saveOrder(slugs);
+                          showUndoSnackbar(
+                            context,
+                            ref,
+                            message: 'Порядок модулей изменён',
+                            onUndo: () {
+                              setState(() => _orderedSlugs = prevSlugs);
+                              _saveOrder(prevSlugs);
+                            },
+                          );
                         },
                       );
               },
-              loading: () => Center(
-                child: CircularProgressIndicator(
-                  color: c.accent,
-                  strokeWidth: 1.5,
-                ),
-              ),
+              loading: () => const _BranchCarouselSkeleton(),
               error: (e, _) => const Center(
                 child: _NoConnectionMessage(),
               ),
@@ -205,15 +212,14 @@ class _OperationsControlScreenState
   }
 
   void _showWelcomeModal(Profile profile) {
+    // Shown once, but the user can dismiss it any way (button, ✕, tap-outside);
+    // every exit marks it seen so it never re-appears.
     showDialog<void>(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.75),
-      builder: (_) => _WelcomeDialog(
-        profile: profile,
-        onAccept: () => markWelcomeSeen(profile.id),
-      ),
-    );
+      builder: (_) => _WelcomeDialog(profile: profile),
+    ).then((_) => markWelcomeSeen(profile.id));
   }
 }
 
@@ -222,9 +228,8 @@ class _OperationsControlScreenState
 // ─────────────────────────────────────────────────────────────────────────────
 class _WelcomeDialog extends ConsumerStatefulWidget {
   final Profile profile;
-  final VoidCallback onAccept;
 
-  const _WelcomeDialog({required this.profile, required this.onAccept});
+  const _WelcomeDialog({required this.profile});
 
   @override
   ConsumerState<_WelcomeDialog> createState() => _WelcomeDialogState();
@@ -301,6 +306,20 @@ class _WelcomeDialogState extends ConsumerState<_WelcomeDialog>
                           color: c.accent,
                         ),
                   ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    behavior: HitTestBehavior.opaque,
+                    child: Semantics(
+                      button: true,
+                      label: 'Закрыть',
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(Icons.close,
+                            size: 20, color: c.iconMuted),
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 20),
@@ -327,10 +346,7 @@ class _WelcomeDialogState extends ConsumerState<_WelcomeDialog>
               SizedBox(
                 width: double.infinity,
                 child: GestureDetector(
-                  onTap: () {
-                    widget.onAccept();
-                    Navigator.of(context).pop();
-                  },
+                  onTap: () => Navigator.of(context).pop(),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(
@@ -386,7 +402,8 @@ void _onBranchTap(BuildContext context, Branch branch) {
 
   ScaffoldMessenger.of(context).showSnackBar(
     const SnackBar(
-      content: Text('Department initialising...'),
+      behavior: SnackBarBehavior.floating,
+      content: Text('Этот модуль скоро будет доступен'),
       duration: Duration(seconds: 2),
     ),
   );
@@ -422,7 +439,8 @@ class _FloatingNavBar extends ConsumerWidget {
       default:
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Module initialising...'),
+            behavior: SnackBarBehavior.floating,
+            content: Text('Этот модуль скоро будет доступен'),
             duration: Duration(seconds: 2),
           ),
         );
@@ -592,6 +610,7 @@ class _BranchCarousel extends StatelessWidget {
       scrollDirection: Axis.horizontal,
       padding: EdgeInsets.only(left: screenWidth * 0.09, right: 8),
       onReorder: onReorder,
+      onReorderStart: (_) => SieHaptics.heavy(),
       proxyDecorator: (child, _, animation) => AnimatedBuilder(
         animation: animation,
         builder: (_, ch) {
@@ -622,6 +641,33 @@ class _BranchCarousel extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Branch Carousel Skeleton (loading placeholder)
+// ─────────────────────────────────────────────────────────────────────────────
+class _BranchCarouselSkeleton extends StatelessWidget {
+  const _BranchCarouselSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final itemWidth = screenWidth * 0.82;
+    return ListView.builder(
+      scrollDirection: Axis.horizontal,
+      padding: EdgeInsets.only(left: screenWidth * 0.09, right: 8),
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: 3,
+      itemBuilder: (_, __) => Padding(
+        padding: const EdgeInsets.only(right: 12),
+        child: SieSkeleton(
+          width: itemWidth,
+          height: double.infinity,
+          radius: 20,
+        ),
+      ),
     );
   }
 }
@@ -660,8 +706,9 @@ class _BranchCarouselCard extends ConsumerWidget {
       case 'breathing_practices':
         return 'PROTOCOL READY';
       case 'planning':
-        final planningState = ref.watch(planningProvider).valueOrNull;
-        final count = planningState?.activeGoals.length ?? 0;
+        final count = ref.watch(
+          planningProvider.select((s) => s.valueOrNull?.activeGoals.length ?? 0),
+        );
         return '$count ${count == 1 ? 'Mission' : 'Missions'}';
       default:
         return 'ACTIVE';
@@ -1290,6 +1337,15 @@ class _ScreenHeader extends ConsumerWidget {
               icon: Icons.logout,
               size: 20,
               onTap: () async {
+                final ok = await confirmDestructive(
+                  context,
+                  ref,
+                  title: 'Выйти из системы?',
+                  message: 'Сессия будет завершена. Несинхронизированные '
+                      'данные сохранятся локально.',
+                  confirmLabel: 'Выйти',
+                );
+                if (!ok) return;
                 await SupabaseService.signOut();
                 ref.invalidate(userProfileProvider);
                 ref.invalidate(habitsProvider);
@@ -1416,47 +1472,53 @@ class _NotificationBell extends ConsumerWidget {
     final unread =
         ref.watch(notificationsProvider).valueOrNull?.unreadCount ?? 0;
 
-    return GestureDetector(
-      onTap: () => showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => const _NotificationsSheet(),
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: c.flatCard(radius: 19),
-            child: Center(
-              child: Icon(Icons.notifications_outlined,
-                  color: c.textSecondary, size: 18),
+    return Semantics(
+      button: true,
+      label: unread > 0
+          ? 'Уведомления, $unread непрочитанных'
+          : 'Уведомления',
+      child: GestureDetector(
+        onTap: () => showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => const _NotificationsSheet(),
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: c.flatCard(radius: 19),
+              child: Center(
+                child: Icon(Icons.notifications_outlined,
+                    color: c.textSecondary, size: 18),
+              ),
             ),
-          ),
-          if (unread > 0)
-            Positioned(
-              top: -2,
-              right: -2,
-              child: Container(
-                width: 16,
-                height: 16,
-                decoration: const BoxDecoration(
-                    color: Colors.red, shape: BoxShape.circle),
-                child: Center(
-                  child: Text(
-                    unread > 9 ? '9+' : '$unread',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 8,
-                      fontWeight: FontWeight.w800,
+            if (unread > 0)
+              Positioned(
+                top: -2,
+                right: -2,
+                child: Container(
+                  width: 17,
+                  height: 17,
+                  decoration: BoxDecoration(
+                      color: c.danger, shape: BoxShape.circle),
+                  child: Center(
+                    child: Text(
+                      unread > 9 ? '9+' : '$unread',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

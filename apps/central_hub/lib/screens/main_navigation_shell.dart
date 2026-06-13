@@ -69,7 +69,11 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
               right: 0,
               child: _ShellNavBar(
                 activeIndex: _currentIndex,
-                onTabChanged: (i) => setState(() => _currentIndex = i),
+                onTabChanged: (i) {
+                  if (i == _currentIndex) return;
+                  SieHaptics.selection();
+                  setState(() => _currentIndex = i);
+                },
               ),
             ),
           ],
@@ -157,41 +161,46 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = isActive ? activeColor : inactiveColor;
 
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 72,
-        height: 68,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (isActive)
-              Container(
-                width: 28,
+    return Semantics(
+      button: true,
+      selected: isActive,
+      label: label,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          width: 72,
+          height: 68,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Animated active indicator — fades/grows in instead of snapping.
+              AnimatedContainer(
+                duration: SieMotion.duration(context, SieMotion.fast),
+                curve: Curves.easeOut,
+                width: isActive ? 28 : 0,
                 height: 2,
                 margin: const EdgeInsets.only(bottom: 4),
                 decoration: BoxDecoration(
                   color: activeColor,
                   borderRadius: BorderRadius.circular(1),
                 ),
-              )
-            else
-              const SizedBox(height: 6),
-            Icon(icon, color: color, size: 22),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 9,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
-                letterSpacing: 0.5,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+              Icon(icon, color: color, size: 22),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 10,
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
+                  letterSpacing: 0.3,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
       ),
     );

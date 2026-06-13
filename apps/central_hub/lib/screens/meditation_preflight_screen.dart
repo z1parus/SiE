@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
@@ -22,6 +23,23 @@ class _MeditationPreflightScreenState
     _current = widget.preset;
   }
 
+  bool get _dirty =>
+      !mapEquals(_current.toMap(), widget.preset.toMap());
+
+  Future<void> _handleBack() async {
+    if (_dirty) {
+      final leave = await confirmDestructive(
+        context,
+        ref,
+        title: 'Выйти без запуска?',
+        message: 'Изменённые настройки сессии не сохранятся.',
+        confirmLabel: 'Выйти',
+      );
+      if (!leave) return;
+    }
+    if (mounted) Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final c     = ref.watch(sieColorsProvider);
@@ -31,7 +49,13 @@ class _MeditationPreflightScreenState
             ?.affirmationPacks ??
         [];
 
-    return SieBackground(
+    return PopScope(
+      canPop: !_dirty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: SieBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
@@ -39,7 +63,7 @@ class _MeditationPreflightScreenState
           elevation: 0,
           leading: IconButton(
             icon: Icon(Icons.arrow_back_ios_new_rounded, color: c.accent),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: _handleBack,
           ),
           title: Text(
             'НАСТРОЙКА СЕССИИ',
@@ -188,6 +212,7 @@ class _MeditationPreflightScreenState
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -367,52 +392,71 @@ class _PatternChips extends StatelessWidget {
   });
 
   static const _patterns = [
-    ('box', 'Box 4×4', '4-4-4-4'),
-    ('4-7-8', '4-7-8', '4-7-8'),
-    ('coherence', 'Coherence', '5-5'),
+    ('box', 'Box 4×4', '4-4-4-4',
+        'Вдох 4 · задержка 4 · выдох 4 · пауза 4 сек'),
+    ('4-7-8', '4-7-8', '4-7-8', 'Вдох 4 · задержка 7 · выдох 8 сек'),
+    ('coherence', 'Coherence', '5-5',
+        'Вдох 5 · выдох 5 сек — баланс нервной системы'),
   ];
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: _patterns.map((rec) {
-        final (id, name, timing) = rec;
-        final isSelected = selected == id;
-        return Expanded(
-          child: GestureDetector(
-            onTap: () => onSelected(id),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              margin: const EdgeInsets.only(right: 6),
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? c.accent.withValues(alpha: 0.18)
-                    : c.surface.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: isSelected ? c.accent : c.border),
+    final desc = _patterns
+        .firstWhere((p) => p.$1 == selected, orElse: () => _patterns[0])
+        .$4;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: _patterns.map((rec) {
+            final (id, name, timing, _) = rec;
+            final isSelected = selected == id;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => onSelected(id),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  margin: const EdgeInsets.only(right: 6),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? c.accent.withValues(alpha: 0.18)
+                        : c.surface.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: isSelected ? c.accent : c.border),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(name,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color:
+                                  isSelected ? c.accent : c.textSecondary,
+                              fontSize: 11,
+                              fontWeight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.w400)),
+                      Text(timing,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: c.textSecondary, fontSize: 9)),
+                    ],
+                  ),
+                ),
               ),
-              child: Column(
-                children: [
-                  Text(name,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          color: isSelected ? c.accent : c.textSecondary,
-                          fontSize: 11,
-                          fontWeight: isSelected
-                              ? FontWeight.w700
-                              : FontWeight.w400)),
-                  Text(timing,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          color: c.textSecondary, fontSize: 9)),
-                ],
-              ),
-            ),
-          ),
-        );
-      }).toList(),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          desc,
+          style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 11,
+              height: 1.3),
+        ),
+      ],
     );
   }
 }

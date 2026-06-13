@@ -22,6 +22,7 @@ class _MeditationPresetBuilderScreenState
   late TextEditingController _nameCtrl;
   late TextEditingController _descCtrl;
   late MeditationPreset _preset;
+  bool _showNameError = false;
 
   @override
   void initState() {
@@ -53,6 +54,29 @@ class _MeditationPresetBuilderScreenState
 
     _nameCtrl = TextEditingController(text: _preset.name);
     _descCtrl = TextEditingController(text: _preset.description ?? '');
+    // Clear the inline name error as soon as the user starts typing.
+    _nameCtrl.addListener(() {
+      if (_showNameError && _nameCtrl.text.trim().isNotEmpty) {
+        setState(() => _showNameError = false);
+      }
+    });
+  }
+
+  bool get _hasProgress =>
+      _nameCtrl.text.trim().isNotEmpty || _page > 0;
+
+  Future<void> _handleBack() async {
+    if (_hasProgress) {
+      final leave = await confirmDestructive(
+        context,
+        ref,
+        title: 'Выйти из конструктора?',
+        message: 'Несохранённый пресет будет потерян.',
+        confirmLabel: 'Выйти',
+      );
+      if (!leave) return;
+    }
+    if (mounted) Navigator.of(context).pop();
   }
 
   @override
@@ -72,7 +96,13 @@ class _MeditationPresetBuilderScreenState
             ?.affirmationPacks ??
         [];
 
-    return SieBackground(
+    return PopScope(
+      canPop: !_hasProgress,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: SieBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
@@ -80,7 +110,7 @@ class _MeditationPresetBuilderScreenState
           elevation: 0,
           leading: IconButton(
             icon: Icon(Icons.arrow_back_ios_new_rounded, color: c.accent),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: _handleBack,
           ),
           title: Text(
             widget.editPreset != null ? 'РЕДАКТИРОВАНИЕ' : 'НОВЫЙ ПРЕСЕТ',
@@ -148,7 +178,12 @@ class _MeditationPresetBuilderScreenState
           physics: const NeverScrollableScrollPhysics(),
           onPageChanged: (p) => setState(() => _page = p),
           children: [
-            _NamePage(nameCtrl: _nameCtrl, descCtrl: _descCtrl, c: c),
+            _NamePage(
+              nameCtrl: _nameCtrl,
+              descCtrl: _descCtrl,
+              c: c,
+              nameError: _showNameError ? 'Введите название пресета' : null,
+            ),
             _ChainPage(
               preset: _preset,
               onChanged: (p) => setState(() => _preset = p),
@@ -168,15 +203,14 @@ class _MeditationPresetBuilderScreenState
           ],
         ),
       ),
+      ),
     );
   }
 
   void _nextPage() {
     if (_page == 0 && _nameCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Введите название пресета')),
-      );
+      SieHaptics.warning();
+      setState(() => _showNameError = true);
       return;
     }
     _pageCtrl.nextPage(
@@ -195,10 +229,10 @@ class _MeditationPresetBuilderScreenState
   Future<void> _save() async {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Введите название пресета')),
-      );
+      SieHaptics.warning();
+      setState(() => _showNameError = true);
+      // Jump back to the name page so the error is visible.
+      _pageCtrl.jumpToPage(0);
       return;
     }
 
@@ -216,6 +250,7 @@ class _MeditationPresetBuilderScreenState
       await notifier.createPreset(finalPreset);
     }
 
+    SieHaptics.success();
     if (mounted) Navigator.of(context).pop();
   }
 }
@@ -225,10 +260,12 @@ class _NamePage extends StatelessWidget {
   final TextEditingController nameCtrl;
   final TextEditingController descCtrl;
   final SieColors c;
+  final String? nameError;
   const _NamePage({
     required this.nameCtrl,
     required this.descCtrl,
     required this.c,
+    this.nameError,
   });
 
   @override
@@ -238,11 +275,12 @@ class _NamePage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Label('Название пресета', c),
+          _Label('Название пресета *', c),
           const SizedBox(height: 12),
           _Field(
               controller: nameCtrl,
               hint: 'Например: Утренняя медитация',
+              errorText: nameError,
               c: c),
           const SizedBox(height: 20),
           _Label('Описание (необязательно)', c),
@@ -263,11 +301,13 @@ class _Field extends StatelessWidget {
   final String hint;
   final int maxLines;
   final SieColors c;
+  final String? errorText;
   const _Field({
     required this.controller,
     required this.hint,
     this.maxLines = 1,
     required this.c,
+    this.errorText,
   });
 
   @override
@@ -281,12 +321,25 @@ class _Field extends StatelessWidget {
         hintText: hint,
         hintStyle:
             TextStyle(color: c.textSecondary, fontSize: 14),
+        errorText: errorText,
+        errorStyle: TextStyle(color: c.danger, fontSize: 12),
         enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: c.border),
+          borderSide: BorderSide(
+              color: errorText != null ? c.danger : c.border),
           borderRadius: BorderRadius.circular(10),
         ),
         focusedBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: c.accent, width: 1.5),
+          borderSide: BorderSide(
+              color: errorText != null ? c.danger : c.accent,
+              width: 1.5),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: c.danger),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: c.danger, width: 1.5),
           borderRadius: BorderRadius.circular(10),
         ),
         filled: true,

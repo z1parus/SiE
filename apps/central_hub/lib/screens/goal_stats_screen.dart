@@ -5,14 +5,6 @@ import 'package:sie_core/sie_core.dart';
 
 // ─── Local helpers (duplicated from mission_detail_screen / planning_screen) ──
 
-Color _priorityColor(int p) => switch (p) {
-      1 => const Color(0xFF888898),
-      2 => const Color(0xFFC8A84B),
-      3 => const Color(0xFFE07830),
-      4 => const Color(0xFFE03050),
-      _ => const Color(0xFFC8A84B),
-    };
-
 IconData? _categoryIcon(GoalCategory? cat) => switch (cat) {
       GoalCategory.learning   => Icons.school_outlined,
       GoalCategory.health     => Icons.favorite_outline,
@@ -147,7 +139,7 @@ class _StatsHeader extends StatelessWidget {
             width: 4,
             height: 20,
             decoration: BoxDecoration(
-              color: _priorityColor(goal.priority),
+              color: sc.priorityColor(goal.priority),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -328,8 +320,7 @@ class _TasksCard extends StatelessWidget {
                     label: 'Просроченных',
                     value: '$overdueCount',
                     sc: sc,
-                    valueColor:
-                        overdueCount > 0 ? const Color(0xFFE03050) : null)),
+                    valueColor: overdueCount > 0 ? sc.danger : null)),
           ]),
           const SizedBox(height: 12),
           ClipRRect(
@@ -474,7 +465,7 @@ class _TimeCard extends StatelessWidget {
       daysLeftColor = null;
     } else if (daysLeft < 0) {
       daysLeftValue = 'просрочено';
-      daysLeftColor = const Color(0xFFE03050);
+      daysLeftColor = sc.danger;
     } else {
       daysLeftValue = '$daysLeft дн.';
       daysLeftColor = null;
@@ -591,11 +582,9 @@ class _HabitsCard extends StatelessWidget {
                           horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(10),
-                        color: const Color(0xFFF4C430)
-                            .withValues(alpha: 0.15),
+                        color: sc.rankGold.withValues(alpha: 0.15),
                         border: Border.all(
-                            color: const Color(0xFFF4C430)
-                                .withValues(alpha: 0.4)),
+                            color: sc.rankGold.withValues(alpha: 0.4)),
                       ),
                       child: Text(
                         '🔥 $streak',
@@ -627,22 +616,22 @@ class _AdviceCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.orange.withValues(alpha: 0.1),
+        color: sc.warning.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+        border: Border.all(color: sc.warning.withValues(alpha: 0.35)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.lightbulb_outline,
-                  color: Colors.orange, size: 16),
+              Icon(Icons.lightbulb_outline,
+                  color: sc.warning, size: 16),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'СОВЕТЫ',
                 style: TextStyle(
-                  color: Colors.orange,
+                  color: sc.warning,
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.5,
@@ -658,7 +647,7 @@ class _AdviceCard extends StatelessWidget {
                   children: [
                     Text('• ',
                         style: TextStyle(
-                            color: Colors.orange.withValues(alpha: 0.8),
+                            color: sc.warning.withValues(alpha: 0.8),
                             fontSize: 12)),
                     Expanded(
                       child: Text(

@@ -937,7 +937,7 @@ class _DayLockBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const lockColor = Color(0xFFFF9800); // amber
+    final lockColor = c.warning;
 
     return Container(
       width: double.infinity,

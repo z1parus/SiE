@@ -90,10 +90,26 @@ class RoutineEditorScreen extends ConsumerWidget {
                           habit: habits[i],
                           onRemove: routine == null
                               ? null
-                              : () => ref
-                                  .read(habitRoutinesProvider.notifier)
-                                  .removeHabitFromRoutine(
-                                      routine.id, habits[i].id),
+                              : () {
+                                  final notifier = ref.read(
+                                      habitRoutinesProvider.notifier);
+                                  final removedId = habits[i].id;
+                                  final prevOrder =
+                                      habits.map((h) => h.id).toList();
+                                  notifier.removeHabitFromRoutine(
+                                      routine.id, removedId);
+                                  showUndoSnackbar(
+                                    context,
+                                    ref,
+                                    message: 'Привычка убрана из рутины',
+                                    onUndo: () async {
+                                      await notifier.addHabitToRoutine(
+                                          routine.id, removedId);
+                                      await notifier.reorderMembers(
+                                          routine.id, prevOrder);
+                                    },
+                                  );
+                                },
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute<void>(
                               builder: (_) =>
@@ -257,26 +273,41 @@ class _RoutineMemberTile extends ConsumerWidget {
                 ),
               ),
             ),
-            if (onRemove != null) ...[
-              GestureDetector(
-                onTap: onRemove,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Icon(
-                    Icons.remove_circle_outline,
-                    color: sc.textSecondary.withValues(alpha: 0.50),
-                    size: 18,
+            if (onRemove != null)
+              Semantics(
+                button: true,
+                label: 'Убрать из рутины',
+                child: GestureDetector(
+                  onTap: onRemove,
+                  behavior: HitTestBehavior.opaque,
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: Center(
+                      child: Icon(
+                        Icons.remove_circle_outline,
+                        color: sc.textSecondary.withValues(alpha: 0.50),
+                        size: 18,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ],
-            const SizedBox(width: 4),
             ReorderableDragStartListener(
               index: index,
-              child: Icon(
-                Icons.drag_handle,
-                color: sc.textSecondary.withValues(alpha: 0.35),
-                size: 20,
+              child: Semantics(
+                label: 'Перетащите для сортировки',
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Center(
+                    child: Icon(
+                      Icons.drag_handle,
+                      color: sc.textSecondary.withValues(alpha: 0.35),
+                      size: 20,
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
@@ -349,7 +380,7 @@ class _HabitPickerSheet extends ConsumerWidget {
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
       padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
       decoration: BoxDecoration(
-        color: sc.surface.withOpacity(0.92),
+        color: sc.surface.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: sc.border),
       ),
@@ -392,11 +423,15 @@ class _HabitPickerSheet extends ConsumerWidget {
                   .where((h) => !existingHabitIds.contains(h.id))
                   .toList();
               if (available.isEmpty) {
+                final noHabitsAtAll = state.habits.isEmpty;
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24),
                   child: Center(
                     child: Text(
-                      'Все активные привычки уже добавлены',
+                      noHabitsAtAll
+                          ? 'Сначала создайте привычки в Архиве'
+                          : 'Все активные привычки уже добавлены',
+                      textAlign: TextAlign.center,
                       style: TextStyle(
                         color: sc.textSecondary,
                         fontSize: 12,

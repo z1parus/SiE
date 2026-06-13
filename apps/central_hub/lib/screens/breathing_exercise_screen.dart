@@ -124,7 +124,11 @@ enum _Phase { idle, countdown, active, retention, recovery, roundTransition, com
 // ── Screen ───────────────────────────────────────────────────
 
 class BreathingExerciseScreen extends ConsumerStatefulWidget {
-  const BreathingExerciseScreen({super.key});
+  const BreathingExerciseScreen({super.key, this.openSettings = false});
+
+  /// When true, the protocol settings sheet auto-opens on entry — used by the
+  /// Knowledge Base deep-link.
+  final bool openSettings;
 
   @override
   ConsumerState<BreathingExerciseScreen> createState() =>
@@ -183,6 +187,11 @@ class _BreathingExerciseScreenState
       duration: const Duration(seconds: 60),
     )..repeat();
     _loadSphereShader();
+    if (widget.openSettings) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showSettings();
+      });
+    }
   }
 
   Future<void> _loadSphereShader() async {
@@ -221,6 +230,26 @@ class _BreathingExerciseScreenState
     _audio.stopAll();
     await _awardPartialXpIfEligible();
     if (mounted) Navigator.of(context).pop();
+  }
+
+  bool get _sessionActive =>
+      _phase != _Phase.idle && _phase != _Phase.complete;
+
+  /// Routes both the top-bar back button and the system back gesture through a
+  /// confirmation while a session is running — guards against accidental exit.
+  Future<void> _handleBackRequest() async {
+    if (_sessionActive) {
+      final ok = await confirmDestructive(
+        context,
+        ref,
+        title: 'Прервать сессию?',
+        message: 'Если вы продержались дольше 30 секунд, прогресс '
+            'сохранится частично.',
+        confirmLabel: 'Прервать',
+      );
+      if (!ok) return;
+    }
+    await _onBack();
   }
 
   void _onSphereTap() {
@@ -524,7 +553,13 @@ class _BreathingExerciseScreenState
             profile != null &&
             !profile.hasSeenOnboardingBreathing);
 
-    return Stack(
+    return PopScope(
+      canPop: !_sessionActive,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _handleBackRequest();
+      },
+      child: Stack(
       children: [
         SieBackground(
           child: Scaffold(
@@ -538,7 +573,7 @@ class _BreathingExerciseScreenState
                       phase: _phase,
                       round: _round,
                       totalRounds: _settings.rounds,
-                      onBack: _onBack,
+                      onBack: _handleBackRequest,
                       onInfo: () => setState(() => _showOnboardingManual = true),
                     ),
                   ),
@@ -621,6 +656,7 @@ class _BreathingExerciseScreenState
           ),
         ),
       ],
+      ),
     );
   }
 
@@ -862,6 +898,20 @@ class _BreathingExerciseScreenState
                     'CYCLE ${_cycle + 1} / ${_settings.cyclesPerRound}',
                     style: TextStyle(color: c.textSecondary, fontSize: 12),
                     textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: SizedBox(
+                      width: 120,
+                      height: 3,
+                      child: LinearProgressIndicator(
+                        value: ((_cycle + 1) / _settings.cyclesPerRound)
+                            .clamp(0.0, 1.0),
+                        backgroundColor: c.border,
+                        valueColor: AlwaysStoppedAnimation(activeColor),
+                      ),
+                    ),
                   ),
                 ],
               ),

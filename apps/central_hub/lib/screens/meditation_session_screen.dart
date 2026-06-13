@@ -26,6 +26,8 @@ class _MeditationSessionScreenState
   late AnimationController _rimCtrl;
   late Animation<double> _rimAngle;
 
+  bool _motion = true;
+
   @override
   void initState() {
     super.initState();
@@ -110,8 +112,14 @@ class _MeditationSessionScreenState
       case MeditationPhase.meditating:
         _breathScaleCtrl.animateTo(0.5,
             duration: const Duration(seconds: 2), curve: Curves.easeOut);
-        if (!_meditationOpacityCtrl.isAnimating) {
-          _meditationOpacityCtrl.repeat(reverse: true);
+        // Decorative glow pulse — hold static under reduce-motion.
+        if (_motion) {
+          if (!_meditationOpacityCtrl.isAnimating) {
+            _meditationOpacityCtrl.repeat(reverse: true);
+          }
+        } else {
+          _meditationOpacityCtrl.stop();
+          _meditationOpacityCtrl.value = 1.0;
         }
       case MeditationPhase.transition:
         if (!_transitionCtrl.isAnimating) {
@@ -138,6 +146,14 @@ class _MeditationSessionScreenState
   @override
   Widget build(BuildContext context) {
     final c = ref.watch(sieColorsProvider);
+
+    // Honour reduce-motion: hold the decorative rim rotation static.
+    _motion = SieMotion.enabled(context);
+    if (!_motion && _rimCtrl.isAnimating) {
+      _rimCtrl.stop();
+    } else if (_motion && !_rimCtrl.isAnimating) {
+      _rimCtrl.repeat();
+    }
 
     ref.listen<MeditationSessionState>(meditationSessionProvider,
         (prev, next) {
@@ -197,6 +213,43 @@ class _MeditationSessionScreenState
                 ),
               ),
             ),
+            // Pause indicator
+            if (!session.isRunning &&
+                (session.phase == MeditationPhase.breathing ||
+                    session.phase == MeditationPhase.meditating))
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 200),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.pause_rounded,
+                            size: 14,
+                            color: Colors.white.withValues(alpha: 0.7)),
+                        const SizedBox(width: 6),
+                        Text(
+                          'ПАУЗА',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             // Breathing cue
             if (session.phase == MeditationPhase.breathing)
               Positioned(
@@ -263,19 +316,38 @@ class _MeditationSessionScreenState
                 c: c,
               ),
             ),
-            // Dark screen overlay
+            // Dark screen overlay — keeps a dim timer + visible exit hint.
             if (session.isDarkScreenMode)
               Positioned.fill(
-                child: GestureDetector(
-                  onTap: () => ref
-                      .read(meditationSessionProvider.notifier)
-                      .toggleDarkScreenMode(),
-                  child: Container(
-                    color: Colors.black.withValues(alpha: 0.92),
-                    alignment: Alignment.bottomRight,
-                    padding: const EdgeInsets.all(24),
-                    child: _CornerTimer(
-                        formatted: session.formattedRemaining, c: c),
+                child: Semantics(
+                  button: true,
+                  label: 'Выйти из тёмного режима',
+                  child: GestureDetector(
+                    onTap: () => ref
+                        .read(meditationSessionProvider.notifier)
+                        .toggleDarkScreenMode(),
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.92),
+                      alignment: Alignment.bottomRight,
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'Коснитесь, чтобы выйти',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.35),
+                              fontSize: 11,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          _CornerTimer(
+                              formatted: session.formattedRemaining, c: c),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -887,8 +959,22 @@ class _CompletionSheetState extends ConsumerState<_CompletionSheet> {
               children: List.generate(5, (i) {
                 final v   = i + 1;
                 final sel = v == _stateAfter;
-                return GestureDetector(
-                  onTap: () => setState(() => _stateAfter = v),
+                const moodLabels = [
+                  'Очень плохо',
+                  'Плохо',
+                  'Нейтрально',
+                  'Хорошо',
+                  'Отлично'
+                ];
+                return Semantics(
+                  button: true,
+                  selected: sel,
+                  label: moodLabels[i],
+                  child: GestureDetector(
+                  onTap: () {
+                    SieHaptics.selection();
+                    setState(() => _stateAfter = v);
+                  },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
                     margin: const EdgeInsets.symmetric(horizontal: 6),
@@ -907,6 +993,7 @@ class _CompletionSheetState extends ConsumerState<_CompletionSheet> {
                       ['😣', '😕', '😐', '🙂', '😊'][i],
                       style: const TextStyle(fontSize: 18),
                     ),
+                  ),
                   ),
                 );
               }),

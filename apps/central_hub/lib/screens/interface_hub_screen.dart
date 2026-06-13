@@ -38,20 +38,24 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
       ref.invalidate(inventoryProvider);
       ref.invalidate(userProfileProvider);
       if (!mounted) return;
+      SieHaptics.success();
       ref.read(audioServiceProvider).playPurchase().ignore();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
+          behavior: SnackBarBehavior.floating,
           content: Text('ПРОТОКОЛ ВИЗУАЛИЗАЦИИ УСПЕШНО ПРИОБРЕТЁН'),
         ),
       );
     } catch (e) {
       if (!mounted) return;
       final isInsufficient = e.toString().contains('INSUFFICIENT_DP');
+      SieHaptics.warning();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
+          behavior: SnackBarBehavior.floating,
           content: Text(
             isInsufficient
-                ? 'НЕДОСТАТОЧНО РЕСУРСОВ (DP)'
+                ? 'Недостаточно DP. Зарабатывайте их, выполняя задания и миссии.'
                 : 'ОШИБКА ТРАНЗАКЦИИ',
           ),
         ),
@@ -66,8 +70,11 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
       await equipAsset(asset);
       ref.invalidate(userProfileProvider);
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('ОСНАЩЕНИЕ ПРИМЕНЕНО')));
+      SieHaptics.success();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text('ОСНАЩЕНИЕ ПРИМЕНЕНО'),
+      ));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
