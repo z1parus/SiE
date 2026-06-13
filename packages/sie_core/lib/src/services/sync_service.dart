@@ -169,6 +169,12 @@ class SyncService {
               'weight': payload['weight'] ?? 1,
               'order_index': payload['order_index'] ?? localTask?.orderIndex ?? 0,
               if (payload['due_date'] != null) 'due_date': payload['due_date'],
+              if (payload['recurrence_rule'] != null)
+                'recurrence_rule': payload['recurrence_rule'],
+              if (payload['recurrence_until'] != null)
+                'recurrence_until': payload['recurrence_until'],
+              if (payload['recurrence_parent_id'] != null)
+                'recurrence_parent_id': payload['recurrence_parent_id'],
               'is_completed': localTask?.isCompleted ?? false,
               if (localTask?.completedAtMs != null)
                 'completed_at': DateTime.fromMillisecondsSinceEpoch(
@@ -182,6 +188,18 @@ class SyncService {
               'is_completed': isCompleted,
               'completed_at': payload['completed_at'],
             }).eq('id', payload['id'] as String);
+            await _db.updatePlanningTask(payload['id'] as String,
+                const LocalPlanningTasksCompanion(synced: Value(true)));
+          case 'reschedule_task':
+            await client.from('planning_tasks').update({
+              'due_date': payload['due_date'],
+            }).eq('id', payload['id'] as String).eq('user_id', userId);
+            await _db.updatePlanningTask(payload['id'] as String,
+                const LocalPlanningTasksCompanion(synced: Value(true)));
+          case 'end_recurrence':
+            await client.from('planning_tasks').update({
+              'recurrence_rule': null,
+            }).eq('id', payload['id'] as String).eq('user_id', userId);
             await _db.updatePlanningTask(payload['id'] as String,
                 const LocalPlanningTasksCompanion(synced: Value(true)));
           case 'delete_task':
@@ -199,9 +217,31 @@ class SyncService {
               'name': payload['name'],
               if (payload['target_date'] != null) 'target_date': payload['target_date'],
               'is_completed': localMs?.isCompleted ?? false,
+              'kind': payload['kind'] ?? 'binary',
+              if (payload['unit'] != null) 'unit': payload['unit'],
+              if (payload['start_value'] != null) 'start_value': payload['start_value'],
+              if (payload['target_value'] != null) 'target_value': payload['target_value'],
+              if (payload['current_value'] != null) 'current_value': payload['current_value'],
+              'direction': payload['direction'] ?? 'up',
             }, onConflict: 'id');
             await _db.upsertMilestone(LocalMilestonesCompanion(
                 id: Value(msId), synced: const Value(true)));
+          case 'insert_milestone_log':
+            await client.from('milestone_logs').upsert({
+              'id': payload['id'],
+              'milestone_id': payload['milestone_id'],
+              'user_id': payload['user_id'],
+              'value': payload['value'],
+              'recorded_at': payload['recorded_at'],
+            }, onConflict: 'id');
+            await _db.insertMilestoneLog(LocalMilestoneLogsCompanion(
+                id: Value(payload['id'] as String),
+                synced: const Value(true)));
+          case 'delete_milestone_log':
+            await client
+                .from('milestone_logs')
+                .delete()
+                .eq('id', payload['id'] as String);
           case 'complete_milestone':
             await client
                 .from('milestones')
@@ -214,6 +254,17 @@ class SyncService {
                 .from('milestones')
                 .delete()
                 .eq('id', payload['id'] as String);
+          case 'insert_goal_snapshot':
+            await client.from('goal_progress_snapshots').upsert({
+              'id': payload['id'],
+              'goal_id': payload['goal_id'],
+              'user_id': payload['user_id'],
+              'progress': payload['progress'],
+              'completed_tasks': payload['completed_tasks'],
+              'total_tasks': payload['total_tasks'],
+              'captured_at': payload['captured_at'],
+            }, onConflict: 'id');
+            await _db.markGoalSnapshotSynced(payload['id'] as String);
           case 'insert_habit_link':
             await client.from('goal_habit_links').upsert({
               'id': payload['id'],

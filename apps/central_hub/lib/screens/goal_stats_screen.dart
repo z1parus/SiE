@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
+import '../widgets/momentum_chart.dart';
 
 // ─── Local helpers (duplicated from mission_detail_screen / planning_screen) ──
 
@@ -76,6 +77,8 @@ class GoalStatsScreen extends ConsumerWidget {
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                   children: [
                     _ProgressRingCard(goal: liveGoal, sc: sc),
+                    const SizedBox(height: 12),
+                    _MomentumCard(goal: liveGoal, sc: sc),
                     const SizedBox(height: 12),
                     _TasksCard(goal: liveGoal, sc: sc),
                     const SizedBox(height: 12),
@@ -251,6 +254,244 @@ class _StatsRingPainter extends CustomPainter {
   @override
   bool shouldRepaint(_StatsRingPainter old) =>
       old.progress != progress || old.color != color;
+}
+
+// ─── Momentum card ────────────────────────────────────────────────────────────
+
+class _MomentumCard extends ConsumerWidget {
+  const _MomentumCard({required this.goal, required this.sc});
+
+  final Goal goal;
+  final SieColors sc;
+
+  String _fmtShortDate(DateTime d) {
+    const months = [
+      'янв', 'фев', 'мар', 'апр', 'мая', 'июн',
+      'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'
+    ];
+    return '${d.day} ${months[d.month - 1]}';
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final analyticsAsync = ref.watch(goalAnalyticsProvider(goal.id));
+
+    return _Card(
+      sc: sc,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.show_chart, size: 14, color: sc.textSecondary),
+              const SizedBox(width: 6),
+              Text(
+                'ИМПУЛЬС',
+                style: TextStyle(
+                  color: sc.textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const Spacer(),
+              analyticsAsync.maybeWhen(
+                data: (m) {
+                  final d = momentumDisplay(m.state, sc);
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      color: d.color.withValues(alpha: 0.12),
+                      border:
+                          Border.all(color: d.color.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(d.icon, size: 11, color: d.color),
+                        const SizedBox(width: 4),
+                        Text(
+                          d.label,
+                          style: TextStyle(
+                            color: d.color,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                orElse: () => const SizedBox.shrink(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          analyticsAsync.when(
+            loading: () => SizedBox(
+              height: 80,
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: sc.accent),
+                ),
+              ),
+            ),
+            error: (_, __) => Text(
+              'Не удалось загрузить аналитику темпа.',
+              style: TextStyle(color: sc.textSecondary, fontSize: 12),
+            ),
+            data: (m) {
+              if (!m.hasEnoughData) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.timelapse,
+                          size: 16, color: sc.textSecondary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Собираем данные о темпе… '
+                          '(${m.snapshots.length}/3 замера прогресса)',
+                          style: TextStyle(
+                              color: sc.textSecondary, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              final vel = m.velocityPerWeek;
+              final velStr = vel >= 0
+                  ? '+${vel.toStringAsFixed(0)}%'
+                  : '${vel.toStringAsFixed(0)}%';
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  MomentumChart(
+                    snapshots: m.snapshots,
+                    color: goal.color,
+                    sc: sc,
+                    deadline: goal.deadline,
+                    goalCreatedAt: goal.createdAt,
+                    projected: m.projectedCompletion,
+                  ),
+                  const SizedBox(height: 14),
+                  _LabelValueRow(
+                    label: 'Темп (за 7 дней)',
+                    value: '$velStr прогресса',
+                    sc: sc,
+                    valueColor: vel > 0
+                        ? sc.success
+                        : (vel < 0 ? sc.danger : sc.textSecondary),
+                  ),
+                  if (m.projectedCompletion != null)
+                    _LabelValueRow(
+                      label: 'Прогноз финиша',
+                      value: _fmtShortDate(m.projectedCompletion!),
+                      sc: sc,
+                      valueColor: _projectionColor(m),
+                    )
+                  else
+                    _LabelValueRow(
+                      label: 'Прогноз финиша',
+                      value: 'темп нулевой',
+                      sc: sc,
+                      valueColor: sc.textSecondary,
+                    ),
+                  if (m.daysVsDeadline != null)
+                    _LabelValueRow(
+                      label: 'Относительно дедлайна',
+                      value: _deadlineDeltaLabel(m.daysVsDeadline!),
+                      sc: sc,
+                      valueColor: m.daysVsDeadline! >= 0
+                          ? sc.success
+                          : sc.danger,
+                    ),
+                  if (goal.deadline != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        _LegendDot(color: goal.color, sc: sc, label: 'факт'),
+                        const SizedBox(width: 12),
+                        _LegendDot(
+                            color: sc.textSecondary,
+                            sc: sc,
+                            label: 'идеал',
+                            dashed: true),
+                        const SizedBox(width: 12),
+                        _LegendDot(
+                            color: sc.danger,
+                            sc: sc,
+                            label: 'дедлайн',
+                            dashed: true),
+                      ],
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _projectionColor(MomentumStats m) {
+    final delta = m.daysVsDeadline;
+    if (delta == null) return sc.textPrimary;
+    if (delta >= 3) return sc.success;
+    if (delta >= 0) return sc.warning;
+    return sc.danger;
+  }
+
+  String _deadlineDeltaLabel(int days) {
+    if (days == 0) return 'точно в срок';
+    if (days > 0) return 'на $days дн. раньше';
+    return 'на ${days.abs()} дн. позже';
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  const _LegendDot({
+    required this.color,
+    required this.sc,
+    required this.label,
+    this.dashed = false,
+  });
+
+  final Color color;
+  final SieColors sc;
+  final String label;
+  final bool dashed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12,
+          height: 2.5,
+          decoration: BoxDecoration(
+            color: dashed ? color.withValues(alpha: 0.5) : color,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(label,
+            style: TextStyle(color: sc.textSecondary, fontSize: 10)),
+      ],
+    );
+  }
 }
 
 // ─── Tasks card ───────────────────────────────────────────────────────────────

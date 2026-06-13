@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' show Offset;
 import 'package:flutter/foundation.dart';
@@ -7,14 +8,18 @@ import 'package:drift/drift.dart' show Value;
 import 'package:uuid/uuid.dart';
 import '../local/app_database.dart';
 import '../models/planning.dart';
+import '../models/goal_analytics.dart';
 import '../models/goal_collaborator.dart';
 import '../models/public_profile.dart';
 import '../models/mission_medal.dart';
 import '../models/ai_decomposition.dart';
+import '../services/notification_service.dart';
 import 'auth_state_provider.dart';
 import 'connectivity_provider.dart';
 import 'habits_provider.dart';
+import 'notification_provider.dart';
 import 'user_profile_provider.dart';
+import 'user_timezone_provider.dart';
 
 const _uuid = Uuid();
 
@@ -75,12 +80,286 @@ final planningProvider =
   PlanningNotifier.new,
 );
 
+bool _isMetricAchieved(Milestone m) {
+  if (!m.isMetric) return false;
+  final current = m.currentValue;
+  final target = m.targetValue;
+  if (current == null || target == null) return false;
+  return m.direction == 'up' ? current >= target : current <= target;
+}
+
+// Lazily loaded per-milestone log list.  Used by sparkline + history screen.
+final milestoneLogsProvider = FutureProvider.autoDispose
+    .family<List<MilestoneLog>, String>((ref, milestoneId) async {
+  final client = Supabase.instance.client;
+  final session = client.auth.currentSession;
+  if (session == null) return [];
+
+  final db = ref.read(appDatabaseProvider);
+  final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+
+  if (isOnline) {
+    try {
+      final raw = await client
+          .from('milestone_logs')
+          .select()
+          .eq('milestone_id', milestoneId)
+          .order('recorded_at', ascending: true);
+      final logs = (raw as List)
+          .map((r) => MilestoneLog.fromJson(r as Map<String, dynamic>))
+          .toList();
+      for (final log in logs) {
+        await db.insertMilestoneLog(LocalMilestoneLogsCompanion(
+          id: Value(log.id),
+          milestoneId: Value(log.milestoneId),
+          userId: Value(log.userId),
+          value: Value(log.value),
+          recordedAtMs: Value(log.recordedAt.millisecondsSinceEpoch),
+          synced: const Value(true),
+        ));
+      }
+      return logs;
+    } catch (_) {}
+  }
+
+  final rows = await db.logsForMilestone(milestoneId);
+  return rows
+      .map((r) => MilestoneLog(
+            id: r.id,
+            milestoneId: r.milestoneId,
+            userId: r.userId,
+            value: r.value,
+            recordedAt: DateTime.fromMillisecondsSinceEpoch(r.recordedAtMs),
+          ))
+      .toList();
+});
+
 class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
   @override
   Future<PlanningState> build() async {
     ref.watch(authStateProvider);
     ref.watch(connectivityProvider);
-    return _load();
+    final s = await _load();
+    // Re-arm local reminders from fresh state (fire-and-forget, never blocks UI).
+    unawaited(_syncReminders(s));
+    // Capture a daily progress snapshot per active goal (fire-and-forget).
+    unawaited(_captureDailySnapshots(s));
+    return s;
+  }
+
+  // ── Momentum snapshots ──────────────────────────────────────────────────────
+
+  /// Records one progress snapshot per active goal per day. Cheap and enough
+  /// to build velocity/projection trends (see goal_analytics.dart). Skips goals
+  /// that already have a snapshot for today.
+  Future<void> _captureDailySnapshots(PlanningState s) async {
+    final client = Supabase.instance.client;
+    final session = client.auth.currentSession;
+    if (session == null) return;
+    final userId = session.user.id;
+    final db = ref.read(appDatabaseProvider);
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final dayKeyMs = today.millisecondsSinceEpoch;
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+
+    for (final goal in s.activeGoals) {
+      // Only capture for goals the current user owns (avoid duplicate rows from
+      // multiple collaborators racing on a shared goal).
+      if (goal.userId != userId) continue;
+      try {
+        if (await db.hasGoalSnapshotForDay(goal.id, dayKeyMs)) continue;
+
+        final id = _uuid.v4();
+        final snapshot = GoalProgressSnapshot(
+          id: id,
+          goalId: goal.id,
+          userId: userId,
+          progress: goalProgress(goal),
+          completedTasks: goal.completedTasks,
+          totalTasks: goal.totalTasks,
+          capturedAt: now,
+        );
+
+        await db.upsertGoalSnapshot(LocalGoalProgressSnapshotsCompanion(
+          id: Value(id),
+          goalId: Value(goal.id),
+          userId: Value(userId),
+          progress: Value(snapshot.progress),
+          completedTasks: Value(snapshot.completedTasks),
+          totalTasks: Value(snapshot.totalTasks),
+          capturedAtMs: Value(now.millisecondsSinceEpoch),
+          dayKeyMs: Value(dayKeyMs),
+          synced: const Value(false),
+        ));
+
+        if (isOnline) {
+          try {
+            await client
+                .from('goal_progress_snapshots')
+                .insert(snapshot.toInsertJson());
+            await db.markGoalSnapshotSynced(id);
+          } catch (_) {
+            await db.enqueueSyncOp(
+                'insert_goal_snapshot', jsonEncode(snapshot.toInsertJson()));
+          }
+        } else {
+          await db.enqueueSyncOp(
+              'insert_goal_snapshot', jsonEncode(snapshot.toInsertJson()));
+        }
+      } catch (_) {
+        // Snapshots are best-effort; never let them break module load.
+      }
+    }
+  }
+
+  // ── Notification helpers ────────────────────────────────────────────────────
+
+  ReminderSettings? get _reminderSettings =>
+      ref.read(reminderSettingsProvider).valueOrNull;
+
+  NotificationService get _notif => ref.read(notificationServiceProvider);
+
+  bool get _remindersOn => _reminderSettings?.remindersEnabled ?? false;
+
+  void _syncNotifOffset() {
+    final off = ref.read(userTimezoneProvider).valueOrNull;
+    if (off != null) _notif.setOffset(off);
+  }
+
+  Goal? _goalById(String id) {
+    final goals = state.valueOrNull?.goals;
+    if (goals == null) return null;
+    for (final g in goals) {
+      if (g.id == id) return g;
+    }
+    return null;
+  }
+
+  Future<void> _scheduleTaskNotif(String goalId, PlanningTask task) async {
+    if (!_remindersOn || task.isCompleted || task.dueDate == null) return;
+    final goal = _goalById(goalId);
+    if (goal == null || goal.status != 'active') return;
+    _syncNotifOffset();
+    await _notif.scheduleTaskReminder(
+      taskId: task.id,
+      taskName: task.name,
+      goalName: goal.name,
+      dueDate: task.dueDate!,
+      remindBeforeDays: goal.settings.remindBeforeDeadlineDays,
+    );
+  }
+
+  Future<void> _cancelTaskNotif(String taskId) async {
+    if (!_remindersOn) return;
+    await _notif.cancelTaskReminder(taskId);
+  }
+
+  Future<void> _cancelGoalNotifs(Goal goal) async {
+    if (!_remindersOn) return;
+    await _notif.cancelGoalDeadline(goal.id);
+    await _notif.cancelStagnationNudge(goal.id);
+    for (final sg in _allSubGoals(goal.subGoals)) {
+      for (final t in sg.tasks) {
+        await _notif.cancelTaskReminder(t.id);
+      }
+    }
+    for (final m in goal.milestones) {
+      await _notif.cancelMilestoneReminder(m.id);
+    }
+  }
+
+  // Bulk (re)scheduler — idempotent thanks to deterministic notification ids.
+  Future<void> _syncReminders(PlanningState s) async {
+    ReminderSettings settings;
+    try {
+      settings = await ref.read(reminderSettingsProvider.future);
+    } catch (_) {
+      return;
+    }
+    if (!settings.remindersEnabled) return;
+    _syncNotifOffset();
+
+    final svc = _notif;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    var scheduled = 0;
+    const cap = 50; // stay well under the iOS 64 pending-notification limit
+    var todayCount = 0;
+
+    for (final goal in s.activeGoals) {
+      final remindDays = goal.settings.remindBeforeDeadlineDays;
+
+      if (goal.deadline != null && goal.deadline!.isAfter(now)) {
+        await svc.scheduleGoalDeadline(
+          goalId: goal.id,
+          goalName: goal.name,
+          deadline: goal.deadline!,
+          progressPercent: goalProgress(goal).round(),
+          remindBeforeDays: remindDays,
+        );
+      }
+
+      for (final sg in _allSubGoals(goal.subGoals)) {
+        for (final t in sg.tasks) {
+          if (t.isCompleted || t.dueDate == null) continue;
+          final due = DateTime(
+              t.dueDate!.year, t.dueDate!.month, t.dueDate!.day);
+          if (due == today) todayCount++;
+          if (scheduled < cap && !due.isBefore(today)) {
+            await svc.scheduleTaskReminder(
+              taskId: t.id,
+              taskName: t.name,
+              goalName: goal.name,
+              dueDate: t.dueDate!,
+              remindBeforeDays: remindDays,
+            );
+            scheduled++;
+          }
+        }
+      }
+
+      for (final m in goal.milestones) {
+        if (m.isCompleted || m.targetDate == null) continue;
+        if (scheduled < cap) {
+          await svc.scheduleMilestoneReminder(
+            milestoneId: m.id,
+            milestoneName: m.name,
+            goalName: goal.name,
+            targetDate: m.targetDate!,
+            remindBeforeDays: remindDays,
+          );
+          scheduled++;
+        }
+      }
+
+      if (settings.stagnationNudge && isGoalFatigued(goal)) {
+        // Nudge tomorrow morning; deterministic id avoids duplicates.
+        await svc.scheduleStagnationNudge(
+          goalId: goal.id,
+          goalName: goal.name,
+          when: DateTime(now.year, now.month, now.day + 1, 10, 0),
+        );
+      }
+    }
+
+    if (settings.dailyDigestEnabled) {
+      await svc.scheduleDailyDigest(
+        hour: settings.digestHour,
+        minute: settings.digestMinute,
+        taskCount: todayCount,
+      );
+    } else {
+      await svc.cancelDailyDigest();
+    }
+  }
+
+  /// Public entry-point so the UI can re-arm reminders after the user toggles
+  /// settings or grants permission.
+  Future<void> resyncReminders() async {
+    final s = state.valueOrNull;
+    if (s != null) await _syncReminders(s);
   }
 
   // ── Load ─────────────────────────────────────────────────────────────────
@@ -224,6 +503,9 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
               completedAtMs: Value(t.completedAt?.millisecondsSinceEpoch),
               dueDateMs: Value(t.dueDate?.millisecondsSinceEpoch),
               orderIndex: Value(t.orderIndex),
+              recurrenceRule: Value(t.recurrenceRule),
+              recurrenceUntilMs: Value(t.recurrenceUntil?.millisecondsSinceEpoch),
+              recurrenceParentId: Value(t.recurrenceParentId),
               synced: const Value(true),
               createdAtMs: Value(t.createdAt.millisecondsSinceEpoch),
             ));
@@ -240,6 +522,12 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             isCompleted: Value(m.isCompleted),
             synced: const Value(true),
             createdAtMs: Value(m.createdAt.millisecondsSinceEpoch),
+            kind: Value(m.kind),
+            unit: Value(m.unit),
+            startValue: Value(m.startValue),
+            targetValue: Value(m.targetValue),
+            currentValue: Value(m.currentValue),
+            direction: Value(m.direction),
           ));
         }
       }
@@ -293,6 +581,11 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         dueDate: rt.dueDateMs != null
             ? DateTime.fromMillisecondsSinceEpoch(rt.dueDateMs!)
             : null,
+        recurrenceRule: rt.recurrenceRule,
+        recurrenceUntil: rt.recurrenceUntilMs != null
+            ? DateTime.fromMillisecondsSinceEpoch(rt.recurrenceUntilMs!)
+            : null,
+        recurrenceParentId: rt.recurrenceParentId,
         createdAt: DateTime.fromMillisecondsSinceEpoch(rt.createdAtMs),
       ));
     }
@@ -322,6 +615,12 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             : null,
         isCompleted: rm.isCompleted,
         createdAt: DateTime.fromMillisecondsSinceEpoch(rm.createdAtMs),
+        kind: rm.kind,
+        unit: rm.unit,
+        startValue: rm.startValue,
+        targetValue: rm.targetValue,
+        currentValue: rm.currentValue,
+        direction: rm.direction,
       ));
     }
 
@@ -441,6 +740,9 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final current = state.valueOrNull;
     if (current == null) return;
 
+    final goal = _goalById(id);
+    if (goal != null) await _cancelGoalNotifs(goal);
+
     state = AsyncData(
         current.copyWith(goals: current.goals.where((g) => g.id != id).toList()));
 
@@ -479,6 +781,11 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
     await db.updateGoal(id, LocalGoalsCompanion(
         status: Value(newStatus), synced: const Value(false)));
+
+    // Cancel all reminders when a goal leaves the active board.
+    if (newStatus != 'active' && goal != null) {
+      await _cancelGoalNotifs(goal);
+    }
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
 
@@ -726,12 +1033,13 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     required String name,
     int weight = 1,
     DateTime? dueDate,
+    String? recurrenceRule,
+    DateTime? recurrenceUntil,
   }) async {
     final client = Supabase.instance.client;
     final session = client.auth.currentSession;
     if (session == null) return;
 
-    final db = ref.read(appDatabaseProvider);
     final now = DateTime.now();
     final id = _uuid.v4();
     final userId = session.user.id;
@@ -751,6 +1059,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       orderIndex: taskOrderIndex,
       completedAt: null,
       dueDate: dueDate,
+      recurrenceRule: recurrenceRule,
+      recurrenceUntil: recurrenceUntil,
       createdAt: now,
     );
 
@@ -758,45 +1068,66 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         subGoals: _updateSubGoalInTree(g.subGoals, subGoalId,
             (sg) => sg.copyWith(tasks: [...sg.tasks, newTask]))));
 
+    await _scheduleTaskNotif(goalId, newTask);
+    await _persistTaskInsert(newTask);
+  }
+
+  /// Shared insert persistence (local upsert → online insert → offline queue).
+  /// Used by [addTask] and by recurrence spawning in [toggleTask].
+  Future<void> _persistTaskInsert(PlanningTask t) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+
     await db.upsertPlanningTask(LocalPlanningTasksCompanion(
-      id: Value(id),
-      subGoalId: Value(subGoalId),
-      userId: Value(userId),
-      name: Value(name),
-      weight: Value(weight),
-      orderIndex: Value(taskOrderIndex),
-      dueDateMs: Value(dueDate?.millisecondsSinceEpoch),
+      id: Value(t.id),
+      subGoalId: Value(t.subGoalId),
+      userId: Value(t.userId),
+      name: Value(t.name),
+      weight: Value(t.weight),
+      isCompleted: Value(t.isCompleted),
+      orderIndex: Value(t.orderIndex),
+      dueDateMs: Value(t.dueDate?.millisecondsSinceEpoch),
+      recurrenceRule: Value(t.recurrenceRule),
+      recurrenceUntilMs: Value(t.recurrenceUntil?.millisecondsSinceEpoch),
+      recurrenceParentId: Value(t.recurrenceParentId),
       synced: const Value(false),
-      createdAtMs: Value(now.millisecondsSinceEpoch),
+      createdAtMs: Value(t.createdAt.millisecondsSinceEpoch),
     ));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) {
       try {
         await client.from('planning_tasks').insert({
-          'id': id,
-          'sub_goal_id': subGoalId,
-          'user_id': userId,
-          'name': name,
-          'weight': weight,
-          'order_index': taskOrderIndex,
-          'due_date': dueDate?.toIso8601String(),
-          'created_at': now.toIso8601String(),
+          'id': t.id,
+          'sub_goal_id': t.subGoalId,
+          'user_id': t.userId,
+          'name': t.name,
+          'weight': t.weight,
+          'order_index': t.orderIndex,
+          'due_date': t.dueDate?.toIso8601String(),
+          'recurrence_rule': t.recurrenceRule,
+          'recurrence_until': t.recurrenceUntil?.toIso8601String(),
+          'recurrence_parent_id': t.recurrenceParentId,
+          'created_at': t.createdAt.toIso8601String(),
         });
-        await db.updatePlanningTask(id,
-            LocalPlanningTasksCompanion(synced: const Value(true)));
+        await db.updatePlanningTask(t.id,
+            const LocalPlanningTasksCompanion(synced: Value(true)));
         return;
       } catch (_) {}
     }
     await db.enqueueSyncOp(
         'insert_task',
         jsonEncode({
-          'id': id,
-          'sub_goal_id': subGoalId,
-          'user_id': userId,
-          'name': name,
-          'weight': weight,
-          'order_index': taskOrderIndex,
+          'id': t.id,
+          'sub_goal_id': t.subGoalId,
+          'user_id': t.userId,
+          'name': t.name,
+          'weight': t.weight,
+          'order_index': t.orderIndex,
+          'due_date': t.dueDate?.toIso8601String(),
+          'recurrence_rule': t.recurrenceRule,
+          'recurrence_until': t.recurrenceUntil?.toIso8601String(),
+          'recurrence_parent_id': t.recurrenceParentId,
         }));
   }
 
@@ -813,6 +1144,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
                 tasks: sg.tasks.where((t) => t.id != taskId).toList()))));
 
     await db.deletePlanningTaskLocally(taskId);
+    await _cancelTaskNotif(taskId);
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) {
@@ -889,6 +1221,164 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     if (nowCompleted) await _awardXp(taskXp(task.weight), 0);
     await _touchGoalUpdatedAt(goalId);
     if (nowCompleted) await _autoCompleteParents(goalId);
+
+    // Reminder lifecycle: cancel when done, re-arm when re-opened.
+    if (nowCompleted) {
+      await _cancelTaskNotif(taskId);
+    } else {
+      await _scheduleTaskNotif(goalId, task.copyWith(isCompleted: false));
+    }
+
+    // Recurrence: completing a recurring task spawns its next instance.
+    if (nowCompleted && task.isRecurring) {
+      await _spawnNextRecurrence(goalId, subGoalId, task);
+    }
+  }
+
+  /// Creates the next instance of a recurring task when the current one is done.
+  Future<void> _spawnNextRecurrence(
+      String goalId, String subGoalId, PlanningTask task) async {
+    final rule = task.recurrenceRule;
+    if (rule == null || rule.isEmpty) return;
+    final from = task.dueDate ?? DateTime.now();
+    final next = nextOccurrence(rule, from);
+    if (task.recurrenceUntil != null && next.isAfter(task.recurrenceUntil!)) {
+      return; // series finished
+    }
+
+    final sg = _allSubGoals(_goalById(goalId)?.subGoals ?? const [])
+        .where((s) => s.id == subGoalId)
+        .firstOrNull;
+    final orderIndex = sg?.tasks.length ?? 0;
+
+    final instance = PlanningTask(
+      id: _uuid.v4(),
+      subGoalId: subGoalId,
+      userId: task.userId,
+      name: task.name,
+      weight: task.weight,
+      isCompleted: false,
+      orderIndex: orderIndex,
+      dueDate: next,
+      recurrenceRule: rule,
+      recurrenceUntil: task.recurrenceUntil,
+      recurrenceParentId: task.recurrenceParentId ?? task.id,
+      createdAt: DateTime.now(),
+    );
+
+    _updateGoalInState(goalId, (g) => g.copyWith(
+        subGoals: _updateSubGoalInTree(g.subGoals, subGoalId,
+            (s) => s.copyWith(tasks: [...s.tasks, instance]))));
+
+    await _persistTaskInsert(instance);
+    await _scheduleTaskNotif(goalId, instance);
+  }
+
+  /// Stops a recurrence series — current instance stays, no more are spawned.
+  Future<void> endRecurrence(
+      String taskId, String subGoalId, String goalId) async {
+    final db = ref.read(appDatabaseProvider);
+    final client = Supabase.instance.client;
+
+    _updateGoalInState(goalId, (g) => g.copyWith(
+        subGoals: _updateSubGoalInTree(g.subGoals, subGoalId,
+            (s) => s.copyWith(
+                tasks: s.tasks
+                    .map((t) =>
+                        t.id == taskId ? t.copyWith(recurrenceRule: null) : t)
+                    .toList()))));
+
+    await db.updatePlanningTask(taskId, const LocalPlanningTasksCompanion(
+      recurrenceRule: Value(null),
+      synced: Value(false),
+    ));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    var synced = false;
+    if (isOnline) {
+      try {
+        await client
+            .from('planning_tasks')
+            .update({'recurrence_rule': null}).eq('id', taskId);
+        await db.updatePlanningTask(taskId,
+            const LocalPlanningTasksCompanion(synced: Value(true)));
+        synced = true;
+      } catch (e) {
+        debugPrint('SiE Planning: end_recurrence online failed — $e');
+      }
+    }
+    if (!synced) {
+      await db.enqueueSyncOp('end_recurrence', jsonEncode({'id': taskId}));
+    }
+  }
+
+  // Reschedule a task's due date (or clear it when [newDueDate] is null).
+  // Used by the War Room agenda ("Отложить на завтра" / "Снять дедлайн").
+  Future<void> rescheduleTask(
+      String taskId, String subGoalId, String goalId, DateTime? newDueDate) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+    final current = state.valueOrNull;
+    if (current == null) return;
+
+    // Locate the task within the goal's sub-goal tree.
+    final goal = current.goals.firstWhere((g) => g.id == goalId,
+        orElse: () => throw StateError('goal not found'));
+    final sg = _allSubGoals(goal.subGoals).firstWhere((s) => s.id == subGoalId,
+        orElse: () => throw StateError('subgoal not found'));
+    final task = sg.tasks.firstWhere((t) => t.id == taskId,
+        orElse: () => throw StateError('task not found'));
+
+    // ── Optimistic update ──
+    _updateGoalInState(goalId, (g) => g.copyWith(
+        subGoals: _updateSubGoalInTree(g.subGoals, subGoalId,
+            (s) => s.copyWith(
+                tasks: s.tasks
+                    .map((t) => t.id == taskId
+                        ? t.copyWith(dueDate: newDueDate)
+                        : t)
+                    .toList()))));
+
+    // ── Local DB upsert ──
+    await db.updatePlanningTask(taskId, LocalPlanningTasksCompanion(
+      dueDateMs: Value(newDueDate?.millisecondsSinceEpoch),
+      synced: const Value(false),
+    ));
+
+    // ── Try online sync ──
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    var syncedToServer = false;
+    if (isOnline) {
+      try {
+        await client.from('planning_tasks').update({
+          'due_date': newDueDate?.toIso8601String(),
+        }).eq('id', taskId);
+        await db.updatePlanningTask(taskId,
+            const LocalPlanningTasksCompanion(synced: Value(true)));
+        syncedToServer = true;
+      } catch (e) {
+        debugPrint('SiE Planning: reschedule_task online failed — $e');
+      }
+    }
+
+    // ── Fallback to offline queue ──
+    if (!syncedToServer) {
+      await db.enqueueSyncOp(
+          'reschedule_task',
+          jsonEncode({
+            'id': taskId,
+            'due_date': newDueDate?.toIso8601String(),
+          }));
+    }
+
+    // Re-arm the reminder for the new date (or clear it).
+    await _cancelTaskNotif(taskId);
+    if (newDueDate != null) {
+      await _scheduleTaskNotif(
+          goalId, task.copyWith(dueDate: newDueDate, isCompleted: false));
+    }
+
+    await _touchGoalUpdatedAt(goalId);
   }
 
   // Auto-complete sub-goals and goal when all children/tasks are done.
@@ -920,8 +1410,16 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
   // ── Add Milestone ─────────────────────────────────────────────────────────
 
-  Future<void> addMilestone(String goalId, String name,
-      {DateTime? targetDate}) async {
+  Future<void> addMilestone(
+    String goalId,
+    String name, {
+    DateTime? targetDate,
+    String kind = 'binary',
+    String? unit,
+    double? startValue,
+    double? targetValue,
+    String direction = 'up',
+  }) async {
     final client = Supabase.instance.client;
     final session = client.auth.currentSession;
     if (session == null) return;
@@ -937,10 +1435,30 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       targetDate: targetDate,
       isCompleted: false,
       createdAt: now,
+      kind: kind,
+      unit: unit,
+      startValue: startValue,
+      targetValue: targetValue,
+      currentValue: startValue, // start at the beginning
+      direction: direction,
     );
 
     _updateGoalInState(goalId,
         (g) => g.copyWith(milestones: [...g.milestones, newMs]));
+
+    if (_remindersOn && targetDate != null) {
+      final goal = _goalById(goalId);
+      if (goal != null && goal.status == 'active') {
+        _syncNotifOffset();
+        await _notif.scheduleMilestoneReminder(
+          milestoneId: id,
+          milestoneName: name,
+          goalName: goal.name,
+          targetDate: targetDate,
+          remindBeforeDays: goal.settings.remindBeforeDeadlineDays,
+        );
+      }
+    }
 
     await db.upsertMilestone(LocalMilestonesCompanion(
       id: Value(id),
@@ -949,6 +1467,12 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       targetDateMs: Value(targetDate?.millisecondsSinceEpoch),
       synced: const Value(false),
       createdAtMs: Value(now.millisecondsSinceEpoch),
+      kind: Value(kind),
+      unit: Value(unit),
+      startValue: Value(startValue),
+      targetValue: Value(targetValue),
+      currentValue: Value(startValue),
+      direction: Value(direction),
     ));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
@@ -958,7 +1482,13 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           'id': id,
           'goal_id': goalId,
           'name': name,
-          'target_date': targetDate?.toIso8601String(),
+          if (targetDate != null) 'target_date': targetDate.toIso8601String(),
+          'kind': kind,
+          if (unit != null) 'unit': unit,
+          if (startValue != null) 'start_value': startValue,
+          if (targetValue != null) 'target_value': targetValue,
+          if (startValue != null) 'current_value': startValue,
+          'direction': direction,
           'created_at': now.toIso8601String(),
         });
         await db.upsertMilestone(
@@ -966,8 +1496,133 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         return;
       } catch (_) {}
     }
-    await db.enqueueSyncOp('insert_milestone',
-        jsonEncode({'id': id, 'goal_id': goalId, 'name': name}));
+    await db.enqueueSyncOp('insert_milestone', jsonEncode({
+      'id': id,
+      'goal_id': goalId,
+      'name': name,
+      if (targetDate != null) 'target_date': targetDate.toIso8601String(),
+      'kind': kind,
+      if (unit != null) 'unit': unit,
+      if (startValue != null) 'start_value': startValue,
+      if (targetValue != null) 'target_value': targetValue,
+      if (startValue != null) 'current_value': startValue,
+      'direction': direction,
+    }));
+  }
+
+  // ── Add Milestone Log ─────────────────────────────────────────────────────
+
+  Future<void> addMilestoneLog(
+      String milestoneId, String goalId, double value) async {
+    final client = Supabase.instance.client;
+    final session = client.auth.currentSession;
+    if (session == null) return;
+
+    final db = ref.read(appDatabaseProvider);
+    final now = DateTime.now();
+    final id = _uuid.v4();
+    final userId = session.user.id;
+
+    // Capture milestone state before optimistic update to check completion.
+    final msBefore = _goalById(goalId)
+        ?.milestones
+        .where((m) => m.id == milestoneId)
+        .firstOrNull;
+
+    // Optimistic: update currentValue in state.
+    _updateGoalInState(goalId, (g) => g.copyWith(
+        milestones: g.milestones
+            .map((m) =>
+                m.id == milestoneId ? m.copyWith(currentValue: value) : m)
+            .toList()));
+
+    // Invalidate logs provider so sparkline/history reloads.
+    ref.invalidate(milestoneLogsProvider(milestoneId));
+
+    // Persist log locally.
+    await db.insertMilestoneLog(LocalMilestoneLogsCompanion(
+      id: Value(id),
+      milestoneId: Value(milestoneId),
+      userId: Value(userId),
+      value: Value(value),
+      recordedAtMs: Value(now.millisecondsSinceEpoch),
+      synced: const Value(false),
+    ));
+    await db.updateMilestoneCurrentValue(milestoneId, value);
+
+    // Auto-complete when threshold is crossed.
+    if (msBefore != null && !msBefore.isCompleted) {
+      final updated = msBefore.copyWith(currentValue: value);
+      if (_isMetricAchieved(updated)) {
+        await completeMilestone(milestoneId, goalId);
+      }
+    }
+
+    // Online sync.
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client.from('milestone_logs').insert({
+          'id': id,
+          'milestone_id': milestoneId,
+          'user_id': userId,
+          'value': value,
+          'recorded_at': now.toIso8601String(),
+        });
+        await client
+            .from('milestones')
+            .update({'current_value': value}).eq('id', milestoneId);
+        await db.insertMilestoneLog(LocalMilestoneLogsCompanion(
+            id: Value(id), synced: const Value(true)));
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('insert_milestone_log', jsonEncode({
+      'id': id,
+      'milestone_id': milestoneId,
+      'user_id': userId,
+      'value': value,
+      'recorded_at': now.toIso8601String(),
+    }));
+  }
+
+  // ── Delete Milestone Log ──────────────────────────────────────────────────
+
+  Future<void> deleteMilestoneLog(
+      String logId, String milestoneId, String goalId) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+
+    await db.deleteMilestoneLogLocally(logId);
+    ref.invalidate(milestoneLogsProvider(milestoneId));
+
+    // Recalculate currentValue from the remaining logs.
+    final remaining = await db.logsForMilestone(milestoneId);
+    final latest = remaining.isEmpty
+        ? null
+        : remaining.reduce(
+            (a, b) => a.recordedAtMs >= b.recordedAtMs ? a : b);
+    final newCurrent = latest?.value;
+
+    await db.updateMilestoneCurrentValue(milestoneId, newCurrent);
+    _updateGoalInState(goalId, (g) => g.copyWith(
+        milestones: g.milestones
+            .map((m) => m.id == milestoneId
+                ? m.copyWith(currentValue: newCurrent)
+                : m)
+            .toList()));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client.from('milestone_logs').delete().eq('id', logId);
+        await client.from('milestones').update(
+            {'current_value': newCurrent}).eq('id', milestoneId);
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('delete_milestone_log',
+        jsonEncode({'id': logId, 'milestone_id': milestoneId}));
   }
 
   // ── Delete Milestone ──────────────────────────────────────────────────────
@@ -982,6 +1637,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
                 g.milestones.where((m) => m.id != milestoneId).toList()));
 
     await db.deleteMilestoneLocally(milestoneId);
+    if (_remindersOn) await _notif.cancelMilestoneReminder(milestoneId);
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) {
@@ -1031,6 +1687,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       await db.enqueueSyncOp('complete_milestone',
           jsonEncode({'id': milestoneId, 'goal_id': goalId}));
     }
+    if (_remindersOn) await _notif.cancelMilestoneReminder(milestoneId);
     await _awardXp(500, 0);
   }
 
