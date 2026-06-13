@@ -12,6 +12,7 @@ class Profile {
   final String? equippedFrameId;
   final String? equippedBackgroundId;
   final String? equippedStatStyleId;
+  final String? equippedPatternId;
   final int designPoints;
 
   const Profile({
@@ -28,6 +29,7 @@ class Profile {
     this.equippedFrameId,
     this.equippedBackgroundId,
     this.equippedStatStyleId,
+    this.equippedPatternId,
     this.designPoints = 0,
   });
 
@@ -52,6 +54,7 @@ class Profile {
         equippedFrameId: equippedFrameId,
         equippedBackgroundId: equippedBackgroundId,
         equippedStatStyleId: equippedStatStyleId,
+        equippedPatternId: equippedPatternId,
         designPoints: designPoints ?? this.designPoints,
       );
 
@@ -72,6 +75,7 @@ class Profile {
         equippedFrameId: json['equipped_frame_id'] as String?,
         equippedBackgroundId: json['equipped_background_id'] as String?,
         equippedStatStyleId: json['equipped_stat_style_id'] as String?,
+        equippedPatternId: json['equipped_pattern_id'] as String?,
         designPoints: json['design_points'] as int? ?? 0,
       );
 }

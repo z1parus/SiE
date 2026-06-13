@@ -7,11 +7,13 @@ class InventoryState {
   final Set<String> ownedFrameIds;
   final Set<String> ownedBackgroundIds;
   final Set<String> ownedStyleIds;
+  final Set<String> ownedPatternIds;
 
   const InventoryState({
     this.ownedFrameIds = const {},
     this.ownedBackgroundIds = const {},
     this.ownedStyleIds = const {},
+    this.ownedPatternIds = const {},
   });
 
   static const empty = InventoryState();
@@ -20,6 +22,7 @@ class InventoryState {
         AssetType.avatarFrame       => ownedFrameIds.contains(asset.id),
         AssetType.profileBackground => ownedBackgroundIds.contains(asset.id),
         AssetType.statStyle         => ownedStyleIds.contains(asset.id),
+        AssetType.profilePattern    => ownedPatternIds.contains(asset.id),
       };
 }
 
@@ -36,6 +39,7 @@ final inventoryProvider = FutureProvider.autoDispose<InventoryState>((ref) async
   final frames = <String>{};
   final backgrounds = <String>{};
   final styles = <String>{};
+  final patterns = <String>{};
 
   for (final row in rows) {
     final id = row['asset_id'] as String;
@@ -46,6 +50,8 @@ final inventoryProvider = FutureProvider.autoDispose<InventoryState>((ref) async
         backgrounds.add(id);
       case 'stat_style':
         styles.add(id);
+      case 'profile_pattern':
+        patterns.add(id);
     }
   }
 
@@ -53,6 +59,7 @@ final inventoryProvider = FutureProvider.autoDispose<InventoryState>((ref) async
     ownedFrameIds: frames,
     ownedBackgroundIds: backgrounds,
     ownedStyleIds: styles,
+    ownedPatternIds: patterns,
   );
 });
 
@@ -71,6 +78,7 @@ Future<void> equipAsset(CosmeticAsset asset) async {
     AssetType.avatarFrame       => 'equipped_frame_id',
     AssetType.profileBackground => 'equipped_background_id',
     AssetType.statStyle         => 'equipped_stat_style_id',
+    AssetType.profilePattern    => 'equipped_pattern_id',
   };
   await SupabaseService.client
       .from('profiles')

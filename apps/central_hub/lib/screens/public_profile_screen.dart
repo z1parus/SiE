@@ -16,14 +16,17 @@ class PublicProfileScreen extends ConsumerWidget {
     final frames      = ref.watch(avatarFramesProvider).valueOrNull ?? [];
     final backgrounds = ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
     final styles      = ref.watch(statStylesProvider).valueOrNull ?? [];
+    final patterns    = ref.watch(profilePatternsProvider).valueOrNull ?? [];
 
     final equipped = EquippedAssets.resolve(
       frames: frames,
       backgrounds: backgrounds,
       styles: styles,
+      patterns: patterns,
       frameId: profile.equippedFrameId,
       backgroundId: profile.equippedBackgroundId,
       styleId: profile.equippedStatStyleId,
+      patternId: profile.equippedPatternId,
     );
 
     return SieBackground(
@@ -162,6 +165,13 @@ class _HeroSection extends ConsumerWidget {
                   Positioned.fill(
                     child: NeuralNetworkWidget(
                       color: bg.accentColor.withValues(alpha: 0.40),
+                    ),
+                  ),
+                if (equipped.pattern != null)
+                  Positioned.fill(
+                    child: ProfilePatternRenderer(
+                      pattern: equipped.pattern,
+                      accentColor: bg?.accentColor ?? c.accent,
                     ),
                   ),
                 Padding(

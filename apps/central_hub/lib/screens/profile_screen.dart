@@ -150,14 +150,17 @@ class _ProfileContent extends ConsumerWidget {
     final frames       = ref.watch(avatarFramesProvider).valueOrNull ?? [];
     final backgrounds  = ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
     final styles       = ref.watch(statStylesProvider).valueOrNull ?? [];
+    final patterns     = ref.watch(profilePatternsProvider).valueOrNull ?? [];
 
     final equipped = EquippedAssets.resolve(
       frames:       frames,
       backgrounds:  backgrounds,
       styles:       styles,
+      patterns:     patterns,
       frameId:      profile?.equippedFrameId,
       backgroundId: profile?.equippedBackgroundId,
       styleId:      profile?.equippedStatStyleId,
+      patternId:    profile?.equippedPatternId,
     );
 
     final frameDecoration =
@@ -192,6 +195,7 @@ class _ProfileContent extends ConsumerWidget {
                     profile: profile,
                     frameDecoration: frameDecoration,
                     background: equipped.background,
+                    pattern: equipped.pattern,
                   ),
                   if (equipped.statStyle != null) ...[
                     const SizedBox(height: 12),
@@ -264,10 +268,12 @@ class _HeaderGlassCard extends ConsumerWidget {
     required this.profile,
     required this.frameDecoration,
     this.background,
+    this.pattern,
   });
   final Profile? profile;
   final BoxDecoration frameDecoration;
   final CosmeticAsset? background;
+  final CosmeticAsset? pattern;
 
   static BoxDecoration _cardDecoration(SieColors c, CosmeticAsset? bg) {
     if (bg?.backgroundColor != null) {
@@ -321,6 +327,13 @@ class _HeaderGlassCard extends ConsumerWidget {
               child: NeuralNetworkWidget(
                 color: (background?.accentColor ?? c.accent)
                     .withValues(alpha: 0.40),
+              ),
+            ),
+          if (pattern != null)
+            Positioned.fill(
+              child: ProfilePatternRenderer(
+                pattern: pattern,
+                accentColor: background?.accentColor ?? c.accent,
               ),
             ),
           Padding(

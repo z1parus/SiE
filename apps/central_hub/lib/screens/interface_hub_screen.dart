@@ -21,7 +21,7 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    _tabs = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -104,6 +104,7 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
     final frames      = ref.watch(avatarFramesProvider).valueOrNull ?? [];
     final backgrounds = ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
     final styles      = ref.watch(statStylesProvider).valueOrNull ?? [];
+    final patterns    = ref.watch(profilePatternsProvider).valueOrNull ?? [];
     final inventory   = ref.watch(inventoryProvider).valueOrNull ?? InventoryState.empty;
     final dp          = profile?.designPoints ?? 0;
 
@@ -155,6 +156,15 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
                       onEquip: _onEquip,
                       onPreview: (a) => _showPreview(a, profile),
                     ),
+                    _ShopGrid(
+                      assets: patterns,
+                      inventory: inventory,
+                      profile: profile,
+                      buyingId: _buyingId,
+                      onBuy: _onBuy,
+                      onEquip: _onEquip,
+                      onPreview: (a) => _showPreview(a, profile),
+                    ),
                   ],
                 ),
               ),
@@ -181,6 +191,7 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
         Tab(text: 'РАМКИ'),
         Tab(text: 'ФОНЫ'),
         Tab(text: 'СТИЛИ'),
+        Tab(text: 'УЗОРЫ'),
       ],
     );
   }
@@ -269,6 +280,7 @@ class _ShopGrid extends ConsumerWidget {
         AssetType.avatarFrame       => profile?.equippedFrameId == asset.id,
         AssetType.profileBackground => profile?.equippedBackgroundId == asset.id,
         AssetType.statStyle         => profile?.equippedStatStyleId == asset.id,
+        AssetType.profilePattern    => profile?.equippedPatternId == asset.id,
       };
 
   Future<void> _onRefresh(WidgetRef ref) async {
@@ -836,6 +848,7 @@ class _AssetVisualBig extends StatelessWidget {
         AssetType.avatarFrame       => _FrameVisual(asset: asset),
         AssetType.profileBackground => _BackgroundVisual(asset: asset),
         AssetType.statStyle         => _StatStyleVisual(asset: asset),
+        AssetType.profilePattern    => _BackgroundVisual(asset: asset),
       };
 }
 
