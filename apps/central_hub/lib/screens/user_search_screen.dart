@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sie_core/sie_core.dart';
 import 'public_profile_screen.dart';
 
@@ -19,6 +20,29 @@ class _UserSearchScreenState extends ConsumerState<UserSearchScreen> {
   final _focus = FocusNode();
   Timer? _debounce;
   String _query = '';
+  List<String> _history = [];
+
+  static const _historyKey = 'user_search_history';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getStringList(_historyKey) ?? [];
+    if (mounted) setState(() => _history = saved);
+  }
+
+  Future<void> _saveToHistory(String query) async {
+    final updated =
+        [query, ..._history.where((h) => h != query)].take(5).toList();
+    setState(() => _history = updated);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_historyKey, updated);
+  }
 
   @override
   void dispose() {
@@ -30,9 +54,18 @@ class _UserSearchScreenState extends ConsumerState<UserSearchScreen> {
 
   void _onChanged(String value) {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 400), () {
-      if (mounted) setState(() => _query = value.trim());
+    _debounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) return;
+      final q = value.trim();
+      setState(() => _query = q);
+      if (q.length >= 2) _saveToHistory(q);
     });
+  }
+
+  void _applyHistory(String query) {
+    _ctrl.text = query;
+    _debounce?.cancel();
+    setState(() => _query = query);
   }
 
   void _clear() {
@@ -57,7 +90,13 @@ class _UserSearchScreenState extends ConsumerState<UserSearchScreen> {
                 onChanged: _onChanged,
                 onClear: _clear,
               ),
-              Expanded(child: _Body(query: _query)),
+              Expanded(
+                child: _Body(
+                  query: _query,
+                  history: _history,
+                  onHistoryTap: _applyHistory,
+                ),
+              ),
             ],
           ),
         ),
@@ -204,12 +243,22 @@ class _TopBarState extends ConsumerState<_TopBar> {
 
 class _Body extends ConsumerWidget {
   final String query;
-  const _Body({required this.query});
+  final List<String> history;
+  final ValueChanged<String> onHistoryTap;
+
+  const _Body({
+    required this.query,
+    required this.history,
+    required this.onHistoryTap,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
     if (query.length < 2) {
+      if (history.isNotEmpty) {
+        return _HistoryList(history: history, onTap: onHistoryTap);
+      }
       return const _StatusMessage(
         icon: Icons.radar,
         text: 'ВВЕДИТЕ ИМЯ ДЛЯ ПОИСКА',
@@ -238,7 +287,7 @@ class _Body extends ConsumerWidget {
         }
         return RefreshIndicator(
           color: c.accent,
-          backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+          backgroundColor: c.background,
           onRefresh: () async {
             ref.invalidate(userSearchProvider(query));
             await ref.read(userSearchProvider(query).future);
@@ -254,6 +303,66 @@ class _Body extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// ── Search History ────────────────────────────────────────────
+
+class _HistoryList extends ConsumerWidget {
+  final List<String> history;
+  final ValueChanged<String> onTap;
+  const _HistoryList({required this.history, required this.onTap});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+      children: [
+        Text(
+          'НЕДАВНИЕ ЗАПРОСЫ',
+          style: TextStyle(
+            color: c.textSecondary,
+            fontSize: 10,
+            letterSpacing: 2,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: history.map((h) {
+            return GestureDetector(
+              onTap: () => onTap(h),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: c.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: c.border),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.history, size: 12, color: c.textSecondary),
+                    const SizedBox(width: 6),
+                    Text(
+                      h,
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 12,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }

@@ -5,10 +5,6 @@ import 'package:sie_core/sie_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'public_profile_screen.dart';
 
-// Rank medal colors — universal across all themes
-const _kGold   = Color(0xFFFFD700);
-const _kSilver = Color(0xFFC0C0C0);
-const _kBronze = Color(0xFFCD7F32);
 
 const _kLastVanguardShownKey = 'last_vanguard_shown_date';
 
@@ -92,7 +88,6 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final c                = ref.watch(sieColorsProvider);
     final leaderboardAsync = ref.watch(leaderboardProvider);
     final profileAsync     = ref.watch(userProfileProvider);
     final currentUserId    = profileAsync.valueOrNull?.id;
@@ -124,11 +119,9 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                 frames: frames,
                 onRefresh: () => ref.refresh(leaderboardProvider.future),
               ),
-              loading: () => Center(
-                child: CircularProgressIndicator(
-                  color: c.accent,
-                  strokeWidth: 1.5,
-                ),
+              loading: () => const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: SieSkeletonList(itemCount: 7, itemHeight: 62, spacing: 6),
               ),
               error: (e, _) => const Center(
                 child: _NoConnectionMessage(),
@@ -398,7 +391,7 @@ class _LeaderRow extends ConsumerWidget {
     final c = ref.watch(sieColorsProvider);
 
     final isTopThree = entry.rank <= 3;
-    final rankColor  = _rankColor(entry.rank);
+    final rankColor  = c.rankColor(entry.rank);
 
     // XP accent: rank color for top 3, accentSecondary for others, accent for self
     final xpColor = isSelf
@@ -597,13 +590,6 @@ class _LeaderRow extends ConsumerWidget {
     );
   }
 
-  static Color _rankColor(int rank) => switch (rank) {
-        1 => _kGold,
-        2 => _kSilver,
-        3 => _kBronze,
-        _ => SieTheme.textSecondary,
-      };
-
   void _openProfile(BuildContext context, LeaderboardEntry entry) {
     final profile = PublicProfile(
       id: entry.userId,
@@ -795,7 +781,7 @@ class _VanguardSummarySheet extends ConsumerWidget {
         color: sheetBg,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         border: Border.all(
-          color: _kGold.withValues(alpha: 0.25),
+          color: c.rankGold.withValues(alpha: 0.25),
           width: 0.8,
         ),
       ),
@@ -806,33 +792,43 @@ class _VanguardSummarySheet extends ConsumerWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Drag handle
-          Container(
-            width: 36,
-            height: 3,
-            decoration: BoxDecoration(
-              color: c.border,
-              borderRadius: BorderRadius.circular(2),
-            ),
+          // Drag handle row with close button
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const SizedBox(width: 24),
+              Container(
+                width: 36,
+                height: 3,
+                decoration: BoxDecoration(
+                  color: c.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                child: Icon(Icons.close, color: c.textSecondary, size: 20),
+              ),
+            ],
           ),
           const SizedBox(height: 20),
 
           // Trophy icon
-          Icon(Icons.emoji_events, color: _kGold, size: 40,
-              shadows: [Shadow(color: _kGold.withValues(alpha: 0.5), blurRadius: 16)]),
+          Icon(Icons.emoji_events, color: c.rankGold, size: 40,
+              shadows: [Shadow(color: c.rankGold.withValues(alpha: 0.5), blurRadius: 16)]),
           const SizedBox(height: 12),
 
           // Title
           Text(
             'ИТОГИ АВАНГАРДА',
             style: TextStyle(
-              color: _kGold,
+              color: c.rankGold,
               fontSize: 18,
               fontWeight: FontWeight.w900,
               letterSpacing: 2.5,
               shadows: c.isLightMode
                   ? null
-                  : [Shadow(color: _kGold.withValues(alpha: 0.5), blurRadius: 10)],
+                  : [Shadow(color: c.rankGold.withValues(alpha: 0.5), blurRadius: 10)],
             ),
           ),
           const SizedBox(height: 4),
@@ -855,13 +851,13 @@ class _VanguardSummarySheet extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: _kGold.withValues(alpha: 0.08),
+                color: c.rankGold.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _kGold.withValues(alpha: 0.25)),
+                border: Border.all(color: c.rankGold.withValues(alpha: 0.25)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.star_outline, color: _kGold, size: 18),
+                  Icon(Icons.star_outline, color: c.rankGold, size: 18),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -916,12 +912,6 @@ class _WinnerRow extends StatelessWidget {
 
   const _WinnerRow({required this.result, required this.c});
 
-  static Color _placeColor(int place) => switch (place) {
-        1 => _kGold,
-        2 => _kSilver,
-        _ => _kBronze,
-      };
-
   static IconData _placeIcon(int place) => switch (place) {
         1 => Icons.emoji_events,
         2 => Icons.workspace_premium,
@@ -930,7 +920,7 @@ class _WinnerRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _placeColor(result.place);
+    final color = c.rankColor(result.place);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Container(

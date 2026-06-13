@@ -154,7 +154,7 @@ class _TabLabel extends ConsumerWidget {
             width: 16,
             height: 16,
             decoration: BoxDecoration(
-              color: highlight ? Colors.red : c.accent.withValues(alpha: 0.3),
+              color: highlight ? c.danger : c.accent.withValues(alpha: 0.3),
               shape: BoxShape.circle,
             ),
             child: Center(
@@ -194,7 +194,7 @@ class _FriendsList extends ConsumerWidget {
     if (rows.isEmpty) {
       return RefreshIndicator(
         color: c.accent,
-        backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+        backgroundColor: c.background,
         onRefresh: () async {
           ref.invalidate(friendsProvider);
           await ref.read(friendsProvider.future);
@@ -223,7 +223,7 @@ class _FriendsList extends ConsumerWidget {
     }
     return RefreshIndicator(
       color: c.accent,
-      backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+      backgroundColor: c.background,
       onRefresh: () async {
         ref.invalidate(friendsProvider);
         await ref.read(friendsProvider.future);
@@ -346,36 +346,28 @@ class _RemoveBtn extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
-    return IconButton(
-      icon: Icon(Icons.person_remove_outlined,
-          color: c.textSecondary, size: 20),
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(),
-      onPressed: () => _confirm(context, ref),
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: IconButton(
+        icon: Icon(Icons.person_remove_outlined,
+            color: c.textSecondary, size: 20),
+        onPressed: () => _confirm(context, ref),
+      ),
     );
   }
 
   Future<void> _confirm(BuildContext context, WidgetRef ref) async {
     final name = row.otherUser.username ?? 'пользователя';
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Удалить из друзей?'),
-        content: Text('$name будет удалён из вашего списка друзей.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена')),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Удалить')),
-        ],
-      ),
+    final ok = await confirmDestructive(
+      context,
+      ref,
+      title: 'Удалить из друзей?',
+      message: '$name будет удалён из вашего списка друзей.',
+      confirmLabel: 'Удалить',
     );
-    if (ok == true) {
-      await ref
-          .read(friendsProvider.notifier)
-          .removeFriend(row.friendshipId);
+    if (ok) {
+      await ref.read(friendsProvider.notifier).removeFriend(row.friendshipId);
     }
   }
 }
@@ -387,12 +379,14 @@ class _CancelBtn extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
-    return IconButton(
-      icon: Icon(Icons.cancel_outlined, color: c.textSecondary, size: 20),
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(),
-      onPressed: () =>
-          ref.read(friendsProvider.notifier).cancelRequest(row.friendshipId),
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: IconButton(
+        icon: Icon(Icons.cancel_outlined, color: c.textSecondary, size: 20),
+        onPressed: () =>
+            ref.read(friendsProvider.notifier).cancelRequest(row.friendshipId),
+      ),
     );
   }
 }
@@ -403,30 +397,31 @@ class _AcceptDeclineRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        IconButton(
-          icon: const Icon(Icons.check_circle_outlined,
-              color: Colors.green, size: 22),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          onPressed: () => ref
-              .read(friendsProvider.notifier)
-              .acceptRequest(row.friendshipId),
+        SizedBox(
+          width: 40,
+          height: 40,
+          child: IconButton(
+            icon: Icon(Icons.check_circle_outlined, color: c.success, size: 22),
+            onPressed: () => ref
+                .read(friendsProvider.notifier)
+                .acceptRequest(row.friendshipId),
+          ),
         ),
         const SizedBox(width: 4),
-        Consumer(builder: (_, ref2, _) {
-          final c = ref2.watch(sieColorsProvider);
-          return IconButton(
+        SizedBox(
+          width: 40,
+          height: 40,
+          child: IconButton(
             icon: Icon(Icons.close, color: c.textSecondary, size: 20),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-            onPressed: () => ref2
+            onPressed: () => ref
                 .read(friendsProvider.notifier)
                 .declineRequest(row.friendshipId),
-          );
-        }),
+          ),
+        ),
       ],
     );
   }
