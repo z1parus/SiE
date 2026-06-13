@@ -891,6 +891,68 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     if (nowCompleted) await _autoCompleteParents(goalId);
   }
 
+  // Reschedule a task's due date (or clear it when [newDueDate] is null).
+  // Used by the War Room agenda ("Отложить на завтра" / "Снять дедлайн").
+  Future<void> rescheduleTask(
+      String taskId, String subGoalId, String goalId, DateTime? newDueDate) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+    final current = state.valueOrNull;
+    if (current == null) return;
+
+    // Locate the task within the goal's sub-goal tree.
+    final goal = current.goals.firstWhere((g) => g.id == goalId,
+        orElse: () => throw StateError('goal not found'));
+    final sg = _allSubGoals(goal.subGoals).firstWhere((s) => s.id == subGoalId,
+        orElse: () => throw StateError('subgoal not found'));
+    sg.tasks.firstWhere((t) => t.id == taskId,
+        orElse: () => throw StateError('task not found'));
+
+    // ── Optimistic update ──
+    _updateGoalInState(goalId, (g) => g.copyWith(
+        subGoals: _updateSubGoalInTree(g.subGoals, subGoalId,
+            (s) => s.copyWith(
+                tasks: s.tasks
+                    .map((t) => t.id == taskId
+                        ? t.copyWith(dueDate: newDueDate)
+                        : t)
+                    .toList()))));
+
+    // ── Local DB upsert ──
+    await db.updatePlanningTask(taskId, LocalPlanningTasksCompanion(
+      dueDateMs: Value(newDueDate?.millisecondsSinceEpoch),
+      synced: const Value(false),
+    ));
+
+    // ── Try online sync ──
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    var syncedToServer = false;
+    if (isOnline) {
+      try {
+        await client.from('planning_tasks').update({
+          'due_date': newDueDate?.toIso8601String(),
+        }).eq('id', taskId);
+        await db.updatePlanningTask(taskId,
+            const LocalPlanningTasksCompanion(synced: Value(true)));
+        syncedToServer = true;
+      } catch (e) {
+        debugPrint('SiE Planning: reschedule_task online failed — $e');
+      }
+    }
+
+    // ── Fallback to offline queue ──
+    if (!syncedToServer) {
+      await db.enqueueSyncOp(
+          'reschedule_task',
+          jsonEncode({
+            'id': taskId,
+            'due_date': newDueDate?.toIso8601String(),
+          }));
+    }
+
+    await _touchGoalUpdatedAt(goalId);
+  }
+
   // Auto-complete sub-goals and goal when all children/tasks are done.
   Future<void> _autoCompleteParents(String goalId) async {
     bool anyChange = true;

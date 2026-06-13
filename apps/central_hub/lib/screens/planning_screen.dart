@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'mission_detail_screen.dart';
 import 'mission_accomplished_screen.dart';
 import 'goal_stats_screen.dart';
+import 'war_room_screen.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -53,7 +55,27 @@ class PlanningScreen extends ConsumerStatefulWidget {
 }
 
 class _PlanningScreenState extends ConsumerState<PlanningScreen> {
+  static const _kModeKey = 'planning_show_agenda';
+
   bool _showArchive = false;
+  bool _showAgenda = true;
+
+  @override
+  void initState() {
+    super.initState();
+    SharedPreferences.getInstance().then((prefs) {
+      final v = prefs.getBool(_kModeKey);
+      if (v != null && mounted) setState(() => _showAgenda = v);
+    });
+  }
+
+  void _setMode(bool agenda) {
+    if (_showAgenda == agenda) return;
+    SieHaptics.selection();
+    setState(() => _showAgenda = agenda);
+    SharedPreferences.getInstance()
+        .then((prefs) => prefs.setBool(_kModeKey, agenda));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +86,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
     return SieBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        floatingActionButton: _showArchive
+        floatingActionButton: (_showArchive || _showAgenda)
             ? null
             : FloatingActionButton(
                 onPressed: () => _showAddGoalSheet(context),
@@ -80,8 +102,17 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
               _PlanningHeader(
                 sc: sc,
                 showArchive: _showArchive,
+                showArchiveButton: !_showAgenda,
                 onToggle: () => setState(() => _showArchive = !_showArchive),
               ),
+              _ModeSwitch(
+                sc: sc,
+                showAgenda: _showAgenda,
+                onChanged: _setMode,
+              ),
+              if (_showAgenda)
+                const Expanded(child: WarRoomView())
+              else
               Expanded(
                 child: planningAsync.when(
                   loading: () => Center(
@@ -245,10 +276,12 @@ class _PlanningHeader extends StatelessWidget {
     required this.sc,
     required this.showArchive,
     required this.onToggle,
+    this.showArchiveButton = true,
   });
 
   final SieColors sc;
   final bool showArchive;
+  final bool showArchiveButton;
   final VoidCallback onToggle;
 
   @override
@@ -282,32 +315,104 @@ class _PlanningHeader extends StatelessWidget {
             ],
           ),
           const Spacer(),
-          GestureDetector(
-            onTap: onToggle,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
+          if (showArchiveButton)
+            GestureDetector(
+              onTap: onToggle,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: showArchive
+                        ? sc.accent.withValues(alpha: 0.5)
+                        : sc.border,
+                  ),
                   color: showArchive
-                      ? sc.accent.withValues(alpha: 0.5)
-                      : sc.border,
+                      ? sc.accent.withValues(alpha: 0.08)
+                      : Colors.transparent,
                 ),
-                color: showArchive
-                    ? sc.accent.withValues(alpha: 0.08)
-                    : Colors.transparent,
-              ),
-              child: Icon(
-                showArchive
-                    ? Icons.inventory_2_outlined
-                    : Icons.archive_outlined,
-                color: showArchive ? sc.accent : sc.textSecondary,
-                size: 18,
+                child: Icon(
+                  showArchive
+                      ? Icons.inventory_2_outlined
+                      : Icons.archive_outlined,
+                  color: showArchive ? sc.accent : sc.textSecondary,
+                  size: 18,
+                ),
               ),
             ),
-          ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Mode switch (Повестка | Цели) ─────────────────────────────────────────────
+
+class _ModeSwitch extends StatelessWidget {
+  const _ModeSwitch({
+    required this.sc,
+    required this.showAgenda,
+    required this.onChanged,
+  });
+
+  final SieColors sc;
+  final bool showAgenda;
+  final void Function(bool agenda) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+      child: Container(
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: sc.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: sc.border),
+        ),
+        child: Row(
+          children: [
+            _segment('Повестка', Icons.today_outlined, showAgenda,
+                () => onChanged(true)),
+            _segment('Цели', Icons.account_tree_outlined, !showAgenda,
+                () => onChanged(false)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _segment(
+      String label, IconData icon, bool active, VoidCallback onTap) {
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: SieMotion.fast,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: active ? sc.accent.withValues(alpha: 0.15) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon,
+                  size: 15, color: active ? sc.accent : sc.textSecondary),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: active ? sc.accent : sc.textSecondary,
+                  fontSize: 13,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

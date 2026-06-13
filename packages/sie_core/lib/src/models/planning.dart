@@ -101,7 +101,7 @@ class PlanningTask {
     bool? isCompleted,
     int? orderIndex,
     Object? completedAt = _unset,
-    DateTime? dueDate,
+    Object? dueDate = _unset,
   }) =>
       PlanningTask(
         id: id,
@@ -113,7 +113,7 @@ class PlanningTask {
         orderIndex: orderIndex ?? this.orderIndex,
         completedAt:
             completedAt == _unset ? this.completedAt : completedAt as DateTime?,
-        dueDate: dueDate ?? this.dueDate,
+        dueDate: dueDate == _unset ? this.dueDate : dueDate as DateTime?,
         createdAt: createdAt,
       );
 
@@ -471,6 +471,9 @@ class PlanningState {
 }
 
 // ─── Helper functions ─────────────────────────────────────────────────────────
+
+// Public flatten of an entire sub-goal tree (used by the agenda aggregator).
+List<SubGoal> flattenSubGoals(List<SubGoal> roots) => _allSubGoals(roots);
 
 // Flatten entire sub-goal tree into a list
 List<SubGoal> _allSubGoals(List<SubGoal> roots) {

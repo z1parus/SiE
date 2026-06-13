@@ -184,6 +184,12 @@ class SyncService {
             }).eq('id', payload['id'] as String);
             await _db.updatePlanningTask(payload['id'] as String,
                 const LocalPlanningTasksCompanion(synced: Value(true)));
+          case 'reschedule_task':
+            await client.from('planning_tasks').update({
+              'due_date': payload['due_date'],
+            }).eq('id', payload['id'] as String).eq('user_id', userId);
+            await _db.updatePlanningTask(payload['id'] as String,
+                const LocalPlanningTasksCompanion(synced: Value(true)));
           case 'delete_task':
             await client
                 .from('planning_tasks')
