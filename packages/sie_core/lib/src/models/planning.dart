@@ -82,6 +82,9 @@ class PlanningTask {
     required this.createdAt,
     this.completedAt,
     this.dueDate,
+    this.recurrenceRule,
+    this.recurrenceUntil,
+    this.recurrenceParentId,
   });
 
   final String id;
@@ -94,6 +97,12 @@ class PlanningTask {
   final DateTime? completedAt;
   final DateTime? dueDate;
   final DateTime createdAt;
+  // Recurrence (stage 3). null = one-shot.
+  final String? recurrenceRule; // 'daily'|'weekly:1,3'|'monthly:15'|'every:N'
+  final DateTime? recurrenceUntil;
+  final String? recurrenceParentId;
+
+  bool get isRecurring => recurrenceRule != null && recurrenceRule!.isNotEmpty;
 
   PlanningTask copyWith({
     String? subGoalId,
@@ -102,6 +111,9 @@ class PlanningTask {
     int? orderIndex,
     Object? completedAt = _unset,
     Object? dueDate = _unset,
+    Object? recurrenceRule = _unset,
+    Object? recurrenceUntil = _unset,
+    Object? recurrenceParentId = _unset,
   }) =>
       PlanningTask(
         id: id,
@@ -114,6 +126,15 @@ class PlanningTask {
         completedAt:
             completedAt == _unset ? this.completedAt : completedAt as DateTime?,
         dueDate: dueDate == _unset ? this.dueDate : dueDate as DateTime?,
+        recurrenceRule: recurrenceRule == _unset
+            ? this.recurrenceRule
+            : recurrenceRule as String?,
+        recurrenceUntil: recurrenceUntil == _unset
+            ? this.recurrenceUntil
+            : recurrenceUntil as DateTime?,
+        recurrenceParentId: recurrenceParentId == _unset
+            ? this.recurrenceParentId
+            : recurrenceParentId as String?,
         createdAt: createdAt,
       );
 
@@ -131,6 +152,11 @@ class PlanningTask {
         dueDate: j['due_date'] != null
             ? DateTime.parse(j['due_date'] as String)
             : null,
+        recurrenceRule: j['recurrence_rule'] as String?,
+        recurrenceUntil: j['recurrence_until'] != null
+            ? DateTime.parse(j['recurrence_until'] as String)
+            : null,
+        recurrenceParentId: j['recurrence_parent_id'] as String?,
         createdAt: DateTime.parse(j['created_at'] as String),
       );
 
@@ -143,6 +169,11 @@ class PlanningTask {
         'is_completed': isCompleted,
         if (completedAt != null) 'completed_at': completedAt!.toIso8601String(),
         if (dueDate != null) 'due_date': dueDate!.toIso8601String(),
+        if (recurrenceRule != null) 'recurrence_rule': recurrenceRule,
+        if (recurrenceUntil != null)
+          'recurrence_until': recurrenceUntil!.toIso8601String(),
+        if (recurrenceParentId != null)
+          'recurrence_parent_id': recurrenceParentId,
       };
 }
 
@@ -515,15 +546,19 @@ Map<String, dynamic> positionsToJson(Map<String, Offset> pos) =>
     pos.map((k, v) => MapEntry(k, {'x': v.dx, 'y': v.dy}));
 
 double subGoalProgress(SubGoal sg) {
-  final hasTasks    = sg.tasks.isNotEmpty;
+  // Recurring tasks are an engine, not a measure of completion — exclude them
+  // from the progress denominator so a goal with a recurring task can still
+  // reach 100%.
+  final progressTasks = sg.tasks.where((t) => !t.isRecurring).toList();
+  final hasTasks    = progressTasks.isNotEmpty;
   final hasChildren = sg.children.isNotEmpty;
 
   if (!hasTasks && !hasChildren) return sg.isCompleted ? 100.0 : 0.0;
 
   double? taskSlot;
   if (hasTasks) {
-    final total = sg.tasks.fold(0, (s, t) => s + t.weight);
-    final done  = sg.tasks
+    final total = progressTasks.fold(0, (s, t) => s + t.weight);
+    final done  = progressTasks
         .where((t) => t.isCompleted)
         .fold(0, (s, t) => s + t.weight);
     taskSlot = total == 0 ? 0.0 : (done / total) * 100.0;
@@ -561,6 +596,65 @@ int taskXp(int weight) => switch (weight) {
       5 => 15,
       _ => 5,
     };
+
+// ─── Recurrence ───────────────────────────────────────────────────────────────
+
+/// Computes the next due date for a recurring task, given its [rule] and the
+/// reference date [from] (typically the current dueDate, or `now`).
+///
+/// Supported compact formats:
+///  - `daily`            → next day
+///  - `weekly:1,3,5`     → next listed weekday (1=Mon … 7=Sun) after [from]
+///  - `monthly:15`       → the given day-of-month next month (clamped to month length)
+///  - `every:N`          → [from] + N days
+///
+/// Returns the date at midnight. Falls back to +1 day for unknown rules.
+DateTime nextOccurrence(String rule, DateTime from) {
+  final base = DateTime(from.year, from.month, from.day);
+  final parts = rule.split(':');
+  final kind = parts[0];
+  final arg = parts.length > 1 ? parts[1] : '';
+
+  switch (kind) {
+    case 'daily':
+      return base.add(const Duration(days: 1));
+
+    case 'every':
+      final n = int.tryParse(arg) ?? 1;
+      return base.add(Duration(days: n < 1 ? 1 : n));
+
+    case 'weekly':
+      final days = arg
+          .split(',')
+          .map((e) => int.tryParse(e.trim()))
+          .whereType<int>()
+          .where((d) => d >= 1 && d <= 7)
+          .toList()
+        ..sort();
+      if (days.isEmpty) return base.add(const Duration(days: 7));
+      // Find the next listed weekday strictly after [base].
+      for (var i = 1; i <= 7; i++) {
+        final cand = base.add(Duration(days: i));
+        if (days.contains(cand.weekday)) return cand;
+      }
+      return base.add(const Duration(days: 7));
+
+    case 'monthly':
+      final dom = int.tryParse(arg) ?? base.day;
+      var year = base.year;
+      var month = base.month + 1;
+      if (month > 12) {
+        month = 1;
+        year++;
+      }
+      final lastDay = DateTime(year, month + 1, 0).day; // day 0 of next month
+      final day = dom > lastDay ? lastDay : dom;
+      return DateTime(year, month, day);
+
+    default:
+      return base.add(const Duration(days: 1));
+  }
+}
 
 bool isGoalFatigued(Goal g) {
   if (g.status != 'active') return false;

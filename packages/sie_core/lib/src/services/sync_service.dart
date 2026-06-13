@@ -169,6 +169,12 @@ class SyncService {
               'weight': payload['weight'] ?? 1,
               'order_index': payload['order_index'] ?? localTask?.orderIndex ?? 0,
               if (payload['due_date'] != null) 'due_date': payload['due_date'],
+              if (payload['recurrence_rule'] != null)
+                'recurrence_rule': payload['recurrence_rule'],
+              if (payload['recurrence_until'] != null)
+                'recurrence_until': payload['recurrence_until'],
+              if (payload['recurrence_parent_id'] != null)
+                'recurrence_parent_id': payload['recurrence_parent_id'],
               'is_completed': localTask?.isCompleted ?? false,
               if (localTask?.completedAtMs != null)
                 'completed_at': DateTime.fromMillisecondsSinceEpoch(
@@ -187,6 +193,12 @@ class SyncService {
           case 'reschedule_task':
             await client.from('planning_tasks').update({
               'due_date': payload['due_date'],
+            }).eq('id', payload['id'] as String).eq('user_id', userId);
+            await _db.updatePlanningTask(payload['id'] as String,
+                const LocalPlanningTasksCompanion(synced: Value(true)));
+          case 'end_recurrence':
+            await client.from('planning_tasks').update({
+              'recurrence_rule': null,
             }).eq('id', payload['id'] as String).eq('user_id', userId);
             await _db.updatePlanningTask(payload['id'] as String,
                 const LocalPlanningTasksCompanion(synced: Value(true)));

@@ -187,6 +187,10 @@ class LocalPlanningTasks extends Table {
   BoolColumn get synced         => boolean().withDefault(const Constant(false))();
   BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
   IntColumn  get createdAtMs    => integer()();
+  // Recurrence (stage 3): null = one-shot. Format: 'daily'|'weekly:1,3'|'monthly:15'|'every:N'.
+  TextColumn get recurrenceRule     => text().nullable()();
+  IntColumn  get recurrenceUntilMs  => integer().nullable()();
+  TextColumn get recurrenceParentId => text().nullable()();
   @override Set<Column> get primaryKey => {id};
 }
 
@@ -301,7 +305,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 17;
+  int get schemaVersion => 18;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -422,6 +426,14 @@ class AppDatabase extends _$AppDatabase {
           'UPDATE local_goals SET map_positions_json = NULL',
           updates: {localGoals},
         );
+      }
+      if (from < 18) {
+        await m.addColumn(
+            localPlanningTasks, localPlanningTasks.recurrenceRule);
+        await m.addColumn(
+            localPlanningTasks, localPlanningTasks.recurrenceUntilMs);
+        await m.addColumn(
+            localPlanningTasks, localPlanningTasks.recurrenceParentId);
       }
     },
   );

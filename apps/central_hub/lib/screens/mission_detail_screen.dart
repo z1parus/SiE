@@ -1045,23 +1045,50 @@ class _TaskTile extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  t.name,
-                  style: TextStyle(
-                    color: t.isCompleted ? sc.textSecondary : sc.textPrimary,
-                    fontSize: 14,
-                    decoration:
-                        t.isCompleted ? TextDecoration.lineThrough : null,
-                  ),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        t.name,
+                        style: TextStyle(
+                          color: t.isCompleted
+                              ? sc.textSecondary
+                              : sc.textPrimary,
+                          fontSize: 14,
+                          decoration: t.isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
+                        ),
+                      ),
+                    ),
+                    if (t.isRecurring) ...[
+                      const SizedBox(width: 6),
+                      Icon(Icons.repeat, size: 13, color: sc.accentSecondary),
+                    ],
+                  ],
                 ),
-                if (t.dueDate != null)
+                if (t.dueDate != null || t.isRecurring)
                   Text(
-                    _formatDate(t.dueDate!),
+                    [
+                      if (t.dueDate != null) _formatDate(t.dueDate!),
+                      if (t.isRecurring) _recurrenceLabel(t.recurrenceRule!),
+                    ].join(' · '),
                     style: TextStyle(color: sc.textSecondary, fontSize: 10),
                   ),
               ],
             ),
           ),
+          if (t.isRecurring && canEdit) ...[
+            GestureDetector(
+              onTap: () =>
+                  _confirmEndRecurrence(context, ref, t.id, subGoal.id, goal.id, sc),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.stop_circle_outlined,
+                    size: 16, color: sc.textSecondary),
+              ),
+            ),
+          ],
           _WeightBadge(weight: t.weight, sc: sc),
           if (canEdit) ...[
             const SizedBox(width: 6),
@@ -1864,6 +1891,50 @@ Future<void> _confirmDeleteTask(BuildContext context, WidgetRef ref,
   }
 }
 
+Future<void> _confirmEndRecurrence(BuildContext context, WidgetRef ref,
+    String taskId, String subGoalId, String goalId, SieColors sc) async {
+  final confirm = await confirmDestructive(
+    context,
+    ref,
+    title: 'Завершить серию?',
+    message:
+        'Текущая задача останется, но новые повторы создаваться не будут.',
+  );
+  if (confirm) {
+    ref
+        .read(planningProvider.notifier)
+        .endRecurrence(taskId, subGoalId, goalId);
+  }
+}
+
+/// Human-readable label for a recurrence rule (compact format).
+String _recurrenceLabel(String rule) {
+  final parts = rule.split(':');
+  final arg = parts.length > 1 ? parts[1] : '';
+  switch (parts[0]) {
+    case 'daily':
+      return '↻ ежедневно';
+    case 'every':
+      return '↻ каждые $arg дн.';
+    case 'monthly':
+      return '↻ ежемесячно ($arg)';
+    case 'weekly':
+      const names = {
+        '1': 'Пн',
+        '2': 'Вт',
+        '3': 'Ср',
+        '4': 'Чт',
+        '5': 'Пт',
+        '6': 'Сб',
+        '7': 'Вс'
+      };
+      final days = arg.split(',').map((d) => names[d.trim()] ?? d).join(',');
+      return '↻ $days';
+    default:
+      return '↻';
+  }
+}
+
 Future<void> _confirmDeleteMilestone(BuildContext context, WidgetRef ref,
     String milestoneId, String goalId, SieColors sc) async {
   final confirm = await confirmDestructive(
@@ -1936,6 +2007,66 @@ class _AddSubGoalSheetState extends ConsumerState<_AddSubGoalSheet> {
   }
 }
 
+class _RecurChip extends StatelessWidget {
+  const _RecurChip(this.label, this.value, this.current, this.sc, this.onTap);
+
+  final String label;
+  final String value;
+  final String current;
+  final SieColors sc;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = current == value;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: active ? sc.accent.withValues(alpha: 0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: active ? sc.accent : sc.border),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: active ? sc.accent : sc.textSecondary,
+            fontSize: 12,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StepperButton extends StatelessWidget {
+  const _StepperButton(
+      {required this.icon, required this.sc, required this.onTap});
+
+  final IconData icon;
+  final SieColors sc;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: sc.border),
+        ),
+        child: Icon(icon, size: 16, color: sc.textPrimary),
+      ),
+    );
+  }
+}
+
 class _AddTaskSheet extends ConsumerStatefulWidget {
   const _AddTaskSheet(
       {required this.subGoal, required this.goal, required this.sc});
@@ -1952,6 +2083,24 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
   final _ctrl = TextEditingController();
   int _weight = 1;
   DateTime? _dueDate;
+  String _recur = 'none'; // none|daily|weekly|monthly|every
+  int _everyN = 3;
+
+  String? _buildRule() {
+    final anchor = _dueDate ?? DateTime.now();
+    switch (_recur) {
+      case 'daily':
+        return 'daily';
+      case 'weekly':
+        return 'weekly:${anchor.weekday}';
+      case 'monthly':
+        return 'monthly:${anchor.day}';
+      case 'every':
+        return 'every:$_everyN';
+      default:
+        return null;
+    }
+  }
 
   @override
   void dispose() {
@@ -2044,6 +2193,69 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+          Text('ПОВТОР',
+              style: TextStyle(
+                  color: sc.textSecondary,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _RecurChip('Нет', 'none', _recur, sc,
+                  () => setState(() => _recur = 'none')),
+              _RecurChip('Ежедневно', 'daily', _recur, sc,
+                  () => setState(() => _recur = 'daily')),
+              _RecurChip('Еженедельно', 'weekly', _recur, sc,
+                  () => setState(() => _recur = 'weekly')),
+              _RecurChip('Ежемесячно', 'monthly', _recur, sc,
+                  () => setState(() => _recur = 'monthly')),
+              _RecurChip('Каждые N дней', 'every', _recur, sc,
+                  () => setState(() => _recur = 'every')),
+            ],
+          ),
+          if (_recur == 'every') ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Text('Каждые', style: TextStyle(color: sc.textSecondary, fontSize: 13)),
+                const SizedBox(width: 10),
+                _StepperButton(
+                    icon: Icons.remove,
+                    sc: sc,
+                    onTap: () => setState(
+                        () => _everyN = _everyN > 1 ? _everyN - 1 : 1)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text('$_everyN',
+                      style: TextStyle(
+                          color: sc.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700)),
+                ),
+                _StepperButton(
+                    icon: Icons.add,
+                    sc: sc,
+                    onTap: () => setState(
+                        () => _everyN = _everyN < 99 ? _everyN + 1 : 99)),
+                const SizedBox(width: 10),
+                Text('дней', style: TextStyle(color: sc.textSecondary, fontSize: 13)),
+              ],
+            ),
+          ],
+          if (_recur != 'none' && _recur != 'daily' && _recur != 'every')
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                _recur == 'weekly'
+                    ? 'Повтор в этот день недели (по дате дедлайна)'
+                    : 'Повтор в это число месяца (по дате дедлайна)',
+                style: TextStyle(color: sc.textSecondary, fontSize: 11),
+              ),
+            ),
           const SizedBox(height: 20),
           _SheetSubmitButton(
             label: 'ДОБАВИТЬ ЗАДАЧУ',
@@ -2057,6 +2269,7 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
                     name: name,
                     weight: _weight,
                     dueDate: _dueDate,
+                    recurrenceRule: _buildRule(),
                   );
               Navigator.pop(context);
             },

@@ -379,6 +379,9 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
               completedAtMs: Value(t.completedAt?.millisecondsSinceEpoch),
               dueDateMs: Value(t.dueDate?.millisecondsSinceEpoch),
               orderIndex: Value(t.orderIndex),
+              recurrenceRule: Value(t.recurrenceRule),
+              recurrenceUntilMs: Value(t.recurrenceUntil?.millisecondsSinceEpoch),
+              recurrenceParentId: Value(t.recurrenceParentId),
               synced: const Value(true),
               createdAtMs: Value(t.createdAt.millisecondsSinceEpoch),
             ));
@@ -448,6 +451,11 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         dueDate: rt.dueDateMs != null
             ? DateTime.fromMillisecondsSinceEpoch(rt.dueDateMs!)
             : null,
+        recurrenceRule: rt.recurrenceRule,
+        recurrenceUntil: rt.recurrenceUntilMs != null
+            ? DateTime.fromMillisecondsSinceEpoch(rt.recurrenceUntilMs!)
+            : null,
+        recurrenceParentId: rt.recurrenceParentId,
         createdAt: DateTime.fromMillisecondsSinceEpoch(rt.createdAtMs),
       ));
     }
@@ -889,12 +897,13 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     required String name,
     int weight = 1,
     DateTime? dueDate,
+    String? recurrenceRule,
+    DateTime? recurrenceUntil,
   }) async {
     final client = Supabase.instance.client;
     final session = client.auth.currentSession;
     if (session == null) return;
 
-    final db = ref.read(appDatabaseProvider);
     final now = DateTime.now();
     final id = _uuid.v4();
     final userId = session.user.id;
@@ -914,6 +923,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       orderIndex: taskOrderIndex,
       completedAt: null,
       dueDate: dueDate,
+      recurrenceRule: recurrenceRule,
+      recurrenceUntil: recurrenceUntil,
       createdAt: now,
     );
 
@@ -922,46 +933,65 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             (sg) => sg.copyWith(tasks: [...sg.tasks, newTask]))));
 
     await _scheduleTaskNotif(goalId, newTask);
+    await _persistTaskInsert(newTask);
+  }
+
+  /// Shared insert persistence (local upsert → online insert → offline queue).
+  /// Used by [addTask] and by recurrence spawning in [toggleTask].
+  Future<void> _persistTaskInsert(PlanningTask t) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
 
     await db.upsertPlanningTask(LocalPlanningTasksCompanion(
-      id: Value(id),
-      subGoalId: Value(subGoalId),
-      userId: Value(userId),
-      name: Value(name),
-      weight: Value(weight),
-      orderIndex: Value(taskOrderIndex),
-      dueDateMs: Value(dueDate?.millisecondsSinceEpoch),
+      id: Value(t.id),
+      subGoalId: Value(t.subGoalId),
+      userId: Value(t.userId),
+      name: Value(t.name),
+      weight: Value(t.weight),
+      isCompleted: Value(t.isCompleted),
+      orderIndex: Value(t.orderIndex),
+      dueDateMs: Value(t.dueDate?.millisecondsSinceEpoch),
+      recurrenceRule: Value(t.recurrenceRule),
+      recurrenceUntilMs: Value(t.recurrenceUntil?.millisecondsSinceEpoch),
+      recurrenceParentId: Value(t.recurrenceParentId),
       synced: const Value(false),
-      createdAtMs: Value(now.millisecondsSinceEpoch),
+      createdAtMs: Value(t.createdAt.millisecondsSinceEpoch),
     ));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) {
       try {
         await client.from('planning_tasks').insert({
-          'id': id,
-          'sub_goal_id': subGoalId,
-          'user_id': userId,
-          'name': name,
-          'weight': weight,
-          'order_index': taskOrderIndex,
-          'due_date': dueDate?.toIso8601String(),
-          'created_at': now.toIso8601String(),
+          'id': t.id,
+          'sub_goal_id': t.subGoalId,
+          'user_id': t.userId,
+          'name': t.name,
+          'weight': t.weight,
+          'order_index': t.orderIndex,
+          'due_date': t.dueDate?.toIso8601String(),
+          'recurrence_rule': t.recurrenceRule,
+          'recurrence_until': t.recurrenceUntil?.toIso8601String(),
+          'recurrence_parent_id': t.recurrenceParentId,
+          'created_at': t.createdAt.toIso8601String(),
         });
-        await db.updatePlanningTask(id,
-            LocalPlanningTasksCompanion(synced: const Value(true)));
+        await db.updatePlanningTask(t.id,
+            const LocalPlanningTasksCompanion(synced: Value(true)));
         return;
       } catch (_) {}
     }
     await db.enqueueSyncOp(
         'insert_task',
         jsonEncode({
-          'id': id,
-          'sub_goal_id': subGoalId,
-          'user_id': userId,
-          'name': name,
-          'weight': weight,
-          'order_index': taskOrderIndex,
+          'id': t.id,
+          'sub_goal_id': t.subGoalId,
+          'user_id': t.userId,
+          'name': t.name,
+          'weight': t.weight,
+          'order_index': t.orderIndex,
+          'due_date': t.dueDate?.toIso8601String(),
+          'recurrence_rule': t.recurrenceRule,
+          'recurrence_until': t.recurrenceUntil?.toIso8601String(),
+          'recurrence_parent_id': t.recurrenceParentId,
         }));
   }
 
@@ -1061,6 +1091,88 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       await _cancelTaskNotif(taskId);
     } else {
       await _scheduleTaskNotif(goalId, task.copyWith(isCompleted: false));
+    }
+
+    // Recurrence: completing a recurring task spawns its next instance.
+    if (nowCompleted && task.isRecurring) {
+      await _spawnNextRecurrence(goalId, subGoalId, task);
+    }
+  }
+
+  /// Creates the next instance of a recurring task when the current one is done.
+  Future<void> _spawnNextRecurrence(
+      String goalId, String subGoalId, PlanningTask task) async {
+    final rule = task.recurrenceRule;
+    if (rule == null || rule.isEmpty) return;
+    final from = task.dueDate ?? DateTime.now();
+    final next = nextOccurrence(rule, from);
+    if (task.recurrenceUntil != null && next.isAfter(task.recurrenceUntil!)) {
+      return; // series finished
+    }
+
+    final sg = _allSubGoals(_goalById(goalId)?.subGoals ?? const [])
+        .where((s) => s.id == subGoalId)
+        .firstOrNull;
+    final orderIndex = sg?.tasks.length ?? 0;
+
+    final instance = PlanningTask(
+      id: _uuid.v4(),
+      subGoalId: subGoalId,
+      userId: task.userId,
+      name: task.name,
+      weight: task.weight,
+      isCompleted: false,
+      orderIndex: orderIndex,
+      dueDate: next,
+      recurrenceRule: rule,
+      recurrenceUntil: task.recurrenceUntil,
+      recurrenceParentId: task.recurrenceParentId ?? task.id,
+      createdAt: DateTime.now(),
+    );
+
+    _updateGoalInState(goalId, (g) => g.copyWith(
+        subGoals: _updateSubGoalInTree(g.subGoals, subGoalId,
+            (s) => s.copyWith(tasks: [...s.tasks, instance]))));
+
+    await _persistTaskInsert(instance);
+    await _scheduleTaskNotif(goalId, instance);
+  }
+
+  /// Stops a recurrence series — current instance stays, no more are spawned.
+  Future<void> endRecurrence(
+      String taskId, String subGoalId, String goalId) async {
+    final db = ref.read(appDatabaseProvider);
+    final client = Supabase.instance.client;
+
+    _updateGoalInState(goalId, (g) => g.copyWith(
+        subGoals: _updateSubGoalInTree(g.subGoals, subGoalId,
+            (s) => s.copyWith(
+                tasks: s.tasks
+                    .map((t) =>
+                        t.id == taskId ? t.copyWith(recurrenceRule: null) : t)
+                    .toList()))));
+
+    await db.updatePlanningTask(taskId, const LocalPlanningTasksCompanion(
+      recurrenceRule: Value(null),
+      synced: Value(false),
+    ));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    var synced = false;
+    if (isOnline) {
+      try {
+        await client
+            .from('planning_tasks')
+            .update({'recurrence_rule': null}).eq('id', taskId);
+        await db.updatePlanningTask(taskId,
+            const LocalPlanningTasksCompanion(synced: Value(true)));
+        synced = true;
+      } catch (e) {
+        debugPrint('SiE Planning: end_recurrence online failed — $e');
+      }
+    }
+    if (!synced) {
+      await db.enqueueSyncOp('end_recurrence', jsonEncode({'id': taskId}));
     }
   }
 
