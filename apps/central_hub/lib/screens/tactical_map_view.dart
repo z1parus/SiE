@@ -28,6 +28,11 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   Timer? _saveTimer;
   final Set<String> _scoutedMapIds = {};
 
+  // Flattened sub-goal list for the current goal, recomputed once per build.
+  // Safe to reuse across drag handlers because the goal tree structure does not
+  // change during a drag (only positions move).
+  List<SubGoal> _flat = const [];
+
   static const double _cx = 2400.0;
   static const double _cs = 4800.0;
 
@@ -151,7 +156,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       }
     }
 
-    final allSgs = _flatSubGoals(goal.subGoals);
+    final allSgs = _flat;
     final all = {
       goal.id,
       ...allSgs.map((sg) => sg.id),
@@ -261,28 +266,38 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
 
   // ── Collision resolution ──────────────────────────────────────────────────
 
-  double _nodeRadius(String id, Goal goal) {
-    if (id == goal.id) return 80.0;
-    final allSgs = _flatSubGoals(goal.subGoals);
-    if (allSgs.any((sg) => sg.id == id)) return 55.0;
-    final task = allSgs.expand((sg) => sg.tasks).where((t) => t.id == id).firstOrNull;
-    if (task != null) return switch (task.weight) { 5 => 36, 3 => 28, _ => 22 };
-    if (goal.milestones.any((m) => m.id == id)) return 40.0;
-    if (goal.habitLinks.any((l) => l.id == id)) return 26.0;
-    return 30.0;
+  // Computes every node radius in a single pass over the cached flat tree,
+  // instead of re-flattening the whole tree on every lookup (was O(n) per call).
+  Map<String, double> _computeRadii(Goal goal) {
+    final radii = <String, double>{goal.id: 80.0};
+    for (final sg in _flat) {
+      radii[sg.id] = 55.0;
+      for (final t in sg.tasks) {
+        radii[t.id] = switch (t.weight) { 5 => 36.0, 3 => 28.0, _ => 22.0 };
+      }
+    }
+    for (final m in goal.milestones) {
+      radii[m.id] = 40.0;
+    }
+    for (final l in goal.habitLinks) {
+      radii[l.id] = 26.0;
+    }
+    return radii;
   }
 
   void _resolveCollisions(String movedId, Goal goal) {
+    final ids = _positions.keys.toList();
+    // Precompute radii once (O(n)) rather than O(n) per pair → kills the O(n³).
+    final radii = _computeRadii(goal);
     for (int iter = 0; iter < 30; iter++) {
       bool any = false;
-      final ids = _positions.keys.toList();
       for (int i = 0; i < ids.length; i++) {
         for (int j = i + 1; j < ids.length; j++) {
           final a = ids[i];
           final b = ids[j];
           final pa = _positions[a]!;
           final pb = _positions[b]!;
-          final minD = _nodeRadius(a, goal) + _nodeRadius(b, goal) + 36.0;
+          final minD = (radii[a] ?? 30.0) + (radii[b] ?? 30.0) + 36.0;
           final diff = pb - pa;
           final dist = diff.distance;
           if (dist < minD && dist > 0.001) {
@@ -319,7 +334,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     if (pos == null) return null;
     String? nearest;
     double nearestDist = threshold;
-    for (final sg in _flatSubGoals(goal.subGoals)) {
+    for (final sg in _flat) {
       if (exclude.contains(sg.id)) continue;
       final sgPos = _positions[sg.id];
       if (sgPos == null) continue;
@@ -332,7 +347,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     return nearest;
   }
 
-  Set<String> _descendantIds(String sgId, List<SubGoal> subGoals) {
+  Set<String> _descendantIds(String sgId) {
     final result = <String>{};
     void collect(SubGoal sg) {
       for (final c in sg.children) {
@@ -340,7 +355,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
         collect(c);
       }
     }
-    for (final sg in _flatSubGoals(subGoals)) {
+    for (final sg in _flat) {
       if (sg.id == sgId) {
         collect(sg);
         break;
@@ -357,7 +372,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       _showGoalSheet(goal, c);
       return;
     }
-    final allSgs = _flatSubGoals(goal.subGoals);
+    final allSgs = _flat;
     final sg = allSgs.where((s) => s.id == nodeId).firstOrNull;
     if (sg != null) {
       _showSubGoalSheet(sg, goal, c);
@@ -534,13 +549,15 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   @override
   Widget build(BuildContext context) {
     final c = ref.watch(sieColorsProvider);
-    final goal = ref
-            .watch(planningProvider)
-            .valueOrNull
-            ?.goals
+    // Select only this goal: rebuilds are skipped when an unrelated goal mutates,
+    // because the provider reuses unchanged Goal instances across copyWith.
+    final goal = ref.watch(planningProvider.select((s) => s.valueOrNull?.goals
             .where((g) => g.id == _goal.id)
-            .firstOrNull ??
+            .firstOrNull)) ??
         widget.goal;
+
+    // Flatten the tree once per build; reused by drag handlers until next build.
+    _flat = _flatSubGoals(goal.subGoals);
 
     _ensurePositions(goal);
 
@@ -595,11 +612,17 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            // Grid
-            Positioned.fill(child: CustomPaint(painter: _GridPainter(c))),
-            // Edges
+            // Grid — static layer, isolated so node/edge repaints don't touch it
             Positioned.fill(
-              child: CustomPaint(painter: _EdgePainter(edges, _cx, c)),
+              child: RepaintBoundary(
+                child: CustomPaint(painter: _GridPainter(c)),
+              ),
+            ),
+            // Edges — isolated repaint boundary (see _EdgePainter.shouldRepaint)
+            Positioned.fill(
+              child: RepaintBoundary(
+                child: CustomPaint(painter: _EdgePainter(edges, _cx, c)),
+              ),
             ),
             // Habit links
             for (final l in goal.habitLinks)
@@ -620,7 +643,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                 _MilestoneNode(ms: ms, sc: c, dragging: _draggingId == ms.id),
               ),
             // Tasks and nested sub-goals (all depths)
-            for (final sg in _flatSubGoals(goal.subGoals)) ...[
+            for (final sg in _flat) ...[
               for (final t in sg.tasks)
                 _taskPosNode(t, sg.id, goal, c, hidden: isHidden(sg.id)),
               _subGoalPosNode(sg, goal, c,
@@ -735,7 +758,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     const threshold = 75.0;
     String? nearestSgId;
     double nearestDist = threshold;
-    for (final sg in _flatSubGoals(goal.subGoals)) {
+    for (final sg in _flat) {
       final sgPos = _positions[sg.id];
       if (sgPos == null) continue;
       final dist = (taskPos - sgPos).distance;
@@ -790,7 +813,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                 }
                 moveFamily(sg);
               });
-              final excluded = {sg.id, ..._descendantIds(sg.id, goal.subGoals)};
+              final excluded = {sg.id, ..._descendantIds(sg.id)};
               _setHoverTarget(_nearestSubGoalFor(sg.id, goal, exclude: excluded));
             },
       onPanEnd: (hidden || !widget.canEdit)
@@ -823,7 +846,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   }
 
   void _tryReparentSubGoal(SubGoal sg, Goal goal) {
-    final excluded = {sg.id, ..._descendantIds(sg.id, goal.subGoals)};
+    final excluded = {sg.id, ..._descendantIds(sg.id)};
     final nearest = _nearestSubGoalFor(sg.id, goal, exclude: excluded);
     if (nearest != null && nearest != sg.parentSubGoalId) {
       HapticFeedback.mediumImpact();
@@ -897,7 +920,7 @@ class _GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = c.border.withOpacity(c.isLightMode ? 0.45 : 0.25)
+      ..color = c.border.withValues(alpha: c.isLightMode ? 0.45 : 0.25)
       ..strokeWidth = 0.5;
     const step = 40.0;
     for (double x = 0; x < size.width; x += step) {
@@ -927,14 +950,14 @@ class _EdgePainter extends CustomPainter {
       final dst = Offset(center + e.dst.dx, center + e.dst.dy);
 
       var (color, width, dashed) = switch (e.type) {
-        _EType.goalSub => (c.accent.withOpacity(0.38), 2.0, false),
-        _EType.subSub => (c.border.withOpacity(0.9), 1.5, true),
-        _EType.subTask => (c.border.withOpacity(0.8), 1.5, false),
-        _EType.goalMs => (c.accentSecondary.withOpacity(0.45), 1.5, true),
-        _EType.goalHabit => (c.dp.withOpacity(0.35), 1.2, false),
+        _EType.goalSub => (c.accent.withValues(alpha: 0.38), 2.0, false),
+        _EType.subSub => (c.border.withValues(alpha: 0.9), 1.5, true),
+        _EType.subTask => (c.border.withValues(alpha: 0.8), 1.5, false),
+        _EType.goalMs => (c.accentSecondary.withValues(alpha: 0.45), 1.5, true),
+        _EType.goalHabit => (c.dp.withValues(alpha: 0.35), 1.2, false),
       };
       if (e.fogHidden) {
-        color = color.withOpacity(color.opacity * 0.4);
+        color = color.withValues(alpha: color.a * 0.4);
         dashed = true;
       }
 
@@ -983,7 +1006,8 @@ class _EdgePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_EdgePainter old) => true;
+  bool shouldRepaint(_EdgePainter old) =>
+      !identical(old.edges, edges) || old.c != c;
 }
 
 // ─── Goal Node ────────────────────────────────────────────────────────────────
@@ -1041,7 +1065,7 @@ class _GoalRingPainter extends CustomPainter {
       center,
       r,
       Paint()
-        ..color = goal.color.withOpacity(0.13)
+        ..color = goal.color.withValues(alpha: 0.13)
         ..style = PaintingStyle.fill,
     );
     canvas.drawCircle(
@@ -1060,7 +1084,7 @@ class _GoalRingPainter extends CustomPainter {
       2 * math.pi,
       false,
       Paint()
-        ..color = goal.color.withOpacity(0.18)
+        ..color = goal.color.withValues(alpha: 0.18)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 4.5
         ..strokeCap = StrokeCap.round,
@@ -1121,22 +1145,22 @@ class _SubGoalNode extends StatelessWidget {
     final c = sc;
 
     final baseFill = done
-        ? c.accent.withOpacity(0.28)
+        ? c.accent.withValues(alpha: 0.28)
         : prog > 0
-            ? c.accent.withOpacity(0.12)
+            ? c.accent.withValues(alpha: 0.12)
             : c.surface;
     final fill = isHoverTarget
-        ? Color.lerp(baseFill, c.accent.withOpacity(0.22), t) ?? baseFill
+        ? Color.lerp(baseFill, c.accent.withValues(alpha: 0.22), t) ?? baseFill
         : baseFill;
 
     final borderColor =
-        (dragging || isHoverTarget) ? c.accent : (done ? c.accent : prog > 0 ? c.accent.withOpacity(0.5) : c.border);
+        (dragging || isHoverTarget) ? c.accent : (done ? c.accent : prog > 0 ? c.accent.withValues(alpha: 0.5) : c.border);
     final borderWidth = dragging ? 2.5 : (isHoverTarget ? 1.5 + t * 1.5 : 1.5);
 
     final shadow = dragging
-        ? [BoxShadow(color: c.accent.withOpacity(0.3), blurRadius: 14, spreadRadius: 2)]
+        ? [BoxShadow(color: c.accent.withValues(alpha: 0.3), blurRadius: 14, spreadRadius: 2)]
         : isHoverTarget
-            ? [BoxShadow(color: c.accent.withOpacity(0.15 + t * 0.15), blurRadius: 14)]
+            ? [BoxShadow(color: c.accent.withValues(alpha: 0.15 + t * 0.15), blurRadius: 14)]
             : null;
 
     final completedTasks = sg.tasks.where((t) => t.isCompleted).length;
@@ -1201,7 +1225,7 @@ class _SubGoalNode extends StatelessWidget {
                     child: LinearProgressIndicator(
                       value: prog / 100,
                       backgroundColor: Colors.transparent,
-                      valueColor: AlwaysStoppedAnimation<Color>(c.accent.withOpacity(0.55)),
+                      valueColor: AlwaysStoppedAnimation<Color>(c.accent.withValues(alpha: 0.55)),
                       minHeight: 4,
                     ),
                   ),
@@ -1241,8 +1265,8 @@ class _TaskNode extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = sc;
     final alpha = switch (task.weight) { 5 => 0.27, 3 => 0.16, _ => 0.08 };
-    final fill = c.accent.withOpacity(task.isCompleted ? alpha + 0.05 : alpha);
-    final border = task.isCompleted ? c.accent : c.accent.withOpacity(0.3 + task.weight * 0.06);
+    final fill = c.accent.withValues(alpha: task.isCompleted ? alpha + 0.05 : alpha);
+    final border = task.isCompleted ? c.accent : c.accent.withValues(alpha: 0.3 + task.weight * 0.06);
 
     return Container(
       decoration: BoxDecoration(
@@ -1250,7 +1274,7 @@ class _TaskNode extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: dragging ? c.accent : border, width: dragging ? 2.5 : 1.5),
         boxShadow: dragging
-            ? [BoxShadow(color: c.accent.withOpacity(0.3), blurRadius: 14, spreadRadius: 2)]
+            ? [BoxShadow(color: c.accent.withValues(alpha: 0.3), blurRadius: 14, spreadRadius: 2)]
             : null,
       ),
       child: Stack(
@@ -1305,7 +1329,7 @@ class _MilestoneNode extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = sc;
     final sec = c.accentSecondary;
-    final fill = ms.isCompleted ? sec.withOpacity(0.35) : sec.withOpacity(0.14);
+    final fill = ms.isCompleted ? sec.withValues(alpha: 0.35) : sec.withValues(alpha: 0.14);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1321,7 +1345,7 @@ class _MilestoneNode extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: sec, width: dragging ? 2.5 : 2.0),
               boxShadow: dragging
-                  ? [BoxShadow(color: sec.withOpacity(0.3), blurRadius: 10)]
+                  ? [BoxShadow(color: sec.withValues(alpha: 0.3), blurRadius: 10)]
                   : null,
             ),
             child: Center(
@@ -1350,7 +1374,7 @@ class _MilestoneNode extends StatelessWidget {
         if (ms.targetDate != null)
           Text(
             '${ms.targetDate!.day}.${ms.targetDate!.month.toString().padLeft(2, '0')}',
-            style: TextStyle(color: c.textSecondary.withOpacity(0.6), fontSize: 7),
+            style: TextStyle(color: c.textSecondary.withValues(alpha: 0.6), fontSize: 7),
           ),
       ],
     );
@@ -1372,11 +1396,11 @@ class _HabitLinkNode extends StatelessWidget {
       width: 42,
       height: 42,
       decoration: BoxDecoration(
-        color: c.dp.withOpacity(0.14),
+        color: c.dp.withValues(alpha: 0.14),
         shape: BoxShape.circle,
         border: Border.all(color: c.dp, width: dragging ? 2.0 : 1.5),
         boxShadow: dragging
-            ? [BoxShadow(color: c.dp.withOpacity(0.28), blurRadius: 8)]
+            ? [BoxShadow(color: c.dp.withValues(alpha: 0.28), blurRadius: 8)]
             : null,
       ),
       child: Icon(Icons.link, size: 16, color: c.dp),
@@ -1707,7 +1731,7 @@ class _TaskSheet extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: c.accent.withOpacity(0.14),
+                  color: c.accent.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text('×${task.weight}',
@@ -1880,9 +1904,9 @@ class _ActionBtn extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
+          color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.22)),
+          border: Border.all(color: color.withValues(alpha: 0.22)),
         ),
         child: Row(
           children: [
