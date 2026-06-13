@@ -9,6 +9,7 @@ import 'mission_accomplished_screen.dart';
 import 'goal_stats_screen.dart';
 import 'war_room_screen.dart';
 import 'reminder_settings_screen.dart';
+import '../widgets/momentum_chart.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -554,6 +555,7 @@ class _GoalCard extends ConsumerWidget {
                                 size: 12, color: Color(0xFFF4C430)),
                           ],
                           const Spacer(),
+                          if (!fatigued) _MomentumIndicator(goal: goal, sc: sc),
                           if (fatigued)
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -718,6 +720,50 @@ class _GoalCard extends ConsumerWidget {
 }
 
 // ─── Small widgets ────────────────────────────────────────────────────────────
+
+/// Compact ↗/→/↘ momentum chip on a goal card. Reads local-only analytics so
+/// rendering a long goal list stays cheap. Hidden until there is enough data.
+class _MomentumIndicator extends ConsumerWidget {
+  const _MomentumIndicator({required this.goal, required this.sc});
+
+  final Goal goal;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (goal.status != 'active') return const SizedBox.shrink();
+    final stateAsync = ref.watch(goalMomentumStateProvider(goal.id));
+    final state = stateAsync.valueOrNull;
+    if (state == null || state == MomentumState.noData) {
+      return const SizedBox.shrink();
+    }
+    final d = momentumDisplay(state, sc);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: d.color.withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: d.color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(d.icon, color: d.color, size: 11),
+          const SizedBox(width: 3),
+          Text(
+            d.label,
+            style: TextStyle(
+              color: d.color,
+              fontSize: 8,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _StatusChip extends StatelessWidget {
   const _StatusChip({required this.status, required this.sc});

@@ -8,6 +8,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:uuid/uuid.dart';
 import '../local/app_database.dart';
 import '../models/planning.dart';
+import '../models/goal_analytics.dart';
 import '../models/goal_collaborator.dart';
 import '../models/public_profile.dart';
 import '../models/mission_medal.dart';
@@ -141,7 +142,76 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final s = await _load();
     // Re-arm local reminders from fresh state (fire-and-forget, never blocks UI).
     unawaited(_syncReminders(s));
+    // Capture a daily progress snapshot per active goal (fire-and-forget).
+    unawaited(_captureDailySnapshots(s));
     return s;
+  }
+
+  // ── Momentum snapshots ──────────────────────────────────────────────────────
+
+  /// Records one progress snapshot per active goal per day. Cheap and enough
+  /// to build velocity/projection trends (see goal_analytics.dart). Skips goals
+  /// that already have a snapshot for today.
+  Future<void> _captureDailySnapshots(PlanningState s) async {
+    final client = Supabase.instance.client;
+    final session = client.auth.currentSession;
+    if (session == null) return;
+    final userId = session.user.id;
+    final db = ref.read(appDatabaseProvider);
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final dayKeyMs = today.millisecondsSinceEpoch;
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+
+    for (final goal in s.activeGoals) {
+      // Only capture for goals the current user owns (avoid duplicate rows from
+      // multiple collaborators racing on a shared goal).
+      if (goal.userId != userId) continue;
+      try {
+        if (await db.hasGoalSnapshotForDay(goal.id, dayKeyMs)) continue;
+
+        final id = _uuid.v4();
+        final snapshot = GoalProgressSnapshot(
+          id: id,
+          goalId: goal.id,
+          userId: userId,
+          progress: goalProgress(goal),
+          completedTasks: goal.completedTasks,
+          totalTasks: goal.totalTasks,
+          capturedAt: now,
+        );
+
+        await db.upsertGoalSnapshot(LocalGoalProgressSnapshotsCompanion(
+          id: Value(id),
+          goalId: Value(goal.id),
+          userId: Value(userId),
+          progress: Value(snapshot.progress),
+          completedTasks: Value(snapshot.completedTasks),
+          totalTasks: Value(snapshot.totalTasks),
+          capturedAtMs: Value(now.millisecondsSinceEpoch),
+          dayKeyMs: Value(dayKeyMs),
+          synced: const Value(false),
+        ));
+
+        if (isOnline) {
+          try {
+            await client
+                .from('goal_progress_snapshots')
+                .insert(snapshot.toInsertJson());
+            await db.markGoalSnapshotSynced(id);
+          } catch (_) {
+            await db.enqueueSyncOp(
+                'insert_goal_snapshot', jsonEncode(snapshot.toInsertJson()));
+          }
+        } else {
+          await db.enqueueSyncOp(
+              'insert_goal_snapshot', jsonEncode(snapshot.toInsertJson()));
+        }
+      } catch (_) {
+        // Snapshots are best-effort; never let them break module load.
+      }
+    }
   }
 
   // ── Notification helpers ────────────────────────────────────────────────────

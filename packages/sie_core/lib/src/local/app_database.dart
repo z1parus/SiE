@@ -191,6 +191,22 @@ class LocalMilestoneLogs extends Table {
   @override Set<Column> get primaryKey => {id};
 }
 
+@DataClassName('LocalGoalProgressSnapshot')
+class LocalGoalProgressSnapshots extends Table {
+  TextColumn get id             => text()();
+  TextColumn get goalId         => text()();
+  TextColumn get userId         => text()();
+  RealColumn get progress       => real()();
+  IntColumn  get completedTasks => integer().withDefault(const Constant(0))();
+  IntColumn  get totalTasks     => integer().withDefault(const Constant(0))();
+  IntColumn  get capturedAtMs   => integer()();
+  // dayKey = capturedAt floored to local midnight (ms). Used to keep one
+  // snapshot per goal per day (idempotent same-day re-capture).
+  IntColumn  get dayKeyMs       => integer()();
+  BoolColumn get synced         => boolean().withDefault(const Constant(false))();
+  @override Set<Column> get primaryKey => {id};
+}
+
 @DataClassName('LocalPlanningTask')
 class LocalPlanningTasks extends Table {
   TextColumn get id             => text()();
@@ -319,12 +335,13 @@ class LocalMapPositions extends Table {
   LocalMeditationPresets,
   LocalMapPositions,
   LocalMilestoneLogs,
+  LocalGoalProgressSnapshots,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 19;
+  int get schemaVersion => 20;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -338,6 +355,7 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS idx_links_habit ON local_goal_habit_links(habit_id)',
       'CREATE INDEX IF NOT EXISTS idx_goals_user ON local_goals(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_habit_logs_user ON local_habit_logs(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_snapshots_goal ON local_goal_progress_snapshots(goal_id, captured_at_ms)',
     ];
     for (final s in stmts) {
       await m.issueCustomQuery(s, const []);
@@ -462,6 +480,13 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(localMilestones, localMilestones.currentValue);
         await m.addColumn(localMilestones, localMilestones.direction);
         await m.createTable(localMilestoneLogs);
+      }
+      if (from < 20) {
+        await m.createTable(localGoalProgressSnapshots);
+        await m.issueCustomQuery(
+            'CREATE INDEX IF NOT EXISTS idx_snapshots_goal '
+            'ON local_goal_progress_snapshots(goal_id, captured_at_ms)',
+            const []);
       }
     },
   );
@@ -970,6 +995,39 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> deleteMilestoneLogLocally(String id) =>
       (delete(localMilestoneLogs)..where((t) => t.id.equals(id))).go();
+
+  // ── Goal Progress Snapshots ───────────────────────────────────────────────
+
+  Future<void> upsertGoalSnapshot(LocalGoalProgressSnapshotsCompanion row) =>
+      into(localGoalProgressSnapshots).insertOnConflictUpdate(row);
+
+  /// Whether a snapshot already exists for [goalId] on the local day [dayKeyMs].
+  Future<bool> hasGoalSnapshotForDay(String goalId, int dayKeyMs) async {
+    final row = await (select(localGoalProgressSnapshots)
+          ..where((t) =>
+              t.goalId.equals(goalId) & t.dayKeyMs.equals(dayKeyMs))
+          ..limit(1))
+        .getSingleOrNull();
+    return row != null;
+  }
+
+  Future<List<LocalGoalProgressSnapshot>> snapshotsForGoal(String goalId) =>
+      (select(localGoalProgressSnapshots)
+            ..where((t) => t.goalId.equals(goalId))
+            ..orderBy([(t) => OrderingTerm(expression: t.capturedAtMs)]))
+          .get();
+
+  Future<List<LocalGoalProgressSnapshot>> unsyncedGoalSnapshots(
+          String userId) =>
+      (select(localGoalProgressSnapshots)
+            ..where((t) =>
+                t.userId.equals(userId) & t.synced.equals(false)))
+          .get();
+
+  Future<void> markGoalSnapshotSynced(String id) =>
+      (update(localGoalProgressSnapshots)..where((t) => t.id.equals(id)))
+          .write(const LocalGoalProgressSnapshotsCompanion(
+              synced: Value(true)));
 
   // ── Mission Medals ────────────────────────────────────────────────────────
 

@@ -254,6 +254,17 @@ class SyncService {
                 .from('milestones')
                 .delete()
                 .eq('id', payload['id'] as String);
+          case 'insert_goal_snapshot':
+            await client.from('goal_progress_snapshots').upsert({
+              'id': payload['id'],
+              'goal_id': payload['goal_id'],
+              'user_id': payload['user_id'],
+              'progress': payload['progress'],
+              'completed_tasks': payload['completed_tasks'],
+              'total_tasks': payload['total_tasks'],
+              'captured_at': payload['captured_at'],
+            }, onConflict: 'id');
+            await _db.markGoalSnapshotSynced(payload['id'] as String);
           case 'insert_habit_link':
             await client.from('goal_habit_links').upsert({
               'id': payload['id'],
