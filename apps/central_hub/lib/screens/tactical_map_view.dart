@@ -33,6 +33,12 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   // change during a drag (only positions move).
   List<SubGoal> _flat = const [];
 
+  // Ticked on every position/hover change during a drag. The dynamic layer
+  // (edges + nodes) listens to this, so dragging repaints ONLY that subtree —
+  // the root build() (InteractiveViewer, provider .select, grid) is not called.
+  final ValueNotifier<int> _repaint = ValueNotifier<int>(0);
+  void _bumpRepaint() => _repaint.value++;
+
   static const double _cx = 2400.0;
   static const double _cs = 4800.0;
 
@@ -53,6 +59,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     _saveTimer?.cancel();
     _hoverAnim.dispose();
     _tc.dispose();
+    _repaint.dispose();
     super.dispose();
   }
 
@@ -317,7 +324,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
 
   void _setHoverTarget(String? id) {
     if (id == _hoverTargetId) return;
-    setState(() => _hoverTargetId = id);
+    _hoverTargetId = id; // no setState — dynamic layer repaints via _bumpRepaint
     if (id != null) {
       HapticFeedback.selectionClick();
       _hoverAnim
@@ -326,6 +333,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     } else {
       _hoverAnim.reverse();
     }
+    _bumpRepaint();
   }
 
   String? _nearestSubGoalFor(String draggingId, Goal goal,
@@ -567,33 +575,38 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
         : null;
     bool isHidden(String id) => visibleIds != null && !visibleIds.contains(id);
 
-    final goalPos = _positions[goal.id] ?? Offset.zero;
-
-    final edges = <_Edge>[];
-    void addSubGoalEdges(SubGoal sg, Offset parentPos, _EType edgeType) {
-      final sgPos = _positions[sg.id];
-      if (sgPos == null) return;
-      edges.add(_Edge(parentPos, sgPos, edgeType, fogHidden: isHidden(sg.id)));
-      for (final t in sg.tasks) {
-        final tp = _positions[t.id];
-        if (tp != null) {
-          edges.add(_Edge(sgPos, tp, _EType.subTask, fogHidden: isHidden(sg.id)));
+    // Recomputed every frame the dynamic layer rebuilds (cheap O(n)); kept as a
+    // closure so the ValueListenableBuilder can rebuild edges from live positions
+    // without re-running the whole build().
+    List<_Edge> buildEdges() {
+      final goalPos = _positions[goal.id] ?? Offset.zero;
+      final edges = <_Edge>[];
+      void addSubGoalEdges(SubGoal sg, Offset parentPos, _EType edgeType) {
+        final sgPos = _positions[sg.id];
+        if (sgPos == null) return;
+        edges.add(_Edge(parentPos, sgPos, edgeType, fogHidden: isHidden(sg.id)));
+        for (final t in sg.tasks) {
+          final tp = _positions[t.id];
+          if (tp != null) {
+            edges.add(_Edge(sgPos, tp, _EType.subTask, fogHidden: isHidden(sg.id)));
+          }
+        }
+        for (final child in sg.children) {
+          addSubGoalEdges(child, sgPos, _EType.subSub);
         }
       }
-      for (final child in sg.children) {
-        addSubGoalEdges(child, sgPos, _EType.subSub);
+      for (final sg in goal.subGoals) {
+        addSubGoalEdges(sg, goalPos, _EType.goalSub);
       }
-    }
-    for (final sg in goal.subGoals) {
-      addSubGoalEdges(sg, goalPos, _EType.goalSub);
-    }
-    for (final ms in goal.milestones) {
-      final mp = _positions[ms.id];
-      if (mp != null) edges.add(_Edge(goalPos, mp, _EType.goalMs));
-    }
-    for (final l in goal.habitLinks) {
-      final lp = _positions[l.id];
-      if (lp != null) edges.add(_Edge(goalPos, lp, _EType.goalHabit));
+      for (final ms in goal.milestones) {
+        final mp = _positions[ms.id];
+        if (mp != null) edges.add(_Edge(goalPos, mp, _EType.goalMs));
+      }
+      for (final l in goal.habitLinks) {
+        final lp = _positions[l.id];
+        if (lp != null) edges.add(_Edge(goalPos, lp, _EType.goalHabit));
+      }
+      return edges;
     }
 
     return Stack(
@@ -618,39 +631,59 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                 child: CustomPaint(painter: _GridPainter(c)),
               ),
             ),
-            // Edges — isolated repaint boundary (see _EdgePainter.shouldRepaint)
+            // Dynamic layer: edges + all draggable nodes. Listens to _repaint so a
+            // drag rebuilds ONLY this subtree (root build is not called mid-drag).
             Positioned.fill(
               child: RepaintBoundary(
-                child: CustomPaint(painter: _EdgePainter(edges, _cx, c)),
+                child: ValueListenableBuilder<int>(
+                  valueListenable: _repaint,
+                  builder: (_, _, _) {
+                    final edges = buildEdges();
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        // Edges
+                        Positioned.fill(
+                          child: CustomPaint(
+                              painter: _EdgePainter(edges, _cx, c)),
+                        ),
+                        // Habit links
+                        for (final l in goal.habitLinks)
+                          _posNode(
+                            l.id,
+                            42,
+                            42,
+                            goal,
+                            _HabitLinkNode(
+                                link: l, sc: c, dragging: _draggingId == l.id),
+                          ),
+                        // Milestones
+                        for (final ms in goal.milestones)
+                          _posNode(
+                            ms.id,
+                            80,
+                            80,
+                            goal,
+                            _MilestoneNode(
+                                ms: ms, sc: c, dragging: _draggingId == ms.id),
+                          ),
+                        // Tasks and nested sub-goals (all depths)
+                        for (final sg in _flat) ...[
+                          for (final t in sg.tasks)
+                            _taskPosNode(t, sg.id, goal, c,
+                                hidden: isHidden(sg.id)),
+                          _subGoalPosNode(sg, goal, c,
+                              hidden: isHidden(sg.id),
+                              onHiddenTap: () =>
+                                  setState(() => _scoutedMapIds.add(sg.id))),
+                        ],
+                      ],
+                    );
+                  },
+                ),
               ),
             ),
-            // Habit links
-            for (final l in goal.habitLinks)
-              _posNode(
-                l.id,
-                42,
-                42,
-                goal,
-                _HabitLinkNode(link: l, sc: c, dragging: _draggingId == l.id),
-              ),
-            // Milestones
-            for (final ms in goal.milestones)
-              _posNode(
-                ms.id,
-                80,
-                80,
-                goal,
-                _MilestoneNode(ms: ms, sc: c, dragging: _draggingId == ms.id),
-              ),
-            // Tasks and nested sub-goals (all depths)
-            for (final sg in _flat) ...[
-              for (final t in sg.tasks)
-                _taskPosNode(t, sg.id, goal, c, hidden: isHidden(sg.id)),
-              _subGoalPosNode(sg, goal, c,
-                  hidden: isHidden(sg.id),
-                  onHiddenTap: () => setState(() => _scoutedMapIds.add(sg.id))),
-            ],
-            // Goal (fixed, topmost)
+            // Goal (fixed, topmost) — never moves, kept out of the dynamic layer
             Positioned(
               left: _cx - 80,
               top: _cx - 80,
@@ -727,7 +760,9 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
           ? null
           : (d) {
               final scale = _tc.value.getMaxScaleOnAxis();
-              setState(() => _positions[task.id] = _positions[task.id]! + d.delta / scale);
+              // Mutate + bump (no setState) → only the dynamic layer repaints.
+              _positions[task.id] = _positions[task.id]! + d.delta / scale;
+              _bumpRepaint();
               _setHoverTarget(_nearestSubGoalFor(task.id, goal, exclude: {task.id}));
             },
       onPanEnd: (hidden || !widget.canEdit)
@@ -744,6 +779,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     );
     if (hidden) node = Opacity(opacity: 0.25, child: node);
     return Positioned(
+      key: ValueKey(task.id),
       left: _cx + pos.dx - w / 2,
       top: _cx + pos.dy - h / 2,
       width: w,
@@ -797,22 +833,21 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
           : (d) {
               final scale = _tc.value.getMaxScaleOnAxis();
               final delta = d.delta / scale;
-              setState(() {
-                _positions[sg.id] = _positions[sg.id]! + delta;
-                // Move own tasks + all descendants (sub-goals and their tasks) with the same delta
-                void moveFamily(SubGoal s) {
-                  for (final t in s.tasks) {
-                    final p = _positions[t.id];
-                    if (p != null) _positions[t.id] = p + delta;
-                  }
-                  for (final child in s.children) {
-                    final p = _positions[child.id];
-                    if (p != null) _positions[child.id] = p + delta;
-                    moveFamily(child);
-                  }
+              _positions[sg.id] = _positions[sg.id]! + delta;
+              // Move own tasks + all descendants (sub-goals and their tasks) with the same delta
+              void moveFamily(SubGoal s) {
+                for (final t in s.tasks) {
+                  final p = _positions[t.id];
+                  if (p != null) _positions[t.id] = p + delta;
                 }
-                moveFamily(sg);
-              });
+                for (final child in s.children) {
+                  final p = _positions[child.id];
+                  if (p != null) _positions[child.id] = p + delta;
+                  moveFamily(child);
+                }
+              }
+              moveFamily(sg);
+              _bumpRepaint();
               final excluded = {sg.id, ..._descendantIds(sg.id)};
               _setHoverTarget(_nearestSubGoalFor(sg.id, goal, exclude: excluded));
             },
@@ -837,6 +872,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     );
     if (hidden) node = Opacity(opacity: 0.25, child: node);
     return Positioned(
+      key: ValueKey(sg.id),
       left: _cx + pos.dx - w / 2,
       top: _cx + pos.dy - h / 2,
       width: w,
@@ -876,7 +912,8 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
           ? null
           : (d) {
               final scale = _tc.value.getMaxScaleOnAxis();
-              setState(() => _positions[id] = _positions[id]! + d.delta / scale);
+              _positions[id] = _positions[id]! + d.delta / scale;
+              _bumpRepaint();
             },
       onPanEnd: (hidden || !widget.canEdit)
           ? null
@@ -890,6 +927,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     );
     if (hidden) inner = Opacity(opacity: 0.25, child: inner);
     return Positioned(
+      key: ValueKey(id),
       left: _cx + pos.dx - w / 2,
       top: _cx + pos.dy - h / 2,
       width: w,

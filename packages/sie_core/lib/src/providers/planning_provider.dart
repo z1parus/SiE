@@ -18,6 +18,13 @@ import 'user_profile_provider.dart';
 
 const _uuid = Uuid();
 
+/// Above this many map-position entries, JSON encoding is offloaded to a
+/// background isolate via [compute] to keep the UI thread free.
+const _kPositionsComputeThreshold = 120;
+
+/// Top-level so it can be sent to a background isolate by [compute].
+String _encodeJson(Object? data) => jsonEncode(data);
+
 // ── Sub-goal tree helpers ─────────────────────────────────────────────────────
 
 List<SubGoal> _updateSubGoalInTree(
@@ -1520,11 +1527,16 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
   Future<void> saveMapPositions(String goalId, Map<String, Offset> positions) async {
     final posJson = positionsToJson(positions);
+    // Large maps: encode off the UI thread (isolate spawn cost is worth it only
+    // past the threshold; small maps encode inline to avoid the overhead).
+    final heavy = positions.length > _kPositionsComputeThreshold;
+    Future<String> encode(Object? data) =>
+        heavy ? compute(_encodeJson, data) : Future.value(jsonEncode(data));
 
     _updateGoalInState(goalId, (g) => g.copyWith(mapPositions: positions));
 
     final db = ref.read(appDatabaseProvider);
-    await db.updateGoalMapPositions(goalId, jsonEncode(posJson));
+    await db.updateGoalMapPositions(goalId, await encode(posJson));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) {
@@ -1537,6 +1549,6 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       } catch (_) {}
     }
     await db.enqueueSyncOp('save_map_positions',
-        jsonEncode({'id': goalId, 'map_positions': posJson}));
+        await encode({'id': goalId, 'map_positions': posJson}));
   }
 }
