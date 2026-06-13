@@ -79,6 +79,60 @@ final planningProvider =
   PlanningNotifier.new,
 );
 
+bool _isMetricAchieved(Milestone m) {
+  if (!m.isMetric) return false;
+  final current = m.currentValue;
+  final target = m.targetValue;
+  if (current == null || target == null) return false;
+  return m.direction == 'up' ? current >= target : current <= target;
+}
+
+// Lazily loaded per-milestone log list.  Used by sparkline + history screen.
+final milestoneLogsProvider = FutureProvider.autoDispose
+    .family<List<MilestoneLog>, String>((ref, milestoneId) async {
+  final client = Supabase.instance.client;
+  final session = client.auth.currentSession;
+  if (session == null) return [];
+
+  final db = ref.read(appDatabaseProvider);
+  final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+
+  if (isOnline) {
+    try {
+      final raw = await client
+          .from('milestone_logs')
+          .select()
+          .eq('milestone_id', milestoneId)
+          .order('recorded_at', ascending: true);
+      final logs = (raw as List)
+          .map((r) => MilestoneLog.fromJson(r as Map<String, dynamic>))
+          .toList();
+      for (final log in logs) {
+        await db.insertMilestoneLog(LocalMilestoneLogsCompanion(
+          id: Value(log.id),
+          milestoneId: Value(log.milestoneId),
+          userId: Value(log.userId),
+          value: Value(log.value),
+          recordedAtMs: Value(log.recordedAt.millisecondsSinceEpoch),
+          synced: const Value(true),
+        ));
+      }
+      return logs;
+    } catch (_) {}
+  }
+
+  final rows = await db.logsForMilestone(milestoneId);
+  return rows
+      .map((r) => MilestoneLog(
+            id: r.id,
+            milestoneId: r.milestoneId,
+            userId: r.userId,
+            value: r.value,
+            recordedAt: DateTime.fromMillisecondsSinceEpoch(r.recordedAtMs),
+          ))
+      .toList();
+});
+
 class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
   @override
   Future<PlanningState> build() async {
@@ -398,6 +452,12 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             isCompleted: Value(m.isCompleted),
             synced: const Value(true),
             createdAtMs: Value(m.createdAt.millisecondsSinceEpoch),
+            kind: Value(m.kind),
+            unit: Value(m.unit),
+            startValue: Value(m.startValue),
+            targetValue: Value(m.targetValue),
+            currentValue: Value(m.currentValue),
+            direction: Value(m.direction),
           ));
         }
       }
@@ -485,6 +545,12 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             : null,
         isCompleted: rm.isCompleted,
         createdAt: DateTime.fromMillisecondsSinceEpoch(rm.createdAtMs),
+        kind: rm.kind,
+        unit: rm.unit,
+        startValue: rm.startValue,
+        targetValue: rm.targetValue,
+        currentValue: rm.currentValue,
+        direction: rm.direction,
       ));
     }
 
@@ -1274,8 +1340,16 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
   // ── Add Milestone ─────────────────────────────────────────────────────────
 
-  Future<void> addMilestone(String goalId, String name,
-      {DateTime? targetDate}) async {
+  Future<void> addMilestone(
+    String goalId,
+    String name, {
+    DateTime? targetDate,
+    String kind = 'binary',
+    String? unit,
+    double? startValue,
+    double? targetValue,
+    String direction = 'up',
+  }) async {
     final client = Supabase.instance.client;
     final session = client.auth.currentSession;
     if (session == null) return;
@@ -1291,6 +1365,12 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       targetDate: targetDate,
       isCompleted: false,
       createdAt: now,
+      kind: kind,
+      unit: unit,
+      startValue: startValue,
+      targetValue: targetValue,
+      currentValue: startValue, // start at the beginning
+      direction: direction,
     );
 
     _updateGoalInState(goalId,
@@ -1317,6 +1397,12 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       targetDateMs: Value(targetDate?.millisecondsSinceEpoch),
       synced: const Value(false),
       createdAtMs: Value(now.millisecondsSinceEpoch),
+      kind: Value(kind),
+      unit: Value(unit),
+      startValue: Value(startValue),
+      targetValue: Value(targetValue),
+      currentValue: Value(startValue),
+      direction: Value(direction),
     ));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
@@ -1326,7 +1412,13 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           'id': id,
           'goal_id': goalId,
           'name': name,
-          'target_date': targetDate?.toIso8601String(),
+          if (targetDate != null) 'target_date': targetDate.toIso8601String(),
+          'kind': kind,
+          if (unit != null) 'unit': unit,
+          if (startValue != null) 'start_value': startValue,
+          if (targetValue != null) 'target_value': targetValue,
+          if (startValue != null) 'current_value': startValue,
+          'direction': direction,
           'created_at': now.toIso8601String(),
         });
         await db.upsertMilestone(
@@ -1334,8 +1426,133 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         return;
       } catch (_) {}
     }
-    await db.enqueueSyncOp('insert_milestone',
-        jsonEncode({'id': id, 'goal_id': goalId, 'name': name}));
+    await db.enqueueSyncOp('insert_milestone', jsonEncode({
+      'id': id,
+      'goal_id': goalId,
+      'name': name,
+      if (targetDate != null) 'target_date': targetDate.toIso8601String(),
+      'kind': kind,
+      if (unit != null) 'unit': unit,
+      if (startValue != null) 'start_value': startValue,
+      if (targetValue != null) 'target_value': targetValue,
+      if (startValue != null) 'current_value': startValue,
+      'direction': direction,
+    }));
+  }
+
+  // ── Add Milestone Log ─────────────────────────────────────────────────────
+
+  Future<void> addMilestoneLog(
+      String milestoneId, String goalId, double value) async {
+    final client = Supabase.instance.client;
+    final session = client.auth.currentSession;
+    if (session == null) return;
+
+    final db = ref.read(appDatabaseProvider);
+    final now = DateTime.now();
+    final id = _uuid.v4();
+    final userId = session.user.id;
+
+    // Capture milestone state before optimistic update to check completion.
+    final msBefore = _goalById(goalId)
+        ?.milestones
+        .where((m) => m.id == milestoneId)
+        .firstOrNull;
+
+    // Optimistic: update currentValue in state.
+    _updateGoalInState(goalId, (g) => g.copyWith(
+        milestones: g.milestones
+            .map((m) =>
+                m.id == milestoneId ? m.copyWith(currentValue: value) : m)
+            .toList()));
+
+    // Invalidate logs provider so sparkline/history reloads.
+    ref.invalidate(milestoneLogsProvider(milestoneId));
+
+    // Persist log locally.
+    await db.insertMilestoneLog(LocalMilestoneLogsCompanion(
+      id: Value(id),
+      milestoneId: Value(milestoneId),
+      userId: Value(userId),
+      value: Value(value),
+      recordedAtMs: Value(now.millisecondsSinceEpoch),
+      synced: const Value(false),
+    ));
+    await db.updateMilestoneCurrentValue(milestoneId, value);
+
+    // Auto-complete when threshold is crossed.
+    if (msBefore != null && !msBefore.isCompleted) {
+      final updated = msBefore.copyWith(currentValue: value);
+      if (_isMetricAchieved(updated)) {
+        await completeMilestone(milestoneId, goalId);
+      }
+    }
+
+    // Online sync.
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client.from('milestone_logs').insert({
+          'id': id,
+          'milestone_id': milestoneId,
+          'user_id': userId,
+          'value': value,
+          'recorded_at': now.toIso8601String(),
+        });
+        await client
+            .from('milestones')
+            .update({'current_value': value}).eq('id', milestoneId);
+        await db.insertMilestoneLog(LocalMilestoneLogsCompanion(
+            id: Value(id), synced: const Value(true)));
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('insert_milestone_log', jsonEncode({
+      'id': id,
+      'milestone_id': milestoneId,
+      'user_id': userId,
+      'value': value,
+      'recorded_at': now.toIso8601String(),
+    }));
+  }
+
+  // ── Delete Milestone Log ──────────────────────────────────────────────────
+
+  Future<void> deleteMilestoneLog(
+      String logId, String milestoneId, String goalId) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+
+    await db.deleteMilestoneLogLocally(logId);
+    ref.invalidate(milestoneLogsProvider(milestoneId));
+
+    // Recalculate currentValue from the remaining logs.
+    final remaining = await db.logsForMilestone(milestoneId);
+    final latest = remaining.isEmpty
+        ? null
+        : remaining.reduce(
+            (a, b) => a.recordedAtMs >= b.recordedAtMs ? a : b);
+    final newCurrent = latest?.value;
+
+    await db.updateMilestoneCurrentValue(milestoneId, newCurrent);
+    _updateGoalInState(goalId, (g) => g.copyWith(
+        milestones: g.milestones
+            .map((m) => m.id == milestoneId
+                ? m.copyWith(currentValue: newCurrent)
+                : m)
+            .toList()));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client.from('milestone_logs').delete().eq('id', logId);
+        await client.from('milestones').update(
+            {'current_value': newCurrent}).eq('id', milestoneId);
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('delete_milestone_log',
+        jsonEncode({'id': logId, 'milestone_id': milestoneId}));
   }
 
   // ── Delete Milestone ──────────────────────────────────────────────────────

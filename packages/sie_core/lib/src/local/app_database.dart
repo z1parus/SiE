@@ -170,6 +170,24 @@ class LocalMilestones extends Table {
   BoolColumn get synced         => boolean().withDefault(const Constant(false))();
   BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
   IntColumn  get createdAtMs    => integer()();
+  // Stage 4: metric milestones
+  TextColumn get kind           => text().withDefault(const Constant('binary'))();
+  TextColumn get unit           => text().nullable()();
+  RealColumn get startValue     => real().nullable()();
+  RealColumn get targetValue    => real().nullable()();
+  RealColumn get currentValue   => real().nullable()();
+  TextColumn get direction      => text().withDefault(const Constant('up'))();
+  @override Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('LocalMilestoneLog')
+class LocalMilestoneLogs extends Table {
+  TextColumn get id           => text()();
+  TextColumn get milestoneId  => text()();
+  TextColumn get userId       => text()();
+  RealColumn get value        => real()();
+  IntColumn  get recordedAtMs => integer()();
+  BoolColumn get synced       => boolean().withDefault(const Constant(false))();
   @override Set<Column> get primaryKey => {id};
 }
 
@@ -300,12 +318,13 @@ class LocalMapPositions extends Table {
   LocalMeditationSessions,
   LocalMeditationPresets,
   LocalMapPositions,
+  LocalMilestoneLogs,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 18;
+  int get schemaVersion => 19;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -434,6 +453,15 @@ class AppDatabase extends _$AppDatabase {
             localPlanningTasks, localPlanningTasks.recurrenceUntilMs);
         await m.addColumn(
             localPlanningTasks, localPlanningTasks.recurrenceParentId);
+      }
+      if (from < 19) {
+        await m.addColumn(localMilestones, localMilestones.kind);
+        await m.addColumn(localMilestones, localMilestones.unit);
+        await m.addColumn(localMilestones, localMilestones.startValue);
+        await m.addColumn(localMilestones, localMilestones.targetValue);
+        await m.addColumn(localMilestones, localMilestones.currentValue);
+        await m.addColumn(localMilestones, localMilestones.direction);
+        await m.createTable(localMilestoneLogs);
       }
     },
   );
@@ -921,6 +949,27 @@ class AppDatabase extends _$AppDatabase {
 
   Future<LocalMilestone?> getMilestone(String id) =>
       (select(localMilestones)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  Future<void> updateMilestoneCurrentValue(String milestoneId, double? value) =>
+      (update(localMilestones)..where((t) => t.id.equals(milestoneId)))
+          .write(LocalMilestonesCompanion(
+            currentValue: Value(value),
+            synced: const Value(false),
+          ));
+
+  // ── Milestone Logs ────────────────────────────────────────────────────────
+
+  Future<void> insertMilestoneLog(LocalMilestoneLogsCompanion row) =>
+      into(localMilestoneLogs).insertOnConflictUpdate(row);
+
+  Future<List<LocalMilestoneLog>> logsForMilestone(String milestoneId) =>
+      (select(localMilestoneLogs)
+            ..where((t) => t.milestoneId.equals(milestoneId))
+            ..orderBy([(t) => OrderingTerm(expression: t.recordedAtMs)]))
+          .get();
+
+  Future<void> deleteMilestoneLogLocally(String id) =>
+      (delete(localMilestoneLogs)..where((t) => t.id.equals(id))).go();
 
   // ── Mission Medals ────────────────────────────────────────────────────────
 

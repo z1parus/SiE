@@ -252,6 +252,12 @@ class Milestone {
     required this.isCompleted,
     required this.createdAt,
     this.targetDate,
+    this.kind = 'binary',
+    this.unit,
+    this.startValue,
+    this.targetValue,
+    this.currentValue,
+    this.direction = 'up',
   });
 
   final String id;
@@ -260,14 +266,34 @@ class Milestone {
   final DateTime? targetDate;
   final bool isCompleted;
   final DateTime createdAt;
+  // Stage 4: metric fields
+  final String kind;        // 'binary' | 'metric'
+  final String? unit;
+  final double? startValue;
+  final double? targetValue;
+  final double? currentValue;
+  final String direction;   // 'up' | 'down'
 
-  Milestone copyWith({bool? isCompleted}) => Milestone(
+  bool get isMetric => kind == 'metric';
+
+  Milestone copyWith({
+    bool? isCompleted,
+    Object? currentValue = _unset,
+  }) =>
+      Milestone(
         id: id,
         goalId: goalId,
         name: name,
         targetDate: targetDate,
         isCompleted: isCompleted ?? this.isCompleted,
         createdAt: createdAt,
+        kind: kind,
+        unit: unit,
+        startValue: startValue,
+        targetValue: targetValue,
+        currentValue:
+            currentValue == _unset ? this.currentValue : currentValue as double?,
+        direction: direction,
       );
 
   factory Milestone.fromJson(Map<String, dynamic> j) => Milestone(
@@ -279,7 +305,47 @@ class Milestone {
             : null,
         isCompleted: j['is_completed'] as bool? ?? false,
         createdAt: DateTime.parse(j['created_at'] as String),
+        kind: j['kind'] as String? ?? 'binary',
+        unit: j['unit'] as String?,
+        startValue: (j['start_value'] as num?)?.toDouble(),
+        targetValue: (j['target_value'] as num?)?.toDouble(),
+        currentValue: (j['current_value'] as num?)?.toDouble(),
+        direction: j['direction'] as String? ?? 'up',
       );
+}
+
+// ─── MilestoneLog ─────────────────────────────────────────────────────────────
+
+class MilestoneLog {
+  const MilestoneLog({
+    required this.id,
+    required this.milestoneId,
+    required this.userId,
+    required this.value,
+    required this.recordedAt,
+  });
+
+  final String id;
+  final String milestoneId;
+  final String userId;
+  final double value;
+  final DateTime recordedAt;
+
+  factory MilestoneLog.fromJson(Map<String, dynamic> j) => MilestoneLog(
+        id: j['id'] as String,
+        milestoneId: j['milestone_id'] as String,
+        userId: j['user_id'] as String,
+        value: (j['value'] as num).toDouble(),
+        recordedAt: DateTime.parse(j['recorded_at'] as String),
+      );
+
+  Map<String, dynamic> toInsertJson() => {
+        'id': id,
+        'milestone_id': milestoneId,
+        'user_id': userId,
+        'value': value,
+        'recorded_at': recordedAt.toIso8601String(),
+      };
 }
 
 // ─── GoalHabitLink ────────────────────────────────────────────────────────────
@@ -654,6 +720,19 @@ DateTime nextOccurrence(String rule, DateTime from) {
     default:
       return base.add(const Duration(days: 1));
   }
+}
+
+// Returns 0–1 progress for a metric milestone.
+// For binary milestones returns 1.0 if completed, else 0.0.
+double metricProgress(Milestone m) {
+  if (!m.isMetric) return m.isCompleted ? 1.0 : 0.0;
+  final start = m.startValue;
+  final target = m.targetValue;
+  final current = m.currentValue;
+  if (start == null || target == null || current == null) return 0.0;
+  final range = target - start;
+  if (range == 0) return current == target ? 1.0 : 0.0;
+  return ((current - start) / range).clamp(0.0, 1.0);
 }
 
 bool isGoalFatigued(Goal g) {

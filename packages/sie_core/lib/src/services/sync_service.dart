@@ -217,9 +217,31 @@ class SyncService {
               'name': payload['name'],
               if (payload['target_date'] != null) 'target_date': payload['target_date'],
               'is_completed': localMs?.isCompleted ?? false,
+              'kind': payload['kind'] ?? 'binary',
+              if (payload['unit'] != null) 'unit': payload['unit'],
+              if (payload['start_value'] != null) 'start_value': payload['start_value'],
+              if (payload['target_value'] != null) 'target_value': payload['target_value'],
+              if (payload['current_value'] != null) 'current_value': payload['current_value'],
+              'direction': payload['direction'] ?? 'up',
             }, onConflict: 'id');
             await _db.upsertMilestone(LocalMilestonesCompanion(
                 id: Value(msId), synced: const Value(true)));
+          case 'insert_milestone_log':
+            await client.from('milestone_logs').upsert({
+              'id': payload['id'],
+              'milestone_id': payload['milestone_id'],
+              'user_id': payload['user_id'],
+              'value': payload['value'],
+              'recorded_at': payload['recorded_at'],
+            }, onConflict: 'id');
+            await _db.insertMilestoneLog(LocalMilestoneLogsCompanion(
+                id: Value(payload['id'] as String),
+                synced: const Value(true)));
+          case 'delete_milestone_log':
+            await client
+                .from('milestone_logs')
+                .delete()
+                .eq('id', payload['id'] as String);
           case 'complete_milestone':
             await client
                 .from('milestones')

@@ -7,6 +7,8 @@ import 'tactical_map_view.dart';
 import 'mission_accomplished_screen.dart';
 import 'goal_stats_screen.dart';
 import 'ai_decomposition_sheet.dart';
+import 'milestone_metric_screen.dart';
+import '../widgets/sparkline.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -1240,6 +1242,8 @@ class _MilestoneTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final m = milestone;
+    if (m.isMetric) return _MetricMilestoneTile(milestone: m, goal: goal, sc: sc, canEdit: canEdit);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -1286,6 +1290,356 @@ class _MilestoneTile extends ConsumerWidget {
                   Icon(Icons.close, size: 14, color: sc.textSecondary),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _MetricMilestoneTile extends ConsumerWidget {
+  const _MetricMilestoneTile({
+    required this.milestone,
+    required this.goal,
+    required this.sc,
+    this.canEdit = true,
+  });
+
+  final Milestone milestone;
+  final Goal goal;
+  final SieColors sc;
+  final bool canEdit;
+
+  String _fmt(double v) {
+    if (v == v.truncateToDouble()) return v.toInt().toString();
+    return v.toStringAsFixed(1);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final m = milestone;
+    final logsAsync = ref.watch(milestoneLogsProvider(m.id));
+    final progress = metricProgress(m);
+    final pct = (progress * 100).round();
+    final unit = m.unit ?? '';
+
+    final currentStr = m.currentValue != null
+        ? '${_fmt(m.currentValue!)}${unit.isNotEmpty ? ' $unit' : ''}'
+        : '—';
+    final targetStr = m.targetValue != null
+        ? _fmt(m.targetValue!)
+        : '?';
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => MilestoneMetricScreen(
+                  milestone: m, goalId: goal.id))),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: sc.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: sc.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    m.isCompleted ? Icons.flag : Icons.flag_outlined,
+                    color: m.isCompleted ? sc.accent : sc.textSecondary,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      m.name,
+                      style: TextStyle(
+                        color: m.isCompleted
+                            ? sc.textSecondary
+                            : sc.textPrimary,
+                        fontSize: 14,
+                        decoration: m.isCompleted
+                            ? TextDecoration.lineThrough
+                            : null,
+                      ),
+                    ),
+                  ),
+                  // Sparkline
+                  logsAsync.when(
+                    loading: () => const SizedBox(width: 80, height: 28),
+                    error: (_, __) => const SizedBox(width: 80, height: 28),
+                    data: (logs) => logs.length >= 2
+                        ? Sparkline(
+                            values: logs.map((l) => l.value).toList(),
+                            color: m.isCompleted
+                                ? sc.success
+                                : sc.accentSecondary,
+                            width: 80,
+                            height: 28,
+                          )
+                        : const SizedBox(width: 80, height: 28),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            minHeight: 4,
+                            backgroundColor: sc.border,
+                            valueColor: AlwaysStoppedAnimation(
+                                m.isCompleted ? sc.success : sc.accent),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$currentStr / $targetStr${unit.isNotEmpty ? ' $unit' : ''} · $pct%',
+                          style: TextStyle(
+                              color: sc.textSecondary, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  if (canEdit && !m.isCompleted)
+                    GestureDetector(
+                      onTap: () {
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (_) => _LogMeasurementSheet(
+                              milestone: m, goalId: goal.id, sc: sc),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: sc.accent.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text('ЗАМЕР',
+                            style: TextStyle(
+                                color: sc.accent,
+                                fontSize: 10,
+                                letterSpacing: 1)),
+                      ),
+                    ),
+                  if (canEdit)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: GestureDetector(
+                        onTap: () => _confirmDeleteMilestone(
+                            context, ref, m.id, goal.id, sc),
+                        child: Icon(Icons.close,
+                            size: 14, color: sc.textSecondary),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Inline log sheet (reused from MilestoneMetricScreen context).
+class _LogMeasurementSheet extends ConsumerStatefulWidget {
+  const _LogMeasurementSheet(
+      {required this.milestone, required this.goalId, required this.sc});
+  final Milestone milestone;
+  final String goalId;
+  final SieColors sc;
+
+  @override
+  ConsumerState<_LogMeasurementSheet> createState() =>
+      _LogMeasurementSheetState();
+}
+
+class _LogMeasurementSheetState
+    extends ConsumerState<_LogMeasurementSheet> {
+  late final TextEditingController _ctrl;
+  double? _parsed;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.milestone.currentValue;
+    _ctrl = TextEditingController(
+        text: initial != null ? _fmtV(initial) : '');
+    _parsed = initial;
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  String _fmtV(double v) {
+    if (v == v.truncateToDouble()) return v.toInt().toString();
+    return v.toStringAsFixed(1);
+  }
+
+  void _applyDelta(double delta) {
+    final current = _parsed ?? widget.milestone.currentValue ?? 0;
+    final next = current + delta;
+    setState(() {
+      _parsed = next;
+      _ctrl.text = _fmtV(next);
+      _ctrl.selection = TextSelection.fromPosition(
+          TextPosition(offset: _ctrl.text.length));
+    });
+  }
+
+  void _onChanged(String s) {
+    setState(() => _parsed = double.tryParse(s.replaceAll(',', '.')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sc = widget.sc;
+    final ms = widget.milestone;
+    final unit = ms.unit ?? '';
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomInset),
+      decoration: BoxDecoration(
+        color: sc.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: sc.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('ВНЕСТИ ЗАМЕР',
+              style: TextStyle(
+                  color: sc.textSecondary,
+                  fontSize: 11,
+                  letterSpacing: 1.5)),
+          const SizedBox(height: 4),
+          Text(ms.name,
+              style: TextStyle(
+                  color: sc.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500)),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              _MeasureStepBtn(label: '−0.1', sc: sc, onTap: () => _applyDelta(-0.1)),
+              const SizedBox(width: 8),
+              _MeasureStepBtn(label: '−1', sc: sc, onTap: () => _applyDelta(-1)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _ctrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: sc.textPrimary,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w500),
+                  decoration: InputDecoration(
+                    suffixText: unit,
+                    suffixStyle:
+                        TextStyle(color: sc.textSecondary, fontSize: 14),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: sc.border)),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: sc.border)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: sc.accent)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 14),
+                  ),
+                  onChanged: _onChanged,
+                ),
+              ),
+              const SizedBox(width: 12),
+              _MeasureStepBtn(label: '+1', sc: sc, onTap: () => _applyDelta(1)),
+              const SizedBox(width: 8),
+              _MeasureStepBtn(label: '+0.1', sc: sc, onTap: () => _applyDelta(0.1)),
+            ],
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _parsed == null
+                  ? null
+                  : () {
+                      ref
+                          .read(planningProvider.notifier)
+                          .addMilestoneLog(ms.id, widget.goalId, _parsed!);
+                      SieHaptics.success();
+                      Navigator.pop(context);
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: sc.accent,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              child: const Text('СОХРАНИТЬ',
+                  style: TextStyle(
+                      letterSpacing: 1.5, fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MeasureStepBtn extends StatelessWidget {
+  const _MeasureStepBtn(
+      {required this.label, required this.sc, required this.onTap});
+  final String label;
+  final SieColors sc;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: sc.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: sc.border),
+        ),
+        child: Center(
+          child: Text(label,
+              style: TextStyle(
+                  color: sc.accent,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500)),
+        ),
       ),
     );
   }
@@ -2341,12 +2695,20 @@ class _AddMilestoneSheet extends ConsumerStatefulWidget {
 }
 
 class _AddMilestoneSheetState extends ConsumerState<_AddMilestoneSheet> {
-  final _ctrl = TextEditingController();
+  final _nameCtrl = TextEditingController();
+  final _unitCtrl = TextEditingController();
+  final _startCtrl = TextEditingController();
+  final _targetCtrl = TextEditingController();
   DateTime? _targetDate;
+  String _kind = 'binary'; // 'binary' | 'metric'
+  String _direction = 'up'; // 'up' | 'down'
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _nameCtrl.dispose();
+    _unitCtrl.dispose();
+    _startCtrl.dispose();
+    _targetCtrl.dispose();
     super.dispose();
   }
 
@@ -2363,7 +2725,71 @@ class _AddMilestoneSheetState extends ConsumerState<_AddMilestoneSheet> {
         children: [
           _SheetTitle('КОНТРОЛЬНАЯ ТОЧКА', sc),
           const SizedBox(height: 12),
-          _SheetTextField('Название точки', _ctrl, sc, autofocus: true),
+          _SheetTextField('Название точки', _nameCtrl, sc, autofocus: true),
+          const SizedBox(height: 16),
+
+          // Kind selector.
+          Row(
+            children: [
+              _KindChip(
+                label: 'Бинарная',
+                selected: _kind == 'binary',
+                sc: sc,
+                onTap: () => setState(() => _kind = 'binary'),
+              ),
+              const SizedBox(width: 8),
+              _KindChip(
+                label: 'Метрика',
+                selected: _kind == 'metric',
+                sc: sc,
+                onTap: () => setState(() => _kind = 'metric'),
+              ),
+            ],
+          ),
+
+          // Metric fields.
+          if (_kind == 'metric') ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _SheetTextField('Старт', _startCtrl, sc,
+                      keyboard: const TextInputType.numberWithOptions(decimal: true)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _SheetTextField('Цель', _targetCtrl, sc,
+                      keyboard: const TextInputType.numberWithOptions(decimal: true)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _SheetTextField('Ед. (кг, \$, км)', _unitCtrl, sc),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Text('Направление:',
+                    style: TextStyle(color: sc.textSecondary, fontSize: 12)),
+                const SizedBox(width: 12),
+                _KindChip(
+                  label: '↑ Увеличивать',
+                  selected: _direction == 'up',
+                  sc: sc,
+                  onTap: () => setState(() => _direction = 'up'),
+                ),
+                const SizedBox(width: 8),
+                _KindChip(
+                  label: '↓ Уменьшать',
+                  selected: _direction == 'down',
+                  sc: sc,
+                  onTap: () => setState(() => _direction = 'down'),
+                ),
+              ],
+            ),
+          ],
+
           const SizedBox(height: 16),
           GestureDetector(
             onTap: () async {
@@ -2408,16 +2834,65 @@ class _AddMilestoneSheetState extends ConsumerState<_AddMilestoneSheet> {
             label: 'ДОБАВИТЬ ТОЧКУ',
             sc: sc,
             onTap: () {
-              final name = _ctrl.text.trim();
+              final name = _nameCtrl.text.trim();
               if (name.isEmpty) return;
-              ref
-                  .read(planningProvider.notifier)
-                  .addMilestone(widget.goal.id, name,
-                      targetDate: _targetDate);
+              final startV =
+                  double.tryParse(_startCtrl.text.replaceAll(',', '.'));
+              final targetV =
+                  double.tryParse(_targetCtrl.text.replaceAll(',', '.'));
+              final unit = _unitCtrl.text.trim();
+              if (_kind == 'metric' && (startV == null || targetV == null)) {
+                return; // Require numeric fields for metric.
+              }
+              ref.read(planningProvider.notifier).addMilestone(
+                    widget.goal.id,
+                    name,
+                    targetDate: _targetDate,
+                    kind: _kind,
+                    unit: unit.isEmpty ? null : unit,
+                    startValue: startV,
+                    targetValue: targetV,
+                    direction: _direction,
+                  );
               Navigator.pop(context);
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _KindChip extends StatelessWidget {
+  const _KindChip(
+      {required this.label,
+      required this.selected,
+      required this.sc,
+      required this.onTap});
+  final String label;
+  final bool selected;
+  final SieColors sc;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? sc.accent.withOpacity(0.2) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: selected ? sc.accent : sc.border, width: 1),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+              color: selected ? sc.accent : sc.textSecondary,
+              fontSize: 12),
+        ),
       ),
     );
   }
@@ -2730,19 +3205,23 @@ class _SheetTitle extends StatelessWidget {
 
 class _SheetTextField extends StatelessWidget {
   const _SheetTextField(this.hint, this.ctrl, this.sc,
-      {this.autofocus = false});
+      {this.autofocus = false, this.keyboard});
 
   final String hint;
   final TextEditingController ctrl;
   final SieColors sc;
   final bool autofocus;
+  final TextInputType? keyboard;
 
   @override
   Widget build(BuildContext context) => TextField(
         controller: ctrl,
         autofocus: autofocus,
+        keyboardType: keyboard,
         style: TextStyle(color: sc.textPrimary, fontSize: 16),
-        textCapitalization: TextCapitalization.sentences,
+        textCapitalization: keyboard != null
+            ? TextCapitalization.none
+            : TextCapitalization.sentences,
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(color: sc.textSecondary, fontSize: 16),
