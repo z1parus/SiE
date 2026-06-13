@@ -32,6 +32,9 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   // Safe to reuse across drag handlers because the goal tree structure does not
   // change during a drag (only positions move).
   List<SubGoal> _flat = const [];
+  // Set during build() so _setHoverTarget (called from gesture callbacks) can
+  // check whether looping animations are allowed.
+  bool _motionEnabled = true;
 
   // Ticked on every position/hover change during a drag. The dynamic layer
   // (edges + nodes) listens to this, so dragging repaints ONLY that subtree —
@@ -327,11 +330,18 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     _hoverTargetId = id; // no setState — dynamic layer repaints via _bumpRepaint
     if (id != null) {
       HapticFeedback.selectionClick();
-      _hoverAnim
-        ..reset()
-        ..repeat(reverse: true);
+      _hoverAnim.reset();
+      if (_motionEnabled) {
+        _hoverAnim.repeat(reverse: true);
+      } else {
+        _hoverAnim.value = 1.0; // instant highlight, no loop
+      }
     } else {
-      _hoverAnim.reverse();
+      if (_motionEnabled) {
+        _hoverAnim.reverse();
+      } else {
+        _hoverAnim.value = 0.0;
+      }
     }
     _bumpRepaint();
   }
@@ -566,6 +576,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
 
     // Flatten the tree once per build; reused by drag handlers until next build.
     _flat = _flatSubGoals(goal.subGoals);
+    _motionEnabled = SieMotion.enabled(context);
 
     _ensurePositions(goal);
 

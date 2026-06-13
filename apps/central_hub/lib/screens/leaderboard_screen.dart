@@ -690,6 +690,8 @@ class _Avatar extends ConsumerWidget {
             ? Image.network(
                 avatarUrl!,
                 fit: BoxFit.cover,
+                cacheWidth: 76,
+                cacheHeight: 76,
                 errorBuilder: (_, _, _) => _Placeholder(size: size),
               )
             : _Placeholder(size: size),
@@ -964,7 +966,10 @@ class _WinnerRow extends StatelessWidget {
               ),
               child: ClipOval(
                 child: result.avatarUrl != null && result.avatarUrl!.isNotEmpty
-                    ? Image.network(result.avatarUrl!, fit: BoxFit.cover,
+                    ? Image.network(result.avatarUrl!,
+                        fit: BoxFit.cover,
+                        cacheWidth: 76,
+                        cacheHeight: 76,
                         errorBuilder: (_, _, _) => Icon(Icons.person,
                             color: c.textSecondary, size: 20))
                     : Icon(Icons.person, color: c.textSecondary, size: 20),

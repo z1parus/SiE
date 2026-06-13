@@ -1,3 +1,5 @@
+import 'dart:convert' show jsonDecode;
+import 'dart:ui' show Offset;
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -263,6 +265,17 @@ class LocalMeditationPresets extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+@DataClassName('LocalMapPosition')
+class LocalMapPositions extends Table {
+  TextColumn get goalId => text()();
+  TextColumn get nodeId => text()();
+  RealColumn get x      => real()();
+  RealColumn get y      => real()();
+
+  @override
+  Set<Column> get primaryKey => {goalId, nodeId};
+}
+
 // ── Database ───────────────────────────────────────────────────────────────
 
 @DriftDatabase(tables: [
@@ -282,12 +295,13 @@ class LocalMeditationPresets extends Table {
   LocalMissionMedals,
   LocalMeditationSessions,
   LocalMeditationPresets,
+  LocalMapPositions,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 17;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -370,6 +384,44 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 16) {
         await _createIndexes(m);
+      }
+      if (from < 17) {
+        await m.createTable(localMapPositions);
+        // Lazy migration: populate from JSON blobs where present.
+        // Each goal row's map_positions_json is read, parsed, and inserted into
+        // the new table. The JSON column is then cleared to free space.
+        final goals = await customSelect(
+          'SELECT id, map_positions_json FROM local_goals '
+          'WHERE map_positions_json IS NOT NULL AND map_positions_json != \'{}\'',
+          readsFrom: {localGoals},
+        ).get();
+        for (final row in goals) {
+          final id = row.read<String>('id');
+          final raw = row.readNullable<String>('map_positions_json');
+          if (raw == null || raw.isEmpty) continue;
+          try {
+            final map = jsonDecode(raw) as Map<String, dynamic>;
+            await batch((b) {
+              for (final entry in map.entries) {
+                final pos = entry.value as Map<String, dynamic>;
+                b.insert(
+                  localMapPositions,
+                  LocalMapPositionsCompanion(
+                    goalId: Value(id),
+                    nodeId: Value(entry.key),
+                    x: Value((pos['x'] as num).toDouble()),
+                    y: Value((pos['y'] as num).toDouble()),
+                  ),
+                  mode: InsertMode.insertOrReplace,
+                );
+              }
+            });
+          } catch (_) {}
+        }
+        await customUpdate(
+          'UPDATE local_goals SET map_positions_json = NULL',
+          updates: {localGoals},
+        );
       }
     },
   );
@@ -664,6 +716,46 @@ class AppDatabase extends _$AppDatabase {
         mapPositionsJson: Value(json),
         synced: const Value(false),
       ));
+
+  Future<void> upsertMapPositionsBatch(
+      String goalId, Map<String, Offset> positions) =>
+      batch((b) {
+        for (final e in positions.entries) {
+          b.insert(
+            localMapPositions,
+            LocalMapPositionsCompanion(
+              goalId: Value(goalId),
+              nodeId: Value(e.key),
+              x: Value(e.value.dx),
+              y: Value(e.value.dy),
+            ),
+            mode: InsertMode.insertOrReplace,
+          );
+        }
+      });
+
+  Future<Map<String, Offset>> mapPositionsForGoal(String goalId) async {
+    final rows = await (select(localMapPositions)
+          ..where((t) => t.goalId.equals(goalId)))
+        .get();
+    return {for (final r in rows) r.nodeId: Offset(r.x, r.y)};
+  }
+
+  Future<Map<String, Map<String, Offset>>> mapPositionsForGoals(
+      List<String> goalIds) async {
+    if (goalIds.isEmpty) return {};
+    final rows = await (select(localMapPositions)
+          ..where((t) => t.goalId.isIn(goalIds)))
+        .get();
+    final result = <String, Map<String, Offset>>{};
+    for (final r in rows) {
+      (result[r.goalId] ??= {})[r.nodeId] = Offset(r.x, r.y);
+    }
+    return result;
+  }
+
+  Future<void> deleteMapPositionsForGoal(String goalId) =>
+      (delete(localMapPositions)..where((t) => t.goalId.equals(goalId))).go();
 
   Future<void> updateSubGoalOrderIndex(String id, int idx) =>
       (update(localSubGoals)..where((t) => t.id.equals(id)))

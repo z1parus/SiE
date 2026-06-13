@@ -706,8 +706,9 @@ class _BranchCarouselCard extends ConsumerWidget {
       case 'breathing_practices':
         return 'PROTOCOL READY';
       case 'planning':
-        final planningState = ref.watch(planningProvider).valueOrNull;
-        final count = planningState?.activeGoals.length ?? 0;
+        final count = ref.watch(
+          planningProvider.select((s) => s.valueOrNull?.activeGoals.length ?? 0),
+        );
         return '$count ${count == 1 ? 'Mission' : 'Missions'}';
       default:
         return 'ACTIVE';

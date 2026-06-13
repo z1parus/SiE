@@ -264,9 +264,9 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         ? {for (final g in serverGoals) g.id: g}
         : <String, Goal>{};
     final rawGoals = await db.goalsForUser(userId);
-    if (rawGoals.isEmpty) return const PlanningState(goals: []);
+    if (rawGoals.isEmpty) return PlanningState(goals: const []);
 
-    // Batch-load every related table in one query each (5 total), then group in
+    // Batch-load every related table in one query each (6 total), then group in
     // memory — replaces the previous N+1 cascade (1 + goals + sub-goals queries).
     final goalIds = [for (final g in rawGoals) g.id];
     final rawSubsAll = await db.subGoalsForGoals(goalIds);
@@ -274,6 +274,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final rawTasksAll = await db.tasksForSubGoals(subGoalIds);
     final rawMsAll = await db.milestonesForGoals(goalIds);
     final rawLinksAll = await db.habitLinksForGoals(goalIds);
+    final positionsByGoal = await db.mapPositionsForGoals(goalIds);
 
     // Group by foreign key.
     final tasksBySubGoal = <String, List<PlanningTask>>{};
@@ -356,10 +357,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             ? GoalSettings.fromJson(
                 jsonDecode(rg.settingsJson!) as Map<String, dynamic>)
             : GoalSettings.defaults,
-        mapPositions: rg.mapPositionsJson != null
-            ? positionsFromJson(
-                jsonDecode(rg.mapPositionsJson!) as Map<String, dynamic>)
-            : const {},
+        mapPositions: positionsByGoal[rg.id] ?? const {},
         isPinned: rg.isPinned,
         // Restore collaborators and ownerProfile from server data if available
         collaborators: serverMap[rg.id]?.collaborators ?? const [],
@@ -446,7 +444,10 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     state = AsyncData(
         current.copyWith(goals: current.goals.where((g) => g.id != id).toList()));
 
-    await db.deleteGoalLocally(id);
+    await Future.wait([
+      db.deleteGoalLocally(id),
+      db.deleteMapPositionsForGoal(id),
+    ]);
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) {
@@ -469,10 +470,12 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
     final goal = current.goals.where((g) => g.id == id).firstOrNull;
 
-    final updated = current.goals
-        .map((g) => g.id == id ? g.copyWith(status: newStatus) : g)
-        .toList();
-    state = AsyncData(current.copyWith(goals: updated));
+    final idx = current.goals.indexWhere((g) => g.id == id);
+    if (idx != -1) {
+      final next = [...current.goals];
+      next[idx] = next[idx].copyWith(status: newStatus);
+      state = AsyncData(current.copyWith(goals: next));
+    }
 
     await db.updateGoal(id, LocalGoalsCompanion(
         status: Value(newStatus), synced: const Value(false)));
@@ -574,11 +577,11 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
   void _updateGoalInState(String goalId, Goal Function(Goal) updater) {
     final current = state.valueOrNull;
     if (current == null) return;
-    state = AsyncData(current.copyWith(
-      goals: current.goals
-          .map((g) => g.id == goalId ? updater(g) : g)
-          .toList(),
-    ));
+    final idx = current.goals.indexWhere((g) => g.id == goalId);
+    if (idx == -1) return;
+    final next = [...current.goals];
+    next[idx] = updater(next[idx]);
+    state = AsyncData(current.copyWith(goals: next));
   }
 
   // ── Add Sub-goal ──────────────────────────────────────────────────────────
@@ -1538,21 +1541,16 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
   // ── Save map positions ────────────────────────────────────────────────────
 
   Future<void> saveMapPositions(String goalId, Map<String, Offset> positions) async {
-    final posJson = positionsToJson(positions);
-    // Large maps: encode off the UI thread (isolate spawn cost is worth it only
-    // past the threshold; small maps encode inline to avoid the overhead).
-    final heavy = positions.length > _kPositionsComputeThreshold;
-    Future<String> encode(Object? data) =>
-        heavy ? compute(_encodeJson, data) : Future.value(jsonEncode(data));
-
     _updateGoalInState(goalId, (g) => g.copyWith(mapPositions: positions));
 
+    // Row-level upsert — no JSON encoding; only this goal's rows are touched.
     final db = ref.read(appDatabaseProvider);
-    await db.updateGoalMapPositions(goalId, await encode(posJson));
+    await db.upsertMapPositionsBatch(goalId, positions);
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) {
       try {
+        final posJson = positionsToJson(positions);
         await Supabase.instance.client
             .from('goals')
             .update({'map_positions': posJson}).eq('id', goalId);
@@ -1560,7 +1558,12 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         return;
       } catch (_) {}
     }
-    await db.enqueueSyncOp('save_map_positions',
-        await encode({'id': goalId, 'map_positions': posJson}));
+    // Offline: enqueue sync op with JSON payload for later upload.
+    final posJson = positionsToJson(positions);
+    final heavy = positions.length > _kPositionsComputeThreshold;
+    final encoded = heavy
+        ? await compute(_encodeJson, {'id': goalId, 'map_positions': posJson})
+        : jsonEncode({'id': goalId, 'map_positions': posJson});
+    await db.enqueueSyncOp('save_map_positions', encoded);
   }
 }

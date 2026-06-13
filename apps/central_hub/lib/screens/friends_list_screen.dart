@@ -283,6 +283,8 @@ class _FriendTile extends ConsumerWidget {
                     ? Image.network(
                         profile.avatarUrl!,
                         fit: BoxFit.cover,
+                        cacheWidth: 96,
+                        cacheHeight: 96,
                         errorBuilder: (_, _, _) =>
                             _AvatarLetter(letter: letter, c: c),
                       )

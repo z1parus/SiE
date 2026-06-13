@@ -454,19 +454,20 @@ class Goal {
 // ─── PlanningState ────────────────────────────────────────────────────────────
 
 class PlanningState {
-  const PlanningState({required this.goals});
+  PlanningState({required this.goals});
 
   final List<Goal> goals;
 
-  static const empty = PlanningState(goals: []);
+  // Lazily computed once per instance — avoids repeated .where().toList() on each access.
+  late final List<Goal> activeGoals =
+      goals.where((g) => g.status == 'active').toList();
+  late final List<Goal> archivedGoals =
+      goals.where((g) => g.status != 'active').toList();
+
+  static final PlanningState empty = PlanningState(goals: const []);
 
   PlanningState copyWith({List<Goal>? goals}) =>
       PlanningState(goals: goals ?? this.goals);
-
-  List<Goal> get activeGoals =>
-      goals.where((g) => g.status == 'active').toList();
-  List<Goal> get archivedGoals =>
-      goals.where((g) => g.status != 'active').toList();
 }
 
 // ─── Helper functions ─────────────────────────────────────────────────────────

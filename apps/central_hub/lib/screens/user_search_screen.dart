@@ -470,6 +470,8 @@ class _UserTileState extends ConsumerState<_UserTile>
                 ? Image.network(
                     widget.profile.avatarUrl!,
                     fit: BoxFit.cover,
+                    cacheWidth: 96,
+                    cacheHeight: 96,
                     errorBuilder: (_, _, _) => _TileLetter(letter: letter),
                   )
                 : _TileLetter(letter: letter),
