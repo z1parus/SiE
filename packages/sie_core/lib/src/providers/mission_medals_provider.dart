@@ -30,7 +30,7 @@ final missionMedalsProvider =
         await db.upsertMedalLocally(LocalMissionMedalsCompanion(
           id: Value(m['id'] as String),
           userId: Value(m['user_id'] as String),
-          goalId: Value(m['goal_id'] as String),
+          goalId: Value(m['goal_id'] as String? ?? ''),
           goalName: const Value(''),
           category: Value(m['category'] as String? ?? 'none'),
           level: Value((m['level'] as num).toInt()),
@@ -40,6 +40,7 @@ final missionMedalsProvider =
           totalTaskWeight:
               Value((m['total_task_weight'] as num?)?.toInt() ?? 0),
           durationDays: Value((m['duration_days'] as num?)?.toInt() ?? 0),
+          medalType: Value(m['medal_type'] as String? ?? 'goal'),
           synced: const Value(true),
         ));
       }
@@ -90,6 +91,7 @@ MissionMedal _fromLocal(LocalMissionMedal r) {
     earnedAt: DateTime.fromMillisecondsSinceEpoch(r.earnedAtMs),
     totalTaskWeight: r.totalTaskWeight,
     durationDays: r.durationDays,
+    medalType: r.medalType,
   );
 }
 
@@ -101,7 +103,7 @@ MissionMedal _fromRemote(Map<String, dynamic> m) {
   return MissionMedal(
     id: m['id'] as String,
     userId: m['user_id'] as String,
-    goalId: m['goal_id'] as String,
+    goalId: m['goal_id'] as String? ?? '',
     goalName: '',
     category: cat,
     level: (m['level'] as num).toInt(),
@@ -109,5 +111,6 @@ MissionMedal _fromRemote(Map<String, dynamic> m) {
     earnedAt: DateTime.parse(m['earned_at'] as String),
     totalTaskWeight: (m['total_task_weight'] as num?)?.toInt() ?? 0,
     durationDays: (m['duration_days'] as num?)?.toInt() ?? 0,
+    medalType: m['medal_type'] as String? ?? 'goal',
   );
 }

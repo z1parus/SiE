@@ -1,19 +1,25 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sie_core/sie_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'breathing_exercise_screen.dart';
 import 'focus_protocol_screen.dart';
 import 'habit_tracker_screen.dart';
 import 'leaderboard_screen.dart';
+import 'meditation_hub_screen.dart';
 import 'planning_screen.dart';
+import 'session_orb_painters.dart';
 import 'profile_screen.dart';
 import 'public_profile_screen.dart';
 import 'user_search_screen.dart';
 
 const _kOrange = Color(0xFFFF8C42);
+const _kBranchOrderKey = 'branch_order';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OperationsControlScreen
@@ -31,6 +37,36 @@ class OperationsControlScreen extends ConsumerStatefulWidget {
 class _OperationsControlScreenState
     extends ConsumerState<OperationsControlScreen> {
   bool _welcomeShown = false;
+  List<String>? _orderedSlugs;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrder();
+  }
+
+  Future<void> _loadOrder() async {
+    final prefs = await SharedPreferences.getInstance();
+    final slugs = prefs.getStringList(_kBranchOrderKey);
+    if (mounted && slugs != null) setState(() => _orderedSlugs = slugs);
+  }
+
+  Future<void> _saveOrder(List<String> slugs) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_kBranchOrderKey, slugs);
+  }
+
+  List<Branch> _applyOrder(List<Branch> branches) {
+    final slugs = _orderedSlugs;
+    if (slugs == null || slugs.isEmpty) return branches;
+    final indexMap = {for (var i = 0; i < slugs.length; i++) slugs[i]: i};
+    return List<Branch>.from(branches)
+      ..sort((a, b) {
+        final aIdx = indexMap[a.slug] ?? 9999;
+        final bIdx = indexMap[b.slug] ?? 9999;
+        return aIdx.compareTo(bIdx);
+      });
+  }
 
   Future<void> _onRefresh() async {
     ref.invalidate(branchesProvider);
@@ -87,7 +123,8 @@ class _OperationsControlScreenState
                 final filtered = branches
                     .where((b) => b.slug != 'progress_hub')
                     .toList();
-                return filtered.isEmpty
+                final ordered = _applyOrder(filtered);
+                return ordered.isEmpty
                     ? Center(
                         child: Text(
                           'NO DEPARTMENTS AVAILABLE',
@@ -99,16 +136,32 @@ class _OperationsControlScreenState
                         ),
                       )
                     : _BranchCarousel(
-                        branches: filtered,
+                        branches: ordered,
                         onBranchTap: (b) => _onBranchTap(context, b),
+                        onReorder: (oldIndex, newIndex) {
+                          final prevSlugs =
+                              ordered.map((b) => b.slug).toList();
+                          final reordered = List<Branch>.from(ordered);
+                          if (newIndex > oldIndex) newIndex--;
+                          final item = reordered.removeAt(oldIndex);
+                          reordered.insert(newIndex, item);
+                          final slugs =
+                              reordered.map((b) => b.slug).toList();
+                          setState(() => _orderedSlugs = slugs);
+                          _saveOrder(slugs);
+                          showUndoSnackbar(
+                            context,
+                            ref,
+                            message: 'Порядок модулей изменён',
+                            onUndo: () {
+                              setState(() => _orderedSlugs = prevSlugs);
+                              _saveOrder(prevSlugs);
+                            },
+                          );
+                        },
                       );
               },
-              loading: () => Center(
-                child: CircularProgressIndicator(
-                  color: c.accent,
-                  strokeWidth: 1.5,
-                ),
-              ),
+              loading: () => const _BranchCarouselSkeleton(),
               error: (e, _) => const Center(
                 child: _NoConnectionMessage(),
               ),
@@ -159,15 +212,14 @@ class _OperationsControlScreenState
   }
 
   void _showWelcomeModal(Profile profile) {
+    // Shown once, but the user can dismiss it any way (button, ✕, tap-outside);
+    // every exit marks it seen so it never re-appears.
     showDialog<void>(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.75),
-      builder: (_) => _WelcomeDialog(
-        profile: profile,
-        onAccept: () => markWelcomeSeen(profile.id),
-      ),
-    );
+      builder: (_) => _WelcomeDialog(profile: profile),
+    ).then((_) => markWelcomeSeen(profile.id));
   }
 }
 
@@ -176,9 +228,8 @@ class _OperationsControlScreenState
 // ─────────────────────────────────────────────────────────────────────────────
 class _WelcomeDialog extends ConsumerStatefulWidget {
   final Profile profile;
-  final VoidCallback onAccept;
 
-  const _WelcomeDialog({required this.profile, required this.onAccept});
+  const _WelcomeDialog({required this.profile});
 
   @override
   ConsumerState<_WelcomeDialog> createState() => _WelcomeDialogState();
@@ -255,6 +306,20 @@ class _WelcomeDialogState extends ConsumerState<_WelcomeDialog>
                           color: c.accent,
                         ),
                   ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    behavior: HitTestBehavior.opaque,
+                    child: Semantics(
+                      button: true,
+                      label: 'Закрыть',
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(Icons.close,
+                            size: 20, color: c.iconMuted),
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 20),
@@ -281,10 +346,7 @@ class _WelcomeDialogState extends ConsumerState<_WelcomeDialog>
               SizedBox(
                 width: double.infinity,
                 child: GestureDetector(
-                  onTap: () {
-                    widget.onAccept();
-                    Navigator.of(context).pop();
-                  },
+                  onTap: () => Navigator.of(context).pop(),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(
@@ -327,6 +389,8 @@ void _onBranchTap(BuildContext context, Branch branch) {
     screen = const FocusProtocolScreen();
   } else if (branch.slug == 'planning') {
     screen = const PlanningScreen();
+  } else if (branch.slug == 'meditation') {
+    screen = const MeditationHubScreen();
   }
 
   if (screen != null) {
@@ -338,7 +402,8 @@ void _onBranchTap(BuildContext context, Branch branch) {
 
   ScaffoldMessenger.of(context).showSnackBar(
     const SnackBar(
-      content: Text('Department initialising...'),
+      behavior: SnackBarBehavior.floating,
+      content: Text('Этот модуль скоро будет доступен'),
       duration: Duration(seconds: 2),
     ),
   );
@@ -374,7 +439,8 @@ class _FloatingNavBar extends ConsumerWidget {
       default:
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Module initialising...'),
+            behavior: SnackBarBehavior.floating,
+            content: Text('Этот модуль скоро будет доступен'),
             duration: Duration(seconds: 2),
           ),
         );
@@ -527,28 +593,80 @@ class _LeaderboardTile extends StatelessWidget {
 class _BranchCarousel extends StatelessWidget {
   final List<Branch> branches;
   final void Function(Branch) onBranchTap;
+  final void Function(int oldIndex, int newIndex) onReorder;
 
   const _BranchCarousel({
     required this.branches,
     required this.onBranchTap,
+    required this.onReorder,
   });
 
   @override
   Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: PageView.builder(
-        controller: PageController(viewportFraction: 0.78),
-        physics: const PageScrollPhysics(parent: BouncingScrollPhysics()),
-        itemCount: branches.length,
-        itemBuilder: (context, index) {
-          final branch = branches[index];
-          return RepaintBoundary(
-            child: _BranchCarouselCard(
-              branch: branch,
-              onTap: () => onBranchTap(branch),
+    final screenWidth = MediaQuery.of(context).size.width;
+    final itemWidth = screenWidth * 0.82;
+
+    return ReorderableListView.builder(
+      scrollDirection: Axis.horizontal,
+      padding: EdgeInsets.only(left: screenWidth * 0.09, right: 8),
+      onReorder: onReorder,
+      onReorderStart: (_) => SieHaptics.heavy(),
+      proxyDecorator: (child, _, animation) => AnimatedBuilder(
+        animation: animation,
+        builder: (_, ch) {
+          final t = CurvedAnimation(
+              parent: animation, curve: Curves.easeOut);
+          return Transform.scale(
+            scale: Tween<double>(begin: 1.0, end: 1.04).evaluate(t),
+            child: Material(
+              elevation: Tween<double>(begin: 0, end: 16).evaluate(t),
+              color: Colors.transparent,
+              shadowColor: Colors.black38,
+              borderRadius: BorderRadius.circular(20),
+              child: ch,
             ),
           );
         },
+        child: child,
+      ),
+      itemCount: branches.length,
+      itemBuilder: (context, index) {
+        final branch = branches[index];
+        return SizedBox(
+          key: ValueKey(branch.slug),
+          width: itemWidth,
+          child: _BranchCarouselCard(
+            branch: branch,
+            onTap: () => onBranchTap(branch),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Branch Carousel Skeleton (loading placeholder)
+// ─────────────────────────────────────────────────────────────────────────────
+class _BranchCarouselSkeleton extends StatelessWidget {
+  const _BranchCarouselSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final itemWidth = screenWidth * 0.82;
+    return ListView.builder(
+      scrollDirection: Axis.horizontal,
+      padding: EdgeInsets.only(left: screenWidth * 0.09, right: 8),
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: 3,
+      itemBuilder: (_, __) => Padding(
+        padding: const EdgeInsets.only(right: 12),
+        child: SieSkeleton(
+          width: itemWidth,
+          height: double.infinity,
+          radius: 20,
+        ),
       ),
     );
   }
@@ -588,8 +706,9 @@ class _BranchCarouselCard extends ConsumerWidget {
       case 'breathing_practices':
         return 'PROTOCOL READY';
       case 'planning':
-        final planningState = ref.watch(planningProvider).valueOrNull;
-        final count = planningState?.activeGoals.length ?? 0;
+        final count = ref.watch(
+          planningProvider.select((s) => s.valueOrNull?.activeGoals.length ?? 0),
+        );
         return '$count ${count == 1 ? 'Mission' : 'Missions'}';
       default:
         return 'ACTIVE';
@@ -695,73 +814,151 @@ class _BreathSpherePreview extends ConsumerStatefulWidget {
 }
 
 class _BreathSpherePreviewState extends ConsumerState<_BreathSpherePreview>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _scale;
+    with TickerProviderStateMixin {
+  late final AnimationController _pulseCtrl;
+  late final AnimationController _shaderCtrl;
+  late final Animation<double> _pulse;
+  FragmentShader? _shader;
+
+  static const _size = 130.0;
+  static const _lightAngle = -math.pi / 4;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
+    _pulseCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 3600),
+      duration: const Duration(seconds: 4),
     )..repeat(reverse: true);
-    _scale = Tween<double>(begin: 0.82, end: 1.0).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    _pulse = Tween<double>(begin: 0.93, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
     );
+    _shaderCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 60),
+    )..repeat();
+    _loadShader();
+  }
+
+  Future<void> _loadShader() async {
+    try {
+      final program = await FragmentProgram.fromAsset(
+        'assets/shaders/breathing_sphere.frag',
+      );
+      if (mounted) setState(() => _shader = program.fragmentShader());
+    } catch (_) {}
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _pulseCtrl.dispose();
+    _shaderCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final c = ref.watch(sieColorsProvider);
+    final fallbackColors = c.isLightMode
+        ? <Color>[const Color(0xFFF1F1F5), const Color(0xFFD0D2DC)]
+        : <Color>[const Color(0xFF1C2035), const Color(0xFF2A3048)];
+
     return Center(
       child: AnimatedBuilder(
-        animation: _scale,
-        builder: (_, _) => Transform.scale(
-          scale: _scale.value,
-          child: Container(
-            width: 130,
-            height: 130,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: c.isLightMode
-                  ? RadialGradient(
-                      colors: [
-                        Colors.white,
-                        const Color(0xFFB8E8E2),
-                        c.accent,
-                        c.surface,
-                      ],
-                      stops: const [0.0, 0.28, 0.65, 1.0],
-                    )
-                  : const RadialGradient(
-                      colors: [
-                        Color(0xFFCCF8FF),
-                        Color(0xFF00E5FF),
-                        Color(0xFF7000FF),
-                        Color(0x007000FF),
-                      ],
-                      stops: [0.0, 0.28, 0.68, 1.0],
-                    ),
-              boxShadow: [
-                BoxShadow(
-                  color: c.accent.withValues(alpha: c.isLightMode ? 0.15 : 0.20),
-                  blurRadius: 20,
-                  spreadRadius: c.isLightMode ? 2 : 4,
+        animation: Listenable.merge([_pulse, _shaderCtrl]),
+        builder: (_, _) {
+          final shaderTime = _shaderCtrl.value * 60.0;
+          return Transform.scale(
+            scale: _pulse.value,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Layer 1 — outer golden corona
+                Container(
+                  width: _size + 60,
+                  height: _size + 60,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFC8A84B).withValues(
+                            alpha: c.isLightMode ? 0.07 : 0.13),
+                        blurRadius: c.isLightMode ? 18 : 22,
+                      ),
+                    ],
+                  ),
+                ),
+                // Layer 2 — shader sphere
+                ClipOval(
+                  child: SizedBox(
+                    width: _size,
+                    height: _size,
+                    child: _shader != null
+                        ? CustomPaint(
+                            painter: _PreviewShaderPainter(
+                              shader: _shader!,
+                              time: shaderTime,
+                              sphereSize: _size,
+                              isDark: !c.isLightMode,
+                            ),
+                          )
+                        : Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: RadialGradient(
+                                colors: fallbackColors,
+                                stops: const [0.0, 1.0],
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+                // Layer 3 — golden rim
+                CustomPaint(
+                  size: const Size(_size, _size),
+                  painter: SphereRimPainter(
+                    lightAngle: _lightAngle,
+                    intensity: 0.6,
+                    isDark: !c.isLightMode,
+                  ),
                 ),
               ],
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
+}
+
+class _PreviewShaderPainter extends CustomPainter {
+  final FragmentShader shader;
+  final double time;
+  final double sphereSize;
+  final bool isDark;
+
+  const _PreviewShaderPainter({
+    required this.shader,
+    required this.time,
+    required this.sphereSize,
+    required this.isDark,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    try {
+      shader.setFloat(0, time);
+      shader.setFloat(1, 0.3); // idle breath position
+      shader.setFloat(2, size.width);
+      shader.setFloat(3, size.height);
+      shader.setFloat(4, isDark ? 1.0 : 0.0);
+      canvas.drawRect(Offset.zero & size, Paint()..shader = shader);
+    } catch (_) {}
+  }
+
+  @override
+  bool shouldRepaint(_PreviewShaderPainter old) =>
+      time != old.time || sphereSize != old.sphereSize || isDark != old.isDark;
 }
 
 class _HabitMatrixPreview extends ConsumerWidget {
@@ -1140,6 +1337,15 @@ class _ScreenHeader extends ConsumerWidget {
               icon: Icons.logout,
               size: 20,
               onTap: () async {
+                final ok = await confirmDestructive(
+                  context,
+                  ref,
+                  title: 'Выйти из системы?',
+                  message: 'Сессия будет завершена. Несинхронизированные '
+                      'данные сохранятся локально.',
+                  confirmLabel: 'Выйти',
+                );
+                if (!ok) return;
                 await SupabaseService.signOut();
                 ref.invalidate(userProfileProvider);
                 ref.invalidate(habitsProvider);
@@ -1266,47 +1472,53 @@ class _NotificationBell extends ConsumerWidget {
     final unread =
         ref.watch(notificationsProvider).valueOrNull?.unreadCount ?? 0;
 
-    return GestureDetector(
-      onTap: () => showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => const _NotificationsSheet(),
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: c.flatCard(radius: 19),
-            child: Center(
-              child: Icon(Icons.notifications_outlined,
-                  color: c.textSecondary, size: 18),
+    return Semantics(
+      button: true,
+      label: unread > 0
+          ? 'Уведомления, $unread непрочитанных'
+          : 'Уведомления',
+      child: GestureDetector(
+        onTap: () => showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => const _NotificationsSheet(),
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: c.flatCard(radius: 19),
+              child: Center(
+                child: Icon(Icons.notifications_outlined,
+                    color: c.textSecondary, size: 18),
+              ),
             ),
-          ),
-          if (unread > 0)
-            Positioned(
-              top: -2,
-              right: -2,
-              child: Container(
-                width: 16,
-                height: 16,
-                decoration: const BoxDecoration(
-                    color: Colors.red, shape: BoxShape.circle),
-                child: Center(
-                  child: Text(
-                    unread > 9 ? '9+' : '$unread',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 8,
-                      fontWeight: FontWeight.w800,
+            if (unread > 0)
+              Positioned(
+                top: -2,
+                right: -2,
+                child: Container(
+                  width: 17,
+                  height: 17,
+                  decoration: BoxDecoration(
+                      color: c.danger, shape: BoxShape.circle),
+                  child: Center(
+                    child: Text(
+                      unread > 9 ? '9+' : '$unread',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1530,29 +1742,33 @@ class _NotifTile extends ConsumerWidget {
 class _CollabInviteActions extends ConsumerStatefulWidget {
   final String goalId;
   final String notificationId;
-  const _CollabInviteActions({required this.goalId, required this.notificationId});
+  const _CollabInviteActions(
+      {required this.goalId, required this.notificationId});
 
   @override
-  ConsumerState<_CollabInviteActions> createState() => _CollabInviteActionsState();
+  ConsumerState<_CollabInviteActions> createState() =>
+      _CollabInviteActionsState();
 }
 
 class _CollabInviteActionsState extends ConsumerState<_CollabInviteActions> {
   bool _loading = false;
-  bool _done = false;
-  String? _result;
 
   Future<void> _handle(bool accept) async {
     setState(() => _loading = true);
     try {
       final collab = ref.read(goalCollaborationProvider);
+      final status = accept ? 'accepted' : 'declined';
       if (accept) {
         await collab.accept(widget.goalId);
-        setState(() { _done = true; _result = 'Принято'; });
       } else {
         await collab.decline(widget.goalId);
-        setState(() { _done = true; _result = 'Отклонено'; });
       }
-      await ref.read(notificationsProvider.notifier).markAsRead(widget.notificationId);
+      await ref
+          .read(notificationsProvider.notifier)
+          .markAsRead(widget.notificationId);
+      ref
+          .read(notificationsProvider.notifier)
+          .resolveInvite(widget.notificationId, status);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -1560,10 +1776,32 @@ class _CollabInviteActionsState extends ConsumerState<_CollabInviteActions> {
 
   @override
   Widget build(BuildContext context) {
-    if (_done) {
-      return Text(_result ?? '',
-          style: TextStyle(fontSize: 12, color: ref.watch(sieColorsProvider).textSecondary));
+    final c = ref.watch(sieColorsProvider);
+
+    // Check in-memory resolution stored in notification payload
+    final notifications =
+        ref.watch(notificationsProvider).valueOrNull?.notifications ?? [];
+    final notif = notifications
+        .cast<AppNotification?>()
+        .firstWhere((n) => n?.id == widget.notificationId, orElse: () => null);
+    final inviteStatus = notif?.payload['invite_status'] as String?;
+
+    // Fallback for accepted: check if goal already appears in user's planning list
+    final myId = Supabase.instance.client.auth.currentUser?.id;
+    final goals = ref.watch(planningProvider).valueOrNull?.goals ?? [];
+    final isAcceptedViaPlanning = myId != null &&
+        goals.any((g) => g.id == widget.goalId && g.userId != myId);
+
+    final isAccepted = inviteStatus == 'accepted' || isAcceptedViaPlanning;
+    final isDeclined = inviteStatus == 'declined';
+
+    if (isAccepted || isDeclined) {
+      final label =
+          isAccepted ? 'Предложение принято' : 'Предложение отклонено';
+      return Text(label,
+          style: TextStyle(fontSize: 12, color: c.textSecondary));
     }
+
     if (_loading) {
       return const SizedBox(
         height: 20,
@@ -1571,6 +1809,7 @@ class _CollabInviteActionsState extends ConsumerState<_CollabInviteActions> {
         child: CircularProgressIndicator(strokeWidth: 2),
       );
     }
+
     return Row(
       children: [
         FilledButton(

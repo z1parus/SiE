@@ -191,6 +191,7 @@ class _ProfileContent extends ConsumerWidget {
                   _HeaderGlassCard(
                     profile: profile,
                     frameDecoration: frameDecoration,
+                    background: equipped.background,
                   ),
                   if (equipped.statStyle != null) ...[
                     const SizedBox(height: 12),
@@ -262,9 +263,28 @@ class _HeaderGlassCard extends ConsumerWidget {
   const _HeaderGlassCard({
     required this.profile,
     required this.frameDecoration,
+    this.background,
   });
   final Profile? profile;
   final BoxDecoration frameDecoration;
+  final CosmeticAsset? background;
+
+  static BoxDecoration _cardDecoration(SieColors c, CosmeticAsset? bg) {
+    if (bg?.backgroundColor != null) {
+      return BoxDecoration(
+        color: bg!.backgroundColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: bg.accentColor.withValues(alpha: 0.25)),
+      );
+    }
+    if (bg?.backgroundGradient != null) {
+      return BoxDecoration(
+        gradient: bg!.backgroundGradient,
+        borderRadius: BorderRadius.circular(24),
+      );
+    }
+    return c.flatCard(radius: 24);
+  }
 
   static String _rankLabel(int level) {
     if (level <= 5)  return 'Recruit';
@@ -275,133 +295,148 @@ class _HeaderGlassCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c          = ref.watch(sieColorsProvider);
-    final username   = profile?.username?.toUpperCase() ?? 'UNKNOWN';
-    final letter     = username.isNotEmpty ? username[0] : '?';
-    final xp         = profile?.totalXp ?? 0;
-    final level      = (xp ~/ 1000) + 1;
-    final xpInLevel  = xp % 1000;
-    final progress   = (xpInLevel / 1000.0).clamp(0.0, 1.0);
-    final xpToNext   = 1000 - xpInLevel;
+    final c           = ref.watch(sieColorsProvider);
+    final username    = profile?.username?.toUpperCase() ?? 'UNKNOWN';
+    final letter      = username.isNotEmpty ? username[0] : '?';
+    final xp          = profile?.totalXp ?? 0;
+    final level       = (xp ~/ 1000) + 1;
+    final xpInLevel   = xp % 1000;
+    final progress    = (xpInLevel / 1000.0).clamp(0.0, 1.0);
+    final xpToNext    = 1000 - xpInLevel;
+    final hasCustomBg = background != null &&
+        (background!.backgroundColor != null ||
+            background!.backgroundGradient != null);
+    final textMain    = hasCustomBg ? Colors.white : c.textPrimary;
+    final textSub     = hasCustomBg ? Colors.white60 : c.textSecondary;
+    final showNeural  = background != null &&
+        (background!.backgroundColor != null || background!.useNeuralPattern);
 
-    final inner = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 68,
-              height: 68,
-              decoration: frameDecoration,
-              child: ClipOval(
-                child: profile?.avatarUrl != null
-                    ? Image.network(
-                        profile!.avatarUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) =>
-                            _AvatarLetter(letter: letter),
-                      )
-                    : _AvatarLetter(letter: letter),
+    return Container(
+      clipBehavior: Clip.hardEdge,
+      decoration: _cardDecoration(c, background),
+      child: Stack(
+        children: [
+          if (showNeural)
+            Positioned.fill(
+              child: NeuralNetworkWidget(
+                color: (background?.accentColor ?? c.accent)
+                    .withValues(alpha: 0.40),
               ),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    username,
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineMedium
-                        ?.copyWith(
-                          fontSize: 18,
-                          shadows: null,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      _Chip(
-                        label: 'LEVEL $level',
-                        borderColor: c.accent.withValues(alpha: 0.5),
-                        textColor: c.accent,
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 68,
+                      height: 68,
+                      decoration: frameDecoration,
+                      child: ClipOval(
+                        child: profile?.avatarUrl != null
+                            ? Image.network(
+                                profile!.avatarUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) =>
+                                    _AvatarLetter(letter: letter),
+                              )
+                            : _AvatarLetter(letter: letter),
                       ),
-                      const SizedBox(width: 8),
-                      _Chip(
-                        label: '${profile?.designPoints ?? 0} DP',
-                        borderColor: c.dp.withValues(alpha: 0.45),
-                        textColor: c.dp,
-                        icon: Icons.palette_outlined,
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            username,
+                            style: TextStyle(
+                              color: textMain,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1,
+                              shadows: null,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              _Chip(
+                                label: 'LEVEL $level',
+                                borderColor: c.accent.withValues(alpha: 0.5),
+                                textColor: c.accent,
+                              ),
+                              const SizedBox(width: 8),
+                              _Chip(
+                                label: '${profile?.designPoints ?? 0} DP',
+                                borderColor: c.dp.withValues(alpha: 0.45),
+                                textColor: c.dp,
+                                icon: Icons.palette_outlined,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '$xp XP TOTAL',
+                      style: TextStyle(
+                        color: c.accent,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    Text(
+                      '$xpToNext XP TO LVL ${level + 1}',
+                      style: TextStyle(color: textSub, fontSize: 10),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: Stack(
+                    children: [
+                      Container(height: 6, color: c.border),
+                      FractionallySizedBox(
+                        widthFactor: progress,
+                        child: Container(
+                          height: 6,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [c.accent, c.accentSecondary],
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              '$xp XP TOTAL',
-              style: TextStyle(
-                color: c.accent,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1.2,
-              ),
-            ),
-            Text(
-              '$xpToNext XP TO LVL ${level + 1}',
-              style: TextStyle(
-                color: c.textSecondary,
-                fontSize: 10,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(3),
-          child: Stack(
-            children: [
-              Container(height: 6, color: c.border),
-              FractionallySizedBox(
-                widthFactor: progress,
-                child: Container(
-                  height: 6,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [c.accent, c.accentSecondary],
-                    ),
-                    boxShadow: null,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${(progress * 100).toStringAsFixed(0)}%  ·  '
+                  '${_rankLabel(level).toUpperCase()}  ·  '
+                  'LVL $level → LVL ${level + 1}',
+                  style: TextStyle(
+                    color: textSub,
+                    fontSize: 9,
+                    letterSpacing: 1,
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          '${(progress * 100).toStringAsFixed(0)}%  ·  '
-          '${_rankLabel(level).toUpperCase()}  ·  '
-          'LVL $level → LVL ${level + 1}',
-          style: TextStyle(
-            color: c.textSecondary,
-            fontSize: 9,
-            letterSpacing: 1,
-          ),
-        ),
-      ],
-    );
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: c.flatCard(radius: 24),
-      child: inner,
+        ],
+      ),
     );
   }
 }
@@ -647,6 +682,19 @@ class _MedalsVault extends ConsumerWidget {
                 TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),
           );
         }
+
+        // Group by type (category + level); vanguard medals grouped separately
+        final Map<String, List<MissionMedal>> groupMap = {};
+        for (final medal in medals) {
+          final key = medal.isVanguard
+              ? 'vanguard_${medal.level}'
+              : '${medal.category?.name ?? '_'}_${medal.level}';
+          groupMap.putIfAbsent(key, () => []).add(medal);
+        }
+        // Higher level first
+        final groups = groupMap.values.toList()
+          ..sort((a, b) => b.first.level.compareTo(a.first.level));
+
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -656,11 +704,17 @@ class _MedalsVault extends ConsumerWidget {
             mainAxisSpacing: 10,
             childAspectRatio: 0.82,
           ),
-          itemCount: medals.length,
-          itemBuilder: (_, i) => MissionMedalBadge(
-            medal: medals[i],
-            onTap: () => _showMedalSheet(context, medals[i], c),
-          ),
+          itemCount: groups.length,
+          itemBuilder: (_, i) {
+            final group = groups[i];
+            return MissionMedalBadge(
+              medal: group.first,
+              count: group.length,
+              onTap: () => group.length == 1
+                  ? _showMedalSheet(context, group.first, c)
+                  : _showMedalGroupSheet(context, group, c),
+            );
+          },
         );
       },
     );
@@ -673,7 +727,185 @@ class _MedalsVault extends ConsumerWidget {
       builder: (_) => _MedalDetailSheet(medal: medal, c: c),
     );
   }
+
+  void _showMedalGroupSheet(
+      BuildContext context, List<MissionMedal> group, SieColors c) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _MedalGroupSheet(medals: group, c: c),
+    );
+  }
 }
+
+// ─── Medal Group Sheet ────────────────────────────────────────────────────────
+
+class _MedalGroupSheet extends StatelessWidget {
+  const _MedalGroupSheet({required this.medals, required this.c});
+
+  final List<MissionMedal> medals;
+  final SieColors c;
+
+  @override
+  Widget build(BuildContext context) {
+    final rep = medals.first;
+    final levelColor = medalLevelColor(rep.level);
+    final levelLabel = medalLevelLabel(rep.level);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: levelColor.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 8),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+                color: c.border, borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: levelColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(4),
+                  border:
+                      Border.all(color: levelColor.withValues(alpha: 0.35)),
+                ),
+                child: Text(
+                  levelLabel,
+                  style: TextStyle(
+                    color: levelColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                rep.name,
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${medals.length} медал${_medalSuffix(medals.length)}',
+            style: TextStyle(color: c.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          Divider(height: 1, color: c.border),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.45,
+            ),
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: medals.length,
+              separatorBuilder: (_, __) => Divider(height: 1, color: c.border),
+              itemBuilder: (ctx, i) => _MedalGroupRow(
+                medal: medals[i],
+                c: c,
+                onTap: () {
+                  Navigator.pop(context);
+                  showModalBottomSheet(
+                    context: context,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) =>
+                        _MedalDetailSheet(medal: medals[i], c: c),
+                  );
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  static String _medalSuffix(int n) {
+    if (n % 10 == 1 && n % 100 != 11) return 'ь';
+    if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) {
+      return 'и';
+    }
+    return 'ей';
+  }
+}
+
+class _MedalGroupRow extends StatelessWidget {
+  const _MedalGroupRow(
+      {required this.medal, required this.c, required this.onTap});
+
+  final MissionMedal medal;
+  final SieColors c;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = medal.earnedAt;
+    final dateStr =
+        '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
+    final title =
+        medal.goalName.isNotEmpty ? medal.goalName : medal.name;
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            MissionMedalBadge(medal: medal, size: 48),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Завершено: $dateStr',
+                    style:
+                        TextStyle(color: c.textSecondary, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_outlined,
+                color: c.textSecondary, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Medal Detail Sheet ───────────────────────────────────────────────────────
 
 class _MedalDetailSheet extends StatelessWidget {
   const _MedalDetailSheet({required this.medal, required this.c});

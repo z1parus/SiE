@@ -110,6 +110,12 @@ class CosmeticAsset {
     );
   }
 
+  Color? get backgroundColor =>
+      _hexColor(styleConfig['background_color'] as String?);
+
+  bool get useNeuralPattern =>
+      styleConfig['use_neural_pattern'] as bool? ?? false;
+
   // ── Stat style helpers ─────────────────────────────────────
 
   Color get accentColor =>
@@ -128,7 +134,7 @@ class CosmeticAsset {
       border: Border.all(
         color: isLightMode ? SieTheme.borderDefault : styleBorderColor,
       ),
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(14),
       boxShadow: (!isLightMode && glow != null && styleGlowRadius > 0)
           ? [BoxShadow(color: glow, blurRadius: styleGlowRadius)]
           : null,

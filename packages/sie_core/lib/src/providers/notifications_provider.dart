@@ -128,4 +128,15 @@ class NotificationsNotifier extends AsyncNotifier<NotificationsState>
               cur.notifications.map((n) => n.copyWith(isRead: true)).toList()));
     }
   }
+
+  void resolveInvite(String notificationId, String inviteStatus) {
+    final cur = state.valueOrNull;
+    if (cur == null) return;
+    state = AsyncData(NotificationsState(
+        notifications: cur.notifications.map((n) {
+      if (n.id != notificationId) return n;
+      return n.copyWith(
+          payload: {...n.payload, 'invite_status': inviteStatus});
+    }).toList()));
+  }
 }

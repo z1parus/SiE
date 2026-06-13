@@ -7,11 +7,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sie_core/sie_core.dart';
 import 'mission_accomplished_screen.dart';
+import 'session_orb_painters.dart';
 
-// ── Gold palette (matches c.accent / c.accentSecondary) ────────
-const _kRimGold    = Color(0xFFC8A84B);   // accent — Gold Sand
-const _kRimBronze  = Color(0xFFAA7744);   // accentSecondary — Bronze Gold
-const _kRimLight   = Color(0xFFD9BB65);   // highlight at bright spot
+const _kRimGold  = kRimGold;
+const _kRimLight = kRimLight;
 
 // ── Settings ──────────────────────────────────────────────────
 
@@ -125,7 +124,11 @@ enum _Phase { idle, countdown, active, retention, recovery, roundTransition, com
 // ── Screen ───────────────────────────────────────────────────
 
 class BreathingExerciseScreen extends ConsumerStatefulWidget {
-  const BreathingExerciseScreen({super.key});
+  const BreathingExerciseScreen({super.key, this.openSettings = false});
+
+  /// When true, the protocol settings sheet auto-opens on entry — used by the
+  /// Knowledge Base deep-link.
+  final bool openSettings;
 
   @override
   ConsumerState<BreathingExerciseScreen> createState() =>
@@ -184,6 +187,11 @@ class _BreathingExerciseScreenState
       duration: const Duration(seconds: 60),
     )..repeat();
     _loadSphereShader();
+    if (widget.openSettings) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showSettings();
+      });
+    }
   }
 
   Future<void> _loadSphereShader() async {
@@ -222,6 +230,26 @@ class _BreathingExerciseScreenState
     _audio.stopAll();
     await _awardPartialXpIfEligible();
     if (mounted) Navigator.of(context).pop();
+  }
+
+  bool get _sessionActive =>
+      _phase != _Phase.idle && _phase != _Phase.complete;
+
+  /// Routes both the top-bar back button and the system back gesture through a
+  /// confirmation while a session is running — guards against accidental exit.
+  Future<void> _handleBackRequest() async {
+    if (_sessionActive) {
+      final ok = await confirmDestructive(
+        context,
+        ref,
+        title: 'Прервать сессию?',
+        message: 'Если вы продержались дольше 30 секунд, прогресс '
+            'сохранится частично.',
+        confirmLabel: 'Прервать',
+      );
+      if (!ok) return;
+    }
+    await _onBack();
   }
 
   void _onSphereTap() {
@@ -525,7 +553,13 @@ class _BreathingExerciseScreenState
             profile != null &&
             !profile.hasSeenOnboardingBreathing);
 
-    return Stack(
+    return PopScope(
+      canPop: !_sessionActive,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _handleBackRequest();
+      },
+      child: Stack(
       children: [
         SieBackground(
           child: Scaffold(
@@ -539,7 +573,7 @@ class _BreathingExerciseScreenState
                       phase: _phase,
                       round: _round,
                       totalRounds: _settings.rounds,
-                      onBack: _onBack,
+                      onBack: _handleBackRequest,
                       onInfo: () => setState(() => _showOnboardingManual = true),
                     ),
                   ),
@@ -622,6 +656,7 @@ class _BreathingExerciseScreenState
           ),
         ),
       ],
+      ),
     );
   }
 
@@ -863,6 +898,20 @@ class _BreathingExerciseScreenState
                     'CYCLE ${_cycle + 1} / ${_settings.cyclesPerRound}',
                     style: TextStyle(color: c.textSecondary, fontSize: 12),
                     textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: SizedBox(
+                      width: 120,
+                      height: 3,
+                      child: LinearProgressIndicator(
+                        value: ((_cycle + 1) / _settings.cyclesPerRound)
+                            .clamp(0.0, 1.0),
+                        backgroundColor: c.border,
+                        valueColor: AlwaysStoppedAnimation(activeColor),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -1854,54 +1903,6 @@ class _SieButton extends ConsumerWidget {
       ),
     );
   }
-}
-
-// ── SphereRimPainter ────────────────────────────────────────────
-class SphereRimPainter extends CustomPainter {
-  final double lightAngle;
-  final double intensity;
-  final bool isDark;
-
-  const SphereRimPainter({
-    required this.lightAngle,
-    required this.intensity,
-    required this.isDark,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center    = Offset(size.width / 2, size.height / 2);
-    final radius    = size.width / 2 - 1.0;
-    final rect      = Rect.fromCircle(center: center, radius: radius);
-    final baseAlpha = (0.75 + intensity * 0.15).clamp(0.0, 1.0);
-
-    // Peak brightness where light hits (top-left of sphere)
-    final peakAngle = lightAngle - pi / 2;
-
-    // Gradient mirrors RECRUIT badge: Bronze → Gold Sand → Light peak → Gold Sand → Bronze
-    final gradient = SweepGradient(
-      startAngle: peakAngle - pi,
-      endAngle:   peakAngle + pi,
-      colors: [
-        _kRimBronze.withValues(alpha: baseAlpha * 0.80),
-        _kRimGold  .withValues(alpha: baseAlpha * 0.92),
-        _kRimLight .withValues(alpha: baseAlpha * 1.00),
-        _kRimGold  .withValues(alpha: baseAlpha * 0.92),
-        _kRimBronze.withValues(alpha: baseAlpha * 0.80),
-      ],
-      stops: const [0.0, 0.28, 0.50, 0.72, 1.0],
-    );
-
-    final rimPaint = Paint()
-      ..style       = PaintingStyle.stroke
-      ..strokeWidth = 3.0
-      ..shader      = gradient.createShader(rect);
-    canvas.drawCircle(center, radius, rimPaint);
-  }
-
-  @override
-  bool shouldRepaint(SphereRimPainter old) =>
-      lightAngle != old.lightAngle || intensity != old.intensity;
 }
 
 // ── _ShaderPainter ──────────────────────────────────────────────

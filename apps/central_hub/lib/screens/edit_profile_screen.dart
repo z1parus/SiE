@@ -884,6 +884,7 @@ class _SheetField extends ConsumerStatefulWidget {
 class _SheetFieldState extends ConsumerState<_SheetField> {
   final _focus = FocusNode();
   bool _focused = false;
+  bool _obscured = true;
 
   @override
   void initState() {
@@ -944,15 +945,30 @@ class _SheetFieldState extends ConsumerState<_SheetField> {
           child: TextField(
             controller: widget.controller,
             focusNode: _focus,
-            obscureText: widget.obscure,
+            obscureText: widget.obscure && _obscured,
             style: TextStyle(color: c.textPrimary, fontSize: 14),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               isDense: true,
               contentPadding:
-                  EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               border: InputBorder.none,
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
+              suffixIcon: widget.obscure
+                  ? GestureDetector(
+                      onTap: () => setState(() => _obscured = !_obscured),
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: Icon(
+                          _obscured
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          color: c.textSecondary.withValues(alpha: 0.7),
+                          size: 18,
+                        ),
+                      ),
+                    )
+                  : null,
             ),
           ),
         ),

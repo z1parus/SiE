@@ -19,7 +19,7 @@ Future<void> showAiDecompositionSheet(
   if (!accepted) {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => _PrivacyDialog(sc: _scFromContext(ctx)),
+      builder: (ctx) => const _PrivacyDialog(),
     );
     if (confirmed != true) return;
     await prefs.setBool('ai_privacy_accepted', true);
@@ -34,37 +34,28 @@ Future<void> showAiDecompositionSheet(
   );
 }
 
-SieColors _scFromContext(BuildContext context) {
-  // Fallback to classic dark if theme isn't in context
-  try {
-    return SieColors.forMode(SieThemeMode.classicDark);
-  } catch (_) {
-    return SieColors.forMode(SieThemeMode.classicDark);
-  }
-}
-
 // ─── Privacy Dialog ───────────────────────────────────────────────────────────
 
-class _PrivacyDialog extends StatelessWidget {
-  final SieColors sc;
-  const _PrivacyDialog({required this.sc});
+class _PrivacyDialog extends ConsumerWidget {
+  const _PrivacyDialog();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
     return AlertDialog(
-      backgroundColor: const Color(0xFF0D1B2A),
+      backgroundColor: sc.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFF1E3A4A)),
+        side: BorderSide(color: sc.border),
       ),
-      title: const Row(
+      title: Row(
         children: [
-          Icon(Icons.auto_awesome_outlined, color: Color(0xFF5AADA0), size: 18),
-          SizedBox(width: 8),
+          Icon(Icons.auto_awesome_outlined, color: sc.accent, size: 18),
+          const SizedBox(width: 8),
           Text(
             'AI-СТРАТЕГ',
             style: TextStyle(
-              color: Colors.white,
+              color: sc.textPrimary,
               fontSize: 14,
               letterSpacing: 1.5,
               fontWeight: FontWeight.w600,
@@ -72,21 +63,21 @@ class _PrivacyDialog extends StatelessWidget {
           ),
         ],
       ),
-      content: const Text(
+      content: Text(
         'Название и описание цели будут отправлены в Groq AI для генерации плана.\n\nДанные используются только для этого запроса и не сохраняются сервисом.',
-        style: TextStyle(color: Color(0xFF8A9BB0), fontSize: 13, height: 1.5),
+        style: TextStyle(color: sc.textSecondary, fontSize: 13, height: 1.5),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('ОТМЕНА',
-              style: TextStyle(color: Color(0xFF8A9BB0), fontSize: 12)),
+          child: Text('ОТМЕНА',
+              style: TextStyle(color: sc.textSecondary, fontSize: 12)),
         ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('ПРОДОЛЖИТЬ',
+          child: Text('ПРОДОЛЖИТЬ',
               style: TextStyle(
-                  color: Color(0xFF5AADA0),
+                  color: sc.accent,
                   fontSize: 12,
                   fontWeight: FontWeight.w600)),
         ),
@@ -151,10 +142,27 @@ class _AiDecompositionSheetState
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = _formatError(e);
         _stage = _SheetStage.error;
       });
     }
+  }
+
+  String _formatError(Object e) {
+    final msg = e.toString().toLowerCase();
+    if (msg.contains('socketexception') || msg.contains('network') || msg.contains('connection refused')) {
+      return 'Нет подключения к сети. Проверь интернет и повтори.';
+    }
+    if (msg.contains('401') || msg.contains('api_key') || msg.contains('unauthorized')) {
+      return 'Ошибка авторизации API. Обратись к разработчику.';
+    }
+    if (msg.contains('429') || msg.contains('rate_limit') || msg.contains('too many')) {
+      return 'Слишком много запросов. Подожди немного и повтори.';
+    }
+    if (msg.contains('timeout') || msg.contains('timed out')) {
+      return 'Сервер не ответил вовремя. Повтори попытку.';
+    }
+    return 'Не удалось получить план. Повтори попытку.';
   }
 
   Future<void> _apply() async {
@@ -324,7 +332,7 @@ class _AiDecompositionSheetState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, color: Colors.redAccent, size: 40),
+            Icon(Icons.error_outline, color: c.danger, size: 40),
             const SizedBox(height: 16),
             Text(
               'ОШИБКА ГЕНЕРАЦИИ',
@@ -625,12 +633,19 @@ class _SubGoalTileState extends State<_SubGoalTile> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        _weightLabel(t.weight),
-                        style: TextStyle(
-                          color: _weightColor(t.weight),
-                          fontSize: 8,
-                          letterSpacing: 1,
+                      Tooltip(
+                        message: switch (t.weight) {
+                          1 => 'Лёгкая задача',
+                          3 => 'Средняя задача',
+                          _ => 'Тяжёлая задача',
+                        },
+                        child: Text(
+                          _weightLabel(t.weight),
+                          style: TextStyle(
+                            color: _weightColor(t.weight),
+                            fontSize: 8,
+                            letterSpacing: 1,
+                          ),
                         ),
                       ),
                     ],

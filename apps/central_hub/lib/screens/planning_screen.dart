@@ -18,14 +18,6 @@ int _categoryDp(GoalCategory? cat) => switch (cat) {
       null                    => 20,
     };
 
-Color _priorityColor(int p) => switch (p) {
-      1 => const Color(0xFF888898),
-      2 => const Color(0xFFC8A84B),
-      3 => const Color(0xFFE07830),
-      4 => const Color(0xFFE03050),
-      _ => const Color(0xFFC8A84B),
-    };
-
 IconData? _categoryIcon(GoalCategory? cat) => switch (cat) {
       GoalCategory.learning   => Icons.school_outlined,
       GoalCategory.health     => Icons.favorite_outline,
@@ -105,7 +97,11 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                         ? state.archivedGoals
                         : state.activeGoals;
                     if (goals.isEmpty) {
-                      return _EmptyState(sc: sc, isArchive: _showArchive);
+                      return _EmptyState(
+                        sc: sc,
+                        isArchive: _showArchive,
+                        onCreate: () => _showAddGoalSheet(context),
+                      );
                     }
                     return _GoalList(
                       goals: goals,
@@ -151,44 +147,64 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
 
   void _showGoalOptionsSheet(BuildContext context, Goal goal) {
     final sc = ref.read(sieColorsProvider);
+    final myId = Supabase.instance.client.auth.currentUser?.id;
+    final isOwner = goal.userId == myId;
+    final isViewer = !isOwner &&
+        goal.collaborators.any((c) =>
+            c.userId == myId &&
+            c.status == 'accepted' &&
+            c.role == 'viewer');
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => _GoalOptionsSheet(
         goal: goal,
         sc: sc,
+        isViewer: isViewer,
         onStats: () => Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => GoalStatsScreen(goal: goal),
           ),
         ),
-        onPin: () =>
-            ref.read(planningProvider.notifier).toggleGoalPin(goal.id),
-        onFreeze: () {
-          final newStatus =
-              goal.status == 'frozen' ? 'active' : 'frozen';
-          ref
-              .read(planningProvider.notifier)
-              .updateGoalStatus(goal.id, newStatus);
-        },
-        onComplete: () async {
-          final medal = await ref
-              .read(planningProvider.notifier)
-              .updateGoalStatus(goal.id, 'completed');
-          if (!context.mounted) return;
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => MissionAccomplishedScreen(
-                xpGained: goalCompletionBaseXp(goal) + (medal?.xpBonus ?? 100),
-                dpGained: _categoryDp(goal.settings.category),
-                medal: medal,
-              ),
-            ),
-          );
-        },
-        onDelete: () async {
+        onPin: isViewer
+            ? null
+            : () => ref.read(planningProvider.notifier).toggleGoalPin(goal.id),
+        onFreeze: isViewer
+            ? null
+            : () {
+                final newStatus =
+                    goal.status == 'frozen' ? 'active' : 'frozen';
+                ref
+                    .read(planningProvider.notifier)
+                    .updateGoalStatus(goal.id, newStatus);
+              },
+        onComplete: isViewer
+            ? null
+            : () async {
+                final medal = await ref
+                    .read(planningProvider.notifier)
+                    .updateGoalStatus(goal.id, 'completed');
+                if (!context.mounted) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => MissionAccomplishedScreen(
+                      xpGained:
+                          goalCompletionBaseXp(goal) + (medal?.xpBonus ?? 100),
+                      dpGained: _categoryDp(goal.settings.category),
+                      medal: medal,
+                    ),
+                  ),
+                );
+              },
+        onLeaveOrDelete: () async {
+          if (isViewer) {
+            if (myId == null) return;
+            ref.read(goalCollaborationProvider).remove(goal.id, myId);
+            return;
+          }
           final confirm = await showDialog<bool>(
             context: context,
             builder: (_) => AlertDialog(
@@ -207,8 +223,8 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Удалить',
-                      style: TextStyle(color: Color(0xFFE03050))),
+                  child: Text('Удалить',
+                      style: TextStyle(color: sc.danger)),
                 ),
               ],
             ),
@@ -353,7 +369,7 @@ class _GoalCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final progress = goalProgress(goal) / 100;
     final fatigued = isGoalFatigued(goal);
-    final priorityColor = _priorityColor(goal.priority);
+    final priorityColor = sc.priorityColor(goal.priority);
     final goalColor = goal.color;
     final doneSubGoals = goal.completedSubGoals;
     final totalSubGoals = goal.subGoals.length;
@@ -371,7 +387,7 @@ class _GoalCard extends ConsumerWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: fatigued
-                ? Colors.orange.withValues(alpha: 0.5)
+                ? sc.warning.withValues(alpha: 0.5)
                 : sc.border,
           ),
           color: sc.surface,
@@ -409,8 +425,34 @@ class _GoalCard extends ConsumerWidget {
                           ],
                           const Spacer(),
                           if (fatigued)
-                            Icon(Icons.warning_amber_rounded,
-                                color: Colors.orange, size: 14),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: sc.warning.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                    color: sc.warning
+                                        .withValues(alpha: 0.4)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.warning_amber_rounded,
+                                      color: sc.warning, size: 11),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    'ЗАСТОЙ',
+                                    style: TextStyle(
+                                      color: sc.warning,
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.8,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 8),
@@ -644,10 +686,15 @@ class _MiniStat extends StatelessWidget {
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.sc, required this.isArchive});
+  const _EmptyState({
+    required this.sc,
+    required this.isArchive,
+    this.onCreate,
+  });
 
   final SieColors sc;
   final bool isArchive;
+  final VoidCallback? onCreate;
 
   @override
   Widget build(BuildContext context) {
@@ -665,12 +712,36 @@ class _EmptyState extends StatelessWidget {
             isArchive ? 'Архив пуст' : 'Нет активных миссий',
             style: TextStyle(color: sc.textSecondary, fontSize: 16),
           ),
-          const SizedBox(height: 8),
-          if (!isArchive)
-            Text(
-              'Нажмите + для создания первой цели',
-              style: TextStyle(color: sc.textSecondary, fontSize: 13),
+          if (!isArchive && onCreate != null) ...[
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: onCreate,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: sc.accent),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add, color: sc.accent, size: 18),
+                    const SizedBox(width: 6),
+                    Text(
+                      'СОЗДАТЬ МИССИЮ',
+                      style: TextStyle(
+                        color: sc.accent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
+          ],
         ],
       ),
     );
@@ -683,20 +754,22 @@ class _GoalOptionsSheet extends StatelessWidget {
   const _GoalOptionsSheet({
     required this.goal,
     required this.sc,
+    required this.isViewer,
     required this.onStats,
-    required this.onPin,
-    required this.onFreeze,
-    required this.onComplete,
-    required this.onDelete,
+    this.onPin,
+    this.onFreeze,
+    this.onComplete,
+    required this.onLeaveOrDelete,
   });
 
   final Goal goal;
   final SieColors sc;
+  final bool isViewer;
   final VoidCallback onStats;
-  final VoidCallback onPin;
-  final VoidCallback onFreeze;
-  final VoidCallback onComplete;
-  final VoidCallback onDelete;
+  final VoidCallback? onPin;
+  final VoidCallback? onFreeze;
+  final VoidCallback? onComplete;
+  final VoidCallback onLeaveOrDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -742,42 +815,43 @@ class _GoalOptionsSheet extends StatelessWidget {
               onStats();
             },
           ),
-          _OptionTile(
-            icon: goal.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-            label: goal.isPinned ? 'Открепить миссию' : 'Закрепить миссию',
-            color: const Color(0xFFF4C430),
-            onTap: () {
-              Navigator.pop(context);
-              onPin();
-            },
-          ),
-          _OptionTile(
-            icon: isFrozen ? Icons.play_arrow_outlined : Icons.ac_unit,
-            label:
-                isFrozen ? 'Разморозить миссию' : 'Заморозить миссию',
-            color: const Color(0xFF6A8ED8),
-            onTap: () {
-              Navigator.pop(context);
-              onFreeze();
-            },
-          ),
-          if (goal.status != 'completed')
+          if (onPin != null)
+            _OptionTile(
+              icon: goal.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+              label: goal.isPinned ? 'Открепить миссию' : 'Закрепить миссию',
+              color: const Color(0xFFF4C430),
+              onTap: () {
+                Navigator.pop(context);
+                onPin!();
+              },
+            ),
+          if (onFreeze != null)
+            _OptionTile(
+              icon: isFrozen ? Icons.play_arrow_outlined : Icons.ac_unit,
+              label: isFrozen ? 'Разморозить миссию' : 'Заморозить миссию',
+              color: const Color(0xFF6A8ED8),
+              onTap: () {
+                Navigator.pop(context);
+                onFreeze!();
+              },
+            ),
+          if (onComplete != null && goal.status != 'completed')
             _OptionTile(
               icon: Icons.check_circle_outline,
               label: 'Завершить миссию',
               color: const Color(0xFF5AADA0),
               onTap: () {
                 Navigator.pop(context);
-                onComplete();
+                onComplete!();
               },
             ),
           _OptionTile(
-            icon: Icons.delete_outline,
-            label: 'Удалить миссию',
+            icon: isViewer ? Icons.exit_to_app_outlined : Icons.delete_outline,
+            label: isViewer ? 'Покинуть миссию' : 'Удалить миссию',
             color: const Color(0xFFE03050),
             onTap: () {
               Navigator.pop(context);
-              onDelete();
+              onLeaveOrDelete();
             },
           ),
           const SizedBox(height: 8),
@@ -994,7 +1068,10 @@ class _AddGoalSheetState extends ConsumerState<_AddGoalSheet> {
                     DateTime.now().add(const Duration(days: 365 * 5)),
                 builder: (ctx, child) => Theme(
                   data: Theme.of(ctx).copyWith(
-                    colorScheme: ColorScheme.dark(primary: sc.accent),
+                    colorScheme: (sc.isLightMode
+                            ? ColorScheme.light(primary: sc.accent)
+                            : ColorScheme.dark(primary: sc.accent))
+                        .copyWith(surface: sc.surface),
                   ),
                   child: child!,
                 ),
@@ -1078,7 +1155,7 @@ class _PriorityBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _priorityColor(priority);
+    final color = sc.priorityColor(priority);
     return Expanded(
       child: GestureDetector(
         onTap: onTap,

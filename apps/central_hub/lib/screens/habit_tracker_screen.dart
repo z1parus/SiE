@@ -101,11 +101,9 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
               backgroundColor: sc.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
               onRefresh: _onRefresh,
               child: habitsAsync.when(
-              loading: () => Center(
-                child: CircularProgressIndicator(
-                  color: sc.accent,
-                  strokeWidth: 1.5,
-                ),
+              loading: () => const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: SieSkeletonList(itemCount: 5, itemHeight: 76),
               ),
               error: (e, _) => Center(child: _NoConnectionMessage(error: e)),
               data: (state) {
@@ -375,12 +373,18 @@ class _CyberTopBar extends ConsumerWidget {
               ],
             ),
           ),
-          _GlassIconBtn(icon: Icons.help_outline, onTap: onInfo, size: 18),
+          _GlassIconBtn(
+            icon: Icons.help_outline,
+            onTap: onInfo,
+            size: 18,
+            semanticLabel: 'Справка',
+          ),
           const SizedBox(width: 8),
           _GlassIconBtn(
             icon: Icons.inventory_2_outlined,
             onTap: onArchive,
             size: 18,
+            semanticLabel: 'Архив привычек',
           ),
         ],
       ),
@@ -393,11 +397,13 @@ class _GlassIconBtn extends ConsumerWidget {
     required this.icon,
     required this.onTap,
     this.size = 16,
+    this.semanticLabel,
   });
 
   final IconData icon;
   final VoidCallback onTap;
   final double size;
+  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -406,7 +412,7 @@ class _GlassIconBtn extends ConsumerWidget {
       child: Icon(icon, color: sc.textSecondary, size: size),
     );
 
-    return GestureDetector(
+    final button = GestureDetector(
       onTap: onTap,
       child: Container(
         width: 36,
@@ -414,6 +420,13 @@ class _GlassIconBtn extends ConsumerWidget {
         decoration: sc.flatCard(radius: 18),
         child: child,
       ),
+    );
+
+    if (semanticLabel == null) return button;
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: Tooltip(message: semanticLabel!, child: button),
     );
   }
 }
@@ -1144,17 +1157,21 @@ class _DayNode extends ConsumerWidget {
   final bool isToday;
   final Color accentColor;
 
+  /// Optional retro-log handler (wired only for "yesterday").
+  final VoidCallback? onTap;
+
   const _DayNode({
     required this.date,
     required this.isCompleted,
     required this.isToday,
     required this.accentColor,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sc = ref.watch(sieColorsProvider);
-    return Column(
+    final node = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
@@ -1227,6 +1244,19 @@ class _DayNode extends ConsumerWidget {
           ),
         ),
       ],
+    );
+
+    if (onTap == null) return node;
+    return Semantics(
+      button: true,
+      label: isCompleted
+          ? 'Отменить отметку за ${date.day}'
+          : 'Отметить выполнение за ${date.day}',
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: node,
+      ),
     );
   }
 }
@@ -3123,18 +3153,27 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                     icon: Icons.inventory_2_outlined,
                     label: 'ARCHIVE PROTOCOL',
                     color: sc.accent,
-                    onTap: () {
+                    onTap: () async {
                       Navigator.of(ctx).pop();
+                      final ok = await confirmDestructive(
+                        context,
+                        ref,
+                        title: 'Архивировать привычку?',
+                        message: 'Привычка скроется из активного списка. '
+                            'Её можно восстановить из Архива в любой момент.',
+                        confirmLabel: 'В архив',
+                      );
+                      if (!ok) return;
                       ref
                           .read(habitsProvider.notifier)
                           .archiveHabit(widget.habit.id);
-                      Navigator.of(context).pop();
+                      if (mounted) Navigator.of(context).pop();
                     },
                   ),
                   _OptionTile(
                     icon: Icons.delete_outline,
                     label: 'DELETE PROTOCOL',
-                    color: Colors.redAccent,
+                    color: sc.danger,
                     onTap: () {
                       Navigator.of(ctx).pop();
                       _confirmDeleteHabit();
@@ -3330,6 +3369,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                       icon: Icons.settings_outlined,
                       onTap: _editHabit,
                       size: 18,
+                      semanticLabel: 'Настройки привычки',
                     ),
                   ],
                 ),
@@ -3372,13 +3412,24 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: days.asMap().entries.map((e) {
-                          final isToday    = e.key == 6;
+                          final isToday     = e.key == 6;
+                          final isYesterday = e.key == 5;
                           final isComplete = logDates.contains(_fmt(e.value));
                           return _DayNode(
                             date: e.value,
                             isCompleted: isComplete,
                             isToday: isToday,
                             accentColor: accentColor,
+                            // Allow retro-logging "yesterday" only.
+                            onTap: isYesterday
+                                ? () {
+                                    SieHaptics.selection();
+                                    ref
+                                        .read(habitsProvider.notifier)
+                                        .toggleHabit(
+                                            widget.habit.id, e.value);
+                                  }
+                                : null,
                           );
                         }).toList(),
                       ),
@@ -3394,9 +3445,17 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                               accentColor: completedToday
                                   ? sc.textSecondary.withValues(alpha: 0.6)
                                   : accentColor,
-                              onTap: () => ref
-                                  .read(habitsProvider.notifier)
-                                  .toggleHabit(widget.habit.id, DateTime.now()),
+                              onTap: () {
+                                if (completedToday) {
+                                  SieHaptics.light();
+                                } else {
+                                  SieHaptics.success();
+                                }
+                                ref
+                                    .read(habitsProvider.notifier)
+                                    .toggleHabit(
+                                        widget.habit.id, DateTime.now());
+                              },
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -3410,10 +3469,19 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                               accentColor: completedToday
                                   ? accentColor
                                   : sc.textSecondary.withValues(alpha: 0.35),
+                              // Stays visually disabled, but explains why
+                              // instead of being an inert button.
                               onTap: completedToday
                                   ? () => _openReflection(
                                       today, todayEntry, accentColor)
-                                  : null,
+                                  : () => ScaffoldMessenger.of(context)
+                                      .showSnackBar(const SnackBar(
+                                        behavior: SnackBarBehavior.floating,
+                                        duration: Duration(seconds: 2),
+                                        content: Text(
+                                            'Сначала отметьте выполнение, '
+                                            'затем добавьте заметку'),
+                                      )),
                             ),
                           ),
                         ],

@@ -37,11 +37,12 @@ class MissionMedal {
     required this.earnedAt,
     this.totalTaskWeight = 0,
     this.durationDays = 0,
+    this.medalType = 'goal',
   });
 
   final String id;
   final String userId;
-  final String goalId;
+  final String goalId; // '' for vanguard medals
   final String goalName;
   final GoalCategory? category;
   final int level; // 1=Bronze, 2=Silver, 3=Gold
@@ -49,6 +50,9 @@ class MissionMedal {
   final DateTime earnedAt;
   final int totalTaskWeight;
   final int durationDays;
+  final String medalType; // 'goal' | 'vanguard'
+
+  bool get isVanguard => medalType == 'vanguard';
 
   int get xpBonus => medalXpBonus(level);
 
@@ -60,7 +64,7 @@ class MissionMedal {
     return MissionMedal(
       id: m['id'] as String,
       userId: m['user_id'] as String,
-      goalId: m['goal_id'] as String,
+      goalId: m['goal_id'] as String? ?? '',
       goalName: m['goal_name'] as String? ?? '',
       category: cat,
       level: (m['level'] as num).toInt(),
@@ -70,19 +74,22 @@ class MissionMedal {
           : DateTime.fromMillisecondsSinceEpoch(m['earned_at'] as int),
       totalTaskWeight: (m['total_task_weight'] as num?)?.toInt() ?? 0,
       durationDays: (m['duration_days'] as num?)?.toInt() ?? 0,
+      medalType: m['medal_type'] as String? ?? 'goal',
     );
   }
 
   Map<String, dynamic> toInsertMap() => {
         'id': id,
         'user_id': userId,
-        'goal_id': goalId,
+        if (goalId.isNotEmpty) 'goal_id': goalId,
         'category': category?.name ?? 'none',
         'level': level,
         'name': name,
         'earned_at': earnedAt.toIso8601String(),
         'total_task_weight': totalTaskWeight,
         'duration_days': durationDays,
+        'medal_type': medalType,
         // goal_name is not in DB — derived client-side
       };
 }
+
