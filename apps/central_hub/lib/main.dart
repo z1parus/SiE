@@ -5,7 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 import 'screens/auth_screen.dart';
 import 'screens/main_navigation_shell.dart';
+import 'screens/planning_screen.dart';
 import 'screens/splash_screen.dart';
+
+/// Root navigator used to route notification taps into the planning module.
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,7 +23,15 @@ void main() async {
     url: 'https://bvqlqvzcqfgojzxztvrm.supabase.co',
     anonKey: 'sb_publishable_x54jsqL5s9ohcOJoyOTklw_5G8lbd9l',
   );
+  await NotificationService.instance.init(onTap: _handleNotificationTap);
   runApp(const ProviderScope(child: SieApp()));
+}
+
+void _handleNotificationTap(String? payload) {
+  // All planning reminders deep-link into the War Room agenda.
+  final nav = rootNavigatorKey.currentState;
+  if (nav == null) return;
+  nav.push(MaterialPageRoute(builder: (_) => const PlanningScreen()));
 }
 
 class SieApp extends ConsumerStatefulWidget {
@@ -40,6 +52,7 @@ class _SieAppState extends ConsumerState<SieApp> {
     return MaterialApp(
       title: 'SiE',
       debugShowCheckedModeBanner: false,
+      navigatorKey: rootNavigatorKey,
       theme: SieTheme.themeDataFor(sieMode),
       builder: kIsWeb ? _webConstraint : null,
       home: !_launchComplete

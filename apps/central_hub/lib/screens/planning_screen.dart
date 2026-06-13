@@ -8,6 +8,7 @@ import 'mission_detail_screen.dart';
 import 'mission_accomplished_screen.dart';
 import 'goal_stats_screen.dart';
 import 'war_room_screen.dart';
+import 'reminder_settings_screen.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -104,6 +105,11 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                 showArchive: _showArchive,
                 showArchiveButton: !_showAgenda,
                 onToggle: () => setState(() => _showArchive = !_showArchive),
+                onReminders: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const ReminderSettingsScreen()),
+                ),
               ),
               _ModeSwitch(
                 sc: sc,
@@ -277,12 +283,14 @@ class _PlanningHeader extends StatelessWidget {
     required this.showArchive,
     required this.onToggle,
     this.showArchiveButton = true,
+    this.onReminders,
   });
 
   final SieColors sc;
   final bool showArchive;
   final bool showArchiveButton;
   final VoidCallback onToggle;
+  final VoidCallback? onReminders;
 
   @override
   Widget build(BuildContext context) {
@@ -315,6 +323,23 @@ class _PlanningHeader extends StatelessWidget {
             ],
           ),
           const Spacer(),
+          if (onReminders != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: GestureDetector(
+                onTap: onReminders,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: sc.border),
+                  ),
+                  child: Icon(Icons.notifications_outlined,
+                      color: sc.textSecondary, size: 18),
+                ),
+              ),
+            ),
           if (showArchiveButton)
             GestureDetector(
               onTap: onToggle,

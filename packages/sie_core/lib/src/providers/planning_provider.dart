@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' show Offset;
 import 'package:flutter/foundation.dart';
@@ -11,10 +12,13 @@ import '../models/goal_collaborator.dart';
 import '../models/public_profile.dart';
 import '../models/mission_medal.dart';
 import '../models/ai_decomposition.dart';
+import '../services/notification_service.dart';
 import 'auth_state_provider.dart';
 import 'connectivity_provider.dart';
 import 'habits_provider.dart';
+import 'notification_provider.dart';
 import 'user_profile_provider.dart';
+import 'user_timezone_provider.dart';
 
 const _uuid = Uuid();
 
@@ -80,7 +84,158 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
   Future<PlanningState> build() async {
     ref.watch(authStateProvider);
     ref.watch(connectivityProvider);
-    return _load();
+    final s = await _load();
+    // Re-arm local reminders from fresh state (fire-and-forget, never blocks UI).
+    unawaited(_syncReminders(s));
+    return s;
+  }
+
+  // ── Notification helpers ────────────────────────────────────────────────────
+
+  ReminderSettings? get _reminderSettings =>
+      ref.read(reminderSettingsProvider).valueOrNull;
+
+  NotificationService get _notif => ref.read(notificationServiceProvider);
+
+  bool get _remindersOn => _reminderSettings?.remindersEnabled ?? false;
+
+  void _syncNotifOffset() {
+    final off = ref.read(userTimezoneProvider).valueOrNull;
+    if (off != null) _notif.setOffset(off);
+  }
+
+  Goal? _goalById(String id) {
+    final goals = state.valueOrNull?.goals;
+    if (goals == null) return null;
+    for (final g in goals) {
+      if (g.id == id) return g;
+    }
+    return null;
+  }
+
+  Future<void> _scheduleTaskNotif(String goalId, PlanningTask task) async {
+    if (!_remindersOn || task.isCompleted || task.dueDate == null) return;
+    final goal = _goalById(goalId);
+    if (goal == null || goal.status != 'active') return;
+    _syncNotifOffset();
+    await _notif.scheduleTaskReminder(
+      taskId: task.id,
+      taskName: task.name,
+      goalName: goal.name,
+      dueDate: task.dueDate!,
+      remindBeforeDays: goal.settings.remindBeforeDeadlineDays,
+    );
+  }
+
+  Future<void> _cancelTaskNotif(String taskId) async {
+    if (!_remindersOn) return;
+    await _notif.cancelTaskReminder(taskId);
+  }
+
+  Future<void> _cancelGoalNotifs(Goal goal) async {
+    if (!_remindersOn) return;
+    await _notif.cancelGoalDeadline(goal.id);
+    await _notif.cancelStagnationNudge(goal.id);
+    for (final sg in _allSubGoals(goal.subGoals)) {
+      for (final t in sg.tasks) {
+        await _notif.cancelTaskReminder(t.id);
+      }
+    }
+    for (final m in goal.milestones) {
+      await _notif.cancelMilestoneReminder(m.id);
+    }
+  }
+
+  // Bulk (re)scheduler — idempotent thanks to deterministic notification ids.
+  Future<void> _syncReminders(PlanningState s) async {
+    ReminderSettings settings;
+    try {
+      settings = await ref.read(reminderSettingsProvider.future);
+    } catch (_) {
+      return;
+    }
+    if (!settings.remindersEnabled) return;
+    _syncNotifOffset();
+
+    final svc = _notif;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    var scheduled = 0;
+    const cap = 50; // stay well under the iOS 64 pending-notification limit
+    var todayCount = 0;
+
+    for (final goal in s.activeGoals) {
+      final remindDays = goal.settings.remindBeforeDeadlineDays;
+
+      if (goal.deadline != null && goal.deadline!.isAfter(now)) {
+        await svc.scheduleGoalDeadline(
+          goalId: goal.id,
+          goalName: goal.name,
+          deadline: goal.deadline!,
+          progressPercent: goalProgress(goal).round(),
+          remindBeforeDays: remindDays,
+        );
+      }
+
+      for (final sg in _allSubGoals(goal.subGoals)) {
+        for (final t in sg.tasks) {
+          if (t.isCompleted || t.dueDate == null) continue;
+          final due = DateTime(
+              t.dueDate!.year, t.dueDate!.month, t.dueDate!.day);
+          if (due == today) todayCount++;
+          if (scheduled < cap && !due.isBefore(today)) {
+            await svc.scheduleTaskReminder(
+              taskId: t.id,
+              taskName: t.name,
+              goalName: goal.name,
+              dueDate: t.dueDate!,
+              remindBeforeDays: remindDays,
+            );
+            scheduled++;
+          }
+        }
+      }
+
+      for (final m in goal.milestones) {
+        if (m.isCompleted || m.targetDate == null) continue;
+        if (scheduled < cap) {
+          await svc.scheduleMilestoneReminder(
+            milestoneId: m.id,
+            milestoneName: m.name,
+            goalName: goal.name,
+            targetDate: m.targetDate!,
+            remindBeforeDays: remindDays,
+          );
+          scheduled++;
+        }
+      }
+
+      if (settings.stagnationNudge && isGoalFatigued(goal)) {
+        // Nudge tomorrow morning; deterministic id avoids duplicates.
+        await svc.scheduleStagnationNudge(
+          goalId: goal.id,
+          goalName: goal.name,
+          when: DateTime(now.year, now.month, now.day + 1, 10, 0),
+        );
+      }
+    }
+
+    if (settings.dailyDigestEnabled) {
+      await svc.scheduleDailyDigest(
+        hour: settings.digestHour,
+        minute: settings.digestMinute,
+        taskCount: todayCount,
+      );
+    } else {
+      await svc.cancelDailyDigest();
+    }
+  }
+
+  /// Public entry-point so the UI can re-arm reminders after the user toggles
+  /// settings or grants permission.
+  Future<void> resyncReminders() async {
+    final s = state.valueOrNull;
+    if (s != null) await _syncReminders(s);
   }
 
   // ── Load ─────────────────────────────────────────────────────────────────
@@ -441,6 +596,9 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final current = state.valueOrNull;
     if (current == null) return;
 
+    final goal = _goalById(id);
+    if (goal != null) await _cancelGoalNotifs(goal);
+
     state = AsyncData(
         current.copyWith(goals: current.goals.where((g) => g.id != id).toList()));
 
@@ -479,6 +637,11 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
     await db.updateGoal(id, LocalGoalsCompanion(
         status: Value(newStatus), synced: const Value(false)));
+
+    // Cancel all reminders when a goal leaves the active board.
+    if (newStatus != 'active' && goal != null) {
+      await _cancelGoalNotifs(goal);
+    }
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
 
@@ -758,6 +921,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         subGoals: _updateSubGoalInTree(g.subGoals, subGoalId,
             (sg) => sg.copyWith(tasks: [...sg.tasks, newTask]))));
 
+    await _scheduleTaskNotif(goalId, newTask);
+
     await db.upsertPlanningTask(LocalPlanningTasksCompanion(
       id: Value(id),
       subGoalId: Value(subGoalId),
@@ -813,6 +978,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
                 tasks: sg.tasks.where((t) => t.id != taskId).toList()))));
 
     await db.deletePlanningTaskLocally(taskId);
+    await _cancelTaskNotif(taskId);
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) {
@@ -889,6 +1055,13 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     if (nowCompleted) await _awardXp(taskXp(task.weight), 0);
     await _touchGoalUpdatedAt(goalId);
     if (nowCompleted) await _autoCompleteParents(goalId);
+
+    // Reminder lifecycle: cancel when done, re-arm when re-opened.
+    if (nowCompleted) {
+      await _cancelTaskNotif(taskId);
+    } else {
+      await _scheduleTaskNotif(goalId, task.copyWith(isCompleted: false));
+    }
   }
 
   // Reschedule a task's due date (or clear it when [newDueDate] is null).
@@ -905,7 +1078,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         orElse: () => throw StateError('goal not found'));
     final sg = _allSubGoals(goal.subGoals).firstWhere((s) => s.id == subGoalId,
         orElse: () => throw StateError('subgoal not found'));
-    sg.tasks.firstWhere((t) => t.id == taskId,
+    final task = sg.tasks.firstWhere((t) => t.id == taskId,
         orElse: () => throw StateError('task not found'));
 
     // ── Optimistic update ──
@@ -948,6 +1121,13 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             'id': taskId,
             'due_date': newDueDate?.toIso8601String(),
           }));
+    }
+
+    // Re-arm the reminder for the new date (or clear it).
+    await _cancelTaskNotif(taskId);
+    if (newDueDate != null) {
+      await _scheduleTaskNotif(
+          goalId, task.copyWith(dueDate: newDueDate, isCompleted: false));
     }
 
     await _touchGoalUpdatedAt(goalId);
@@ -1004,6 +1184,20 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     _updateGoalInState(goalId,
         (g) => g.copyWith(milestones: [...g.milestones, newMs]));
 
+    if (_remindersOn && targetDate != null) {
+      final goal = _goalById(goalId);
+      if (goal != null && goal.status == 'active') {
+        _syncNotifOffset();
+        await _notif.scheduleMilestoneReminder(
+          milestoneId: id,
+          milestoneName: name,
+          goalName: goal.name,
+          targetDate: targetDate,
+          remindBeforeDays: goal.settings.remindBeforeDeadlineDays,
+        );
+      }
+    }
+
     await db.upsertMilestone(LocalMilestonesCompanion(
       id: Value(id),
       goalId: Value(goalId),
@@ -1044,6 +1238,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
                 g.milestones.where((m) => m.id != milestoneId).toList()));
 
     await db.deleteMilestoneLocally(milestoneId);
+    if (_remindersOn) await _notif.cancelMilestoneReminder(milestoneId);
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) {
@@ -1093,6 +1288,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       await db.enqueueSyncOp('complete_milestone',
           jsonEncode({'id': milestoneId, 'goal_id': goalId}));
     }
+    if (_remindersOn) await _notif.cancelMilestoneReminder(milestoneId);
     await _awardXp(500, 0);
   }
 
