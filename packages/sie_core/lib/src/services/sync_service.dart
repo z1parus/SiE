@@ -76,6 +76,13 @@ class SyncService {
                 .eq('habit_id', payload['habit_id'] as String)
                 .eq('user_id', userId)
                 .eq('completed_at', payload['completed_at'] as String);
+          case 'update_habit_log_value':
+            await client.from('habit_logs').upsert({
+              'habit_id': payload['habit_id'],
+              'user_id': userId,
+              'completed_at': payload['completed_at'],
+              'value': payload['value'],
+            }, onConflict: 'user_id,habit_id,completed_at');
           case 'delete_habit_log':
             await client
                 .from('habit_logs')

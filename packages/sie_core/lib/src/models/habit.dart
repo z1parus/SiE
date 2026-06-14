@@ -1,4 +1,5 @@
 import 'habit_log_entry.dart';
+import 'life_area.dart';
 
 class Habit {
   final String id;
@@ -11,6 +12,37 @@ class Habit {
   final bool isArchived;
   final DateTime createdAt;
 
+  /// Compact schedule descriptor (Stage 1 — flexible scheduling):
+  ///   'daily'            — every day (default, legacy behaviour)
+  ///   'weekdays:1,3,5'   — specific ISO weekdays (1=Mon … 7=Sun)
+  ///   'weekly:N'         — N times per ISO week, any days
+  ///   'interval:N'       — every N days from the first completion (anchor)
+  final String schedule;
+
+  /// Stage 2 — measurement type: 'binary' (default) | 'count' | 'duration'.
+  final String kind;
+
+  /// Daily target for count/duration habits. For 'duration' it is stored in
+  /// seconds. Null for binary.
+  final double? targetValue;
+
+  /// Display unit for count habits ('стак.', 'стр.', 'раз'). Null for
+  /// binary/duration (duration is always shown in minutes).
+  final String? unit;
+
+  /// Quick "+step" button increment. For 'duration' it is in seconds.
+  final double? step;
+
+  /// Stage 3 — optional reminder time as 'HH:mm' string (null = off).
+  final String? reminderTime;
+
+  /// Stage 6 — optional life area for grouping (null = no area).
+  final LifeArea? area;
+
+  /// Stage 7 — habit polarity: 'build' (default, do the good thing) |
+  /// 'avoid' (abstain from a bad thing; success = a day without a lapse).
+  final String polarity;
+
   const Habit({
     required this.id,
     required this.userId,
@@ -20,6 +52,14 @@ class Habit {
     this.icon,
     this.isPinned = false,
     this.isArchived = false,
+    this.schedule = 'daily',
+    this.kind = 'binary',
+    this.targetValue,
+    this.unit,
+    this.step,
+    this.reminderTime,
+    this.area,
+    this.polarity = 'build',
     required this.createdAt,
   });
 
@@ -32,6 +72,20 @@ class Habit {
         icon: map['icon']?.toString(),
         isPinned: map['is_pinned'] == true,
         isArchived: map['is_archived'] == true,
+        schedule: (map['schedule']?.toString().isNotEmpty ?? false)
+            ? map['schedule'].toString()
+            : 'daily',
+        kind: (map['kind']?.toString().isNotEmpty ?? false)
+            ? map['kind'].toString()
+            : 'binary',
+        targetValue: (map['target_value'] as num?)?.toDouble(),
+        unit: map['unit']?.toString(),
+        step: (map['step'] as num?)?.toDouble(),
+        reminderTime: map['reminder_time']?.toString(),
+        area: LifeAreaX.fromString(map['area']?.toString()),
+        polarity: (map['polarity']?.toString().isNotEmpty ?? false)
+            ? map['polarity'].toString()
+            : 'build',
         createdAt:
             DateTime.tryParse(map['created_at']?.toString() ?? '') ??
                 DateTime.now(),
@@ -44,6 +98,14 @@ class Habit {
     Object? icon = _sentinel,
     bool? isPinned,
     bool? isArchived,
+    String? schedule,
+    String? kind,
+    Object? targetValue = _sentinel,
+    Object? unit = _sentinel,
+    Object? step = _sentinel,
+    Object? reminderTime = _sentinel,
+    Object? area = _sentinel,
+    String? polarity,
   }) =>
       Habit(
         id: id,
@@ -54,16 +116,182 @@ class Habit {
         icon: icon == _sentinel ? this.icon : icon as String?,
         isPinned: isPinned ?? this.isPinned,
         isArchived: isArchived ?? this.isArchived,
+        schedule: schedule ?? this.schedule,
+        kind: kind ?? this.kind,
+        targetValue: targetValue == _sentinel
+            ? this.targetValue
+            : targetValue as double?,
+        unit: unit == _sentinel ? this.unit : unit as String?,
+        step: step == _sentinel ? this.step : step as double?,
+        reminderTime: reminderTime == _sentinel
+            ? this.reminderTime
+            : reminderTime as String?,
+        area: area == _sentinel ? this.area : area as LifeArea?,
+        polarity: polarity ?? this.polarity,
         createdAt: createdAt,
       );
+
+  /// Stage 7 — true for "avoid" (break a bad habit) polarity.
+  bool get isAvoid => polarity == 'avoid';
+
+  /// True when this habit uses a non-daily schedule.
+  bool get hasCustomSchedule => schedule != 'daily';
+
+  /// True for count/duration habits (with an accumulating daily value).
+  bool get isMetric => kind == 'count' || kind == 'duration';
+
+  /// Effective daily target (≥ 1 for metric habits, 1 for binary).
+  double get effectiveTarget => isMetric ? (targetValue ?? 1) : 1;
+
+  /// Effective quick-step increment.
+  double get effectiveStep =>
+      step ?? (kind == 'duration' ? 300 : 1); // 5 min default for duration
+
+  /// Whether [value] reaches this habit's daily goal.
+  bool isMetByValue(double value) => value >= effectiveTarget;
 }
 
 const _sentinel = Object();
 
+// ── Schedule-aware helpers (Stage 1) ─────────────────────────────────────────
+
+String habitDateKey(DateTime dt) =>
+    '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+
+DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+/// Monday-start (ISO 8601) date-only for the week containing [day].
+DateTime isoWeekStart(DateTime day) {
+  final d = _dateOnly(day);
+  return d.subtract(Duration(days: d.weekday - 1));
+}
+
+/// Earliest log date (date-only) among [logDates], or null if none.
+/// Public wrapper used by UI to anchor `interval:N` schedules.
+DateTime? firstLogDate(Set<String> logDates) => _firstLogDate(logDates);
+
+DateTime? _firstLogDate(Set<String> logDates) {
+  DateTime? first;
+  for (final s in logDates) {
+    final d = DateTime.tryParse(s);
+    if (d == null) continue;
+    if (first == null || d.isBefore(first)) first = d;
+  }
+  return first == null ? null : _dateOnly(first);
+}
+
+/// Whether [h] is scheduled to be performed on [day].
+///
+/// For `interval:N`, the anchor is the first completion date when known
+/// ([firstLog]), otherwise the habit's creation date. `weekly:N` is "any day",
+/// so every day is a candidate.
+bool isScheduledOn(Habit h, DateTime day, {DateTime? firstLog}) {
+  final s = h.schedule;
+  if (s.isEmpty || s == 'daily') return true;
+
+  if (s.startsWith('weekdays:')) {
+    final days = s
+        .substring('weekdays:'.length)
+        .split(',')
+        .map((e) => int.tryParse(e.trim()))
+        .whereType<int>()
+        .toSet();
+    if (days.isEmpty) return true; // malformed — fail open to daily
+    return days.contains(day.weekday); // Mon=1 … Sun=7
+  }
+
+  if (s.startsWith('weekly:')) return true;
+
+  if (s.startsWith('interval:')) {
+    final n = int.tryParse(s.substring('interval:'.length)) ?? 1;
+    if (n <= 1) return true;
+    final anchor = _dateOnly(firstLog ?? h.createdAt);
+    final d = _dateOnly(day);
+    final diff = d.difference(anchor).inDays;
+    return diff >= 0 && diff % n == 0;
+  }
+
+  return true; // unknown format — fail open
+}
+
+/// All scheduled (candidate) days for [h] within [from]..[to] inclusive.
+/// Note: for `weekly:N` every day is a candidate (any-day goal).
+List<DateTime> scheduledDaysInRange(Habit h, DateTime from, DateTime to,
+    {DateTime? firstLog}) {
+  final result = <DateTime>[];
+  var day = _dateOnly(from);
+  final end = _dateOnly(to);
+  while (!day.isAfter(end)) {
+    if (isScheduledOn(h, day, firstLog: firstLog)) result.add(day);
+    day = day.add(const Duration(days: 1));
+  }
+  return result;
+}
+
+/// Number of completions required per week for a `weekly:N` schedule, else 0.
+int weeklyTarget(Habit h) {
+  if (!h.schedule.startsWith('weekly:')) return 0;
+  return int.tryParse(h.schedule.substring('weekly:'.length)) ?? 1;
+}
+
+/// Schedule-aware streak.
+///
+/// • `daily` / `weekdays` / `interval` — walk back over *scheduled* days only;
+///   the series breaks on the first missed scheduled day. A scheduled-but-not-
+///   yet-logged *today* does NOT break the series (the day is still live).
+/// • `weekly:N` — counted in ISO weeks: a week counts when completed ≥ N times;
+///   streak = number of consecutive counted weeks. The current (in-progress)
+///   week never breaks the series.
+int scheduleAwareStreak(Habit h, Set<String> logDates) {
+  if (logDates.isEmpty) return 0;
+
+  if (h.schedule.startsWith('weekly:')) {
+    final target = weeklyTarget(h);
+    final perWeek = <DateTime, int>{};
+    for (final s in logDates) {
+      final d = DateTime.tryParse(s);
+      if (d == null) continue;
+      perWeek.update(isoWeekStart(d), (v) => v + 1, ifAbsent: () => 1);
+    }
+    var streak = 0;
+    final currentWeek = isoWeekStart(DateTime.now());
+    var week = currentWeek;
+    while (true) {
+      final count = perWeek[week] ?? 0;
+      if (count >= target) {
+        streak++;
+      } else if (week != currentWeek) {
+        break; // a past week fell short — series ends
+      }
+      week = week.subtract(const Duration(days: 7));
+      if (currentWeek.difference(week).inDays > 730) break;
+    }
+    return streak;
+  }
+
+  // daily / weekdays / interval
+  final firstLog = _firstLogDate(logDates);
+  final today = _dateOnly(DateTime.now());
+  var day = today;
+  var n = 0;
+  while (true) {
+    if (isScheduledOn(h, day, firstLog: firstLog)) {
+      if (logDates.contains(habitDateKey(day))) {
+        n++;
+      } else if (day != today) {
+        break; // missed a past scheduled day — series ends
+      }
+    }
+    day = day.subtract(const Duration(days: 1));
+    if (today.difference(day).inDays > 730) break;
+  }
+  return n;
+}
+
 class HabitsState {
   final List<Habit> habits;
 
-  /// habitId → set of 'yyyy-MM-dd' strings completed in last 30 days
+  /// habitId → set of 'yyyy-MM-dd' strings where the daily goal was MET.
   final Map<String, Set<String>> logDates;
 
   /// habitId → consecutive-day streak count (ending today)
@@ -72,13 +300,197 @@ class HabitsState {
   /// habitId → list of log entries (with note/emoji), newest first
   final Map<String, List<HabitLogEntry>> logEntries;
 
+  /// Stage 2 — habitId → date 'yyyy-MM-dd' → accumulated value for that day.
+  final Map<String, Map<String, double>> logValues;
+
+  /// Stage 5 — habitId → set of 'yyyy-MM-dd' explicit rest days.
+  final Map<String, Set<String>> restDates;
+
+  /// Stage 5 — habitId → remaining freeze count for the current streak window.
+  final Map<String, int> freezesAvailable;
+
+  /// Stage 7 — habitId → set of 'yyyy-MM-dd' lapse dates (avoid habits).
+  final Map<String, Set<String>> lapseDates;
+
   const HabitsState({
     required this.habits,
     required this.logDates,
     required this.streaks,
     this.logEntries = const {},
+    this.logValues = const {},
+    this.restDates = const {},
+    this.freezesAvailable = const {},
+    this.lapseDates = const {},
   });
 
   static const empty =
       HabitsState(habits: [], logDates: {}, streaks: {});
+
+  /// Accumulated value for [habitId] on [dateKey] (0 if none).
+  double valueFor(String habitId, String dateKey) =>
+      logValues[habitId]?[dateKey] ?? 0;
+
+  /// Active habits scheduled for [day] (defaults to today).
+  List<Habit> dueOn([DateTime? day]) {
+    final d = day ?? DateTime.now();
+    return habits.where((h) {
+      final firstLog = _firstLogDate(logDates[h.id] ?? const {});
+      return isScheduledOn(h, d, firstLog: firstLog);
+    }).toList();
+  }
+
+  /// Active habits NOT scheduled for [day] (defaults to today).
+  List<Habit> notDueOn([DateTime? day]) {
+    final d = day ?? DateTime.now();
+    return habits.where((h) {
+      final firstLog = _firstLogDate(logDates[h.id] ?? const {});
+      return !isScheduledOn(h, d, firstLog: firstLog);
+    }).toList();
+  }
+}
+
+// ── Resilient streak (Stage 5) ────────────────────────────────────────────────
+
+/// Returns `(streak, freezesUsed)` walking newest-first through scheduled days.
+///
+/// Budget: 1 freeze per 7 scheduled days in the full history window.
+/// Rest days (entry_type='rest') extend the streak without consuming a freeze.
+/// Today's unlogged scheduled day is silently skipped (grace period).
+(int streak, int freezesUsed) _resilientStreakDetail(
+  Habit habit,
+  Set<String> doneDates,
+  Set<String> restDates,
+) {
+  final now   = DateTime.now();
+  final today = _dateOnly(now);
+  final allDates = doneDates.union(restDates);
+  final first = firstLogDate(allDates);
+
+  if (first == null) return (0, 0);
+
+  final start = first.isBefore(today.subtract(const Duration(days: 365)))
+      ? today.subtract(const Duration(days: 365))
+      : first;
+
+  final allScheduled = scheduledDaysInRange(habit, start, today, firstLog: first);
+  final budget = allScheduled.length ~/ 7;
+
+  int streak = 0;
+  int freezesUsed = 0;
+
+  for (final day in allScheduled.reversed) {
+    final key    = habitDateKey(day);
+    final isDone = doneDates.contains(key);
+    final isRest = restDates.contains(key);
+    final isToday = _dateOnly(day).isAtSameMomentAs(today);
+
+    if (isDone || isRest) {
+      streak++;
+    } else if (isToday) {
+      // Grace period: today not yet logged — skip without breaking.
+    } else if (freezesUsed < budget) {
+      freezesUsed++;
+      streak++;
+    } else {
+      break;
+    }
+  }
+  return (streak, freezesUsed);
+}
+
+/// Schedule-aware resilient streak. Replaces [scheduleAwareStreak] when rest
+/// days and freeze budgets are available.
+int resilientStreak(
+  Habit habit,
+  Set<String> doneDates,
+  Set<String> restDates,
+) =>
+    _resilientStreakDetail(habit, doneDates, restDates).$1;
+
+/// Remaining freeze credits for the current streak window.
+int freezesAvailableFor(
+  Habit habit,
+  Set<String> doneDates,
+  Set<String> restDates,
+) {
+  final now   = DateTime.now();
+  final today = _dateOnly(now);
+  final allDates = doneDates.union(restDates);
+  final first = firstLogDate(allDates);
+  if (first == null) return 0;
+  final start = first.isBefore(today.subtract(const Duration(days: 365)))
+      ? today.subtract(const Duration(days: 365))
+      : first;
+  final allScheduled =
+      scheduledDaysInRange(habit, start, today, firstLog: first);
+  final budget = allScheduled.length ~/ 7;
+  final detail = _resilientStreakDetail(habit, doneDates, restDates);
+  return budget - detail.$2;
+}
+
+// ── Abstinence streak (Stage 7 — avoid habits) ───────────────────────────────
+
+/// Abstinence milestones (in days) that grant event-based XP.
+const abstinenceMilestones = <int>[1, 7, 30, 90, 180, 365];
+
+/// Number of clean days since the most recent lapse, inclusive of today.
+///
+/// With no lapses the count runs from the habit's creation date. A lapse
+/// recorded today yields 0 (the streak just reset).
+int abstinenceStreak(Habit habit, Set<String> lapseDates) {
+  final today = _dateOnly(DateTime.now());
+  final last = _lastLapseDate(lapseDates);
+  final from = last != null
+      ? last.add(const Duration(days: 1)) // first clean day after the lapse
+      : _dateOnly(habit.createdAt);
+  if (from.isAfter(today)) return 0;
+  return today.difference(from).inDays + 1;
+}
+
+/// Longest run of consecutive clean days ever achieved.
+///
+/// Considers the gaps between successive lapses plus the open final stretch
+/// from the last lapse to today (and the opening stretch from creation to the
+/// first lapse).
+int longestClean(Habit habit, Set<String> lapseDates) {
+  final today = _dateOnly(DateTime.now());
+  final created = _dateOnly(habit.createdAt);
+  final lapses = lapseDates
+      .map(DateTime.tryParse)
+      .whereType<DateTime>()
+      .map(_dateOnly)
+      .toList()
+    ..sort();
+
+  if (lapses.isEmpty) {
+    return today.difference(created).inDays + 1;
+  }
+
+  var longest = 0;
+  // Opening stretch: creation → day before first lapse.
+  final opening = lapses.first.difference(created).inDays; // exclusive of lapse
+  if (opening > longest) longest = opening;
+
+  // Gaps between successive lapses.
+  for (var i = 1; i < lapses.length; i++) {
+    final gap = lapses[i].difference(lapses[i - 1]).inDays - 1;
+    if (gap > longest) longest = gap;
+  }
+
+  // Final open stretch: day after last lapse → today.
+  final tail = today.difference(lapses.last).inDays; // clean days after lapse
+  if (tail > longest) longest = tail;
+
+  return longest < 0 ? 0 : longest;
+}
+
+DateTime? _lastLapseDate(Set<String> lapseDates) {
+  DateTime? last;
+  for (final s in lapseDates) {
+    final d = DateTime.tryParse(s);
+    if (d == null) continue;
+    final dd = _dateOnly(d);
+    if (last == null || dd.isAfter(last)) last = dd;
+  }
+  return last;
 }
