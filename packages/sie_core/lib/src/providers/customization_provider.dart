@@ -33,7 +33,8 @@ final statStylesProvider = FutureProvider<List<CosmeticAsset>>((ref) async {
       .toList();
 });
 
-final profilePatternsProvider = FutureProvider<List<CosmeticAsset>>((ref) async {
+final profilePatternsProvider =
+    FutureProvider<List<CosmeticAsset>>((ref) async {
   final data = await SupabaseService.client
       .from('profile_patterns')
       .select()
@@ -47,7 +48,7 @@ Future<void> applyCustomization({
   required String? frameId,
   required String? backgroundId,
   required String? styleId,
-  String? patternId,
+  required String? patternId,
 }) async {
   final userId = SupabaseService.client.auth.currentUser?.id;
   if (userId == null) return;

@@ -117,9 +117,17 @@ class CosmeticAsset {
   bool get useNeuralPattern =>
       styleConfig['use_neural_pattern'] as bool? ?? false;
 
-  // ── Pattern helpers ────────────────────────────────────────
+  // ── Pattern helpers (animated overlay) ─────────────────────
 
-  String? get patternType => styleConfig['pattern_type'] as String?;
+  /// Which animated pattern to render: 'neural_threads' | 'low_poly' |
+  /// 'iso_grid' | 'dot_matrix'. Falls back to [slug] for forward-compat.
+  String get patternSlug =>
+      styleConfig['pattern_slug'] as String? ?? slug;
+
+  /// Overlay opacity for the pattern layer (the hue itself inherits the
+  /// equipped background accent at render time).
+  double get patternOpacity =>
+      (styleConfig['opacity'] as num?)?.toDouble() ?? 0.40;
 
   // ── Stat style helpers ─────────────────────────────────────
 
@@ -174,7 +182,12 @@ class EquippedAssets {
   final CosmeticAsset? statStyle;
   final CosmeticAsset? pattern;
 
-  const EquippedAssets({this.frame, this.background, this.statStyle, this.pattern});
+  const EquippedAssets({
+    this.frame,
+    this.background,
+    this.statStyle,
+    this.pattern,
+  });
   static const none = EquippedAssets();
 
   static EquippedAssets resolve({

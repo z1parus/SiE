@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 
+import 'customization_screen.dart';
 import 'edit_profile_screen.dart';
 import 'friends_list_screen.dart';
 import 'knowledge_base_screen.dart';
@@ -163,14 +164,6 @@ class _ProfileContent extends ConsumerWidget {
       patternId:    profile?.equippedPatternId,
     );
 
-    final frameDecoration =
-        equipped.frame?.buildFrameDecoration(surfaceColor: c.surface, suppressGlow: c.isLightMode) ??
-        BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: c.accent.withValues(alpha: 0.45), width: 1.5),
-          color: c.surface,
-        );
-
     final xp    = profile?.totalXp ?? 0;
     final level = (xp ~/ 1000) + 1;
 
@@ -191,22 +184,33 @@ class _ProfileContent extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _HeaderGlassCard(
-                    profile: profile,
-                    frameDecoration: frameDecoration,
+                  ProfileHeroCard(
+                    username: profile?.username ?? '',
+                    avatarUrl: profile?.avatarUrl,
+                    totalXp: xp,
+                    designPoints: profile?.designPoints ?? 0,
+                    frame: equipped.frame,
                     background: equipped.background,
                     pattern: equipped.pattern,
-                  ),
-                  if (equipped.statStyle != null) ...[
-                    const SizedBox(height: 12),
-                    _StatStyleCard(
-                      statStyle: equipped.statStyle!,
-                      level: level,
-                      xp: xp,
+                    avatarSize: 72,
+                    onAvatarTap: () => Navigator.of(context).push(
+                      PageRouteBuilder(
+                        pageBuilder: (_, _, _) => const EditProfileScreen(),
+                        transitionsBuilder: (_, anim, _, child) =>
+                            FadeTransition(opacity: anim, child: child),
+                        transitionDuration: const Duration(milliseconds: 300),
+                      ),
                     ),
-                  ],
+                  ),
+                  const SizedBox(height: 14),
+                  _StatsStrip(
+                    level: level,
+                    xp: xp,
+                    dp: profile?.designPoints ?? 0,
+                    statStyle: equipped.statStyle,
+                  ),
                   const SizedBox(height: 20),
-                  // Progress Hub + База Знаний — square 2-column grid
+                  // Progress Hub + База Знаний + Облик — square nav grid
                   Row(
                     children: [
                       Expanded(
@@ -230,10 +234,26 @@ class _ProfileContent extends ConsumerWidget {
                           ),
                         ),
                       ),
+                      if (profile != null) ...[
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _SquareNavButton(
+                            icon: Icons.palette_outlined,
+                            label: 'ОБЛИК',
+                            iconColor: c.accent,
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    CustomizationScreen(profile: profile!),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 28),
-                  const SectionHeader(title: 'AWARDS'),
+                  const _AwardsHeader(),
                   const SizedBox(height: 16),
                   const _AchievementsGrid(),
                   const SizedBox(height: 28),
@@ -261,301 +281,106 @@ class _ProfileContent extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Header Glass Card
+// Stats strip — Level / Total XP / DP, styled by the equipped stat style
 // ─────────────────────────────────────────────────────────────────────────────
-class _HeaderGlassCard extends ConsumerWidget {
-  const _HeaderGlassCard({
-    required this.profile,
-    required this.frameDecoration,
-    this.background,
-    this.pattern,
+class _StatsStrip extends ConsumerWidget {
+  const _StatsStrip({
+    required this.level,
+    required this.xp,
+    required this.dp,
+    this.statStyle,
   });
-  final Profile? profile;
-  final BoxDecoration frameDecoration;
-  final CosmeticAsset? background;
-  final CosmeticAsset? pattern;
-
-  static BoxDecoration _cardDecoration(SieColors c, CosmeticAsset? bg) {
-    if (bg?.backgroundColor != null) {
-      return BoxDecoration(
-        color: bg!.backgroundColor,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: bg.accentColor.withValues(alpha: 0.25)),
-      );
-    }
-    if (bg?.backgroundGradient != null) {
-      return BoxDecoration(
-        gradient: bg!.backgroundGradient,
-        borderRadius: BorderRadius.circular(24),
-      );
-    }
-    return c.flatCard(radius: 24);
-  }
-
-  static String _rankLabel(int level) {
-    if (level <= 5)  return 'Recruit';
-    if (level <= 10) return 'Operative';
-    if (level <= 20) return 'Explorer';
-    return 'Commander';
-  }
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c           = ref.watch(sieColorsProvider);
-    final username    = profile?.username?.toUpperCase() ?? 'UNKNOWN';
-    final letter      = username.isNotEmpty ? username[0] : '?';
-    final xp          = profile?.totalXp ?? 0;
-    final level       = (xp ~/ 1000) + 1;
-    final xpInLevel   = xp % 1000;
-    final progress    = (xpInLevel / 1000.0).clamp(0.0, 1.0);
-    final xpToNext    = 1000 - xpInLevel;
-    final hasCustomBg = background != null &&
-        (background!.backgroundColor != null ||
-            background!.backgroundGradient != null);
-    final textMain    = hasCustomBg ? Colors.white : c.textPrimary;
-    final textSub     = hasCustomBg ? Colors.white60 : c.textSecondary;
-    final showNeural  = background != null &&
-        (background!.backgroundColor != null || background!.useNeuralPattern);
-
-    return Container(
-      clipBehavior: Clip.hardEdge,
-      decoration: _cardDecoration(c, background),
-      child: Stack(
-        children: [
-          if (showNeural)
-            Positioned.fill(
-              child: NeuralNetworkWidget(
-                color: (background?.accentColor ?? c.accent)
-                    .withValues(alpha: 0.40),
-              ),
-            ),
-          if (pattern != null)
-            Positioned.fill(
-              child: ProfilePatternRenderer(
-                pattern: pattern,
-                accentColor: background?.accentColor ?? c.accent,
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 68,
-                      height: 68,
-                      decoration: frameDecoration,
-                      child: ClipOval(
-                        child: profile?.avatarUrl != null
-                            ? Image.network(
-                                profile!.avatarUrl!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) =>
-                                    _AvatarLetter(letter: letter),
-                              )
-                            : _AvatarLetter(letter: letter),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            username,
-                            style: TextStyle(
-                              color: textMain,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1,
-                              shadows: null,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              _Chip(
-                                label: 'LEVEL $level',
-                                borderColor: c.accent.withValues(alpha: 0.5),
-                                textColor: c.accent,
-                              ),
-                              const SizedBox(width: 8),
-                              _Chip(
-                                label: '${profile?.designPoints ?? 0} DP',
-                                borderColor: c.dp.withValues(alpha: 0.45),
-                                textColor: c.dp,
-                                icon: Icons.palette_outlined,
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '$xp XP TOTAL',
-                      style: TextStyle(
-                        color: c.accent,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    Text(
-                      '$xpToNext XP TO LVL ${level + 1}',
-                      style: TextStyle(color: textSub, fontSize: 10),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(3),
-                  child: Stack(
-                    children: [
-                      Container(height: 6, color: c.border),
-                      FractionallySizedBox(
-                        widthFactor: progress,
-                        child: Container(
-                          height: 6,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [c.accent, c.accentSecondary],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '${(progress * 100).toStringAsFixed(0)}%  ·  '
-                  '${_rankLabel(level).toUpperCase()}  ·  '
-                  'LVL $level → LVL ${level + 1}',
-                  style: TextStyle(
-                    color: textSub,
-                    fontSize: 9,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AvatarLetter extends ConsumerWidget {
-  const _AvatarLetter({required this.letter});
-  final String letter;
+  final int level;
+  final int xp;
+  final int dp;
+  final CosmeticAsset? statStyle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
-    return Center(
-      child: Text(
-        letter,
-        style: TextStyle(
-          color: c.accent,
-          fontSize: 28,
-          fontWeight: FontWeight.w200,
-          shadows: null,
+    return Row(
+      children: [
+        Expanded(
+          child: _StatCell(
+            icon: Icons.military_tech_outlined,
+            value: 'LVL $level',
+            label: 'УРОВЕНЬ',
+            statStyle: statStyle,
+            c: c,
+          ),
         ),
-      ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _StatCell(
+            icon: Icons.bolt,
+            value: '$xp',
+            label: 'XP ВСЕГО',
+            statStyle: statStyle,
+            c: c,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _StatCell(
+            icon: Icons.palette_outlined,
+            value: '$dp',
+            label: 'DP',
+            statStyle: statStyle,
+            c: c,
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _Chip extends StatelessWidget {
-  const _Chip({
+class _StatCell extends StatelessWidget {
+  const _StatCell({
+    required this.icon,
+    required this.value,
     required this.label,
-    required this.borderColor,
-    required this.textColor,
-    this.icon,
+    required this.c,
+    this.statStyle,
   });
+  final IconData icon;
+  final String value;
   final String label;
-  final Color borderColor;
-  final Color textColor;
-  final IconData? icon;
+  final SieColors c;
+  final CosmeticAsset? statStyle;
 
   @override
   Widget build(BuildContext context) {
+    final valueColor = statStyle?.accentColor ?? c.accent;
+    final decoration = statStyle != null
+        ? statStyle!.buildStatCardDecoration(
+            surfaceColor: c.surface, isLightMode: c.isLightMode)
+        : c.flatCard(radius: 14);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        border: Border.all(color: borderColor),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: decoration,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (icon != null) ...[
-            Icon(icon, size: 9, color: textColor),
-            const SizedBox(width: 3),
-          ],
+          Icon(icon, color: c.textSecondary, size: 14),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: valueColor,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 2),
           Text(
             label,
             style: TextStyle(
-              color: textColor,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
+              color: c.textSecondary,
+              fontSize: 9,
               letterSpacing: 1.2,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Equipped stat-style card
-// ─────────────────────────────────────────────────────────────────────────────
-class _StatStyleCard extends ConsumerWidget {
-  const _StatStyleCard({
-    required this.statStyle,
-    required this.level,
-    required this.xp,
-  });
-  final CosmeticAsset statStyle;
-  final int level;
-  final int xp;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c       = ref.watch(sieColorsProvider);
-    final accent  = statStyle.accentColor;
-    final glowCol = c.isLightMode ? null : statStyle.styleGlowColor;
-    final glowRad = statStyle.styleGlowRadius;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-      decoration: statStyle.buildStatCardDecoration(surfaceColor: c.surface, isLightMode: c.isLightMode),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.bolt, color: accent, size: 14),
-          const SizedBox(width: 8),
-          Text(
-            'LEVEL $level  ·  $xp XP',
-            style: TextStyle(
-              color: accent,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.5,
-              shadows: glowCol != null && glowRad > 0
-                  ? [Shadow(color: glowCol, blurRadius: glowRad)]
-                  : null,
             ),
           ),
         ],
@@ -620,6 +445,36 @@ class _SquareNavButton extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Awards header with earned/total counter
+// ─────────────────────────────────────────────────────────────────────────────
+class _AwardsHeader extends ConsumerWidget {
+  const _AwardsHeader();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c   = ref.watch(sieColorsProvider);
+    final ach = ref.watch(userAchievementsProvider).valueOrNull;
+
+    return Row(
+      children: [
+        const SectionHeader(title: 'AWARDS'),
+        const Spacer(),
+        if (ach != null && ach.isNotEmpty)
+          Text(
+            '${ach.where((a) => a.earned).length} / ${ach.length}',
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Achievements grid (regular unlockable achievements)
 // ─────────────────────────────────────────────────────────────────────────────
 class _AchievementsGrid extends ConsumerWidget {
@@ -631,12 +486,7 @@ class _AchievementsGrid extends ConsumerWidget {
     final achievementsAsync = ref.watch(userAchievementsProvider);
 
     return achievementsAsync.when(
-      loading: () => SizedBox(
-        height: 80,
-        child: Center(
-          child: CircularProgressIndicator(color: c.accent, strokeWidth: 1.5),
-        ),
-      ),
+      loading: () => const SieSkeletonGrid(columns: 3, count: 6),
       error: (_, _) => Text(
         'NO ACHIEVEMENTS DEFINED IN DATABASE',
         style: TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),
@@ -677,12 +527,7 @@ class _MedalsVault extends ConsumerWidget {
     final medalsAsync = ref.watch(missionMedalsProvider);
 
     return medalsAsync.when(
-      loading: () => SizedBox(
-        height: 80,
-        child: Center(
-          child: CircularProgressIndicator(color: c.accent, strokeWidth: 1.5),
-        ),
-      ),
+      loading: () => const SieSkeletonGrid(columns: 3, count: 3),
       error: (_, _) => Text(
         'ОШИБКА ЗАГРУЗКИ МЕДАЛЕЙ',
         style: TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),

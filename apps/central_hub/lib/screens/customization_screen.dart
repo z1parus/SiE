@@ -365,7 +365,14 @@ class _Preview extends ConsumerWidget {
         decoration: _cardDecoration(c, bg),
         child: Stack(
           children: [
-            if (showNeural)
+            if (equipped.pattern != null)
+              Positioned.fill(
+                child: ProfilePatternLayer(
+                  pattern: equipped.pattern,
+                  accent: bg?.accentColor ?? c.accent,
+                ),
+              )
+            else if (showNeural)
               Positioned.fill(
                 child: NeuralNetworkWidget(
                   color: bg.accentColor.withValues(alpha: 0.40),
@@ -890,8 +897,33 @@ class _AssetVisual extends StatelessWidget {
         AssetType.avatarFrame       => _FramePreview(asset: asset),
         AssetType.profileBackground => _BackgroundPreview(asset: asset),
         AssetType.statStyle         => _StatStylePreview(asset: asset),
-        AssetType.profilePattern    => _BackgroundPreview(asset: asset),
+        AssetType.profilePattern    => _PatternPreview(asset: asset),
       };
+}
+
+class _PatternPreview extends ConsumerWidget {
+  final CosmeticAsset asset;
+  const _PatternPreview({required this.asset});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        width: 56,
+        height: 40,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF0D2A42), Color(0xFF071520)],
+          ),
+        ),
+        child: ProfilePatternThumb(pattern: asset, accent: c.accent),
+      ),
+    );
+  }
 }
 
 class _FramePreview extends StatelessWidget {

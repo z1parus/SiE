@@ -287,6 +287,7 @@ class _ShopGrid extends ConsumerWidget {
     ref.invalidate(avatarFramesProvider);
     ref.invalidate(profileBackgroundsProvider);
     ref.invalidate(statStylesProvider);
+    ref.invalidate(profilePatternsProvider);
     ref.invalidate(inventoryProvider);
     ref.invalidate(userProfileProvider);
     await ref.read(inventoryProvider.future);
@@ -848,8 +849,33 @@ class _AssetVisualBig extends StatelessWidget {
         AssetType.avatarFrame       => _FrameVisual(asset: asset),
         AssetType.profileBackground => _BackgroundVisual(asset: asset),
         AssetType.statStyle         => _StatStyleVisual(asset: asset),
-        AssetType.profilePattern    => _BackgroundVisual(asset: asset),
+        AssetType.profilePattern    => _PatternVisual(asset: asset),
       };
+}
+
+class _PatternVisual extends ConsumerWidget {
+  final CosmeticAsset asset;
+  const _PatternVisual({required this.asset});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        width: 84,
+        height: 56,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF0D2A42), Color(0xFF071520)],
+          ),
+        ),
+        child: ProfilePatternThumb(pattern: asset, accent: c.accent),
+      ),
+    );
+  }
 }
 
 class _FrameVisual extends StatelessWidget {
@@ -1030,6 +1056,7 @@ class _PreviewSheet extends ConsumerWidget {
     final frames      = ref.watch(avatarFramesProvider).valueOrNull ?? [];
     final backgrounds = ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
     final styles      = ref.watch(statStylesProvider).valueOrNull ?? [];
+    final patterns    = ref.watch(profilePatternsProvider).valueOrNull ?? [];
 
     final c = ref.watch(sieColorsProvider);
 
@@ -1037,6 +1064,7 @@ class _PreviewSheet extends ConsumerWidget {
       frames: frames,
       backgrounds: backgrounds,
       styles: styles,
+      patterns: patterns,
       frameId: asset.type == AssetType.avatarFrame
           ? asset.id
           : profile?.equippedFrameId,
@@ -1046,6 +1074,9 @@ class _PreviewSheet extends ConsumerWidget {
       styleId: asset.type == AssetType.statStyle
           ? asset.id
           : profile?.equippedStatStyleId,
+      patternId: asset.type == AssetType.profilePattern
+          ? asset.id
+          : profile?.equippedPatternId,
     );
 
     final letter = profile?.username?.isNotEmpty == true
@@ -1086,7 +1117,14 @@ class _PreviewSheet extends ConsumerWidget {
             c: c,
             child: Stack(
               children: [
-                if (previewEquipped.background?.useNeuralPattern ?? false)
+                if (previewEquipped.pattern != null)
+                  Positioned.fill(
+                    child: ProfilePatternLayer(
+                      pattern: previewEquipped.pattern,
+                      accent: previewEquipped.background?.accentColor ?? c.accent,
+                    ),
+                  )
+                else if (previewEquipped.background?.useNeuralPattern ?? false)
                   NeuralNetworkWidget(
                     color: (previewEquipped.background?.accentColor ?? c.accent)
                         .withValues(alpha: 0.20),
