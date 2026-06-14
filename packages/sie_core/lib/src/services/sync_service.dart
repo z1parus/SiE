@@ -280,6 +280,15 @@ class SyncService {
               'created_at': payload['created_at'],
             }, onConflict: 'id');
             await _db.markMissionTemplateSynced(payload['id'] as String);
+          case 'insert_weekly_review':
+            // RPC is idempotent per (user, week_start) and updates the streak.
+            await client.rpc('log_weekly_review', params: {
+              'p_week_start': payload['week_start'],
+              'p_completed_tasks': payload['completed_tasks'] ?? 0,
+              'p_notes': payload['notes'],
+              'p_focus_goal_ids': payload['focus_goal_ids'] ?? const [],
+            });
+            await _db.markWeeklyReviewSynced(payload['id'] as String);
           case 'insert_dependency':
             await client.from('task_dependencies').upsert({
               'task_id': payload['task_id'],

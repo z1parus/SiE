@@ -18,6 +18,7 @@ class GoalSettings {
     this.remindBeforeDeadlineDays = 1,
     this.hideCompletedTasks = false,
     this.category,
+    this.why,
   });
 
   final bool isFogOfWarEnabled;
@@ -25,6 +26,8 @@ class GoalSettings {
   final int remindBeforeDeadlineDays;
   final bool hideCompletedTasks;
   final GoalCategory? category;
+  // Stage 9: the motivation / "why" behind this goal.
+  final String? why;
 
   static const defaults = GoalSettings();
 
@@ -34,6 +37,7 @@ class GoalSettings {
     int? remindBeforeDeadlineDays,
     bool? hideCompletedTasks,
     Object? category = _unset,
+    Object? why = _unset,
   }) =>
       GoalSettings(
         isFogOfWarEnabled: isFogOfWarEnabled ?? this.isFogOfWarEnabled,
@@ -42,6 +46,7 @@ class GoalSettings {
             remindBeforeDeadlineDays ?? this.remindBeforeDeadlineDays,
         hideCompletedTasks: hideCompletedTasks ?? this.hideCompletedTasks,
         category: category == _unset ? this.category : category as GoalCategory?,
+        why: why == _unset ? this.why : why as String?,
       );
 
   factory GoalSettings.fromJson(Map<String, dynamic> j) {
@@ -49,6 +54,7 @@ class GoalSettings {
     final cat = catStr != null
         ? GoalCategory.values.where((e) => e.name == catStr).firstOrNull
         : null;
+    final whyRaw = (j['why'] as String?)?.trim();
     return GoalSettings(
       isFogOfWarEnabled: j['is_fog_of_war_enabled'] as bool? ?? false,
       autoRescheduleTasks: j['auto_reschedule_tasks'] as bool? ?? false,
@@ -56,6 +62,7 @@ class GoalSettings {
           (j['remind_before_deadline_days'] as num?)?.toInt() ?? 1,
       hideCompletedTasks: j['hide_completed_tasks'] as bool? ?? false,
       category: cat,
+      why: (whyRaw != null && whyRaw.isNotEmpty) ? whyRaw : null,
     );
   }
 
@@ -65,6 +72,7 @@ class GoalSettings {
         'remind_before_deadline_days': remindBeforeDeadlineDays,
         'hide_completed_tasks': hideCompletedTasks,
         if (category != null) 'category': category!.name,
+        if (why != null) 'why': why,
       };
 }
 

@@ -280,6 +280,31 @@ class _MissionHeader extends StatelessWidget {
               ],
             ],
           ),
+          // Stage 9: the "why" (motivation) shown as a soft quote.
+          if (goal.settings.why != null) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(left: 14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.format_quote, size: 14, color: sc.accent),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      goal.settings.why!,
+                      style: TextStyle(
+                        color: sc.textSecondary,
+                        fontSize: 13,
+                        height: 1.35,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           _HeaderProgressBar(progress: progress, goalColor: goalColor, sc: sc),
           if (goal.deadline != null) ...[
@@ -3536,11 +3561,19 @@ class GoalSettingsScreen extends ConsumerStatefulWidget {
 
 class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
   late GoalSettings _settings;
+  late final TextEditingController _whyCtrl;
 
   @override
   void initState() {
     super.initState();
     _settings = widget.goal.settings;
+    _whyCtrl = TextEditingController(text: _settings.why ?? '');
+  }
+
+  @override
+  void dispose() {
+    _whyCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -3595,6 +3628,49 @@ class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
               Text(
                 'Создано: ${_formatDate(goal.createdAt)}',
                 style: TextStyle(color: sc.textSecondary, fontSize: 12),
+              ),
+              const SizedBox(height: 20),
+              Divider(height: 1, color: sc.border),
+              const SizedBox(height: 16),
+              // Stage 9: the "why" (motivation).
+              Text(
+                'ЗАЧЕМ Я ЭТО ДЕЛАЮ',
+                style: TextStyle(
+                    color: sc.textSecondary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _whyCtrl,
+                maxLines: 3,
+                style: TextStyle(
+                    color: sc.textPrimary, fontSize: 14, height: 1.4),
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (v) {
+                  final trimmed = v.trim();
+                  _settings = _settings.copyWith(
+                      why: trimmed.isEmpty ? null : trimmed);
+                },
+                decoration: InputDecoration(
+                  hintText: 'Моя мотивация и смысл этой цели…',
+                  hintStyle: TextStyle(color: sc.textSecondary, fontSize: 13),
+                  filled: true,
+                  fillColor: sc.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: sc.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: sc.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: sc.accent),
+                  ),
+                ),
               ),
               const SizedBox(height: 20),
               Divider(height: 1, color: sc.border),

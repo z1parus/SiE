@@ -129,11 +129,149 @@ class ReminderSettingsScreen extends ConsumerWidget {
                     },
                   ),
                 ),
+                const SizedBox(height: 12),
+                _Card(
+                  c: c,
+                  child: Column(
+                    children: [
+                      _SwitchRow(
+                        c: c,
+                        title: 'Обзор недели',
+                        subtitle:
+                            'Еженедельное приглашение подвести итоги',
+                        value: s.weeklyReviewEnabled,
+                        onChanged: (v) async {
+                          await ref
+                              .read(reminderSettingsProvider.notifier)
+                              .setWeeklyReviewEnabled(v);
+                          await _resync(ref);
+                        },
+                      ),
+                      if (s.weeklyReviewEnabled) ...[
+                        Divider(color: c.border, height: 24),
+                        _ReviewScheduleRow(
+                          c: c,
+                          weekday: s.reviewWeekday,
+                          hour: s.reviewHour,
+                          minute: s.reviewMinute,
+                          onPickTime: () async {
+                            final picked = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay(
+                                  hour: s.reviewHour, minute: s.reviewMinute),
+                            );
+                            if (picked != null) {
+                              await ref
+                                  .read(reminderSettingsProvider.notifier)
+                                  .setReviewSchedule(s.reviewWeekday,
+                                      picked.hour, picked.minute);
+                              await _resync(ref);
+                            }
+                          },
+                          onPickDay: (day) async {
+                            await ref
+                                .read(reminderSettingsProvider.notifier)
+                                .setReviewSchedule(
+                                    day, s.reviewHour, s.reviewMinute);
+                            await _resync(ref);
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ],
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ReviewScheduleRow extends StatelessWidget {
+  const _ReviewScheduleRow({
+    required this.c,
+    required this.weekday,
+    required this.hour,
+    required this.minute,
+    required this.onPickTime,
+    required this.onPickDay,
+  });
+
+  final SieColors c;
+  final int weekday;
+  final int hour;
+  final int minute;
+  final VoidCallback onPickTime;
+  final ValueChanged<int> onPickDay;
+
+  static const _days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+  @override
+  Widget build(BuildContext context) {
+    final time =
+        '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('День недели',
+            style: TextStyle(color: c.textPrimary, fontSize: 14)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          children: List.generate(7, (i) {
+            final day = i + 1; // Mon=1 … Sun=7
+            final sel = day == weekday;
+            return GestureDetector(
+              onTap: () => onPickDay(day),
+              child: Container(
+                width: 38,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: sel
+                      ? c.accent.withValues(alpha: 0.15)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: sel ? c.accent : c.border),
+                ),
+                child: Text(_days[i],
+                    style: TextStyle(
+                        color: sel ? c.accent : c.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600)),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 14),
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onPickTime,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text('Время обзора',
+                    style: TextStyle(color: c.textPrimary, fontSize: 15)),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: c.accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(time,
+                    style: TextStyle(
+                        color: c.accent,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

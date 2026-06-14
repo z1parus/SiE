@@ -5,6 +5,7 @@ import 'package:sie_core/sie_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'mission_detail_screen.dart';
 import 'focus_protocol_screen.dart';
+import 'weekly_review_screen.dart';
 
 // Launches the focus protocol bound to an agenda item's task (Stage 7).
 void _startFocusOnAgendaItem(BuildContext context, AgendaItem item) {
@@ -90,7 +91,11 @@ class WarRoomView extends ConsumerWidget {
       ...agenda.noDate,
     ].where((i) => i.isBlocked).length;
 
+    // Weekly review banner — shown until this week's review is done.
+    final reviewData = ref.watch(weeklyReviewProvider).valueOrNull;
     final children = <Widget>[
+      if (reviewData != null && !reviewData.alreadyReviewed)
+        _ReviewBanner(c: c),
       _DaySummary(agenda: agenda, c: c),
     ];
 
@@ -330,6 +335,61 @@ class _RingPainter extends CustomPainter {
   @override
   bool shouldRepaint(_RingPainter old) =>
       old.progress != progress || old.fill != fill || old.track != track;
+}
+
+// ─── Weekly review banner (Stage 9) ────────────────────────────────────────────
+
+class _ReviewBanner extends StatelessWidget {
+  const _ReviewBanner({required this.c});
+  final SieColors c;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const WeeklyReviewScreen()),
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          gradient: LinearGradient(
+            colors: [
+              c.accent.withValues(alpha: 0.16),
+              c.accentSecondary.withValues(alpha: 0.10),
+            ],
+          ),
+          border: Border.all(color: c.accent.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.explore_outlined, color: c.accent, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Доступен обзор недели',
+                      style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text('Подведём итоги и наметим фокус',
+                      style:
+                          TextStyle(color: c.textSecondary, fontSize: 12)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: c.textSecondary, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ─── Blocked tasks toggle (Stage 8) ────────────────────────────────────────────
@@ -633,6 +693,9 @@ class _AgendaRow extends ConsumerWidget {
     final dueLabel = _dueLabel();
     final overdue = task.dueDate != null &&
         DateUtils.dateOnly(task.dueDate!).isBefore(today);
+    final focusGoals =
+        ref.watch(weeklyFocusGoalIdsProvider).valueOrNull ?? const {};
+    final isWeeklyFocus = focusGoals.contains(item.goal.id);
 
     final row = Container(
       margin: const EdgeInsets.symmetric(vertical: 3),
@@ -710,6 +773,10 @@ class _AgendaRow extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(width: 5),
+                      if (isWeeklyFocus) ...[
+                        Icon(Icons.star, size: 12, color: c.accent),
+                        const SizedBox(width: 4),
+                      ],
                       Icon(_categoryIcon(item.goal.settings.category),
                           size: 12, color: c.textSecondary),
                       const SizedBox(width: 4),

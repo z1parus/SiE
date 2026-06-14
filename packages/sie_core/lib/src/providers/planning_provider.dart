@@ -358,6 +358,17 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     } else {
       await svc.cancelDailyDigest();
     }
+
+    // Stage 9: weekly review ritual reminder.
+    if (settings.weeklyReviewEnabled) {
+      await svc.scheduleWeeklyReview(
+        weekday: settings.reviewWeekday,
+        hour: settings.reviewHour,
+        minute: settings.reviewMinute,
+      );
+    } else {
+      await svc.cancelWeeklyReview();
+    }
   }
 
   /// Public entry-point so the UI can re-arm reminders after the user toggles

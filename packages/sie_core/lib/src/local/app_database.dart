@@ -210,6 +210,19 @@ class LocalGoalProgressSnapshots extends Table {
   @override Set<Column> get primaryKey => {id};
 }
 
+@DataClassName('LocalWeeklyReview')
+class LocalWeeklyReviews extends Table {
+  TextColumn get id             => text()();
+  TextColumn get userId         => text()();
+  IntColumn  get weekStartMs    => integer()();
+  IntColumn  get completedTasks => integer().withDefault(const Constant(0))();
+  TextColumn get notes          => text().nullable()();
+  TextColumn get focusGoalIdsJson => text().withDefault(const Constant('[]'))();
+  IntColumn  get createdAtMs    => integer()();
+  BoolColumn get synced         => boolean().withDefault(const Constant(false))();
+  @override Set<Column> get primaryKey => {id};
+}
+
 @DataClassName('LocalMissionTemplate')
 class LocalMissionTemplates extends Table {
   TextColumn get id             => text()();
@@ -368,12 +381,13 @@ class LocalMapPositions extends Table {
   LocalGoalProgressSnapshots,
   LocalMissionTemplates,
   LocalTaskDependencies,
+  LocalWeeklyReviews,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 23;
+  int get schemaVersion => 24;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -537,6 +551,9 @@ class AppDatabase extends _$AppDatabase {
             'CREATE INDEX IF NOT EXISTS idx_task_deps_goal '
             'ON local_task_dependencies(goal_id)',
             const []);
+      }
+      if (from < 24) {
+        await m.createTable(localWeeklyReviews);
       }
     },
   );
@@ -1227,6 +1244,39 @@ class AppDatabase extends _$AppDatabase {
       (update(localMeditationPresets)..where((t) => t.id.equals(id)))
           .write(const LocalMeditationPresetsCompanion(
               deletedLocally: Value(true)));
+
+  // ── Weekly Reviews (Stage 9) ───────────────────────────────────────────────
+
+  Future<void> upsertWeeklyReview(LocalWeeklyReviewsCompanion row) =>
+      into(localWeeklyReviews).insertOnConflictUpdate(row);
+
+  Future<LocalWeeklyReview?> weeklyReviewForWeek(
+          String userId, int weekStartMs) =>
+      (select(localWeeklyReviews)
+            ..where((t) =>
+                t.userId.equals(userId) & t.weekStartMs.equals(weekStartMs))
+            ..limit(1))
+          .getSingleOrNull();
+
+  Future<LocalWeeklyReview?> latestWeeklyReview(String userId) =>
+      (select(localWeeklyReviews)
+            ..where((t) => t.userId.equals(userId))
+            ..orderBy([
+              (t) => OrderingTerm(
+                  expression: t.weekStartMs, mode: OrderingMode.desc)
+            ])
+            ..limit(1))
+          .getSingleOrNull();
+
+  Future<List<LocalWeeklyReview>> unsyncedWeeklyReviews(String userId) =>
+      (select(localWeeklyReviews)
+            ..where((t) =>
+                t.userId.equals(userId) & t.synced.equals(false)))
+          .get();
+
+  Future<void> markWeeklyReviewSynced(String id) =>
+      (update(localWeeklyReviews)..where((t) => t.id.equals(id)))
+          .write(const LocalWeeklyReviewsCompanion(synced: Value(true)));
 
   Future<Set<String>> unsyncedPlanningIds() async {
     final goals = await (select(localGoals)..where((t) => t.synced.equals(false))).get();
