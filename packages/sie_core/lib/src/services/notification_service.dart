@@ -251,6 +251,42 @@ class NotificationService {
 
   Future<void> cancelDailyDigest() => cancel(_idFor('daily_digest'));
 
+  /// Weekly review ritual reminder (Stage 9). Repeats on [weekday] (Mon=1 …
+  /// Sun=7) at [hour]:[minute] local time.
+  Future<void> scheduleWeeklyReview({
+    required int weekday,
+    required int hour,
+    required int minute,
+  }) async {
+    if (!_inited || kIsWeb) return;
+    final id = _idFor('weekly_review');
+
+    // Next occurrence of the requested weekday/time in local wall-clock.
+    final now = DateTime.now();
+    var next = DateTime(now.year, now.month, now.day, hour, minute);
+    var addDays = (weekday - now.weekday) % 7;
+    if (addDays < 0) addDays += 7;
+    next = next.add(Duration(days: addDays));
+    if (!next.isAfter(now)) next = next.add(const Duration(days: 7));
+
+    try {
+      await _plugin.zonedSchedule(
+        id: id,
+        title: '🧭 Время еженедельного обзора',
+        body: 'Подведём итоги недели и наметим фокус.',
+        scheduledDate: _instant(next),
+        notificationDetails: _details,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        payload: 'weekly_review',
+        matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+      );
+    } catch (e) {
+      debugPrint('SiE Notifications: weekly review schedule failed — $e');
+    }
+  }
+
+  Future<void> cancelWeeklyReview() => cancel(_idFor('weekly_review'));
+
   /// Optional "stagnation nudge" for a fatigued goal (event-driven, at most
   /// one per goal — id is derived from goalId so it won't duplicate).
   Future<void> scheduleStagnationNudge({

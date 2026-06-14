@@ -4,6 +4,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'mission_detail_screen.dart';
+import 'focus_protocol_screen.dart';
+import 'weekly_review_screen.dart';
+
+// Launches the focus protocol bound to an agenda item's task (Stage 7).
+void _startFocusOnAgendaItem(BuildContext context, AgendaItem item) {
+  SieHaptics.selection();
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => FocusProtocolScreen(
+        initialTaskRef: (
+          taskId: item.task.id,
+          subGoalId: item.subGoalId,
+          goalId: item.goal.id,
+          taskTitle: item.task.name,
+        ),
+      ),
+    ),
+  );
+}
 
 // ─── Category icon (mirrors planning_screen) ───────────────────────────────────
 
@@ -16,10 +36,17 @@ IconData? _categoryIcon(GoalCategory? cat) => switch (cat) {
       null => Icons.flag_outlined,
     };
 
+// Toggle: whether dependency-blocked tasks are shown in the War Room.
+final _showBlockedProvider = StateProvider.autoDispose<bool>((ref) => false);
+
 // ─── War Room body (embedded under the «Повестка» segment) ─────────────────────
 
 class WarRoomView extends ConsumerWidget {
   const WarRoomView({super.key});
+
+  // Hide blocked tasks unless the toggle is on.
+  List<AgendaItem> _visible(List<AgendaItem> items, bool showBlocked) =>
+      showBlocked ? items : items.where((i) => !i.isBlocked).toList();
 
   bool _isReadOnly(Goal goal) {
     final myId = Supabase.instance.client.auth.currentUser?.id;
@@ -30,55 +57,104 @@ class WarRoomView extends ConsumerWidget {
         col.role == 'viewer');
   }
 
+  // The single most important task to focus on now: top unblocked overdue,
+  // else top unblocked today. Buckets are already priority/weight-sorted.
+  AgendaItem? _focusSuggestion(AgendaBuckets agenda) {
+    final overdue = agenda.overdue.where((i) => !i.isBlocked);
+    if (overdue.isNotEmpty) return overdue.first;
+    final todayItems = agenda.today.where((i) => !i.isBlocked);
+    if (todayItems.isNotEmpty) return todayItems.first;
+    return null;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
     final agenda = ref.watch(agendaProvider);
+    final showBlocked = ref.watch(_showBlockedProvider);
     final today = DateUtils.dateOnly(DateTime.now());
 
+    final overdue = _visible(agenda.overdue, showBlocked);
+    final todayItems = _visible(agenda.today, showBlocked);
+    final tomorrow = _visible(agenda.tomorrow, showBlocked);
+    final thisWeek = _visible(agenda.thisWeek, showBlocked);
+    final later = _visible(agenda.later, showBlocked);
+    final noDate = _visible(agenda.noDate, showBlocked);
+
+    // Count blocked tasks across actionable + backlog buckets for the toggle.
+    final blockedCount = [
+      ...agenda.overdue,
+      ...agenda.today,
+      ...agenda.tomorrow,
+      ...agenda.thisWeek,
+      ...agenda.later,
+      ...agenda.noDate,
+    ].where((i) => i.isBlocked).length;
+
+    // Weekly review banner — shown until this week's review is done.
+    final reviewData = ref.watch(weeklyReviewProvider).valueOrNull;
     final children = <Widget>[
+      if (reviewData != null && !reviewData.alreadyReviewed)
+        _ReviewBanner(c: c),
       _DaySummary(agenda: agenda, c: c),
     ];
 
-    if (agenda.overdue.isNotEmpty) {
+    if (blockedCount > 0) {
+      children.add(_BlockedToggle(
+        count: blockedCount,
+        showBlocked: showBlocked,
+        c: c,
+        onToggle: () => ref
+            .read(_showBlockedProvider.notifier)
+            .update((v) => !v),
+      ));
+    }
+
+    // Auto-suggest focusing on the day's top-priority unblocked task.
+    final suggestion = _focusSuggestion(agenda);
+    if (suggestion != null && !_isReadOnly(suggestion.goal)) {
+      children.add(_FocusSuggestionCard(item: suggestion, c: c));
+    }
+
+    if (overdue.isNotEmpty) {
       children.add(_Section(
         title: 'Просрочено',
         icon: Icons.error_outline,
         accent: c.danger,
-        items: agenda.overdue,
+        items: overdue,
         today: today,
         c: c,
         isReadOnly: _isReadOnly,
       ));
     }
-    if (agenda.today.isNotEmpty) {
+    if (todayItems.isNotEmpty) {
       children.add(_Section(
         title: 'Сегодня',
         icon: Icons.star_outline,
         accent: c.accent,
-        items: agenda.today,
+        items: todayItems,
         today: today,
         c: c,
         isReadOnly: _isReadOnly,
       ));
     }
-    if (agenda.tomorrow.isNotEmpty) {
+    if (tomorrow.isNotEmpty) {
       children.add(_Section(
         title: 'Завтра',
         icon: Icons.wb_twilight_outlined,
         accent: c.textSecondary,
-        items: agenda.tomorrow,
+        items: tomorrow,
         today: today,
         c: c,
         isReadOnly: _isReadOnly,
       ));
     }
-    if (agenda.thisWeek.isNotEmpty) {
+    if (thisWeek.isNotEmpty) {
       children.add(_Section(
         title: 'На этой неделе',
         icon: Icons.calendar_view_week_outlined,
         accent: c.textSecondary,
-        items: agenda.thisWeek,
+        items: thisWeek,
         today: today,
         c: c,
         isReadOnly: _isReadOnly,
@@ -90,28 +166,34 @@ class WarRoomView extends ConsumerWidget {
           milestones: agenda.upcomingMilestones, c: c));
     }
 
-    if (agenda.later.isNotEmpty) {
+    if (later.isNotEmpty) {
       children.add(_CollapsibleSection(
         title: 'Позже',
-        count: agenda.later.length,
-        items: agenda.later,
+        count: later.length,
+        items: later,
         today: today,
         c: c,
         isReadOnly: _isReadOnly,
       ));
     }
-    if (agenda.noDate.isNotEmpty) {
+    if (noDate.isNotEmpty) {
       children.add(_CollapsibleSection(
         title: 'Без срока',
-        count: agenda.noDate.length,
-        items: agenda.noDate,
+        count: noDate.length,
+        items: noDate,
         today: today,
         c: c,
         isReadOnly: _isReadOnly,
       ));
     }
 
-    if (agenda.isAllClear && agenda.later.isEmpty && agenda.noDate.isEmpty) {
+    final nothingShown = overdue.isEmpty &&
+        todayItems.isEmpty &&
+        tomorrow.isEmpty &&
+        thisWeek.isEmpty &&
+        later.isEmpty &&
+        noDate.isEmpty;
+    if (nothingShown) {
       children.add(_AllClear(c: c));
     }
 
@@ -253,6 +335,180 @@ class _RingPainter extends CustomPainter {
   @override
   bool shouldRepaint(_RingPainter old) =>
       old.progress != progress || old.fill != fill || old.track != track;
+}
+
+// ─── Weekly review banner (Stage 9) ────────────────────────────────────────────
+
+class _ReviewBanner extends StatelessWidget {
+  const _ReviewBanner({required this.c});
+  final SieColors c;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const WeeklyReviewScreen()),
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          gradient: LinearGradient(
+            colors: [
+              c.accent.withValues(alpha: 0.16),
+              c.accentSecondary.withValues(alpha: 0.10),
+            ],
+          ),
+          border: Border.all(color: c.accent.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.explore_outlined, color: c.accent, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Доступен обзор недели',
+                      style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text('Подведём итоги и наметим фокус',
+                      style:
+                          TextStyle(color: c.textSecondary, fontSize: 12)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: c.textSecondary, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Blocked tasks toggle (Stage 8) ────────────────────────────────────────────
+
+class _BlockedToggle extends StatelessWidget {
+  const _BlockedToggle({
+    required this.count,
+    required this.showBlocked,
+    required this.c,
+    required this.onToggle,
+  });
+
+  final int count;
+  final bool showBlocked;
+  final SieColors c;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onToggle,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Row(
+          children: [
+            Icon(showBlocked ? Icons.lock_open_outlined : Icons.lock_outline,
+                size: 15, color: c.textSecondary),
+            const SizedBox(width: 6),
+            Text(
+              showBlocked
+                  ? 'Скрыть заблокированные'
+                  : 'Показать заблокированные ($count)',
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Focus suggestion card (Stage 7) ───────────────────────────────────────────
+
+class _FocusSuggestionCard extends StatelessWidget {
+  const _FocusSuggestionCard({required this.item, required this.c});
+
+  final AgendaItem item;
+  final SieColors c;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _startFocusOnAgendaItem(context, item),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          color: c.accent.withValues(alpha: 0.08),
+          border: Border.all(color: c.accent.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: c.accent.withValues(alpha: 0.15),
+              ),
+              child: Icon(Icons.play_arrow_rounded, color: c.accent, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'СФОКУСИРОВАТЬСЯ',
+                    style: TextStyle(
+                      color: c.accent,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    item.task.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    item.goal.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: c.textSecondary, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: c.textSecondary, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ─── Section ───────────────────────────────────────────────────────────────────
@@ -437,6 +693,9 @@ class _AgendaRow extends ConsumerWidget {
     final dueLabel = _dueLabel();
     final overdue = task.dueDate != null &&
         DateUtils.dateOnly(task.dueDate!).isBefore(today);
+    final focusGoals =
+        ref.watch(weeklyFocusGoalIdsProvider).valueOrNull ?? const {};
+    final isWeeklyFocus = focusGoals.contains(item.goal.id);
 
     final row = Container(
       margin: const EdgeInsets.symmetric(vertical: 3),
@@ -514,6 +773,10 @@ class _AgendaRow extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(width: 5),
+                      if (isWeeklyFocus) ...[
+                        Icon(Icons.star, size: 12, color: c.accent),
+                        const SizedBox(width: 4),
+                      ],
                       Icon(_categoryIcon(item.goal.settings.category),
                           size: 12, color: c.textSecondary),
                       const SizedBox(width: 4),
@@ -542,11 +805,45 @@ class _AgendaRow extends ConsumerWidget {
                       ],
                     ],
                   ),
+                  // Stage 8: blocker hint.
+                  if (item.isBlocked) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.lock_outline,
+                            size: 11, color: c.textSecondary),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            'Ждёт: ${item.blockerNames.join(', ')}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: c.textSecondary,
+                                fontSize: 11,
+                                fontStyle: FontStyle.italic),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
+          // Focus ▶ (Stage 7) — only for ready (unblocked) tasks.
+          if (!readOnly && !item.isBlocked)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _startFocusOnAgendaItem(context, item),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.play_circle_outline,
+                    size: 20, color: c.accent),
+              ),
+            ),
+          const SizedBox(width: 4),
           // XP weight badge
           Text(
             '+${taskXp(task.weight)}',
@@ -560,7 +857,11 @@ class _AgendaRow extends ConsumerWidget {
       ),
     );
 
-    if (readOnly) return row;
+    // Dependency-blocked tasks are shown dimmed (only visible via the toggle).
+    final display =
+        item.isBlocked ? Opacity(opacity: 0.55, child: row) : row;
+
+    if (readOnly) return display;
 
     // Swipe actions: → отложить на завтра, ← снять дедлайн.
     return Dismissible(
@@ -590,7 +891,7 @@ class _AgendaRow extends ConsumerWidget {
         SieHaptics.selection();
         return false; // provider rebuild handles removal from the bucket
       },
-      child: row,
+      child: display,
     );
   }
 

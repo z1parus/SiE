@@ -265,6 +265,47 @@ class SyncService {
               'captured_at': payload['captured_at'],
             }, onConflict: 'id');
             await _db.markGoalSnapshotSynced(payload['id'] as String);
+          case 'insert_mission_template':
+            await client.from('mission_templates').upsert({
+              'id': payload['id'],
+              if (payload['user_id'] != null) 'user_id': payload['user_id'],
+              'name': payload['name'],
+              if (payload['description'] != null)
+                'description': payload['description'],
+              if (payload['category'] != null) 'category': payload['category'],
+              'is_system': payload['is_system'] ?? false,
+              'is_public': payload['is_public'] ?? false,
+              'color_hex': payload['color_hex'] ?? '#5AADA0',
+              'structure_json': payload['structure_json'],
+              'created_at': payload['created_at'],
+            }, onConflict: 'id');
+            await _db.markMissionTemplateSynced(payload['id'] as String);
+          case 'insert_weekly_review':
+            // RPC is idempotent per (user, week_start) and updates the streak.
+            await client.rpc('log_weekly_review', params: {
+              'p_week_start': payload['week_start'],
+              'p_completed_tasks': payload['completed_tasks'] ?? 0,
+              'p_notes': payload['notes'],
+              'p_focus_goal_ids': payload['focus_goal_ids'] ?? const [],
+            });
+            await _db.markWeeklyReviewSynced(payload['id'] as String);
+          case 'insert_dependency':
+            await client.from('task_dependencies').upsert({
+              'task_id': payload['task_id'],
+              'depends_on_task_id': payload['depends_on_task_id'],
+              'goal_id': payload['goal_id'],
+              'user_id': payload['user_id'],
+            }, onConflict: 'task_id,depends_on_task_id');
+            await _db.markTaskDependencySynced(
+                payload['task_id'] as String,
+                payload['depends_on_task_id'] as String);
+          case 'delete_dependency':
+            await client
+                .from('task_dependencies')
+                .delete()
+                .eq('task_id', payload['task_id'] as String)
+                .eq('depends_on_task_id',
+                    payload['depends_on_task_id'] as String);
           case 'insert_habit_link':
             await client.from('goal_habit_links').upsert({
               'id': payload['id'],
@@ -376,6 +417,8 @@ class SyncService {
           'duration_seconds': s.durationSeconds,
           'is_completed': true,
           'xp_gained': s.xpAwarded,
+          if (s.taskId != null) 'task_id': s.taskId,
+          if (s.goalId != null) 'goal_id': s.goalId,
         }, onConflict: 'id');
         await _db.markFocusSessionSynced(s.id);
       } catch (e) {

@@ -12,16 +12,21 @@ import '../models/goal_analytics.dart';
 import '../models/goal_collaborator.dart';
 import '../models/public_profile.dart';
 import '../models/mission_medal.dart';
+import '../models/mission_template.dart';
 import '../models/ai_decomposition.dart';
 import '../services/notification_service.dart';
 import 'auth_state_provider.dart';
 import 'connectivity_provider.dart';
 import 'habits_provider.dart';
+import 'mission_templates_provider.dart';
 import 'notification_provider.dart';
 import 'user_profile_provider.dart';
 import 'user_timezone_provider.dart';
 
 const _uuid = Uuid();
+
+/// Outcome of attempting to add a task dependency (Stage 8).
+enum DependencyResult { ok, cycle, duplicate, invalid }
 
 /// Above this many map-position entries, JSON encoding is offloaded to a
 /// background isolate via [compute] to keep the UI thread free.
@@ -353,6 +358,17 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     } else {
       await svc.cancelDailyDigest();
     }
+
+    // Stage 9: weekly review ritual reminder.
+    if (settings.weeklyReviewEnabled) {
+      await svc.scheduleWeeklyReview(
+        weekday: settings.reviewWeekday,
+        hour: settings.reviewHour,
+        minute: settings.reviewMinute,
+      );
+    } else {
+      await svc.cancelWeeklyReview();
+    }
   }
 
   /// Public entry-point so the UI can re-arm reminders after the user toggles
@@ -433,6 +449,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         }).toList();
 
         await _mirrorToLocal(db, enrichedGoals, userId);
+        await _mirrorDependencies(
+            client, db, enrichedGoals.map((g) => g.id).toList());
         await db.cleanupRemovedSharedGoals(
             enrichedGoals.map((g) => g.id).toSet());
         return _loadFromLocal(db, userId, enrichedGoals);
@@ -442,6 +460,43 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     }
 
     return _loadFromLocal(db, userId);
+  }
+
+  /// Mirrors server task dependencies into the local store (Stage 8). Synced
+  /// rows are replaced by the server's truth; unsynced local inserts are kept
+  /// for the sync queue to push.
+  Future<void> _mirrorDependencies(
+      SupabaseClient client, AppDatabase db, List<String> goalIds) async {
+    if (goalIds.isEmpty) return;
+    try {
+      final raw = await client
+          .from('task_dependencies')
+          .select('task_id, depends_on_task_id, goal_id')
+          .inFilter('goal_id', goalIds);
+      final serverKeys = <String>{};
+      for (final r in (raw as List)) {
+        final m = r as Map<String, dynamic>;
+        final taskId = m['task_id'] as String;
+        final dependsOn = m['depends_on_task_id'] as String;
+        serverKeys.add('$taskId|$dependsOn');
+        await db.upsertTaskDependency(LocalTaskDependenciesCompanion(
+          taskId: Value(taskId),
+          dependsOnTaskId: Value(dependsOn),
+          goalId: Value(m['goal_id'] as String),
+          synced: const Value(true),
+          createdAtMs: Value(DateTime.now().millisecondsSinceEpoch),
+        ));
+      }
+      // Drop synced-but-gone rows (deleted on another device).
+      final local = await db.dependenciesForGoals(goalIds);
+      for (final d in local) {
+        if (d.synced && !serverKeys.contains('${d.taskId}|${d.dependsOnTaskId}')) {
+          await db.deleteTaskDependency(d.taskId, d.dependsOnTaskId);
+        }
+      }
+    } catch (_) {
+      // best-effort; local data remains usable
+    }
   }
 
   Future<void> _mirrorToLocal(AppDatabase db, List<Goal> goals, String userId) async {
@@ -563,6 +618,13 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final rawMsAll = await db.milestonesForGoals(goalIds);
     final rawLinksAll = await db.habitLinksForGoals(goalIds);
     final positionsByGoal = await db.mapPositionsForGoals(goalIds);
+    final rawDeps = await db.dependenciesForGoals(goalIds);
+
+    // taskId → ids it depends on (Stage 8).
+    final dependsByTask = <String, List<String>>{};
+    for (final d in rawDeps) {
+      (dependsByTask[d.taskId] ??= []).add(d.dependsOnTaskId);
+    }
 
     // Group by foreign key.
     final tasksBySubGoal = <String, List<PlanningTask>>{};
@@ -586,6 +648,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             ? DateTime.fromMillisecondsSinceEpoch(rt.recurrenceUntilMs!)
             : null,
         recurrenceParentId: rt.recurrenceParentId,
+        dependsOn: dependsByTask[rt.id] ?? const [],
         createdAt: DateTime.fromMillisecondsSinceEpoch(rt.createdAtMs),
       ));
     }
@@ -669,7 +732,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
   // ── Add Goal ──────────────────────────────────────────────────────────────
 
-  Future<void> addGoal({
+  Future<String?> addGoal({
     required String name,
     String? description,
     DateTime? deadline,
@@ -678,7 +741,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
   }) async {
     final client = Supabase.instance.client;
     final session = client.auth.currentSession;
-    if (session == null) return;
+    if (session == null) return null;
 
     final db = ref.read(appDatabaseProvider);
     final now = DateTime.now();
@@ -726,10 +789,11 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       try {
         await client.from('goals').insert(newGoal.toInsertJson());
         await db.updateGoal(id, const LocalGoalsCompanion(synced: Value(true)));
-        return;
+        return id;
       } catch (_) {}
     }
     await db.enqueueSyncOp('insert_goal', payload);
+    return id;
   }
 
   // ── Delete Goal ───────────────────────────────────────────────────────────
@@ -1310,6 +1374,123 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     if (!synced) {
       await db.enqueueSyncOp('end_recurrence', jsonEncode({'id': taskId}));
     }
+  }
+
+  // ── Task Dependencies (Stage 8) ─────────────────────────────────────────────
+
+  /// Adds a "[taskId] depends on [dependsOnTaskId]" edge within one goal.
+  /// Returns a result so the UI can explain a rejection (cycle / duplicate /
+  /// invalid). Validates against cycles with a client-side DFS.
+  Future<DependencyResult> addDependency(
+      String goalId, String taskId, String dependsOnTaskId) async {
+    if (taskId == dependsOnTaskId) return DependencyResult.invalid;
+    final goal = _goalById(goalId);
+    if (goal == null) return DependencyResult.invalid;
+
+    final byId = tasksById(goal);
+    // Both tasks must belong to this goal (no cross-goal deps in MVP).
+    if (!byId.containsKey(taskId) || !byId.containsKey(dependsOnTaskId)) {
+      return DependencyResult.invalid;
+    }
+    final task = byId[taskId]!;
+    if (task.dependsOn.contains(dependsOnTaskId)) {
+      return DependencyResult.duplicate;
+    }
+
+    // Cycle check over current adjacency (taskId → its dependsOn).
+    final adjacency = <String, List<String>>{
+      for (final t in byId.values) t.id: List<String>.from(t.dependsOn),
+    };
+    if (wouldCreateDependencyCycle(taskId, dependsOnTaskId, adjacency)) {
+      return DependencyResult.cycle;
+    }
+
+    final client = Supabase.instance.client;
+    final session = client.auth.currentSession;
+    if (session == null) return DependencyResult.invalid;
+    final db = ref.read(appDatabaseProvider);
+    final now = DateTime.now();
+
+    // Optimistic state update.
+    _updateGoalInState(goalId, (g) => g.copyWith(
+        subGoals: _updateSubGoalInTree(g.subGoals, task.subGoalId,
+            (s) => s.copyWith(
+                tasks: s.tasks
+                    .map((t) => t.id == taskId
+                        ? t.copyWith(
+                            dependsOn: [...t.dependsOn, dependsOnTaskId])
+                        : t)
+                    .toList()))));
+
+    await db.upsertTaskDependency(LocalTaskDependenciesCompanion(
+      taskId: Value(taskId),
+      dependsOnTaskId: Value(dependsOnTaskId),
+      goalId: Value(goalId),
+      synced: const Value(false),
+      createdAtMs: Value(now.millisecondsSinceEpoch),
+    ));
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client.from('task_dependencies').insert({
+          'task_id': taskId,
+          'depends_on_task_id': dependsOnTaskId,
+          'goal_id': goalId,
+          'user_id': session.user.id,
+        });
+        await db.markTaskDependencySynced(taskId, dependsOnTaskId);
+        return DependencyResult.ok;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('insert_dependency', jsonEncode({
+      'task_id': taskId,
+      'depends_on_task_id': dependsOnTaskId,
+      'goal_id': goalId,
+      'user_id': session.user.id,
+    }));
+    return DependencyResult.ok;
+  }
+
+  Future<void> removeDependency(
+      String goalId, String taskId, String dependsOnTaskId) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+    final goal = _goalById(goalId);
+    final subGoalId =
+        goal == null ? null : tasksById(goal)[taskId]?.subGoalId;
+
+    if (subGoalId != null) {
+      _updateGoalInState(goalId, (g) => g.copyWith(
+          subGoals: _updateSubGoalInTree(g.subGoals, subGoalId,
+              (s) => s.copyWith(
+                  tasks: s.tasks
+                      .map((t) => t.id == taskId
+                          ? t.copyWith(
+                              dependsOn: t.dependsOn
+                                  .where((d) => d != dependsOnTaskId)
+                                  .toList())
+                          : t)
+                      .toList()))));
+    }
+
+    await db.deleteTaskDependency(taskId, dependsOnTaskId);
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client
+            .from('task_dependencies')
+            .delete()
+            .eq('task_id', taskId)
+            .eq('depends_on_task_id', dependsOnTaskId);
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('delete_dependency', jsonEncode({
+      'task_id': taskId,
+      'depends_on_task_id': dependsOnTaskId,
+    }));
   }
 
   // Reschedule a task's due date (or clear it when [newDueDate] is null).
@@ -2193,6 +2374,88 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     for (final m in result.milestones) {
       await addMilestone(goalId, m.name);
     }
+  }
+
+  // ── Mission Templates ─────────────────────────────────────────────────────
+
+  /// Instantiates a full goal (sub-goals + tasks + milestones) from a saved
+  /// [template]. Reuses the existing add* methods so local persistence, online
+  /// sync and the offline queue all behave exactly as for manual entry.
+  /// Returns the new goal id, or null on failure.
+  Future<String?> createGoalFromTemplate(
+    MissionTemplate template, {
+    required String name,
+    DateTime? deadline,
+  }) async {
+    final goalId = await addGoal(
+      name: name,
+      deadline: deadline,
+      colorHex: template.colorHex,
+    );
+    if (goalId == null) return null;
+
+    if (template.category != null) {
+      await updateGoalSettings(
+          goalId, GoalSettings(category: template.category));
+    }
+
+    for (final sg in template.structure.subGoals) {
+      await _instantiateTemplateSubGoal(goalId, null, sg);
+    }
+    for (final m in template.structure.milestones) {
+      await addMilestone(
+        goalId,
+        m.name,
+        kind: m.kind,
+        unit: m.unit,
+        startValue: m.startValue,
+        targetValue: m.targetValue,
+        direction: m.direction,
+      );
+    }
+    return goalId;
+  }
+
+  Future<void> _instantiateTemplateSubGoal(
+      String goalId, String? parentId, TemplateSubGoal tsg) async {
+    await addSubGoal(goalId, tsg.name, parentSubGoalId: parentId);
+    // addSubGoal appends optimistically, so the new node is the last child of
+    // its parent (or the last root sub-goal).
+    final created = parentId == null
+        ? _goalById(goalId)?.subGoals.lastOrNull
+        : _allSubGoals(_goalById(goalId)?.subGoals ?? const [])
+            .where((s) => s.id == parentId)
+            .firstOrNull
+            ?.children
+            .lastOrNull;
+    if (created == null) return;
+
+    for (final t in tsg.tasks) {
+      await addTask(
+          goalId: goalId,
+          subGoalId: created.id,
+          name: t.name,
+          weight: t.weight);
+    }
+    for (final child in tsg.children) {
+      await _instantiateTemplateSubGoal(goalId, created.id, child);
+    }
+  }
+
+  /// Snapshots a goal's structure (no dates/progress/ids) into a reusable user
+  /// template.
+  Future<MissionTemplate?> saveGoalAsTemplate(
+      String goalId, String name) async {
+    final goal = _goalById(goalId);
+    if (goal == null) return null;
+    final structure = TemplateStructure.fromGoal(goal);
+    return ref.read(missionTemplatesProvider.notifier).createTemplate(
+          name: name,
+          description: goal.description,
+          category: goal.settings.category,
+          colorHex: goal.colorHex,
+          structure: structure,
+        );
   }
 
   // ── Save map positions ────────────────────────────────────────────────────

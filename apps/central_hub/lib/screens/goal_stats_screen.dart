@@ -90,6 +90,8 @@ class GoalStatsScreen extends ConsumerWidget {
                     ],
                     _TimeCard(goal: liveGoal, sc: sc),
                     const SizedBox(height: 12),
+                    _FocusTimeCard(goal: liveGoal, sc: sc),
+                    const SizedBox(height: 12),
                     if (liveGoal.habitLinks.isNotEmpty) ...[
                       _HabitsCard(
                         goal: liveGoal,
@@ -743,6 +745,118 @@ class _TimeCard extends StatelessWidget {
               value: daysLeftValue,
               sc: sc,
               valueColor: daysLeftColor),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Focus time card (Stage 7) ────────────────────────────────────────────────
+
+class _FocusTimeCard extends ConsumerWidget {
+  const _FocusTimeCard({required this.goal, required this.sc});
+
+  final Goal goal;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final statsAsync = ref.watch(goalFocusStatsProvider(goal.id));
+
+    return _Card(
+      sc: sc,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _CardTitle(
+              title: 'Время в фокусе', icon: Icons.timer_outlined, sc: sc),
+          const SizedBox(height: 12),
+          statsAsync.when(
+            loading: () => SizedBox(
+              height: 24,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: sc.accent),
+                ),
+              ),
+            ),
+            error: (_, __) => Text('—',
+                style: TextStyle(color: sc.textSecondary, fontSize: 13)),
+            data: (stats) {
+              if (stats.totalSeconds <= 0) {
+                return Text(
+                  'Пока нет фокус-сессий по этой цели. Запусти ▶ на задаче, '
+                  'чтобы засчитать время.',
+                  style: TextStyle(
+                      color: sc.textSecondary, fontSize: 12, height: 1.4),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        formatFocusDuration(stats.totalSeconds),
+                        style: TextStyle(
+                          color: sc.accentSecondary,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: Text('всего вложено',
+                            style: TextStyle(
+                                color: sc.textSecondary, fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                  if (stats.topTasks.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text('ТОП ЗАДАЧ ПО ВРЕМЕНИ',
+                        style: TextStyle(
+                            color: sc.textSecondary,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2)),
+                    const SizedBox(height: 8),
+                    ...stats.topTasks.map((t) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              Icon(Icons.circle,
+                                  size: 5, color: sc.accentSecondary),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  t.taskName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      color: sc.textPrimary, fontSize: 13),
+                                ),
+                              ),
+                              Text(
+                                formatFocusDuration(t.seconds),
+                                style: TextStyle(
+                                    color: sc.textSecondary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        )),
+                  ],
+                ],
+              );
+            },
+          ),
         ],
       ),
     );

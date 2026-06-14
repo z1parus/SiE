@@ -9,6 +9,8 @@ import 'mission_accomplished_screen.dart';
 import 'goal_stats_screen.dart';
 import 'war_room_screen.dart';
 import 'reminder_settings_screen.dart';
+import 'template_gallery_screen.dart';
+import 'ai_decomposition_sheet.dart';
 import '../widgets/momentum_chart.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
@@ -91,7 +93,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
         floatingActionButton: (_showArchive || _showAgenda)
             ? null
             : FloatingActionButton(
-                onPressed: () => _showAddGoalSheet(context),
+                onPressed: () => _showCreateChooser(context),
                 backgroundColor: sc.accent,
                 foregroundColor: Colors.white,
                 elevation: 4,
@@ -158,7 +160,34 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
     );
   }
 
-  void _showAddGoalSheet(BuildContext context) {
+  void _showCreateChooser(BuildContext context) {
+    final sc = ref.read(sieColorsProvider);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CreateChooserSheet(
+        sc: sc,
+        onEmpty: () {
+          Navigator.pop(context);
+          _showAddGoalSheet(context);
+        },
+        onTemplate: () {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const TemplateGalleryScreen()),
+          );
+        },
+        onAi: () {
+          Navigator.pop(context);
+          _showAddGoalSheet(context, aiAfter: true);
+        },
+      ),
+    );
+  }
+
+  void _showAddGoalSheet(BuildContext context, {bool aiAfter = false}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -170,14 +199,29 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
           DateTime? deadline,
           required int priority,
           required String colorHex,
-        }) {
-          ref.read(planningProvider.notifier).addGoal(
+        }) async {
+          final goalId = await ref.read(planningProvider.notifier).addGoal(
                 name: name,
                 description: description,
                 deadline: deadline,
                 priority: priority,
                 colorHex: colorHex,
               );
+          if (!aiAfter || goalId == null || !context.mounted) return;
+          // Jump straight into the new goal and open AI decomposition.
+          final goal = ref
+              .read(planningProvider)
+              .valueOrNull
+              ?.goals
+              .where((g) => g.id == goalId)
+              .firstOrNull;
+          if (goal == null || !context.mounted) return;
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => MissionDetailScreen(goal: goal)),
+          );
+          if (context.mounted) showAiDecompositionSheet(context, goal);
         },
       ),
     );
@@ -237,6 +281,8 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                   ),
                 );
               },
+        onSaveAsTemplate:
+            isViewer ? null : () => _saveGoalAsTemplate(context, goal),
         onLeaveOrDelete: () async {
           if (isViewer) {
             if (myId == null) return;
@@ -273,6 +319,69 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _saveGoalAsTemplate(BuildContext context, Goal goal) async {
+    final sc = ref.read(sieColorsProvider);
+    final ctrl = TextEditingController(text: goal.name);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: sc.surface,
+        title: Text('Сохранить как шаблон',
+            style: TextStyle(color: sc.textPrimary, fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Структура (этапы, задачи и вехи) сохранится без дат и прогресса.',
+              style: TextStyle(color: sc.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              style: TextStyle(color: sc.textPrimary, fontSize: 15),
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(
+                hintText: 'Название шаблона',
+                hintStyle: TextStyle(color: sc.textSecondary),
+                enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: sc.border)),
+                focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: sc.accent)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child:
+                Text('Отмена', style: TextStyle(color: sc.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: Text('Сохранить', style: TextStyle(color: sc.accent)),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (name == null || name.isEmpty) return;
+    await ref
+        .read(planningProvider.notifier)
+        .saveGoalAsTemplate(goal.id, name);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Шаблон «$name» сохранён'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: sc.surface,
+        ),
+      );
+    }
   }
 }
 
@@ -926,6 +1035,79 @@ class _EmptyState extends StatelessWidget {
 
 // ─── Goal Options Sheet ───────────────────────────────────────────────────────
 
+class _CreateChooserSheet extends StatelessWidget {
+  const _CreateChooserSheet({
+    required this.sc,
+    required this.onEmpty,
+    required this.onTemplate,
+    required this.onAi,
+  });
+
+  final SieColors sc;
+  final VoidCallback onEmpty;
+  final VoidCallback onTemplate;
+  final VoidCallback onAi;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+      decoration: BoxDecoration(
+        color: sc.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: sc.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 8),
+          Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: sc.border,
+                  borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'НОВАЯ МИССИЯ',
+                style: TextStyle(
+                    color: sc.textSecondary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 2),
+              ),
+            ),
+          ),
+          Divider(height: 1, color: sc.border),
+          _OptionTile(
+            icon: Icons.add_circle_outline,
+            label: 'Пустая цель',
+            color: const Color(0xFF5AADA0),
+            onTap: onEmpty,
+          ),
+          _OptionTile(
+            icon: Icons.dashboard_customize_outlined,
+            label: 'Из шаблона',
+            color: const Color(0xFF9B6AD8),
+            onTap: onTemplate,
+          ),
+          _OptionTile(
+            icon: Icons.auto_awesome_outlined,
+            label: 'AI-декомпозиция',
+            color: const Color(0xFF6A8ED8),
+            onTap: onAi,
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
 class _GoalOptionsSheet extends StatelessWidget {
   const _GoalOptionsSheet({
     required this.goal,
@@ -935,6 +1117,7 @@ class _GoalOptionsSheet extends StatelessWidget {
     this.onPin,
     this.onFreeze,
     this.onComplete,
+    this.onSaveAsTemplate,
     required this.onLeaveOrDelete,
   });
 
@@ -945,6 +1128,7 @@ class _GoalOptionsSheet extends StatelessWidget {
   final VoidCallback? onPin;
   final VoidCallback? onFreeze;
   final VoidCallback? onComplete;
+  final VoidCallback? onSaveAsTemplate;
   final VoidCallback onLeaveOrDelete;
 
   @override
@@ -1019,6 +1203,16 @@ class _GoalOptionsSheet extends StatelessWidget {
               onTap: () {
                 Navigator.pop(context);
                 onComplete!();
+              },
+            ),
+          if (onSaveAsTemplate != null)
+            _OptionTile(
+              icon: Icons.bookmark_add_outlined,
+              label: 'Сохранить как шаблон',
+              color: const Color(0xFF9B6AD8),
+              onTap: () {
+                Navigator.pop(context);
+                onSaveAsTemplate!();
               },
             ),
           _OptionTile(

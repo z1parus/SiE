@@ -8,6 +8,7 @@ import 'mission_accomplished_screen.dart';
 import 'goal_stats_screen.dart';
 import 'ai_decomposition_sheet.dart';
 import 'milestone_metric_screen.dart';
+import 'focus_protocol_screen.dart';
 import '../widgets/sparkline.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
@@ -279,6 +280,31 @@ class _MissionHeader extends StatelessWidget {
               ],
             ],
           ),
+          // Stage 9: the "why" (motivation) shown as a soft quote.
+          if (goal.settings.why != null) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(left: 14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.format_quote, size: 14, color: sc.accent),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      goal.settings.why!,
+                      style: TextStyle(
+                        color: sc.textSecondary,
+                        fontSize: 13,
+                        height: 1.35,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           _HeaderProgressBar(progress: progress, goalColor: goalColor, sc: sc),
           if (goal.deadline != null) ...[
@@ -1017,9 +1043,15 @@ class _TaskTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = task;
+    final focusSecs = ref.watch(taskFocusSecondsProvider(t.id)).valueOrNull ?? 0;
+    final byId = tasksById(goal);
+    final blockers = taskBlockers(t, byId);
+    final isBlocked = blockers.isNotEmpty && !t.isCompleted;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
+      child: Opacity(
+        opacity: isBlocked ? 0.6 : 1.0,
+        child: Row(
         children: [
           if (canEdit) ...[
             ReorderableDragStartListener(
@@ -1037,7 +1069,9 @@ class _TaskTile extends ConsumerWidget {
             child: Icon(
               t.isCompleted
                   ? Icons.check_circle
-                  : Icons.radio_button_unchecked,
+                  : isBlocked
+                      ? Icons.lock_outline
+                      : Icons.radio_button_unchecked,
               color: t.isCompleted ? goal.color : sc.textSecondary,
               size: 20,
             ),
@@ -1069,17 +1103,76 @@ class _TaskTile extends ConsumerWidget {
                     ],
                   ],
                 ),
-                if (t.dueDate != null || t.isRecurring)
-                  Text(
-                    [
-                      if (t.dueDate != null) _formatDate(t.dueDate!),
-                      if (t.isRecurring) _recurrenceLabel(t.recurrenceRule!),
-                    ].join(' · '),
-                    style: TextStyle(color: sc.textSecondary, fontSize: 10),
+                if (t.dueDate != null || t.isRecurring || focusSecs > 0)
+                  Row(
+                    children: [
+                      if (t.dueDate != null || t.isRecurring)
+                        Text(
+                          [
+                            if (t.dueDate != null) _formatDate(t.dueDate!),
+                            if (t.isRecurring)
+                              _recurrenceLabel(t.recurrenceRule!),
+                          ].join(' · '),
+                          style: TextStyle(
+                              color: sc.textSecondary, fontSize: 10),
+                        ),
+                      if (focusSecs > 0) ...[
+                        if (t.dueDate != null || t.isRecurring)
+                          Text(' · ',
+                              style: TextStyle(
+                                  color: sc.textSecondary, fontSize: 10)),
+                        Icon(Icons.timer_outlined,
+                            size: 10, color: sc.accentSecondary),
+                        const SizedBox(width: 2),
+                        Text(
+                          formatFocusDuration(focusSecs),
+                          style: TextStyle(
+                              color: sc.accentSecondary, fontSize: 10),
+                        ),
+                      ],
+                    ],
+                  ),
+                if (isBlocked)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      'Ждёт: ${blockers.map((b) => b.name).join(', ')}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: sc.textSecondary,
+                          fontSize: 10,
+                          fontStyle: FontStyle.italic),
+                    ),
                   ),
               ],
             ),
           ),
+          if (canEdit) ...[
+            GestureDetector(
+              onTap: () => _showDependencySheet(context, ref, t, sc),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(
+                  t.hasDependencies
+                      ? Icons.account_tree
+                      : Icons.account_tree_outlined,
+                  size: 16,
+                  color: t.hasDependencies ? sc.accentSecondary : sc.textSecondary,
+                ),
+              ),
+            ),
+          ],
+          if (!t.isCompleted && !isBlocked) ...[
+            GestureDetector(
+              onTap: () => _startFocusOnTask(context, t, subGoal, goal),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.play_circle_outline,
+                    size: 18, color: sc.accent),
+              ),
+            ),
+          ],
           if (t.isRecurring && canEdit) ...[
             GestureDetector(
               onTap: () =>
@@ -1100,8 +1193,181 @@ class _TaskTile extends ConsumerWidget {
             ),
           ],
         ],
+        ),
       ),
     );
+  }
+
+  void _showDependencySheet(
+      BuildContext context, WidgetRef ref, PlanningTask t, SieColors sc) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _DependencySheet(task: t, goal: goal, sc: sc),
+    );
+  }
+
+  void _startFocusOnTask(
+      BuildContext context, PlanningTask t, SubGoal sg, Goal g) {
+    SieHaptics.selection();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FocusProtocolScreen(
+          initialTaskRef: (
+            taskId: t.id,
+            subGoalId: sg.id,
+            goalId: g.id,
+            taskTitle: t.name,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Dependency management sheet (Stage 8) ─────────────────────────────────────
+
+class _DependencySheet extends ConsumerWidget {
+  const _DependencySheet({
+    required this.task,
+    required this.goal,
+    required this.sc,
+  });
+
+  final PlanningTask task;
+  final Goal goal;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Re-read live task from provider so the checkbox state stays in sync.
+    final liveGoal = ref.watch(planningProvider).valueOrNull?.goals
+            .where((g) => g.id == goal.id)
+            .firstOrNull ??
+        goal;
+    final byId = tasksById(liveGoal);
+    final t = byId[task.id] ?? task;
+
+    // Candidate predecessors: every other task of the same goal.
+    final candidates = byId.values.where((c) => c.id != t.id).toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
+      constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.7),
+      decoration: BoxDecoration(
+        color: sc.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: sc.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('ЗАВИСИТ ОТ…',
+              style: TextStyle(
+                  color: sc.textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 2)),
+          const SizedBox(height: 4),
+          Text(t.name,
+              style: TextStyle(
+                  color: sc.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text(
+            'Эта задача станет доступной, когда выбранные будут выполнены.',
+            style: TextStyle(color: sc.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          if (candidates.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text('Нет других задач в этой цели.',
+                  style: TextStyle(color: sc.textSecondary, fontSize: 13)),
+            )
+          else
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: candidates.map((cand) {
+                  final selected = t.dependsOn.contains(cand.id);
+                  return InkWell(
+                    onTap: () => _toggle(context, ref, t, cand, selected),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Row(
+                        children: [
+                          Icon(
+                            selected
+                                ? Icons.check_box
+                                : Icons.check_box_outline_blank,
+                            size: 20,
+                            color:
+                                selected ? sc.accentSecondary : sc.textSecondary,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              cand.name,
+                              style: TextStyle(
+                                color: sc.textPrimary,
+                                fontSize: 14,
+                                decoration: cand.isCompleted
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ),
+                            ),
+                          ),
+                          if (cand.isCompleted)
+                            Icon(Icons.check_circle,
+                                size: 14, color: goal.color),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _toggle(BuildContext context, WidgetRef ref, PlanningTask t,
+      PlanningTask cand, bool selected) async {
+    final notifier = ref.read(planningProvider.notifier);
+    if (selected) {
+      await notifier.removeDependency(goal.id, t.id, cand.id);
+      return;
+    }
+    final result = await notifier.addDependency(goal.id, t.id, cand.id);
+    if (!context.mounted) return;
+    if (result != DependencyResult.ok) {
+      final msg = switch (result) {
+        DependencyResult.cycle =>
+          'Это создаст замкнутый круг зависимостей.',
+        DependencyResult.duplicate => 'Зависимость уже добавлена.',
+        _ => 'Не удалось добавить зависимость.',
+      };
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: sc.surface,
+        ),
+      );
+    } else {
+      SieHaptics.selection();
+    }
   }
 }
 
@@ -3295,11 +3561,19 @@ class GoalSettingsScreen extends ConsumerStatefulWidget {
 
 class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
   late GoalSettings _settings;
+  late final TextEditingController _whyCtrl;
 
   @override
   void initState() {
     super.initState();
     _settings = widget.goal.settings;
+    _whyCtrl = TextEditingController(text: _settings.why ?? '');
+  }
+
+  @override
+  void dispose() {
+    _whyCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -3354,6 +3628,49 @@ class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
               Text(
                 'Создано: ${_formatDate(goal.createdAt)}',
                 style: TextStyle(color: sc.textSecondary, fontSize: 12),
+              ),
+              const SizedBox(height: 20),
+              Divider(height: 1, color: sc.border),
+              const SizedBox(height: 16),
+              // Stage 9: the "why" (motivation).
+              Text(
+                'ЗАЧЕМ Я ЭТО ДЕЛАЮ',
+                style: TextStyle(
+                    color: sc.textSecondary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _whyCtrl,
+                maxLines: 3,
+                style: TextStyle(
+                    color: sc.textPrimary, fontSize: 14, height: 1.4),
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (v) {
+                  final trimmed = v.trim();
+                  _settings = _settings.copyWith(
+                      why: trimmed.isEmpty ? null : trimmed);
+                },
+                decoration: InputDecoration(
+                  hintText: 'Моя мотивация и смысл этой цели…',
+                  hintStyle: TextStyle(color: sc.textSecondary, fontSize: 13),
+                  filled: true,
+                  fillColor: sc.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: sc.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: sc.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: sc.accent),
+                  ),
+                ),
               ),
               const SizedBox(height: 20),
               Divider(height: 1, color: sc.border),
