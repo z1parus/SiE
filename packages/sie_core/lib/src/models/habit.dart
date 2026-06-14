@@ -282,12 +282,20 @@ class HabitsState {
   /// Stage 2 — habitId → date 'yyyy-MM-dd' → accumulated value for that day.
   final Map<String, Map<String, double>> logValues;
 
+  /// Stage 5 — habitId → set of 'yyyy-MM-dd' explicit rest days.
+  final Map<String, Set<String>> restDates;
+
+  /// Stage 5 — habitId → remaining freeze count for the current streak window.
+  final Map<String, int> freezesAvailable;
+
   const HabitsState({
     required this.habits,
     required this.logDates,
     required this.streaks,
     this.logEntries = const {},
     this.logValues = const {},
+    this.restDates = const {},
+    this.freezesAvailable = const {},
   });
 
   static const empty =
@@ -314,4 +322,83 @@ class HabitsState {
       return !isScheduledOn(h, d, firstLog: firstLog);
     }).toList();
   }
+}
+
+// ── Resilient streak (Stage 5) ────────────────────────────────────────────────
+
+/// Returns `(streak, freezesUsed)` walking newest-first through scheduled days.
+///
+/// Budget: 1 freeze per 7 scheduled days in the full history window.
+/// Rest days (entry_type='rest') extend the streak without consuming a freeze.
+/// Today's unlogged scheduled day is silently skipped (grace period).
+(int streak, int freezesUsed) _resilientStreakDetail(
+  Habit habit,
+  Set<String> doneDates,
+  Set<String> restDates,
+) {
+  final now   = DateTime.now();
+  final today = _dateOnly(now);
+  final allDates = doneDates.union(restDates);
+  final first = firstLogDate(allDates);
+
+  if (first == null) return (0, 0);
+
+  final start = first.isBefore(today.subtract(const Duration(days: 365)))
+      ? today.subtract(const Duration(days: 365))
+      : first;
+
+  final allScheduled = scheduledDaysInRange(habit, start, today, firstLog: first);
+  final budget = allScheduled.length ~/ 7;
+
+  int streak = 0;
+  int freezesUsed = 0;
+
+  for (final day in allScheduled.reversed) {
+    final key    = habitDateKey(day);
+    final isDone = doneDates.contains(key);
+    final isRest = restDates.contains(key);
+    final isToday = _dateOnly(day).isAtSameMomentAs(today);
+
+    if (isDone || isRest) {
+      streak++;
+    } else if (isToday) {
+      // Grace period: today not yet logged — skip without breaking.
+    } else if (freezesUsed < budget) {
+      freezesUsed++;
+      streak++;
+    } else {
+      break;
+    }
+  }
+  return (streak, freezesUsed);
+}
+
+/// Schedule-aware resilient streak. Replaces [scheduleAwareStreak] when rest
+/// days and freeze budgets are available.
+int resilientStreak(
+  Habit habit,
+  Set<String> doneDates,
+  Set<String> restDates,
+) =>
+    _resilientStreakDetail(habit, doneDates, restDates).$1;
+
+/// Remaining freeze credits for the current streak window.
+int freezesAvailableFor(
+  Habit habit,
+  Set<String> doneDates,
+  Set<String> restDates,
+) {
+  final now   = DateTime.now();
+  final today = _dateOnly(now);
+  final allDates = doneDates.union(restDates);
+  final first = firstLogDate(allDates);
+  if (first == null) return 0;
+  final start = first.isBefore(today.subtract(const Duration(days: 365)))
+      ? today.subtract(const Duration(days: 365))
+      : first;
+  final allScheduled =
+      scheduledDaysInRange(habit, start, today, firstLog: first);
+  final budget = allScheduled.length ~/ 7;
+  final detail = _resilientStreakDetail(habit, doneDates, restDates);
+  return budget - detail.$2;
 }

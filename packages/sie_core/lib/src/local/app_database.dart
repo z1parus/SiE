@@ -49,6 +49,8 @@ class LocalHabitLogs extends Table {
   TextColumn get emoji => text().nullable()();
   // Stage 2: accumulated value for the day (1 for binary).
   RealColumn get value => real().withDefault(const Constant(1))();
+  // Stage 5: 'done' (default) | 'rest' (explicit rest day, doesn't break streak).
+  TextColumn get entryType => text().withDefault(const Constant('done'))();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
 
   @override
@@ -400,7 +402,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 27;
+  int get schemaVersion => 28;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -581,6 +583,9 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 27) {
         await m.addColumn(localHabits, localHabits.reminderTime);
+      }
+      if (from < 28) {
+        await m.addColumn(localHabitLogs, localHabitLogs.entryType);
       }
     },
   );

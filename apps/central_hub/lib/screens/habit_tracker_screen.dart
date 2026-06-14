@@ -4224,8 +4224,11 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
     final logDates    = habitsState?.logDates[widget.habit.id] ?? {};
     final logValues   = habitsState?.logValues[widget.habit.id] ?? {};
     final streak      = habitsState?.streaks[widget.habit.id] ?? 0;
+    final freezesLeft = habitsState?.freezesAvailable[widget.habit.id] ?? 0;
+    final restDates   = habitsState?.restDates[widget.habit.id] ?? {};
     final logEntries  = habitsState?.logEntries[widget.habit.id] ?? [];
     final completedToday = logDates.contains(today);
+    final restToday   = restDates.contains(today);
     final todayEntry  = logEntries.cast<HabitLogEntry?>()
         .firstWhere((e) => e?.completedAt == today, orElse: () => null);
     final totalDone   = logDates.length;
@@ -4314,16 +4317,27 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                       label: 'STREAK',
                       value: '$streak',
                       accentColor: accentColor,
+                      subtitle: metrics.hasEnoughData ? 'рек. ${metrics.longestStreak}' : null,
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     _StatChip(
                       label: 'СЕГОДНЯ',
-                      value: completedToday ? 'ДА' : 'НЕТ',
+                      value: completedToday ? 'ДА' : (restToday ? '❄️' : 'НЕТ'),
                       accentColor: completedToday
                           ? accentColor
-                          : sc.textSecondary.withValues(alpha: 0.5),
+                          : restToday
+                              ? Colors.lightBlue
+                              : sc.textSecondary.withValues(alpha: 0.5),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
+                    _StatChip(
+                      label: '❄️ ФРИЗЫ',
+                      value: '$freezesLeft',
+                      accentColor: freezesLeft > 0
+                          ? Colors.lightBlue
+                          : sc.textSecondary.withValues(alpha: 0.4),
+                    ),
+                    const SizedBox(width: 8),
                     _StatChip(
                       label: 'ВСЕГО',
                       value: '$totalDone',
@@ -4389,7 +4403,28 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                               },
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _DetailActionBtn(
+                              label: restToday ? '❄️ ОТДЫХ ✓' : '❄️ ОТДЫХ',
+                              icon: Icons.ac_unit_outlined,
+                              accentColor: completedToday
+                                  ? sc.textSecondary.withValues(alpha: 0.3)
+                                  : restToday
+                                      ? Colors.lightBlue
+                                      : Colors.lightBlue.withValues(alpha: 0.7),
+                              onTap: completedToday
+                                  ? null
+                                  : () {
+                                      SieHaptics.selection();
+                                      ref
+                                          .read(habitsProvider.notifier)
+                                          .markRestDay(
+                                              widget.habit.id, DateTime.now());
+                                    },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: _DetailActionBtn(
                               label: todayEntry?.note != null ||
@@ -4400,8 +4435,6 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                               accentColor: completedToday
                                   ? accentColor
                                   : sc.textSecondary.withValues(alpha: 0.35),
-                              // Stays visually disabled, but explains why
-                              // instead of being an inert button.
                               onTap: completedToday
                                   ? () => _openReflection(
                                       today, todayEntry, accentColor)
@@ -4508,11 +4541,13 @@ class _StatChip extends ConsumerWidget {
   final String label;
   final String value;
   final Color accentColor;
+  final String? subtitle;
 
   const _StatChip({
     required this.label,
     required this.value,
     required this.accentColor,
+    this.subtitle,
   });
 
   @override
@@ -4545,6 +4580,17 @@ class _StatChip extends ConsumerWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                subtitle!,
+                style: TextStyle(
+                  color: sc.textSecondary.withValues(alpha: 0.40),
+                  fontSize: 7,
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ],
           ],
         ),
       ),

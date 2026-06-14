@@ -53,7 +53,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
 
         final logsRaw = await client
             .from('habit_logs')
-            .select('habit_id, completed_at, note, emoji, value')
+            .select('habit_id, completed_at, note, emoji, value, entry_type')
             .eq('user_id', userId)
             .gte('completed_at', cutoff);
 
@@ -91,16 +91,22 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         final logDates = <String, Set<String>>{};
         final logEntries = <String, List<HabitLogEntry>>{};
         final logValues = <String, Map<String, double>>{};
+        final restDates = <String, Set<String>>{};
         for (final row in logsRaw) {
           final hId = row['habit_id']?.toString() ?? '';
           final date = row['completed_at']?.toString() ?? '';
           if (hId.isNotEmpty && date.isNotEmpty) {
             final value = (row['value'] as num?)?.toDouble() ?? 1;
+            final entryType = row['entry_type']?.toString() ?? 'done';
             logValues.putIfAbsent(hId, () => {})[date] = value;
-            final habit = habitById[hId];
-            // Only count as "done" if the daily goal is met.
-            if (habit == null || habit.isMetByValue(value)) {
-              logDates.putIfAbsent(hId, () => {}).add(date);
+            if (entryType == 'rest') {
+              restDates.putIfAbsent(hId, () => {}).add(date);
+            } else {
+              final habit = habitById[hId];
+              // Only count as "done" if the daily goal is met.
+              if (habit == null || habit.isMetByValue(value)) {
+                logDates.putIfAbsent(hId, () => {}).add(date);
+              }
             }
             final entry = HabitLogEntry.fromMap({...row, 'user_id': userId});
             logEntries.putIfAbsent(hId, () => []).add(entry);
@@ -111,20 +117,26 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
               note: Value(row['note']?.toString()),
               emoji: Value(row['emoji']?.toString()),
               value: Value(value),
+              entryType: Value(entryType),
               synced: const Value(true),
             ));
           }
         }
 
         final streaks = <String, int>{
-          for (final h in habits) h.id: scheduleAwareStreak(h, logDates[h.id] ?? {}),
+          for (final h in habits) h.id: resilientStreak(h, logDates[h.id] ?? {}, restDates[h.id] ?? {}),
+        };
+        final freezes = <String, int>{
+          for (final h in habits) h.id: freezesAvailableFor(h, logDates[h.id] ?? {}, restDates[h.id] ?? {}),
         };
         return HabitsState(
             habits: habits,
             logDates: logDates,
             streaks: streaks,
             logEntries: logEntries,
-            logValues: logValues);
+            logValues: logValues,
+            restDates: restDates,
+            freezesAvailable: freezes);
       } catch (e) {
         debugPrint('SiE Habits: online load failed, falling back to local — $e');
       }
@@ -163,12 +175,18 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     final logDates = <String, Set<String>>{};
     final logEntries = <String, List<HabitLogEntry>>{};
     final logValues = <String, Map<String, double>>{};
+    final restDates = <String, Set<String>>{};
     for (final log in localLogs) {
       final value = log.value;
+      final entryType = log.entryType;
       logValues.putIfAbsent(log.habitId, () => {})[log.completedAt] = value;
-      final habit = habitById[log.habitId];
-      if (habit == null || habit.isMetByValue(value)) {
-        logDates.putIfAbsent(log.habitId, () => {}).add(log.completedAt);
+      if (entryType == 'rest') {
+        restDates.putIfAbsent(log.habitId, () => {}).add(log.completedAt);
+      } else {
+        final habit = habitById[log.habitId];
+        if (habit == null || habit.isMetByValue(value)) {
+          logDates.putIfAbsent(log.habitId, () => {}).add(log.completedAt);
+        }
       }
       logEntries.putIfAbsent(log.habitId, () => []).add(HabitLogEntry(
             habitId: log.habitId,
@@ -177,27 +195,35 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
             note: log.note,
             emoji: log.emoji,
             value: value,
+            entryType: entryType,
           ));
     }
 
     final streaks = <String, int>{
-      for (final h in habits) h.id: scheduleAwareStreak(h, logDates[h.id] ?? {}),
+      for (final h in habits) h.id: resilientStreak(h, logDates[h.id] ?? {}, restDates[h.id] ?? {}),
+    };
+    final freezes = <String, int>{
+      for (final h in habits) h.id: freezesAvailableFor(h, logDates[h.id] ?? {}, restDates[h.id] ?? {}),
     };
     return HabitsState(
         habits: habits,
         logDates: logDates,
         streaks: streaks,
         logEntries: logEntries,
-        logValues: logValues);
+        logValues: logValues,
+        restDates: restDates,
+        freezesAvailable: freezes);
   }
 
   /// Schedule-aware streak for a habit identified by [habitId]. Looks up the
   /// habit in current state to honour its schedule; falls back to daily if not
   /// found (e.g. brand-new optimistic insert).
   int _streakById(String habitId, Set<String> dates) {
-    final habits = state.valueOrNull?.habits ?? const <Habit>[];
+    final s = state.valueOrNull;
+    final habits = s?.habits ?? const <Habit>[];
+    final rDates = s?.restDates[habitId] ?? const <String>{};
     for (final h in habits) {
-      if (h.id == habitId) return scheduleAwareStreak(h, dates);
+      if (h.id == habitId) return resilientStreak(h, dates, rDates);
     }
     return dates.isEmpty ? 0 : dates.length;
   }
@@ -249,6 +275,8 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         streaks: {...prev.streaks, habitId: 0},
         logEntries: prev.logEntries,
         logValues: prev.logValues,
+        restDates: prev.restDates,
+        freezesAvailable: {...prev.freezesAvailable, habitId: 0},
       ));
     }
 
@@ -394,10 +422,15 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       logDates: newLogDates,
       streaks: {
         ...prev.streaks,
-        habitId: scheduleAwareStreak(updated, newLogDates[habitId] ?? const {}),
+        habitId: resilientStreak(updated, newLogDates[habitId] ?? const {}, prev.restDates[habitId] ?? const {}),
       },
       logEntries: prev.logEntries,
       logValues: prev.logValues,
+      restDates: prev.restDates,
+      freezesAvailable: {
+        ...prev.freezesAvailable,
+        habitId: freezesAvailableFor(updated, newLogDates[habitId] ?? const {}, prev.restDates[habitId] ?? const {}),
+      },
     ));
 
     final resolvedIcon = icon == _noChange ? updated.icon : icon as String?;
@@ -482,12 +515,18 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     final newLogEntriesDel =
         Map<String, List<HabitLogEntry>>.from(prev.logEntries)
           ..remove(habitId);
+    final newRestDatesDel = Map<String, Set<String>>.from(prev.restDates)
+      ..remove(habitId);
+    final newFreezesDel = Map<String, int>.from(prev.freezesAvailable)
+      ..remove(habitId);
 
     state = AsyncData(HabitsState(
       habits: newHabits,
       logDates: newLogDates,
       streaks: newStreaks,
       logEntries: newLogEntriesDel,
+      restDates: newRestDatesDel,
+      freezesAvailable: newFreezesDel,
     ));
 
     await db.markHabitDeleted(habitId);
@@ -537,7 +576,9 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       logDates: prev.logDates,
       streaks: prev.streaks,
       logEntries: prev.logEntries,
-        logValues: prev.logValues,
+      logValues: prev.logValues,
+      restDates: prev.restDates,
+      freezesAvailable: prev.freezesAvailable,
     ));
 
     await db.upsertHabit(LocalHabitsCompanion(
@@ -633,6 +674,9 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       logDates: newLogDates,
       streaks: {...prev.streaks, habitId: _streakById(habitId, habitDates)},
       logEntries: newLogEntries,
+      logValues: prev.logValues,
+      restDates: prev.restDates,
+      freezesAvailable: prev.freezesAvailable,
     ));
 
     try {
@@ -791,7 +835,9 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         habitId: _streakById(habitId, newLogDates[habitId] ?? const {}),
       },
       logEntries: newLogEntries,
-        logValues: newLogValues,
+      logValues: newLogValues,
+      restDates: prev.restDates,
+      freezesAvailable: prev.freezesAvailable,
     ));
 
     try {
@@ -881,12 +927,18 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     final newLogEntriesArc =
         Map<String, List<HabitLogEntry>>.from(prev.logEntries)
           ..remove(habitId);
+    final newRestDatesArc = Map<String, Set<String>>.from(prev.restDates)
+      ..remove(habitId);
+    final newFreezesArc = Map<String, int>.from(prev.freezesAvailable)
+      ..remove(habitId);
 
     state = AsyncData(HabitsState(
       habits: newHabits,
       logDates: newLogDates,
       streaks: newStreaks,
       logEntries: newLogEntriesArc,
+      restDates: newRestDatesArc,
+      freezesAvailable: newFreezesArc,
     ));
 
     await NotificationService.instance.cancelHabitReminder(habitId);
@@ -975,6 +1027,9 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           ? {...prev.streaks, habitId: _streakById(habitId, updatedLogDates[habitId] ?? {})}
           : prev.streaks,
       logEntries: updatedEntries,
+      logValues: prev.logValues,
+      restDates: prev.restDates,
+      freezesAvailable: prev.freezesAvailable,
     ));
 
     // Upsert to local DB so note/emoji persist even if the remote call fails.
@@ -1022,6 +1077,122 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     }
   }
 
+  /// Stage 5 — mark [date] as an explicit rest day for [habitId].
+  /// A rest day preserves the streak without counting as a completion.
+  /// Calling again on the same date removes the rest mark (toggle).
+  Future<void> markRestDay(String habitId, DateTime date) async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final dateStr = _fmt(date);
+    final prev = state.valueOrNull;
+    if (prev == null) return;
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final db = ref.read(appDatabaseProvider);
+    final habit = prev.habits.cast<Habit?>()
+        .firstWhere((h) => h?.id == habitId, orElse: () => null);
+    if (habit == null) return;
+
+    final isAlreadyRest = prev.restDates[habitId]?.contains(dateStr) ?? false;
+
+    if (isAlreadyRest) {
+      // Remove rest day.
+      final newRestDates = {
+        for (final e in prev.restDates.entries) e.key: Set<String>.from(e.value),
+      };
+      newRestDates[habitId]?.remove(dateStr);
+      final rDates = newRestDates[habitId] ?? const <String>{};
+      state = AsyncData(HabitsState(
+        habits: prev.habits,
+        logDates: prev.logDates,
+        streaks: {
+          ...prev.streaks,
+          habitId: resilientStreak(habit, prev.logDates[habitId] ?? {}, rDates),
+        },
+        logEntries: prev.logEntries,
+        logValues: prev.logValues,
+        restDates: newRestDates,
+        freezesAvailable: {
+          ...prev.freezesAvailable,
+          habitId: freezesAvailableFor(habit, prev.logDates[habitId] ?? {}, rDates),
+        },
+      ));
+      await db.deleteHabitLog(habitId, userId, dateStr);
+      if (isOnline) {
+        await client.from('habit_logs').delete()
+            .eq('habit_id', habitId)
+            .eq('user_id', userId)
+            .eq('completed_at', dateStr);
+      } else {
+        await db.enqueueSyncOp('delete_habit_log', jsonEncode({
+          'habit_id': habitId,
+          'user_id': userId,
+          'completed_at': dateStr,
+        }));
+      }
+    } else {
+      // Add rest day (also removes it from done-dates if toggled there).
+      final newLogDates = {
+        for (final e in prev.logDates.entries) e.key: Set<String>.from(e.value),
+      };
+      newLogDates[habitId]?.remove(dateStr);
+      final newRestDates = {
+        for (final e in prev.restDates.entries) e.key: Set<String>.from(e.value),
+      };
+      newRestDates.putIfAbsent(habitId, () => {}).add(dateStr);
+      final rDates = newRestDates[habitId] ?? const <String>{};
+      state = AsyncData(HabitsState(
+        habits: prev.habits,
+        logDates: newLogDates,
+        streaks: {
+          ...prev.streaks,
+          habitId: resilientStreak(habit, newLogDates[habitId] ?? {}, rDates),
+        },
+        logEntries: prev.logEntries,
+        logValues: prev.logValues,
+        restDates: newRestDates,
+        freezesAvailable: {
+          ...prev.freezesAvailable,
+          habitId: freezesAvailableFor(habit, newLogDates[habitId] ?? {}, rDates),
+        },
+      ));
+      await db.upsertHabitLog(LocalHabitLogsCompanion(
+        habitId: Value(habitId),
+        userId: Value(userId),
+        completedAt: Value(dateStr),
+        entryType: const Value('rest'),
+        synced: Value(isOnline),
+      ));
+      if (isOnline) {
+        try {
+          await client.from('habit_logs').upsert({
+            'habit_id': habitId,
+            'user_id': userId,
+            'completed_at': dateStr,
+            'entry_type': 'rest',
+          }, onConflict: 'user_id,habit_id,completed_at');
+        } catch (e) {
+          await db.enqueueSyncOp('insert_habit_log', jsonEncode({
+            'habit_id': habitId,
+            'user_id': userId,
+            'completed_at': dateStr,
+            'entry_type': 'rest',
+          }));
+          debugPrint('SiE markRestDay: sync failed, queued — $e');
+        }
+      } else {
+        await db.enqueueSyncOp('insert_habit_log', jsonEncode({
+          'habit_id': habitId,
+          'user_id': userId,
+          'completed_at': dateStr,
+          'entry_type': 'rest',
+        }));
+      }
+    }
+  }
+
   Future<void> restoreHabit(Habit habit) async {
     if (_inProgressRestore.contains(habit.id)) return;
     _inProgressRestore.add(habit.id);
@@ -1047,7 +1218,9 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       logDates: prev.logDates,
       streaks: {...prev.streaks, habit.id: 0},
       logEntries: prev.logEntries,
-        logValues: prev.logValues,
+      logValues: prev.logValues,
+      restDates: prev.restDates,
+      freezesAvailable: {...prev.freezesAvailable, habit.id: 0},
     ));
 
     await db.upsertHabit(LocalHabitsCompanion(
@@ -1083,6 +1256,8 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         streaks: prev.streaks,
         logEntries: prev.logEntries,
         logValues: prev.logValues,
+        restDates: prev.restDates,
+        freezesAvailable: prev.freezesAvailable,
       ));
       Error.throwWithStackTrace(e, st);
     }
