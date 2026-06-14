@@ -58,7 +58,7 @@ export 'src/models/vanguard_result.dart';
 export 'src/providers/planning_provider.dart';
 export 'src/providers/goal_analytics_provider.dart';
 export 'src/providers/mission_templates_provider.dart';
-export 'src/providers/weekly_review_provider.dart';
+export 'src/providers/weekly_review_provider.dart' hide isoWeekStart;
 export 'src/providers/agenda_provider.dart';
 export 'src/providers/notification_provider.dart';
 export 'src/services/notification_service.dart';

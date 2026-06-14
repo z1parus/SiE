@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../local/app_database.dart';
 import '../models/habit.dart';
 import '../models/habit_log_entry.dart';
+import '../services/notification_service.dart';
 import 'auth_state_provider.dart';
 import 'connectivity_provider.dart';
 import 'user_profile_provider.dart';
@@ -148,6 +149,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
               targetValue: h.targetValue,
               unit: h.unit,
               step: h.step,
+              reminderTime: h.reminderTime,
               createdAt:
                   DateTime.fromMillisecondsSinceEpoch(h.createdAtMs),
             ))
@@ -211,6 +213,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     double? targetValue,
     String? unit,
     double? step,
+    String? reminderTime,
   }) async {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
@@ -236,6 +239,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       targetValue: targetValue,
       unit: unit,
       step: step,
+      reminderTime: reminderTime,
       createdAt: now,
     );
     if (prev != null) {
@@ -261,9 +265,15 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       targetValue: Value(targetValue),
       unit: Value(unit),
       step: Value(step),
+      reminderTime: Value(reminderTime),
       createdAtMs: Value(now.millisecondsSinceEpoch),
       synced: Value(isOnline),
     ));
+
+    // Schedule notification if a reminder time is set.
+    if (reminderTime != null) {
+      await NotificationService.instance.scheduleHabitReminder(optimistic);
+    }
 
     try {
       if (isOnline) {
@@ -280,6 +290,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           if (targetValue != null) 'target_value': targetValue,
           if (unit != null) 'unit': unit,
           if (step != null) 'step': step,
+          if (reminderTime != null) 'reminder_time': reminderTime,
         });
         state = AsyncData(await _load());
         if (isFirstHabit) {
@@ -300,6 +311,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           if (targetValue != null) 'target_value': targetValue,
           if (unit != null) 'unit': unit,
           if (step != null) 'step': step,
+          if (reminderTime != null) 'reminder_time': reminderTime,
         }));
         state = AsyncData(await _load());
       }
@@ -323,6 +335,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     Object? targetValue = _noChange,
     Object? unit = _noChange,
     Object? step = _noChange,
+    Object? reminderTime = _noChange,
   }) async {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
@@ -346,6 +359,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       targetValue: targetValue,
       unit: unit,
       step: step,
+      reminderTime: reminderTime,
     );
     final newHabits = [...prev.habits]..[idx] = updated;
     final resolvedSchedule = schedule ?? prev.habits[idx].schedule;
@@ -359,6 +373,9 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     final resolvedStep = step == _noChange
         ? prev.habits[idx].step
         : step as double?;
+    final resolvedReminder = reminderTime == _noChange
+        ? prev.habits[idx].reminderTime
+        : reminderTime as String?;
 
     // Re-evaluate logDates when target changes: a day that was previously
     // "done" may no longer meet the new target (show visual only, no XP rollback).
@@ -396,9 +413,17 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       targetValue: Value(resolvedTarget),
       unit: Value(resolvedUnit),
       step: Value(resolvedStep),
+      reminderTime: Value(resolvedReminder),
       createdAtMs: Value(prev.habits[idx].createdAt.millisecondsSinceEpoch),
       synced: Value(isOnline),
     ));
+
+    // Re-schedule (or cancel) reminder when settings change.
+    if (resolvedReminder != null) {
+      await NotificationService.instance.scheduleHabitReminder(updated);
+    } else {
+      await NotificationService.instance.cancelHabitReminder(habitId);
+    }
 
     try {
       if (isOnline) {
@@ -415,6 +440,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           'target_value': resolvedTarget,
           'unit': resolvedUnit,
           'step': resolvedStep,
+          'reminder_time': resolvedReminder,
         }).eq('id', habitId).eq('user_id', userId);
       } else {
         await db.enqueueSyncOp('update_habit', jsonEncode({
@@ -429,6 +455,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           'target_value': resolvedTarget,
           'unit': resolvedUnit,
           'step': resolvedStep,
+          'reminder_time': resolvedReminder,
         }));
       }
     } catch (e, st) {
@@ -464,6 +491,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     ));
 
     await db.markHabitDeleted(habitId);
+    await NotificationService.instance.cancelHabitReminder(habitId);
 
     try {
       if (isOnline) {
@@ -860,6 +888,8 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       streaks: newStreaks,
       logEntries: newLogEntriesArc,
     ));
+
+    await NotificationService.instance.cancelHabitReminder(habitId);
 
     await db.upsertHabit(LocalHabitsCompanion(
       id: Value(habitId),

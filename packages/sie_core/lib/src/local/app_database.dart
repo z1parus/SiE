@@ -30,6 +30,8 @@ class LocalHabits extends Table {
   RealColumn get targetValue => real().nullable()();
   TextColumn get unit => text().nullable()();
   RealColumn get step => real().nullable()();
+  // Stage 3 (habits): optional reminder time as 'HH:mm' string (null = off).
+  TextColumn get reminderTime => text().nullable()();
   BoolColumn get deletedLocally =>
       boolean().withDefault(const Constant(false))();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
@@ -398,7 +400,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 26;
+  int get schemaVersion => 27;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -577,6 +579,9 @@ class AppDatabase extends _$AppDatabase {
         // value column has a DEFAULT of 1, so existing rows backfill to 1.
         await m.addColumn(localHabitLogs, localHabitLogs.value);
       }
+      if (from < 27) {
+        await m.addColumn(localHabits, localHabits.reminderTime);
+      }
     },
   );
 
@@ -684,7 +689,7 @@ class AppDatabase extends _$AppDatabase {
               t.completedAt.equals(completedAt)))
         .getSingleOrNull();
     final prev = existing?.value ?? 0;
-    final next = (prev + delta).clamp(0, double.infinity);
+    final next = (prev + delta).clamp(0.0, double.infinity);
     await into(localHabitLogs).insertOnConflictUpdate(LocalHabitLogsCompanion(
       habitId: Value(habitId),
       userId: Value(userId),

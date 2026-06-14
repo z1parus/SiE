@@ -43,6 +43,20 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
     final habitsAsync   = ref.watch(habitsProvider);
     final routinesAsync = ref.watch(habitRoutinesProvider);
     final today         = _fmt(DateTime.now());
+
+    // Reschedule evening digest whenever habit completion state changes.
+    ref.listen(habitsProvider, (_, next) {
+      final state = next.valueOrNull;
+      if (state == null) return;
+      final pending = state.habits
+          .where((h) => !(state.logDates[h.id]?.contains(today) ?? false))
+          .length;
+      NotificationService.instance.scheduleHabitDigest(
+        hour: 21,
+        minute: 0,
+        pendingCount: pending,
+      );
+    });
     final profile       = ref.watch(userProfileProvider).valueOrNull;
 
     final habitsData   = habitsAsync.valueOrNull;
@@ -311,7 +325,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
       builder: (_) => _HabitDialog(
         existing: existing,
         onSave: (title, description, color, icon, schedule, kind,
-            targetValue, unit, step) {
+            targetValue, unit, step, reminderTime) {
           if (existing == null) {
             ref
                 .read(habitsProvider.notifier)
@@ -324,7 +338,8 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                     kind: kind,
                     targetValue: targetValue,
                     unit: unit,
-                    step: step)
+                    step: step,
+                    reminderTime: reminderTime)
                 .then((awarded) {
               if (awarded && mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -378,6 +393,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                   targetValue: targetValue,
                   unit: unit,
                   step: step,
+                  reminderTime: reminderTime,
                 );
           }
         },
@@ -1636,7 +1652,7 @@ class _HabitDialog extends ConsumerStatefulWidget {
   final Habit? existing;
   final void Function(String title, String? description, String color,
       String? icon, String schedule, String kind, double? targetValue,
-      String? unit, double? step) onSave;
+      String? unit, double? step, String? reminderTime) onSave;
 
   const _HabitDialog({this.existing, required this.onSave});
 
@@ -1700,6 +1716,11 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
   String _unit = 'раз';
   double _step = 1;
 
+  // Stage 3 — reminder state.
+  bool _reminderEnabled = false;
+  int _reminderHour = 9;
+  int _reminderMinute = 0;
+
   static const _colorOptions = [
     '#5AADA0',
     '#6A8ED8',
@@ -1733,6 +1754,13 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
       _targetValue = widget.existing!.targetValue ?? (_kind == 'duration' ? 20 : 8);
       _unit = widget.existing!.unit ?? 'раз';
       _step = widget.existing!.step ?? (_kind == 'duration' ? 300 : 1);
+      final rt = widget.existing!.reminderTime;
+      if (rt != null) {
+        _reminderEnabled = true;
+        final p = rt.split(':');
+        _reminderHour   = int.tryParse(p[0]) ?? 9;
+        _reminderMinute = int.tryParse(p.length > 1 ? p[1] : '0') ?? 0;
+      }
     }
   }
 
@@ -1888,6 +1916,80 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
             onWeeklyChanged: (n) => setState(() => _weeklyCount = n),
             onIntervalChanged: (n) => setState(() => _intervalDays = n),
           ),
+          const SizedBox(height: 20),
+          Text(
+            'REMINDER',
+            style: TextStyle(
+              color: sc.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Switch(
+                value: _reminderEnabled,
+                onChanged: (v) => setState(() => _reminderEnabled = v),
+                activeColor: _toColor(_selectedColor),
+              ),
+              const SizedBox(width: 8),
+              if (_reminderEnabled)
+                GestureDetector(
+                  onTap: () async {
+                    final picked = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay(
+                          hour: _reminderHour, minute: _reminderMinute),
+                      builder: (ctx, child) => Theme(
+                        data: Theme.of(ctx).copyWith(
+                          colorScheme: ColorScheme.dark(
+                            primary: _toColor(_selectedColor),
+                            surface: sc.surface,
+                            onSurface: sc.textPrimary,
+                          ),
+                        ),
+                        child: child!,
+                      ),
+                    );
+                    if (picked != null) {
+                      setState(() {
+                        _reminderHour   = picked.hour;
+                        _reminderMinute = picked.minute;
+                      });
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                          color: _toColor(_selectedColor).withValues(alpha: 0.5)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '${_reminderHour.toString().padLeft(2, '0')}:${_reminderMinute.toString().padLeft(2, '0')}',
+                      style: TextStyle(
+                        color: _toColor(_selectedColor),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.5,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  'Выкл.',
+                  style: TextStyle(
+                    color: sc.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -1904,6 +2006,9 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
                 onTap: () {
                   final title = _titleCtrl.text.trim();
                   if (title.isEmpty) return;
+                  final reminderTime = _reminderEnabled
+                      ? '${_reminderHour.toString().padLeft(2, '0')}:${_reminderMinute.toString().padLeft(2, '0')}'
+                      : null;
                   widget.onSave(
                     title,
                     _descCtrl.text.trim().isEmpty
@@ -1916,6 +2021,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
                     _kind != 'binary' ? _targetValue : null,
                     _kind == 'count' ? _unit : null,
                     _kind != 'binary' ? _step : null,
+                    reminderTime,
                   );
                   Navigator.of(context).pop();
                 },
@@ -3940,7 +4046,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                         builder: (_) => _HabitDialog(
                           existing: widget.habit,
                           onSave: (title, description, color, icon, schedule,
-                              kind, targetValue, unit, step) {
+                              kind, targetValue, unit, step, reminderTime) {
                             ref.read(habitsProvider.notifier).updateHabit(
                                   habitId: widget.habit.id,
                                   title: title,
@@ -3952,6 +4058,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                                   targetValue: targetValue,
                                   unit: unit,
                                   step: step,
+                                  reminderTime: reminderTime,
                                 );
                           },
                         ),

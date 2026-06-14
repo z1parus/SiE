@@ -32,6 +32,9 @@ class Habit {
   /// Quick "+step" button increment. For 'duration' it is in seconds.
   final double? step;
 
+  /// Stage 3 — optional reminder time as 'HH:mm' string (null = off).
+  final String? reminderTime;
+
   const Habit({
     required this.id,
     required this.userId,
@@ -46,6 +49,7 @@ class Habit {
     this.targetValue,
     this.unit,
     this.step,
+    this.reminderTime,
     required this.createdAt,
   });
 
@@ -67,6 +71,7 @@ class Habit {
         targetValue: (map['target_value'] as num?)?.toDouble(),
         unit: map['unit']?.toString(),
         step: (map['step'] as num?)?.toDouble(),
+        reminderTime: map['reminder_time']?.toString(),
         createdAt:
             DateTime.tryParse(map['created_at']?.toString() ?? '') ??
                 DateTime.now(),
@@ -84,6 +89,7 @@ class Habit {
     Object? targetValue = _sentinel,
     Object? unit = _sentinel,
     Object? step = _sentinel,
+    Object? reminderTime = _sentinel,
   }) =>
       Habit(
         id: id,
@@ -101,6 +107,9 @@ class Habit {
             : targetValue as double?,
         unit: unit == _sentinel ? this.unit : unit as String?,
         step: step == _sentinel ? this.step : step as double?,
+        reminderTime: reminderTime == _sentinel
+            ? this.reminderTime
+            : reminderTime as String?,
         createdAt: createdAt,
       );
 
