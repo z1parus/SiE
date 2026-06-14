@@ -325,6 +325,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           if (unit != null) 'unit': unit,
           if (step != null) 'step': step,
           if (reminderTime != null) 'reminder_time': reminderTime,
+          if (area != null) 'area': area.name,
         });
         state = AsyncData(await _load());
         if (isFirstHabit) {
@@ -346,6 +347,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           if (unit != null) 'unit': unit,
           if (step != null) 'step': step,
           if (reminderTime != null) 'reminder_time': reminderTime,
+          if (area != null) 'area': area.name,
         }));
         state = AsyncData(await _load());
       }
@@ -412,6 +414,9 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     final resolvedReminder = reminderTime == _noChange
         ? prev.habits[idx].reminderTime
         : reminderTime as String?;
+    final resolvedArea = area == _noChange
+        ? prev.habits[idx].area
+        : area as LifeArea?;
 
     // Re-evaluate logDates when target changes: a day that was previously
     // "done" may no longer meet the new target (show visual only, no XP rollback).
@@ -455,6 +460,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       unit: Value(resolvedUnit),
       step: Value(resolvedStep),
       reminderTime: Value(resolvedReminder),
+      area: Value(resolvedArea?.name),
       createdAtMs: Value(prev.habits[idx].createdAt.millisecondsSinceEpoch),
       synced: Value(isOnline),
     ));
@@ -482,6 +488,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           'unit': resolvedUnit,
           'step': resolvedStep,
           'reminder_time': resolvedReminder,
+          'area': resolvedArea?.name,
         }).eq('id', habitId).eq('user_id', userId);
       } else {
         await db.enqueueSyncOp('update_habit', jsonEncode({
@@ -497,6 +504,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           'unit': resolvedUnit,
           'step': resolvedStep,
           'reminder_time': resolvedReminder,
+          'area': resolvedArea?.name,
         }));
       }
     } catch (e, st) {
@@ -1317,6 +1325,7 @@ final archivedHabitsProvider =
             isPinned: h.isPinned,
             isArchived: true,
             schedule: h.schedule,
+            area: LifeAreaX.fromString(h.area),
             createdAt: DateTime.fromMillisecondsSinceEpoch(h.createdAtMs),
           ))
       .toList();

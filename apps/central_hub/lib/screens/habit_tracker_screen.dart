@@ -27,6 +27,8 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
   HabitViewMode _viewMode = HabitViewMode.today;
   // Stage 1 — "Не сегодня" section collapsed by default.
   bool _notTodayExpanded = false;
+  // Stage 6 — group habits by life area.
+  bool _groupByArea = false;
 
   Future<void> _onRefresh() async {
     ref.invalidate(habitsProvider);
@@ -83,6 +85,8 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
           _CyberTopBar(
             onArchive: _openArchive,
             onInfo: () => setState(() => _showOnboardingManual = true),
+            onGroupToggle: () => setState(() => _groupByArea = !_groupByArea),
+            groupByArea: _groupByArea,
           ),
           // ── Routine Blocks ──────────────────────────────────────
           routinesAsync.when(
@@ -181,6 +185,31 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                     onTogglePin: () => ref
                         .read(habitsProvider.notifier)
                         .togglePin(habit.id),
+                  );
+                }
+
+                // Stage 6 — group by life area when toggle is active.
+                if (_groupByArea) {
+                  final grouped = <LifeArea?, List<Habit>>{};
+                  for (final h in visibleHabits) {
+                    grouped.putIfAbsent(h.area, () => []).add(h);
+                  }
+                  final areaOrder = [...LifeArea.values, null];
+                  final items = <Widget>[];
+                  for (final area in areaOrder) {
+                    final areaHabits = grouped[area];
+                    if (areaHabits == null || areaHabits.isEmpty) continue;
+                    items.add(_AreaSectionHeader(area: area, sc: sc));
+                    items.add(const SizedBox(height: 8));
+                    for (final h in areaHabits) {
+                      items.add(buildCard(h));
+                      items.add(const SizedBox(height: 12));
+                    }
+                  }
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                    children: items,
                   );
                 }
 
@@ -327,7 +356,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
       builder: (_) => _HabitDialog(
         existing: existing,
         onSave: (title, description, color, icon, schedule, kind,
-            targetValue, unit, step, reminderTime) {
+            targetValue, unit, step, reminderTime, area) {
           if (existing == null) {
             ref
                 .read(habitsProvider.notifier)
@@ -341,7 +370,8 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                     targetValue: targetValue,
                     unit: unit,
                     step: step,
-                    reminderTime: reminderTime)
+                    reminderTime: reminderTime,
+                    area: area)
                 .then((awarded) {
               if (awarded && mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -396,6 +426,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                   unit: unit,
                   step: step,
                   reminderTime: reminderTime,
+                  area: area,
                 );
           }
         },
@@ -408,9 +439,16 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
 // Cyberpunk Top Bar
 // ─────────────────────────────────────────────────────────────────────────────
 class _CyberTopBar extends ConsumerWidget {
-  const _CyberTopBar({required this.onArchive, required this.onInfo});
+  const _CyberTopBar({
+    required this.onArchive,
+    required this.onInfo,
+    required this.onGroupToggle,
+    required this.groupByArea,
+  });
   final VoidCallback onArchive;
   final VoidCallback onInfo;
+  final VoidCallback onGroupToggle;
+  final bool groupByArea;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -483,6 +521,13 @@ class _CyberTopBar extends ConsumerWidget {
             ),
             size: 18,
             semanticLabel: 'Обзор привычек',
+          ),
+          const SizedBox(width: 8),
+          _GlassIconBtn(
+            icon: groupByArea ? Icons.view_list_outlined : Icons.view_module_outlined,
+            onTap: onGroupToggle,
+            size: 18,
+            semanticLabel: 'Группировка по сферам',
           ),
           const SizedBox(width: 8),
           _GlassIconBtn(
@@ -1665,7 +1710,7 @@ class _HabitDialog extends ConsumerStatefulWidget {
   final Habit? existing;
   final void Function(String title, String? description, String color,
       String? icon, String schedule, String kind, double? targetValue,
-      String? unit, double? step, String? reminderTime) onSave;
+      String? unit, double? step, String? reminderTime, LifeArea? area) onSave;
 
   const _HabitDialog({this.existing, required this.onSave});
 
@@ -1678,6 +1723,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
   late final TextEditingController _descCtrl;
   late String _selectedColor;
   String? _selectedIcon;
+  LifeArea? _selectedArea;
 
   // Stage 1 — schedule editor state.
   String _scheduleMode = 'daily'; // daily | weekdays | weekly | interval
@@ -1761,6 +1807,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
     _descCtrl  = TextEditingController(text: widget.existing?.description ?? '');
     _selectedColor = widget.existing?.color ?? '#5AADA0';
     _selectedIcon  = widget.existing?.icon;
+    _selectedArea  = widget.existing?.area;
     if (widget.existing != null) {
       _parseSchedule(widget.existing!.schedule);
       _kind = widget.existing!.kind;
@@ -2003,6 +2050,36 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
                 ),
             ],
           ),
+          const SizedBox(height: 20),
+          Text(
+            'СФЕРА',
+            style: TextStyle(
+              color: sc.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2.5,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _AreaChip(
+                area: null,
+                selected: _selectedArea == null,
+                sc: sc,
+                onTap: () => setState(() => _selectedArea = null),
+              ),
+              for (final a in LifeArea.values)
+                _AreaChip(
+                  area: a,
+                  selected: _selectedArea == a,
+                  sc: sc,
+                  onTap: () => setState(() => _selectedArea = a),
+                ),
+            ],
+          ),
           const SizedBox(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -2035,6 +2112,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
                     _kind == 'count' ? _unit : null,
                     _kind != 'binary' ? _step : null,
                     reminderTime,
+                    _selectedArea,
                   );
                   Navigator.of(context).pop();
                 },
@@ -4059,7 +4137,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                         builder: (_) => _HabitDialog(
                           existing: widget.habit,
                           onSave: (title, description, color, icon, schedule,
-                              kind, targetValue, unit, step, reminderTime) {
+                              kind, targetValue, unit, step, reminderTime, area) {
                             ref.read(habitsProvider.notifier).updateHabit(
                                   habitId: widget.habit.id,
                                   title: title,
@@ -4072,6 +4150,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                                   unit: unit,
                                   step: step,
                                   reminderTime: reminderTime,
+                                  area: area,
                                 );
                           },
                         ),
@@ -5004,6 +5083,77 @@ class _InsightChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Stage 6: Area Chip ────────────────────────────────────────
+
+class _AreaChip extends StatelessWidget {
+  final LifeArea? area;
+  final bool selected;
+  final SieColors sc;
+  final VoidCallback onTap;
+
+  const _AreaChip({
+    required this.area,
+    required this.selected,
+    required this.sc,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = area == null ? '—' : '${area!.icon} ${area!.label}';
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: selected ? sc.accent : sc.border,
+            width: selected ? 1.5 : 1.0,
+          ),
+          color: selected ? sc.accent.withValues(alpha: 0.12) : Colors.transparent,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? sc.accent : sc.textSecondary.withValues(alpha: 0.7),
+            fontSize: 11,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Stage 6: Area Section Header ──────────────────────────────
+
+class _AreaSectionHeader extends StatelessWidget {
+  final LifeArea? area;
+  final SieColors sc;
+  const _AreaSectionHeader({required this.area, required this.sc});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = area == null
+        ? '— БЕЗ СФЕРЫ'
+        : '${area!.icon} ${area!.label.toUpperCase()}';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4, top: 8),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: sc.textSecondary.withValues(alpha: 0.55),
+          fontSize: 9,
+          letterSpacing: 2.5,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
