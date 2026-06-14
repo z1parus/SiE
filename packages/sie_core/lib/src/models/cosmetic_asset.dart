@@ -119,10 +119,14 @@ class CosmeticAsset {
 
   // ── Pattern helpers (animated overlay) ─────────────────────
 
-  /// Which animated pattern to render: 'neural_threads' | 'low_poly' |
-  /// 'iso_grid' | 'dot_matrix'. Falls back to [slug] for forward-compat.
-  String get patternSlug =>
-      styleConfig['pattern_slug'] as String? ?? slug;
+  /// Which animated pattern to render: 'neural' | 'low_poly' |
+  /// 'isometric' | 'dot_matrix'. Falls back to [slug] for forward-compat.
+  String get patternType =>
+      styleConfig['pattern_type'] as String? ??
+      styleConfig['pattern_slug'] as String? ??
+      slug;
+
+  String get patternSlug => patternType;
 
   /// Overlay opacity for the pattern layer (the hue itself inherits the
   /// equipped background accent at render time).
