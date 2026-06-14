@@ -202,14 +202,13 @@ class _ProfileContent extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  if (equipped.statStyle != null) ...[
-                    const SizedBox(height: 12),
-                    _StatStyleCard(
-                      statStyle: equipped.statStyle!,
-                      level: level,
-                      xp: xp,
-                    ),
-                  ],
+                  const SizedBox(height: 14),
+                  _StatsStrip(
+                    level: level,
+                    xp: xp,
+                    dp: profile?.designPoints ?? 0,
+                    statStyle: equipped.statStyle,
+                  ),
                   const SizedBox(height: 20),
                   // Progress Hub + База Знаний + Облик — square nav grid
                   Row(
@@ -254,7 +253,7 @@ class _ProfileContent extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 28),
-                  const SectionHeader(title: 'AWARDS'),
+                  const _AwardsHeader(),
                   const SizedBox(height: 16),
                   const _AchievementsGrid(),
                   const SizedBox(height: 28),
@@ -282,44 +281,106 @@ class _ProfileContent extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Equipped stat-style card
+// Stats strip — Level / Total XP / DP, styled by the equipped stat style
 // ─────────────────────────────────────────────────────────────────────────────
-class _StatStyleCard extends ConsumerWidget {
-  const _StatStyleCard({
-    required this.statStyle,
+class _StatsStrip extends ConsumerWidget {
+  const _StatsStrip({
     required this.level,
     required this.xp,
+    required this.dp,
+    this.statStyle,
   });
-  final CosmeticAsset statStyle;
   final int level;
   final int xp;
+  final int dp;
+  final CosmeticAsset? statStyle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c       = ref.watch(sieColorsProvider);
-    final accent  = statStyle.accentColor;
-    final glowCol = c.isLightMode ? null : statStyle.styleGlowColor;
-    final glowRad = statStyle.styleGlowRadius;
+    final c = ref.watch(sieColorsProvider);
+    return Row(
+      children: [
+        Expanded(
+          child: _StatCell(
+            icon: Icons.military_tech_outlined,
+            value: 'LVL $level',
+            label: 'УРОВЕНЬ',
+            statStyle: statStyle,
+            c: c,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _StatCell(
+            icon: Icons.bolt,
+            value: '$xp',
+            label: 'XP ВСЕГО',
+            statStyle: statStyle,
+            c: c,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _StatCell(
+            icon: Icons.palette_outlined,
+            value: '$dp',
+            label: 'DP',
+            statStyle: statStyle,
+            c: c,
+          ),
+        ),
+      ],
+    );
+  }
+}
 
+class _StatCell extends StatelessWidget {
+  const _StatCell({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.c,
+    this.statStyle,
+  });
+  final IconData icon;
+  final String value;
+  final String label;
+  final SieColors c;
+  final CosmeticAsset? statStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final valueColor = statStyle?.accentColor ?? c.accent;
+    final decoration = statStyle != null
+        ? statStyle!.buildStatCardDecoration(
+            surfaceColor: c.surface, isLightMode: c.isLightMode)
+        : c.flatCard(radius: 14);
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-      decoration: statStyle.buildStatCardDecoration(surfaceColor: c.surface, isLightMode: c.isLightMode),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: decoration,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.bolt, color: accent, size: 14),
-          const SizedBox(width: 8),
+          Icon(icon, color: c.textSecondary, size: 14),
+          const SizedBox(height: 8),
           Text(
-            'LEVEL $level  ·  $xp XP',
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: accent,
-              fontSize: 12,
+              color: valueColor,
+              fontSize: 15,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1.5,
-              shadows: glowCol != null && glowRad > 0
-                  ? [Shadow(color: glowCol, blurRadius: glowRad)]
-                  : null,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 9,
+              letterSpacing: 1.2,
             ),
           ),
         ],
@@ -384,6 +445,36 @@ class _SquareNavButton extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Awards header with earned/total counter
+// ─────────────────────────────────────────────────────────────────────────────
+class _AwardsHeader extends ConsumerWidget {
+  const _AwardsHeader();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c   = ref.watch(sieColorsProvider);
+    final ach = ref.watch(userAchievementsProvider).valueOrNull;
+
+    return Row(
+      children: [
+        const SectionHeader(title: 'AWARDS'),
+        const Spacer(),
+        if (ach != null && ach.isNotEmpty)
+          Text(
+            '${ach.where((a) => a.earned).length} / ${ach.length}',
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Achievements grid (regular unlockable achievements)
 // ─────────────────────────────────────────────────────────────────────────────
 class _AchievementsGrid extends ConsumerWidget {
@@ -395,12 +486,7 @@ class _AchievementsGrid extends ConsumerWidget {
     final achievementsAsync = ref.watch(userAchievementsProvider);
 
     return achievementsAsync.when(
-      loading: () => SizedBox(
-        height: 80,
-        child: Center(
-          child: CircularProgressIndicator(color: c.accent, strokeWidth: 1.5),
-        ),
-      ),
+      loading: () => const SieSkeletonGrid(columns: 3, count: 6),
       error: (_, _) => Text(
         'NO ACHIEVEMENTS DEFINED IN DATABASE',
         style: TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),
@@ -441,12 +527,7 @@ class _MedalsVault extends ConsumerWidget {
     final medalsAsync = ref.watch(missionMedalsProvider);
 
     return medalsAsync.when(
-      loading: () => SizedBox(
-        height: 80,
-        child: Center(
-          child: CircularProgressIndicator(color: c.accent, strokeWidth: 1.5),
-        ),
-      ),
+      loading: () => const SieSkeletonGrid(columns: 3, count: 3),
       error: (_, _) => Text(
         'ОШИБКА ЗАГРУЗКИ МЕДАЛЕЙ',
         style: TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),

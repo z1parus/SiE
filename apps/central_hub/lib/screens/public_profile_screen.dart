@@ -327,12 +327,7 @@ class _AchievementsSection extends ConsumerWidget {
     final achAsync = ref.watch(publicAchievementsProvider(userId));
 
     return achAsync.when(
-      loading: () => SizedBox(
-        height: 80,
-        child: Center(
-          child: CircularProgressIndicator(color: c.accent, strokeWidth: 1.5),
-        ),
-      ),
+      loading: () => const SieSkeletonGrid(columns: 4, count: 8),
       error: (_, _) => Text(
         'AWARDS DATA UNAVAILABLE',
         style: TextStyle(
@@ -558,11 +553,7 @@ class _PublicMedalsSection extends ConsumerWidget {
     final medalsAsync = ref.watch(publicMissionMedalsProvider(userId));
 
     return medalsAsync.when(
-      loading: () => SizedBox(
-        height: 60,
-        child: Center(
-            child: CircularProgressIndicator(color: c.accent, strokeWidth: 1.5)),
-      ),
+      loading: () => const SieSkeletonGrid(columns: 4, count: 4, childAspectRatio: 1.0),
       error: (_, _) => const SizedBox.shrink(),
       data: (medals) {
         if (medals.isEmpty) {
@@ -689,7 +680,7 @@ class _FriendActionSectionState extends ConsumerState<_FriendActionSection> {
       icon: Icons.person_add_outlined,
       filled: true,
       busy: _busy,
-      onTap: () => _run(() => notifier.sendRequest(profile.id)),
+      onTap: () => _run(() => notifier.sendRequest(widget.profile.id)),
     );
   }
 

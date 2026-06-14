@@ -375,7 +375,7 @@ class _Preview extends ConsumerWidget {
             else if (showNeural)
               Positioned.fill(
                 child: NeuralNetworkWidget(
-                  color: bg!.accentColor.withValues(alpha: 0.40),
+                  color: bg.accentColor.withValues(alpha: 0.40),
                 ),
               ),
             Padding(

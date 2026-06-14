@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -301,10 +302,11 @@ class _LevelRingAvatar extends StatelessWidget {
       decoration: frameDecoration,
       child: ClipOval(
         child: avatarUrl != null
-            ? Image.network(
-                avatarUrl!,
+            ? CachedNetworkImage(
+                imageUrl: avatarUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => _Initials(letter: fallbackLetter, c: c),
+                errorWidget: (_, _, _) =>
+                    _Initials(letter: fallbackLetter, c: c),
               )
             : _Initials(letter: fallbackLetter, c: c),
       ),
