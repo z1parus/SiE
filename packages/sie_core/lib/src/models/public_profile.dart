@@ -5,6 +5,7 @@ class PublicProfile {
   final String? equippedFrameId;
   final String? equippedBackgroundId;
   final String? equippedStatStyleId;
+  final String? equippedPatternId;
   final int totalXp;
   final int designPoints;
 
@@ -18,6 +19,7 @@ class PublicProfile {
     this.equippedFrameId,
     this.equippedBackgroundId,
     this.equippedStatStyleId,
+    this.equippedPatternId,
     required this.totalXp,
     this.designPoints = 0,
   });
@@ -29,6 +31,7 @@ class PublicProfile {
         equippedFrameId: json['equipped_frame_id'] as String?,
         equippedBackgroundId: json['equipped_background_id'] as String?,
         equippedStatStyleId: json['equipped_stat_style_id'] as String?,
+        equippedPatternId: json['equipped_pattern_id'] as String?,
         totalXp: json['total_xp'] as int? ?? 0,
         designPoints: json['design_points'] as int? ?? 0,
       );
