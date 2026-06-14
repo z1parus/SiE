@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import '../theme/sie_theme.dart';
 
-enum AssetType { avatarFrame, profileBackground, statStyle }
+enum AssetType { avatarFrame, profileBackground, statStyle, profilePattern }
 
 extension AssetTypeX on AssetType {
   String get dbValue => switch (this) {
         AssetType.avatarFrame       => 'avatar_frame',
         AssetType.profileBackground => 'profile_background',
         AssetType.statStyle         => 'stat_style',
+        AssetType.profilePattern    => 'profile_pattern',
       };
 }
 
@@ -116,6 +117,22 @@ class CosmeticAsset {
   bool get useNeuralPattern =>
       styleConfig['use_neural_pattern'] as bool? ?? false;
 
+  // ── Pattern helpers (animated overlay) ─────────────────────
+
+  /// Which animated pattern to render: 'neural' | 'low_poly' |
+  /// 'isometric' | 'dot_matrix'. Falls back to [slug] for forward-compat.
+  String get patternType =>
+      styleConfig['pattern_type'] as String? ??
+      styleConfig['pattern_slug'] as String? ??
+      slug;
+
+  String get patternSlug => patternType;
+
+  /// Overlay opacity for the pattern layer (the hue itself inherits the
+  /// equipped background accent at render time).
+  double get patternOpacity =>
+      (styleConfig['opacity'] as num?)?.toDouble() ?? 0.40;
+
   // ── Stat style helpers ─────────────────────────────────────
 
   Color get accentColor =>
@@ -167,17 +184,25 @@ class EquippedAssets {
   final CosmeticAsset? frame;
   final CosmeticAsset? background;
   final CosmeticAsset? statStyle;
+  final CosmeticAsset? pattern;
 
-  const EquippedAssets({this.frame, this.background, this.statStyle});
+  const EquippedAssets({
+    this.frame,
+    this.background,
+    this.statStyle,
+    this.pattern,
+  });
   static const none = EquippedAssets();
 
   static EquippedAssets resolve({
     required List<CosmeticAsset> frames,
     required List<CosmeticAsset> backgrounds,
     required List<CosmeticAsset> styles,
+    List<CosmeticAsset> patterns = const [],
     String? frameId,
     String? backgroundId,
     String? styleId,
+    String? patternId,
   }) =>
       EquippedAssets(
         frame: frameId != null
@@ -188,6 +213,9 @@ class EquippedAssets {
             : null,
         statStyle: styleId != null
             ? styles.where((s) => s.id == styleId).firstOrNull
+            : null,
+        pattern: patternId != null
+            ? patterns.where((p) => p.id == patternId).firstOrNull
             : null,
       );
 }
