@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS public.goal_progress_snapshots (
 
 -- One snapshot per goal per day (idempotent same-day re-capture).
 CREATE UNIQUE INDEX IF NOT EXISTS uq_snapshot_goal_day
-  ON public.goal_progress_snapshots(goal_id, (captured_at::date));
+  ON public.goal_progress_snapshots(goal_id, (DATE(captured_at AT TIME ZONE 'UTC')));
 
 CREATE INDEX IF NOT EXISTS idx_snapshot_goal_time
   ON public.goal_progress_snapshots(goal_id, captured_at DESC);
