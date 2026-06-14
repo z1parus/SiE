@@ -157,6 +157,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                     completedToday: logDates.contains(today),
                     streak: state.streaks[habit.id] ?? 0,
                     todayEmoji: todayEntry?.emoji,
+                    currentValue: state.valueFor(habit.id, today),
                     onTap: onTapDetail,
                     onDelete: () => ref
                         .read(habitsProvider.notifier)
@@ -309,7 +310,8 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
       isScrollControlled: true,
       builder: (_) => _HabitDialog(
         existing: existing,
-        onSave: (title, description, color, icon, schedule) {
+        onSave: (title, description, color, icon, schedule, kind,
+            targetValue, unit, step) {
           if (existing == null) {
             ref
                 .read(habitsProvider.notifier)
@@ -318,7 +320,11 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                     description: description,
                     color: color,
                     icon: icon,
-                    schedule: schedule)
+                    schedule: schedule,
+                    kind: kind,
+                    targetValue: targetValue,
+                    unit: unit,
+                    step: step)
                 .then((awarded) {
               if (awarded && mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -368,6 +374,10 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                   color: color,
                   icon: icon,
                   schedule: schedule,
+                  kind: kind,
+                  targetValue: targetValue,
+                  unit: unit,
+                  step: step,
                 );
           }
         },
@@ -871,6 +881,7 @@ class _SwipeableHabitCard extends StatefulWidget {
   final bool completedToday;
   final int streak;
   final String? todayEmoji;
+  final double currentValue;
   final VoidCallback onTap;
   final Future<void> Function() onDelete;
   final VoidCallback onTogglePin;
@@ -884,6 +895,7 @@ class _SwipeableHabitCard extends StatefulWidget {
     required this.onDelete,
     required this.onTogglePin,
     this.todayEmoji,
+    this.currentValue = 0,
   });
 
   @override
@@ -1026,6 +1038,7 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
                     streak: widget.streak,
                     onTap: widget.onTap,
                     todayEmoji: widget.todayEmoji,
+                    currentValue: widget.currentValue,
                   ),
                 ),
               ),
@@ -1122,6 +1135,7 @@ class _HabitMatrixCard extends ConsumerWidget {
   final bool completedToday;
   final int streak;
   final String? todayEmoji;
+  final double currentValue;
   final VoidCallback onTap;
 
   const _HabitMatrixCard({
@@ -1130,12 +1144,34 @@ class _HabitMatrixCard extends ConsumerWidget {
     required this.streak,
     required this.onTap,
     this.todayEmoji,
+    this.currentValue = 0,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sc          = ref.watch(sieColorsProvider);
     final accentColor = hexToColor(habit.color);
+    final isMetric    = habit.isMetric;
+    final target      = habit.effectiveTarget;
+    final ringProgress = isMetric && target > 0
+        ? (currentValue / target).clamp(0.0, 1.0)
+        : 0.0;
+
+    String valueLabel() {
+      if (habit.kind == 'duration') {
+        final curMin  = (currentValue / 60).round();
+        final tgtMin  = (target / 60).round();
+        return '$curMin / $tgtMin мин';
+      }
+      final cur = currentValue % 1 == 0
+          ? currentValue.toInt().toString()
+          : currentValue.toStringAsFixed(1);
+      final tgt = target % 1 == 0
+          ? target.toInt().toString()
+          : target.toStringAsFixed(1);
+      final u = habit.unit?.isNotEmpty == true ? ' ${habit.unit}' : '';
+      return '$cur / $tgt$u';
+    }
 
     final card = SieGlassCard(
       onTap: onTap,
@@ -1190,7 +1226,38 @@ class _HabitMatrixCard extends ConsumerWidget {
                 const SizedBox(width: 8),
                 _StreakBadge(streak: streak, color: accentColor),
               ],
-              if (completedToday) ...[
+              if (isMetric) ...[
+                const SizedBox(width: 8),
+                _ProgressRing(
+                  value: ringProgress,
+                  color: accentColor,
+                  background: accentColor.withValues(alpha: 0.18),
+                  size: 22,
+                  stroke: 2.2,
+                ),
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () => ref
+                      .read(habitsProvider.notifier)
+                      .logHabitValue(habit.id, DateTime.now(), habit.effectiveStep),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: accentColor.withValues(alpha: 0.55)),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      '+${habit.effectiveStep % 1 == 0 ? habit.effectiveStep.toInt() : habit.effectiveStep}',
+                      style: TextStyle(
+                        color: accentColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ] else if (completedToday) ...[
                 const SizedBox(width: 8),
                 Icon(
                   Icons.check_circle_outline,
@@ -1200,7 +1267,21 @@ class _HabitMatrixCard extends ConsumerWidget {
               ],
             ],
           ),
-          if (habit.description != null && habit.description!.isNotEmpty) ...[
+          if (isMetric && !completedToday) ...[
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.only(left: 17),
+              child: Text(
+                valueLabel(),
+                style: TextStyle(
+                  color: accentColor.withValues(alpha: 0.75),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ),
+          ] else if (habit.description != null && habit.description!.isNotEmpty) ...[
             const SizedBox(height: 5),
             Padding(
               padding: const EdgeInsets.only(left: 17),
@@ -1214,6 +1295,28 @@ class _HabitMatrixCard extends ConsumerWidget {
                   letterSpacing: 0.3,
                   height: 1.2,
                 ),
+              ),
+            ),
+          ],
+          if (isMetric && completedToday) ...[
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.only(left: 17),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle_outline,
+                      color: accentColor.withValues(alpha: 0.80), size: 11),
+                  const SizedBox(width: 4),
+                  Text(
+                    valueLabel(),
+                    style: TextStyle(
+                      color: accentColor.withValues(alpha: 0.75),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -1532,7 +1635,8 @@ class _AddButtonState extends ConsumerState<_AddButton>
 class _HabitDialog extends ConsumerStatefulWidget {
   final Habit? existing;
   final void Function(String title, String? description, String color,
-      String? icon, String schedule) onSave;
+      String? icon, String schedule, String kind, double? targetValue,
+      String? unit, double? step) onSave;
 
   const _HabitDialog({this.existing, required this.onSave});
 
@@ -1590,6 +1694,12 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
     }
   }
 
+  // Stage 2 — type state.
+  String _kind = 'binary'; // 'binary' | 'count' | 'duration'
+  double _targetValue = 8;
+  String _unit = 'раз';
+  double _step = 1;
+
   static const _colorOptions = [
     '#5AADA0',
     '#6A8ED8',
@@ -1617,7 +1727,13 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
     _descCtrl  = TextEditingController(text: widget.existing?.description ?? '');
     _selectedColor = widget.existing?.color ?? '#5AADA0';
     _selectedIcon  = widget.existing?.icon;
-    if (widget.existing != null) _parseSchedule(widget.existing!.schedule);
+    if (widget.existing != null) {
+      _parseSchedule(widget.existing!.schedule);
+      _kind = widget.existing!.kind;
+      _targetValue = widget.existing!.targetValue ?? (_kind == 'duration' ? 20 : 8);
+      _unit = widget.existing!.unit ?? 'раз';
+      _step = widget.existing!.step ?? (_kind == 'duration' ? 300 : 1);
+    }
   }
 
   @override
@@ -1713,6 +1829,38 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
           ),
           const SizedBox(height: 20),
           Text(
+            'ТИП',
+            style: TextStyle(
+              color: sc.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _HabitTypeEditor(
+            sc: sc,
+            accent: _toColor(_selectedColor),
+            kind: _kind,
+            targetValue: _targetValue,
+            unit: _unit,
+            step: _step,
+            onKindChanged: (k) => setState(() {
+              _kind = k;
+              if (k == 'duration') {
+                _targetValue = 20 * 60; // 20 min in seconds
+                _step = 300;
+              } else {
+                _targetValue = 8;
+                _step = 1;
+              }
+            }),
+            onTargetChanged: (v) => setState(() => _targetValue = v),
+            onUnitChanged: (v) => setState(() => _unit = v),
+            onStepChanged: (v) => setState(() => _step = v),
+          ),
+          const SizedBox(height: 20),
+          Text(
             'SCHEDULE',
             style: TextStyle(
               color: sc.textSecondary,
@@ -1764,6 +1912,10 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
                     _selectedColor,
                     _selectedIcon,
                     _composeSchedule(),
+                    _kind,
+                    _kind != 'binary' ? _targetValue : null,
+                    _kind == 'count' ? _unit : null,
+                    _kind != 'binary' ? _step : null,
                   );
                   Navigator.of(context).pop();
                 },
@@ -1774,6 +1926,228 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
       ),
     ));
   }
+}
+
+// ── Habit Type Editor (Stage 2) ───────────────────────────────
+
+class _HabitTypeEditor extends StatelessWidget {
+  final SieColors sc;
+  final Color accent;
+  final String kind;
+  final double targetValue;
+  final String unit;
+  final double step;
+  final ValueChanged<String> onKindChanged;
+  final ValueChanged<double> onTargetChanged;
+  final ValueChanged<String> onUnitChanged;
+  final ValueChanged<double> onStepChanged;
+
+  const _HabitTypeEditor({
+    required this.sc,
+    required this.accent,
+    required this.kind,
+    required this.targetValue,
+    required this.unit,
+    required this.step,
+    required this.onKindChanged,
+    required this.onTargetChanged,
+    required this.onUnitChanged,
+    required this.onStepChanged,
+  });
+
+  static const _kinds = [
+    ('binary', 'Да / Нет'),
+    ('count', 'Количество'),
+    ('duration', 'Время'),
+  ];
+
+  String _fmtTarget() {
+    if (kind == 'duration') {
+      final mins = (targetValue / 60).round();
+      return '$mins мин';
+    }
+    return '${targetValue.toStringAsFixed(targetValue % 1 == 0 ? 0 : 1)} $unit';
+  }
+
+  String _fmtStep() {
+    if (kind == 'duration') {
+      final mins = (step / 60).round();
+      return '+$mins мин';
+    }
+    return '+${step.toStringAsFixed(step % 1 == 0 ? 0 : 1)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _kinds.map((k) {
+            final sel = k.$1 == kind;
+            return GestureDetector(
+              onTap: () => onKindChanged(k.$1),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: sel ? accent.withValues(alpha: 0.16) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: sel ? accent : sc.border),
+                ),
+                child: Text(
+                  k.$2,
+                  style: TextStyle(
+                    color: sel ? accent : sc.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        if (kind != 'binary') ...[
+          const SizedBox(height: 14),
+          // Target stepper.
+          _StepperRow(
+            sc: sc,
+            accent: accent,
+            label: kind == 'duration' ? 'Цель (мин)' : 'Цель',
+            value: kind == 'duration'
+                ? (targetValue / 60).round()
+                : targetValue.round(),
+            suffix: kind == 'duration' ? 'мин' : unit,
+            min: 1,
+            max: kind == 'duration' ? 240 : 999,
+            onChanged: (v) => onTargetChanged(
+                kind == 'duration' ? v * 60.0 : v.toDouble()),
+          ),
+          if (kind == 'count') ...[
+            const SizedBox(height: 10),
+            // Unit text input.
+            TextField(
+              controller: TextEditingController(text: unit)
+                ..selection = TextSelection.collapsed(offset: unit.length),
+              style: TextStyle(color: sc.textPrimary, fontSize: 13),
+              decoration: InputDecoration(
+                labelText: 'ЕДИНИЦА (стак., стр., раз…)',
+                labelStyle:
+                    TextStyle(color: sc.textSecondary, fontSize: 10, letterSpacing: 1.5),
+                enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: sc.border)),
+                focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: accent, width: 1.5)),
+              ),
+              onChanged: onUnitChanged,
+            ),
+          ],
+          const SizedBox(height: 10),
+          // Step stepper.
+          _StepperRow(
+            sc: sc,
+            accent: accent,
+            label: 'Шаг «+»',
+            value: kind == 'duration'
+                ? (step / 60).round().clamp(1, 60)
+                : step.round(),
+            suffix: kind == 'duration' ? 'мин' : unit,
+            min: 1,
+            max: kind == 'duration' ? 60 : 100,
+            onChanged: (v) =>
+                onStepChanged(kind == 'duration' ? v * 60.0 : v.toDouble()),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// ── Progress Ring (Stage 2) ───────────────────────────────────
+
+class _ProgressRing extends StatelessWidget {
+  final double value;   // 0..1
+  final Color color;
+  final Color background;
+  final double size;
+  final double stroke;
+  final Widget? child;
+
+  const _ProgressRing({
+    required this.value,
+    required this.color,
+    required this.background,
+    this.size = 48,
+    this.stroke = 4,
+    this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: Size(size, size),
+            painter: _RingPainter(
+              progress: value.clamp(0, 1.0),
+              color: color,
+              background: background,
+              stroke: stroke,
+            ),
+          ),
+          if (child != null) child!,
+        ],
+      ),
+    );
+  }
+}
+
+class _RingPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+  final Color background;
+  final double stroke;
+
+  const _RingPainter({
+    required this.progress,
+    required this.color,
+    required this.background,
+    required this.stroke,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = (size.width - stroke) / 2;
+    final bg = Paint()
+      ..color = background
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke;
+    canvas.drawCircle(c, r, bg);
+    if (progress > 0) {
+      final arc = Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..strokeCap = StrokeCap.round;
+      canvas.drawArc(
+        Rect.fromCircle(center: c, radius: r),
+        -1.5707963267948966, // -pi/2 (12 o'clock)
+        progress * 6.283185307179586, // 2*pi
+        false,
+        arc,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_RingPainter old) => old.progress != progress;
 }
 
 // ── "Не сегодня" collapsible header (Stage 1) ─────────────────
@@ -3565,7 +3939,8 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                         isScrollControlled: true,
                         builder: (_) => _HabitDialog(
                           existing: widget.habit,
-                          onSave: (title, description, color, icon, schedule) {
+                          onSave: (title, description, color, icon, schedule,
+                              kind, targetValue, unit, step) {
                             ref.read(habitsProvider.notifier).updateHabit(
                                   habitId: widget.habit.id,
                                   title: title,
@@ -3573,6 +3948,10 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                                   color: color,
                                   icon: icon,
                                   schedule: schedule,
+                                  kind: kind,
+                                  targetValue: targetValue,
+                                  unit: unit,
+                                  step: step,
                                 );
                           },
                         ),

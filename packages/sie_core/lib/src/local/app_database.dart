@@ -25,6 +25,11 @@ class LocalHabits extends Table {
   // | 'weekly:N' | 'interval:N'. Defaults to legacy daily behaviour.
   TextColumn get schedule =>
       text().withDefault(const Constant('daily'))();
+  // Stage 2 (habits): measurement type — 'binary' | 'count' | 'duration'.
+  TextColumn get kind => text().withDefault(const Constant('binary'))();
+  RealColumn get targetValue => real().nullable()();
+  TextColumn get unit => text().nullable()();
+  RealColumn get step => real().nullable()();
   BoolColumn get deletedLocally =>
       boolean().withDefault(const Constant(false))();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
@@ -40,6 +45,8 @@ class LocalHabitLogs extends Table {
   TextColumn get completedAt => text()();
   TextColumn get note => text().nullable()();
   TextColumn get emoji => text().nullable()();
+  // Stage 2: accumulated value for the day (1 for binary).
+  RealColumn get value => real().withDefault(const Constant(1))();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
 
   @override
@@ -391,7 +398,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 25;
+  int get schemaVersion => 26;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -562,6 +569,14 @@ class AppDatabase extends _$AppDatabase {
       if (from < 25) {
         await m.addColumn(localHabits, localHabits.schedule);
       }
+      if (from < 26) {
+        await m.addColumn(localHabits, localHabits.kind);
+        await m.addColumn(localHabits, localHabits.targetValue);
+        await m.addColumn(localHabits, localHabits.unit);
+        await m.addColumn(localHabits, localHabits.step);
+        // value column has a DEFAULT of 1, so existing rows backfill to 1.
+        await m.addColumn(localHabitLogs, localHabitLogs.value);
+      }
     },
   );
 
@@ -652,6 +667,60 @@ class AppDatabase extends _$AppDatabase {
             emoji: Value(emoji),
             synced: const Value(false),
           ));
+
+  /// Stage 2 — add [delta] to a day's accumulated value (clamp ≥ 0).
+  /// Returns the new accumulated value.
+  Future<double> incrementHabitLogValue({
+    required String habitId,
+    required String userId,
+    required String completedAt,
+    required double delta,
+  }) async {
+    // Read existing row (if any).
+    final existing = await (select(localHabitLogs)
+          ..where((t) =>
+              t.habitId.equals(habitId) &
+              t.userId.equals(userId) &
+              t.completedAt.equals(completedAt)))
+        .getSingleOrNull();
+    final prev = existing?.value ?? 0;
+    final next = (prev + delta).clamp(0, double.infinity);
+    await into(localHabitLogs).insertOnConflictUpdate(LocalHabitLogsCompanion(
+      habitId: Value(habitId),
+      userId: Value(userId),
+      completedAt: Value(completedAt),
+      value: Value(next),
+      note: Value(existing?.note),
+      emoji: Value(existing?.emoji),
+      synced: const Value(false),
+    ));
+    return next;
+  }
+
+  /// Stage 2 — reset a day's accumulated value to 0 (un-complete for
+  /// count/duration habits).
+  Future<void> resetHabitLogValue({
+    required String habitId,
+    required String userId,
+    required String completedAt,
+  }) async {
+    final existing = await (select(localHabitLogs)
+          ..where((t) =>
+              t.habitId.equals(habitId) &
+              t.userId.equals(userId) &
+              t.completedAt.equals(completedAt)))
+        .getSingleOrNull();
+    if (existing == null) return;
+    await into(localHabitLogs).insertOnConflictUpdate(LocalHabitLogsCompanion(
+      habitId: Value(habitId),
+      userId: Value(userId),
+      completedAt: Value(completedAt),
+      value: const Value(0),
+      note: Value(existing.note),
+      emoji: Value(existing.emoji),
+      synced: const Value(false),
+    ));
+  }
 
   Future<List<LocalHabitLog>> habitLogsForHabit(
           String habitId, String userId) =>

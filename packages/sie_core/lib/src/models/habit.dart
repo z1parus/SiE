@@ -18,6 +18,20 @@ class Habit {
   ///   'interval:N'       — every N days from the first completion (anchor)
   final String schedule;
 
+  /// Stage 2 — measurement type: 'binary' (default) | 'count' | 'duration'.
+  final String kind;
+
+  /// Daily target for count/duration habits. For 'duration' it is stored in
+  /// seconds. Null for binary.
+  final double? targetValue;
+
+  /// Display unit for count habits ('стак.', 'стр.', 'раз'). Null for
+  /// binary/duration (duration is always shown in minutes).
+  final String? unit;
+
+  /// Quick "+step" button increment. For 'duration' it is in seconds.
+  final double? step;
+
   const Habit({
     required this.id,
     required this.userId,
@@ -28,6 +42,10 @@ class Habit {
     this.isPinned = false,
     this.isArchived = false,
     this.schedule = 'daily',
+    this.kind = 'binary',
+    this.targetValue,
+    this.unit,
+    this.step,
     required this.createdAt,
   });
 
@@ -43,6 +61,12 @@ class Habit {
         schedule: (map['schedule']?.toString().isNotEmpty ?? false)
             ? map['schedule'].toString()
             : 'daily',
+        kind: (map['kind']?.toString().isNotEmpty ?? false)
+            ? map['kind'].toString()
+            : 'binary',
+        targetValue: (map['target_value'] as num?)?.toDouble(),
+        unit: map['unit']?.toString(),
+        step: (map['step'] as num?)?.toDouble(),
         createdAt:
             DateTime.tryParse(map['created_at']?.toString() ?? '') ??
                 DateTime.now(),
@@ -56,6 +80,10 @@ class Habit {
     bool? isPinned,
     bool? isArchived,
     String? schedule,
+    String? kind,
+    Object? targetValue = _sentinel,
+    Object? unit = _sentinel,
+    Object? step = _sentinel,
   }) =>
       Habit(
         id: id,
@@ -67,11 +95,30 @@ class Habit {
         isPinned: isPinned ?? this.isPinned,
         isArchived: isArchived ?? this.isArchived,
         schedule: schedule ?? this.schedule,
+        kind: kind ?? this.kind,
+        targetValue: targetValue == _sentinel
+            ? this.targetValue
+            : targetValue as double?,
+        unit: unit == _sentinel ? this.unit : unit as String?,
+        step: step == _sentinel ? this.step : step as double?,
         createdAt: createdAt,
       );
 
   /// True when this habit uses a non-daily schedule.
   bool get hasCustomSchedule => schedule != 'daily';
+
+  /// True for count/duration habits (with an accumulating daily value).
+  bool get isMetric => kind == 'count' || kind == 'duration';
+
+  /// Effective daily target (≥ 1 for metric habits, 1 for binary).
+  double get effectiveTarget => isMetric ? (targetValue ?? 1) : 1;
+
+  /// Effective quick-step increment.
+  double get effectiveStep =>
+      step ?? (kind == 'duration' ? 300 : 1); // 5 min default for duration
+
+  /// Whether [value] reaches this habit's daily goal.
+  bool isMetByValue(double value) => value >= effectiveTarget;
 }
 
 const _sentinel = Object();
@@ -214,7 +261,7 @@ int scheduleAwareStreak(Habit h, Set<String> logDates) {
 class HabitsState {
   final List<Habit> habits;
 
-  /// habitId → set of 'yyyy-MM-dd' strings completed in last 30 days
+  /// habitId → set of 'yyyy-MM-dd' strings where the daily goal was MET.
   final Map<String, Set<String>> logDates;
 
   /// habitId → consecutive-day streak count (ending today)
@@ -223,15 +270,23 @@ class HabitsState {
   /// habitId → list of log entries (with note/emoji), newest first
   final Map<String, List<HabitLogEntry>> logEntries;
 
+  /// Stage 2 — habitId → date 'yyyy-MM-dd' → accumulated value for that day.
+  final Map<String, Map<String, double>> logValues;
+
   const HabitsState({
     required this.habits,
     required this.logDates,
     required this.streaks,
     this.logEntries = const {},
+    this.logValues = const {},
   });
 
   static const empty =
       HabitsState(habits: [], logDates: {}, streaks: {});
+
+  /// Accumulated value for [habitId] on [dateKey] (0 if none).
+  double valueFor(String habitId, String dateKey) =>
+      logValues[habitId]?[dateKey] ?? 0;
 
   /// Active habits scheduled for [day] (defaults to today).
   List<Habit> dueOn([DateTime? day]) {

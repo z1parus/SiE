@@ -52,7 +52,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
 
         final logsRaw = await client
             .from('habit_logs')
-            .select('habit_id, completed_at, note, emoji')
+            .select('habit_id, completed_at, note, emoji, value')
             .eq('user_id', userId)
             .gte('completed_at', cutoff);
 
@@ -75,18 +75,32 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
             isPinned: Value(h.isPinned),
             isArchived: Value(h.isArchived),
             schedule: Value(h.schedule),
+            kind: Value(h.kind),
+            targetValue: Value(h.targetValue),
+            unit: Value(h.unit),
+            step: Value(h.step),
             createdAtMs: Value(h.createdAt.millisecondsSinceEpoch),
             synced: const Value(true),
           ));
         }
 
+        // Build habitById map to check isMetByValue.
+        final habitById = {for (final h in habits) h.id: h};
+
         final logDates = <String, Set<String>>{};
         final logEntries = <String, List<HabitLogEntry>>{};
+        final logValues = <String, Map<String, double>>{};
         for (final row in logsRaw) {
           final hId = row['habit_id']?.toString() ?? '';
           final date = row['completed_at']?.toString() ?? '';
           if (hId.isNotEmpty && date.isNotEmpty) {
-            logDates.putIfAbsent(hId, () => {}).add(date);
+            final value = (row['value'] as num?)?.toDouble() ?? 1;
+            logValues.putIfAbsent(hId, () => {})[date] = value;
+            final habit = habitById[hId];
+            // Only count as "done" if the daily goal is met.
+            if (habit == null || habit.isMetByValue(value)) {
+              logDates.putIfAbsent(hId, () => {}).add(date);
+            }
             final entry = HabitLogEntry.fromMap({...row, 'user_id': userId});
             logEntries.putIfAbsent(hId, () => []).add(entry);
             await db.upsertHabitLog(LocalHabitLogsCompanion(
@@ -95,6 +109,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
               completedAt: Value(date),
               note: Value(row['note']?.toString()),
               emoji: Value(row['emoji']?.toString()),
+              value: Value(value),
               synced: const Value(true),
             ));
           }
@@ -107,7 +122,8 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
             habits: habits,
             logDates: logDates,
             streaks: streaks,
-            logEntries: logEntries);
+            logEntries: logEntries,
+            logValues: logValues);
       } catch (e) {
         debugPrint('SiE Habits: online load failed, falling back to local — $e');
       }
@@ -128,6 +144,10 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
               isPinned: h.isPinned,
               isArchived: h.isArchived,
               schedule: h.schedule,
+              kind: h.kind,
+              targetValue: h.targetValue,
+              unit: h.unit,
+              step: h.step,
               createdAt:
                   DateTime.fromMillisecondsSinceEpoch(h.createdAtMs),
             ))
@@ -137,16 +157,24 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         return a.isPinned ? -1 : 1;
       });
 
+    final habitById = {for (final h in habits) h.id: h};
     final logDates = <String, Set<String>>{};
     final logEntries = <String, List<HabitLogEntry>>{};
+    final logValues = <String, Map<String, double>>{};
     for (final log in localLogs) {
-      logDates.putIfAbsent(log.habitId, () => {}).add(log.completedAt);
+      final value = log.value;
+      logValues.putIfAbsent(log.habitId, () => {})[log.completedAt] = value;
+      final habit = habitById[log.habitId];
+      if (habit == null || habit.isMetByValue(value)) {
+        logDates.putIfAbsent(log.habitId, () => {}).add(log.completedAt);
+      }
       logEntries.putIfAbsent(log.habitId, () => []).add(HabitLogEntry(
             habitId: log.habitId,
             userId: log.userId,
             completedAt: log.completedAt,
             note: log.note,
             emoji: log.emoji,
+            value: value,
           ));
     }
 
@@ -157,7 +185,8 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         habits: habits,
         logDates: logDates,
         streaks: streaks,
-        logEntries: logEntries);
+        logEntries: logEntries,
+        logValues: logValues);
   }
 
   /// Schedule-aware streak for a habit identified by [habitId]. Looks up the
@@ -178,6 +207,10 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     String color = '#00C8FF',
     String? icon,
     String schedule = 'daily',
+    String kind = 'binary',
+    double? targetValue,
+    String? unit,
+    double? step,
   }) async {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
@@ -199,6 +232,10 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       color: color,
       icon: icon,
       schedule: schedule,
+      kind: kind,
+      targetValue: targetValue,
+      unit: unit,
+      step: step,
       createdAt: now,
     );
     if (prev != null) {
@@ -207,6 +244,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         logDates: prev.logDates,
         streaks: {...prev.streaks, habitId: 0},
         logEntries: prev.logEntries,
+        logValues: prev.logValues,
       ));
     }
 
@@ -219,6 +257,10 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       color: Value(color),
       icon: Value(icon),
       schedule: Value(schedule),
+      kind: Value(kind),
+      targetValue: Value(targetValue),
+      unit: Value(unit),
+      step: Value(step),
       createdAtMs: Value(now.millisecondsSinceEpoch),
       synced: Value(isOnline),
     ));
@@ -234,6 +276,10 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           'color': color,
           if (icon != null) 'icon': icon,
           'schedule': schedule,
+          'kind': kind,
+          if (targetValue != null) 'target_value': targetValue,
+          if (unit != null) 'unit': unit,
+          if (step != null) 'step': step,
         });
         state = AsyncData(await _load());
         if (isFirstHabit) {
@@ -250,6 +296,10 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           'color': color,
           if (icon != null) 'icon': icon,
           'schedule': schedule,
+          'kind': kind,
+          if (targetValue != null) 'target_value': targetValue,
+          if (unit != null) 'unit': unit,
+          if (step != null) 'step': step,
         }));
         state = AsyncData(await _load());
       }
@@ -269,6 +319,10 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     required String color,
     Object? icon = _noChange,
     String? schedule,
+    String? kind,
+    Object? targetValue = _noChange,
+    Object? unit = _noChange,
+    Object? step = _noChange,
   }) async {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
@@ -288,24 +342,48 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       color: color,
       icon: icon,
       schedule: schedule,
+      kind: kind,
+      targetValue: targetValue,
+      unit: unit,
+      step: step,
     );
     final newHabits = [...prev.habits]..[idx] = updated;
     final resolvedSchedule = schedule ?? prev.habits[idx].schedule;
+    final resolvedKind = kind ?? prev.habits[idx].kind;
+    final resolvedTarget = targetValue == _noChange
+        ? prev.habits[idx].targetValue
+        : targetValue as double?;
+    final resolvedUnit = unit == _noChange
+        ? prev.habits[idx].unit
+        : unit as String?;
+    final resolvedStep = step == _noChange
+        ? prev.habits[idx].step
+        : step as double?;
+
+    // Re-evaluate logDates when target changes: a day that was previously
+    // "done" may no longer meet the new target (show visual only, no XP rollback).
+    final newLogDates = Map<String, Set<String>>.from(prev.logDates);
+    final vals = prev.logValues[habitId] ?? const {};
+    if (vals.isNotEmpty) {
+      final updatedDates = <String>{};
+      for (final e in vals.entries) {
+        if (updated.isMetByValue(e.value)) updatedDates.add(e.key);
+      }
+      newLogDates[habitId] = updatedDates;
+    }
 
     state = AsyncData(HabitsState(
       habits: newHabits,
-      logDates: prev.logDates,
-      // Schedule change can flip the streak — recompute for this habit.
+      logDates: newLogDates,
       streaks: {
         ...prev.streaks,
-        habitId:
-            scheduleAwareStreak(updated, prev.logDates[habitId] ?? const {}),
+        habitId: scheduleAwareStreak(updated, newLogDates[habitId] ?? const {}),
       },
       logEntries: prev.logEntries,
+      logValues: prev.logValues,
     ));
 
     final resolvedIcon = icon == _noChange ? updated.icon : icon as String?;
-    // Update local DB.
     await db.upsertHabit(LocalHabitsCompanion(
       id: Value(habitId),
       userId: Value(userId),
@@ -314,8 +392,11 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       color: Value(color),
       icon: Value(resolvedIcon),
       schedule: Value(resolvedSchedule),
-      createdAtMs: Value(
-          prev.habits[idx].createdAt.millisecondsSinceEpoch),
+      kind: Value(resolvedKind),
+      targetValue: Value(resolvedTarget),
+      unit: Value(resolvedUnit),
+      step: Value(resolvedStep),
+      createdAtMs: Value(prev.habits[idx].createdAt.millisecondsSinceEpoch),
       synced: Value(isOnline),
     ));
 
@@ -330,6 +411,10 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           'color': color,
           if (resolvedIcon != null) 'icon': resolvedIcon,
           'schedule': resolvedSchedule,
+          'kind': resolvedKind,
+          'target_value': resolvedTarget,
+          'unit': resolvedUnit,
+          'step': resolvedStep,
         }).eq('id', habitId).eq('user_id', userId);
       } else {
         await db.enqueueSyncOp('update_habit', jsonEncode({
@@ -340,6 +425,10 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           'color': color,
           if (resolvedIcon != null) 'icon': resolvedIcon,
           'schedule': resolvedSchedule,
+          'kind': resolvedKind,
+          'target_value': resolvedTarget,
+          'unit': resolvedUnit,
+          'step': resolvedStep,
         }));
       }
     } catch (e, st) {
@@ -420,6 +509,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       logDates: prev.logDates,
       streaks: prev.streaks,
       logEntries: prev.logEntries,
+        logValues: prev.logValues,
     ));
 
     await db.upsertHabit(LocalHabitsCompanion(
@@ -576,6 +666,166 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           }
         }
       }
+    } catch (e, st) {
+      state = AsyncData(prev);
+      _inProgress.remove(toggleKey);
+      Error.throwWithStackTrace(e, st);
+    }
+    _inProgress.remove(toggleKey);
+  }
+
+  /// Stage 2 — accumulate [delta] towards today's goal for a count/duration
+  /// habit. For binary habits this is a no-op (use [toggleHabit] instead).
+  /// XP/DP are awarded once, when [value] crosses [targetValue] for the first
+  /// time that day (anti-farm: repeated increments beyond target give no XP).
+  Future<void> logHabitValue(
+    String habitId,
+    DateTime date,
+    double delta,
+  ) async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final dateStr = _fmt(date);
+    final toggleKey = '$habitId-$dateStr';
+    if (_inProgress.contains(toggleKey)) return;
+    _inProgress.add(toggleKey);
+
+    final prev = state.valueOrNull;
+    if (prev == null) {
+      _inProgress.remove(toggleKey);
+      return;
+    }
+
+    final habit = prev.habits.cast<Habit?>().firstWhere(
+        (h) => h?.id == habitId,
+        orElse: () => null);
+    if (habit == null || !habit.isMetric) {
+      _inProgress.remove(toggleKey);
+      return;
+    }
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final db = ref.read(appDatabaseProvider);
+
+    final prevValue = prev.valueFor(habitId, dateStr);
+    final prevMet = habit.isMetByValue(prevValue);
+
+    // Write increment to local DB.
+    final newValue =
+        await db.incrementHabitLogValue(
+      habitId: habitId,
+      userId: userId,
+      completedAt: dateStr,
+      delta: delta,
+    );
+    final newMet = habit.isMetByValue(newValue);
+
+    // Optimistic state update.
+    final newLogValues = {
+      for (final e in prev.logValues.entries)
+        e.key: Map<String, double>.from(e.value),
+    };
+    newLogValues.putIfAbsent(habitId, () => {})[dateStr] = newValue;
+
+    final newLogDates = {
+      for (final e in prev.logDates.entries) e.key: Set<String>.from(e.value),
+    };
+    if (newMet) {
+      newLogDates.putIfAbsent(habitId, () => {}).add(dateStr);
+    } else {
+      newLogDates[habitId]?.remove(dateStr);
+    }
+
+    // Update log entry value.
+    final newLogEntries = {
+      for (final e in prev.logEntries.entries)
+        e.key: List<HabitLogEntry>.from(e.value),
+    };
+    final entries = newLogEntries.putIfAbsent(habitId, () => []);
+    final eIdx = entries.indexWhere((e) => e.completedAt == dateStr);
+    if (eIdx >= 0) {
+      entries[eIdx] = entries[eIdx].copyWith(value: newValue);
+    } else {
+      entries.add(HabitLogEntry(
+          habitId: habitId,
+          userId: userId,
+          completedAt: dateStr,
+          value: newValue));
+    }
+
+    state = AsyncData(HabitsState(
+      habits: prev.habits,
+      logDates: newLogDates,
+      streaks: {
+        ...prev.streaks,
+        habitId: _streakById(habitId, newLogDates[habitId] ?? const {}),
+      },
+      logEntries: newLogEntries,
+        logValues: newLogValues,
+    ));
+
+    try {
+      // Award XP/DP once — when crossing the threshold for the first time today.
+      if (newMet && !prevMet) {
+        if (isOnline) {
+          try {
+            await client.from('habit_logs').upsert({
+              'habit_id': habitId,
+              'user_id': userId,
+              'completed_at': dateStr,
+              'value': newValue,
+              'xp_awarded': 50,
+            }, onConflict: 'user_id,habit_id,completed_at');
+          } on PostgrestException catch (e) {
+            if (e.code != '23505') rethrow;
+          }
+          await Future.wait([
+            client.rpc('increment_xp',
+                params: {'p_user_id': userId, 'p_amount': 50}),
+            client.rpc('add_design_points', params: {'p_amount': 10}),
+          ]);
+        } else {
+          await db.enqueueSyncOp('insert_habit_log', jsonEncode({
+            'habit_id': habitId,
+            'user_id': userId,
+            'completed_at': dateStr,
+            'value': newValue,
+          }));
+        }
+        await ref
+            .read(userProfileProvider.notifier)
+            .applyLocalXpDelta(50, 10);
+        // Habit Synergy boost
+        final links = await db.habitLinksForHabit(habitId);
+        if (links.isNotEmpty) {
+          final planning = ref.read(planningProvider.notifier);
+          final streak = state.valueOrNull?.streaks[habitId] ?? 0;
+          for (final link in links) {
+            final boost = streak > 7 ? 1.0 : link.boostValue;
+            await planning.applyHabitBoost(link.goalId, boost);
+          }
+        }
+      } else if (!newMet) {
+        // Just sync the accumulated value without XP.
+        if (isOnline) {
+          await client.from('habit_logs').upsert({
+            'habit_id': habitId,
+            'user_id': userId,
+            'completed_at': dateStr,
+            'value': newValue,
+          }, onConflict: 'user_id,habit_id,completed_at');
+        } else {
+          await db.enqueueSyncOp('update_habit_log_value', jsonEncode({
+            'habit_id': habitId,
+            'user_id': userId,
+            'completed_at': dateStr,
+            'value': newValue,
+          }));
+        }
+      }
+      await db.markHabitLogSynced(habitId, userId, dateStr);
     } catch (e, st) {
       state = AsyncData(prev);
       _inProgress.remove(toggleKey);
@@ -767,6 +1017,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       logDates: prev.logDates,
       streaks: {...prev.streaks, habit.id: 0},
       logEntries: prev.logEntries,
+        logValues: prev.logValues,
     ));
 
     await db.upsertHabit(LocalHabitsCompanion(
@@ -801,6 +1052,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         logDates: prev.logDates,
         streaks: prev.streaks,
         logEntries: prev.logEntries,
+        logValues: prev.logValues,
       ));
       Error.throwWithStackTrace(e, st);
     }
