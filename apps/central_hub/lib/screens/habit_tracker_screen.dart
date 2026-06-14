@@ -4,6 +4,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
+import '../widgets/habit_heatmap.dart';
+import 'habits_overview_screen.dart';
 import 'routine_editor_screen.dart';
 
 enum HabitViewMode { today, week, allTime }
@@ -470,6 +472,17 @@ class _CyberTopBar extends ConsumerWidget {
             onTap: onInfo,
             size: 18,
             semanticLabel: 'Справка',
+          ),
+          const SizedBox(width: 8),
+          _GlassIconBtn(
+            icon: Icons.bar_chart_outlined,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const HabitsOverviewScreen(),
+              ),
+            ),
+            size: 18,
+            semanticLabel: 'Обзор привычек',
           ),
           const SizedBox(width: 8),
           _GlassIconBtn(
@@ -4205,9 +4218,11 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
     final accentColor = _habitColor(widget.habit.color);
     final habitsState = ref.watch(habitsProvider).valueOrNull;
     final entriesAsync = ref.watch(habitLogEntriesProvider(widget.habit.id));
+    final metrics     = ref.watch(habitAnalyticsProvider(widget.habit.id));
 
     final today       = _fmt(DateTime.now());
     final logDates    = habitsState?.logDates[widget.habit.id] ?? {};
+    final logValues   = habitsState?.logValues[widget.habit.id] ?? {};
     final streak      = habitsState?.streaks[widget.habit.id] ?? 0;
     final logEntries  = habitsState?.logEntries[widget.habit.id] ?? [];
     final completedToday = logDates.contains(today);
@@ -4405,6 +4420,15 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                     ],
                   ),
                 ),
+              ),
+              // ── Analytics ────────────────────────────────────────────────
+              _HabitAnalyticsSection(
+                habit: widget.habit,
+                logDates: logDates,
+                logValues: logValues,
+                accentColor: accentColor,
+                sc: sc,
+                metrics: metrics,
               ),
               // ── Journal header ───────────────────────────────────────────
               Padding(
@@ -4760,6 +4784,180 @@ class _EmptyJournal extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Habit Analytics Section (Stage 4) ─────────────────────────────────────────
+
+class _HabitAnalyticsSection extends StatefulWidget {
+  final Habit habit;
+  final Set<String> logDates;
+  final Map<String, double> logValues;
+  final Color accentColor;
+  final SieColors sc;
+  final HabitMetrics metrics;
+
+  const _HabitAnalyticsSection({
+    required this.habit,
+    required this.logDates,
+    required this.logValues,
+    required this.accentColor,
+    required this.sc,
+    required this.metrics,
+  });
+
+  @override
+  State<_HabitAnalyticsSection> createState() => _HabitAnalyticsSectionState();
+}
+
+class _HabitAnalyticsSectionState extends State<_HabitAnalyticsSection> {
+  bool _showFullYear = false;
+
+  static const _wdNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+  String _wdName(int? wd) => wd != null ? _wdNames[(wd - 1) % 7] : '—';
+
+  @override
+  Widget build(BuildContext context) {
+    final sc    = widget.sc;
+    final accent = widget.accentColor;
+    final m     = widget.metrics;
+    final weeks = _showFullYear ? 52 : 16;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'АНАЛИТИКА',
+                style: TextStyle(
+                  color: sc.textSecondary.withValues(alpha: 0.55),
+                  fontSize: 9,
+                  letterSpacing: 2.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              GestureDetector(
+                onTap: () => setState(() => _showFullYear = !_showFullYear),
+                child: Text(
+                  _showFullYear ? '← 16 НЕД.' : 'ГОД →',
+                  style: TextStyle(
+                    color: accent.withValues(alpha: 0.75),
+                    fontSize: 9,
+                    letterSpacing: 1.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          HabitHeatmap(
+            habit: widget.habit,
+            logDates: widget.logDates,
+            logValues: widget.logValues,
+            sc: sc,
+            accentColor: accent,
+            weeks: weeks,
+          ),
+          const SizedBox(height: 14),
+          if (!m.hasEnoughData)
+            Text(
+              'Копим данные — статистика появится через несколько дней',
+              style: TextStyle(
+                color: sc.textSecondary.withValues(alpha: 0.5),
+                fontSize: 10,
+                letterSpacing: 0.3,
+                fontStyle: FontStyle.italic,
+              ),
+            )
+          else ...[
+            Row(
+              children: [
+                _InsightChip(sc: sc, accent: accent, label: '7 дней',
+                    value: '${(m.completionRate7d * 100).round()}%'),
+                const SizedBox(width: 8),
+                _InsightChip(sc: sc, accent: accent, label: '30 дней',
+                    value: '${(m.completionRate30d * 100).round()}%'),
+                const SizedBox(width: 8),
+                _InsightChip(sc: sc, accent: accent, label: 'Рекорд',
+                    value: '${m.longestStreak}'),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _InsightChip(sc: sc, accent: accent, label: 'Лучший день',
+                    value: _wdName(m.bestWeekday)),
+                const SizedBox(width: 8),
+                _InsightChip(sc: sc, accent: accent, label: 'Слабый день',
+                    value: _wdName(m.worstWeekday)),
+                if (widget.habit.isMetric && m.avgValueLast7 != null) ...[
+                  const SizedBox(width: 8),
+                  _InsightChip(sc: sc, accent: accent, label: 'Тренд 7 дн.',
+                      value: m.valueTrend == 'up' ? '↑'
+                          : m.valueTrend == 'down' ? '↓' : '→'),
+                ],
+              ],
+            ),
+          ],
+          const SizedBox(height: 6),
+        ],
+      ),
+    );
+  }
+}
+
+class _InsightChip extends StatelessWidget {
+  final SieColors sc;
+  final Color accent;
+  final String label;
+  final String value;
+
+  const _InsightChip({
+    required this.sc,
+    required this.accent,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        border: Border.all(color: accent.withValues(alpha: 0.25)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              color: sc.textSecondary.withValues(alpha: 0.5),
+              fontSize: 7.5,
+              letterSpacing: 1,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: TextStyle(
+              color: accent,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
       ),
     );
   }
