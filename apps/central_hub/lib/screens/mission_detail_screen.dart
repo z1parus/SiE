@@ -8,6 +8,7 @@ import 'mission_accomplished_screen.dart';
 import 'goal_stats_screen.dart';
 import 'ai_decomposition_sheet.dart';
 import 'milestone_metric_screen.dart';
+import 'focus_protocol_screen.dart';
 import '../widgets/sparkline.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
@@ -1017,6 +1018,7 @@ class _TaskTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = task;
+    final focusSecs = ref.watch(taskFocusSecondsProvider(t.id)).valueOrNull ?? 0;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
@@ -1069,17 +1071,48 @@ class _TaskTile extends ConsumerWidget {
                     ],
                   ],
                 ),
-                if (t.dueDate != null || t.isRecurring)
-                  Text(
-                    [
-                      if (t.dueDate != null) _formatDate(t.dueDate!),
-                      if (t.isRecurring) _recurrenceLabel(t.recurrenceRule!),
-                    ].join(' · '),
-                    style: TextStyle(color: sc.textSecondary, fontSize: 10),
+                if (t.dueDate != null || t.isRecurring || focusSecs > 0)
+                  Row(
+                    children: [
+                      if (t.dueDate != null || t.isRecurring)
+                        Text(
+                          [
+                            if (t.dueDate != null) _formatDate(t.dueDate!),
+                            if (t.isRecurring)
+                              _recurrenceLabel(t.recurrenceRule!),
+                          ].join(' · '),
+                          style: TextStyle(
+                              color: sc.textSecondary, fontSize: 10),
+                        ),
+                      if (focusSecs > 0) ...[
+                        if (t.dueDate != null || t.isRecurring)
+                          Text(' · ',
+                              style: TextStyle(
+                                  color: sc.textSecondary, fontSize: 10)),
+                        Icon(Icons.timer_outlined,
+                            size: 10, color: sc.accentSecondary),
+                        const SizedBox(width: 2),
+                        Text(
+                          formatFocusDuration(focusSecs),
+                          style: TextStyle(
+                              color: sc.accentSecondary, fontSize: 10),
+                        ),
+                      ],
+                    ],
                   ),
               ],
             ),
           ),
+          if (!t.isCompleted) ...[
+            GestureDetector(
+              onTap: () => _startFocusOnTask(context, t, subGoal, goal),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.play_circle_outline,
+                    size: 18, color: sc.accent),
+              ),
+            ),
+          ],
           if (t.isRecurring && canEdit) ...[
             GestureDetector(
               onTap: () =>
@@ -1100,6 +1133,24 @@ class _TaskTile extends ConsumerWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  void _startFocusOnTask(
+      BuildContext context, PlanningTask t, SubGoal sg, Goal g) {
+    SieHaptics.selection();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FocusProtocolScreen(
+          initialTaskRef: (
+            taskId: t.id,
+            subGoalId: sg.id,
+            goalId: g.id,
+            taskTitle: t.name,
+          ),
+        ),
       ),
     );
   }

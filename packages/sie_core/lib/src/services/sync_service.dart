@@ -391,6 +391,8 @@ class SyncService {
           'duration_seconds': s.durationSeconds,
           'is_completed': true,
           'xp_gained': s.xpAwarded,
+          if (s.taskId != null) 'task_id': s.taskId,
+          if (s.goalId != null) 'goal_id': s.goalId,
         }, onConflict: 'id');
         await _db.markFocusSessionSynced(s.id);
       } catch (e) {

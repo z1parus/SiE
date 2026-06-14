@@ -4,6 +4,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'mission_detail_screen.dart';
+import 'focus_protocol_screen.dart';
+
+// Launches the focus protocol bound to an agenda item's task (Stage 7).
+void _startFocusOnAgendaItem(BuildContext context, AgendaItem item) {
+  SieHaptics.selection();
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => FocusProtocolScreen(
+        initialTaskRef: (
+          taskId: item.task.id,
+          subGoalId: item.subGoalId,
+          goalId: item.goal.id,
+          taskTitle: item.task.name,
+        ),
+      ),
+    ),
+  );
+}
 
 // ─── Category icon (mirrors planning_screen) ───────────────────────────────────
 
@@ -30,6 +49,14 @@ class WarRoomView extends ConsumerWidget {
         col.role == 'viewer');
   }
 
+  // The single most important task to focus on now: top overdue, else top
+  // today. Buckets are already priority/weight-sorted by the agenda provider.
+  AgendaItem? _focusSuggestion(AgendaBuckets agenda) {
+    if (agenda.overdue.isNotEmpty) return agenda.overdue.first;
+    if (agenda.today.isNotEmpty) return agenda.today.first;
+    return null;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
@@ -39,6 +66,12 @@ class WarRoomView extends ConsumerWidget {
     final children = <Widget>[
       _DaySummary(agenda: agenda, c: c),
     ];
+
+    // Auto-suggest focusing on the day's top-priority actionable task.
+    final suggestion = _focusSuggestion(agenda);
+    if (suggestion != null && !_isReadOnly(suggestion.goal)) {
+      children.add(_FocusSuggestionCard(item: suggestion, c: c));
+    }
 
     if (agenda.overdue.isNotEmpty) {
       children.add(_Section(
@@ -253,6 +286,81 @@ class _RingPainter extends CustomPainter {
   @override
   bool shouldRepaint(_RingPainter old) =>
       old.progress != progress || old.fill != fill || old.track != track;
+}
+
+// ─── Focus suggestion card (Stage 7) ───────────────────────────────────────────
+
+class _FocusSuggestionCard extends StatelessWidget {
+  const _FocusSuggestionCard({required this.item, required this.c});
+
+  final AgendaItem item;
+  final SieColors c;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _startFocusOnAgendaItem(context, item),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          color: c.accent.withValues(alpha: 0.08),
+          border: Border.all(color: c.accent.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: c.accent.withValues(alpha: 0.15),
+              ),
+              child: Icon(Icons.play_arrow_rounded, color: c.accent, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'СФОКУСИРОВАТЬСЯ',
+                    style: TextStyle(
+                      color: c.accent,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    item.task.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    item.goal.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: c.textSecondary, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: c.textSecondary, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ─── Section ───────────────────────────────────────────────────────────────────
@@ -546,7 +654,19 @@ class _AgendaRow extends ConsumerWidget {
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
+          // Focus ▶ (Stage 7)
+          if (!readOnly)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _startFocusOnAgendaItem(context, item),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.play_circle_outline,
+                    size: 20, color: c.accent),
+              ),
+            ),
+          const SizedBox(width: 4),
           // XP weight badge
           Text(
             '+${taskXp(task.weight)}',

@@ -51,6 +51,9 @@ class LocalFocusSessions extends Table {
   IntColumn get xpAwarded => integer()();
   IntColumn get dpAwarded => integer()();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
+  // Stage 7: optional link to a planning task / goal this session worked on.
+  TextColumn get taskId => text().nullable()();
+  TextColumn get goalId => text().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -359,7 +362,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 21;
+  int get schemaVersion => 22;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -509,6 +512,14 @@ class AppDatabase extends _$AppDatabase {
       if (from < 21) {
         await m.createTable(localMissionTemplates);
       }
+      if (from < 22) {
+        await m.addColumn(localFocusSessions, localFocusSessions.taskId);
+        await m.addColumn(localFocusSessions, localFocusSessions.goalId);
+        await m.issueCustomQuery(
+            'CREATE INDEX IF NOT EXISTS idx_focus_goal '
+            'ON local_focus_sessions(goal_id)',
+            const []);
+      }
     },
   );
 
@@ -623,6 +634,37 @@ class AppDatabase extends _$AppDatabase {
   Future<void> markFocusSessionSynced(String id) =>
       (update(localFocusSessions)..where((t) => t.id.equals(id)))
           .write(const LocalFocusSessionsCompanion(synced: Value(true)));
+
+  // ── Focus ↔ Planning aggregates (Stage 7) ──────────────────────────────────
+
+  Future<int> focusSecondsForTask(String taskId) async {
+    final rows = await (select(localFocusSessions)
+          ..where((t) => t.taskId.equals(taskId)))
+        .get();
+    return rows.fold<int>(0, (s, r) => s + r.durationSeconds);
+  }
+
+  Future<int> focusSecondsForGoal(String goalId) async {
+    final rows = await (select(localFocusSessions)
+          ..where((t) => t.goalId.equals(goalId)))
+        .get();
+    return rows.fold<int>(0, (s, r) => s + r.durationSeconds);
+  }
+
+  /// Map of taskId → total focus seconds for one goal (orphan task_id rows
+  /// after a task delete are skipped; their time still counts toward the goal).
+  Future<Map<String, int>> focusSecondsByTaskForGoal(String goalId) async {
+    final rows = await (select(localFocusSessions)
+          ..where((t) => t.goalId.equals(goalId) & t.taskId.isNotNull()))
+        .get();
+    final result = <String, int>{};
+    for (final r in rows) {
+      final tid = r.taskId;
+      if (tid == null) continue;
+      result[tid] = (result[tid] ?? 0) + r.durationSeconds;
+    }
+    return result;
+  }
 
   // ── Breathing Sessions ──────────────────────────────────────────────────────
 
