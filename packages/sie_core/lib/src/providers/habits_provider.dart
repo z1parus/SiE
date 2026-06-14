@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../local/app_database.dart';
 import '../models/habit.dart';
 import '../models/habit_log_entry.dart';
+import '../models/life_area.dart';
 import '../services/notification_service.dart';
 import 'auth_state_provider.dart';
 import 'connectivity_provider.dart';
@@ -80,6 +81,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
             targetValue: Value(h.targetValue),
             unit: Value(h.unit),
             step: Value(h.step),
+            area: Value(h.area?.name),
             createdAtMs: Value(h.createdAt.millisecondsSinceEpoch),
             synced: const Value(true),
           ));
@@ -162,6 +164,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
               unit: h.unit,
               step: h.step,
               reminderTime: h.reminderTime,
+              area: LifeAreaX.fromString(h.area),
               createdAt:
                   DateTime.fromMillisecondsSinceEpoch(h.createdAtMs),
             ))
@@ -240,6 +243,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     String? unit,
     double? step,
     String? reminderTime,
+    LifeArea? area,
   }) async {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
@@ -266,6 +270,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       unit: unit,
       step: step,
       reminderTime: reminderTime,
+      area: area,
       createdAt: now,
     );
     if (prev != null) {
@@ -294,6 +299,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       unit: Value(unit),
       step: Value(step),
       reminderTime: Value(reminderTime),
+      area: Value(area?.name),
       createdAtMs: Value(now.millisecondsSinceEpoch),
       synced: Value(isOnline),
     ));
@@ -364,6 +370,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     Object? unit = _noChange,
     Object? step = _noChange,
     Object? reminderTime = _noChange,
+    Object? area = _noChange,
   }) async {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
@@ -388,6 +395,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       unit: unit,
       step: step,
       reminderTime: reminderTime,
+      area: area,
     );
     final newHabits = [...prev.habits]..[idx] = updated;
     final resolvedSchedule = schedule ?? prev.habits[idx].schedule;

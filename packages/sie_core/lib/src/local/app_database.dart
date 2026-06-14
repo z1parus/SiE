@@ -32,6 +32,8 @@ class LocalHabits extends Table {
   RealColumn get step => real().nullable()();
   // Stage 3 (habits): optional reminder time as 'HH:mm' string (null = off).
   TextColumn get reminderTime => text().nullable()();
+  // Stage 6: life area ('health'|'mind'|'productivity'|'relationships'|'finance'|'spirit'|null)
+  TextColumn get area => text().nullable()();
   BoolColumn get deletedLocally =>
       boolean().withDefault(const Constant(false))();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
@@ -402,7 +404,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 28;
+  int get schemaVersion => 29;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -586,6 +588,9 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 28) {
         await m.addColumn(localHabitLogs, localHabitLogs.entryType);
+      }
+      if (from < 29) {
+        await m.addColumn(localHabits, localHabits.area);
       }
     },
   );

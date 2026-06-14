@@ -1,4 +1,5 @@
 import 'habit_log_entry.dart';
+import 'life_area.dart';
 
 class Habit {
   final String id;
@@ -35,6 +36,9 @@ class Habit {
   /// Stage 3 — optional reminder time as 'HH:mm' string (null = off).
   final String? reminderTime;
 
+  /// Stage 6 — optional life area for grouping (null = no area).
+  final LifeArea? area;
+
   const Habit({
     required this.id,
     required this.userId,
@@ -50,6 +54,7 @@ class Habit {
     this.unit,
     this.step,
     this.reminderTime,
+    this.area,
     required this.createdAt,
   });
 
@@ -72,6 +77,7 @@ class Habit {
         unit: map['unit']?.toString(),
         step: (map['step'] as num?)?.toDouble(),
         reminderTime: map['reminder_time']?.toString(),
+        area: LifeAreaX.fromString(map['area']?.toString()),
         createdAt:
             DateTime.tryParse(map['created_at']?.toString() ?? '') ??
                 DateTime.now(),
@@ -90,6 +96,7 @@ class Habit {
     Object? unit = _sentinel,
     Object? step = _sentinel,
     Object? reminderTime = _sentinel,
+    Object? area = _sentinel,
   }) =>
       Habit(
         id: id,
@@ -110,6 +117,7 @@ class Habit {
         reminderTime: reminderTime == _sentinel
             ? this.reminderTime
             : reminderTime as String?,
+        area: area == _sentinel ? this.area : area as LifeArea?,
         createdAt: createdAt,
       );
 
