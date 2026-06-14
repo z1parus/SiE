@@ -150,14 +150,17 @@ class _ProfileContent extends ConsumerWidget {
     final frames       = ref.watch(avatarFramesProvider).valueOrNull ?? [];
     final backgrounds  = ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
     final styles       = ref.watch(statStylesProvider).valueOrNull ?? [];
+    final patterns     = ref.watch(profilePatternsProvider).valueOrNull ?? [];
 
     final equipped = EquippedAssets.resolve(
       frames:       frames,
       backgrounds:  backgrounds,
       styles:       styles,
+      patterns:     patterns,
       frameId:      profile?.equippedFrameId,
       backgroundId: profile?.equippedBackgroundId,
       styleId:      profile?.equippedStatStyleId,
+      patternId:    profile?.equippedPatternId,
     );
 
     final xp    = profile?.totalXp ?? 0;
@@ -187,6 +190,7 @@ class _ProfileContent extends ConsumerWidget {
                     designPoints: profile?.designPoints ?? 0,
                     frame: equipped.frame,
                     background: equipped.background,
+                    pattern: equipped.pattern,
                     avatarSize: 72,
                     onAvatarTap: () => Navigator.of(context).push(
                       PageRouteBuilder(

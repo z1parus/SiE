@@ -69,6 +69,7 @@ class _CustomizationScreenState extends ConsumerState<CustomizationScreen>
         frameId: safeFrameId,
         backgroundId: safeBgId,
         styleId: safeStyleId,
+        patternId: widget.profile.equippedPatternId,
       );
       ref.invalidate(userProfileProvider);
       if (mounted) Navigator.of(context).pop();

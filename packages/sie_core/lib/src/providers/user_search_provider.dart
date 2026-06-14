@@ -11,7 +11,7 @@ final userSearchProvider = FutureProvider.autoDispose
   final data = await SupabaseService.client
       .from('profiles')
       .select(
-          'id, username, avatar_url, equipped_frame_id, equipped_background_id, equipped_stat_style_id, total_xp, design_points')
+          'id, username, avatar_url, equipped_frame_id, equipped_background_id, equipped_stat_style_id, equipped_pattern_id, total_xp, design_points')
       .ilike('username', '%$q%')
       .order('total_xp', ascending: false)
       .limit(30);

@@ -1,5 +1,12 @@
 # Этап 4 — Система анимированных узоров (Patterns)
 
+> **Статус: реализовано (2026-06-14).** Узоры реализованы на `CustomPainter`
+> (`ProfilePatternLayer` + `DotMatrixPainter`/`LowPolyPainter`/`IsoGridPainter`,
+> нейро-нити переиспользуют `NeuralNetworkWidget`). Переход на GLSL-шейдеры для
+> `low_poly`/`iso_grid` оставлен как возможная будущая оптимизация. Миграция БД
+> подготовлена в `supabase/migrations/20260614000002_profile_patterns.sql` (не
+> применена — по решению применяем только из .sql-файлов).
+
 ## Описание
 
 Новый класс косметических предметов — **узоры (patterns)**, которые

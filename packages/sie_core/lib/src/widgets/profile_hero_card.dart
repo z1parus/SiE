@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/cosmetic_asset.dart';
 import '../theme/sie_colors.dart';
 import '../theme/sie_motion.dart';
-import 'neural_network_painter.dart';
+import 'profile_pattern_layer.dart';
 
 /// Shared "operative card" hero used by both the personal ([ProfileScreen])
 /// and public ([PublicProfileScreen]) profiles.
@@ -29,6 +29,7 @@ class ProfileHeroCard extends ConsumerWidget {
     required this.designPoints,
     this.frame,
     this.background,
+    this.pattern,
     this.avatarSize = 72,
     this.onAvatarTap,
   });
@@ -43,6 +44,9 @@ class ProfileHeroCard extends ConsumerWidget {
 
   /// Equipped profile background (colour / gradient / pattern flag), if any.
   final CosmeticAsset? background;
+
+  /// Equipped animated pattern overlay, if any.
+  final CosmeticAsset? pattern;
 
   final double avatarSize;
   final VoidCallback? onAvatarTap;
@@ -84,10 +88,12 @@ class ProfileHeroCard extends ConsumerWidget {
     final hasCustomBg = background != null &&
         (background!.backgroundColor != null ||
             background!.backgroundGradient != null);
-    // The animated pattern layer renders when a custom background is set or the
-    // background explicitly opts into the (legacy) neural pattern flag.
-    final showPattern = background != null &&
+    // Legacy behaviour: backgrounds with a custom colour or the
+    // `use_neural_pattern` flag rendered the neural overlay before patterns
+    // existed as a first-class asset.
+    final legacyNeural = background != null &&
         (background!.backgroundColor != null || background!.useNeuralPattern);
+    final showPattern = pattern != null || legacyNeural;
     final decorated = hasCustomBg || showPattern;
 
     // With a decorative background/pattern we darken behind the text with a
@@ -95,8 +101,6 @@ class ProfileHeroCard extends ConsumerWidget {
     // themed text colours are used.
     final textMain = decorated ? Colors.white : c.textPrimary;
     final textSub = decorated ? Colors.white70 : c.textSecondary;
-
-    final patternColor = (background?.accentColor ?? c.accent).withValues(alpha: 0.40);
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: progress),
@@ -110,11 +114,11 @@ class ProfileHeroCard extends ConsumerWidget {
             children: [
               if (showPattern)
                 Positioned.fill(
-                  child: SieMotion.enabled(context)
-                      ? NeuralNetworkWidget(color: patternColor)
-                      : CustomPaint(
-                          painter: NeuralNetworkPainter(color: patternColor),
-                        ),
+                  child: ProfilePatternLayer(
+                    pattern: pattern,
+                    accent: background?.accentColor ?? c.accent,
+                    legacyNeural: legacyNeural,
+                  ),
                 ),
               if (decorated)
                 Positioned.fill(
