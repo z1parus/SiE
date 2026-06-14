@@ -12,11 +12,13 @@ import '../models/goal_analytics.dart';
 import '../models/goal_collaborator.dart';
 import '../models/public_profile.dart';
 import '../models/mission_medal.dart';
+import '../models/mission_template.dart';
 import '../models/ai_decomposition.dart';
 import '../services/notification_service.dart';
 import 'auth_state_provider.dart';
 import 'connectivity_provider.dart';
 import 'habits_provider.dart';
+import 'mission_templates_provider.dart';
 import 'notification_provider.dart';
 import 'user_profile_provider.dart';
 import 'user_timezone_provider.dart';
@@ -669,7 +671,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
   // ── Add Goal ──────────────────────────────────────────────────────────────
 
-  Future<void> addGoal({
+  Future<String?> addGoal({
     required String name,
     String? description,
     DateTime? deadline,
@@ -678,7 +680,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
   }) async {
     final client = Supabase.instance.client;
     final session = client.auth.currentSession;
-    if (session == null) return;
+    if (session == null) return null;
 
     final db = ref.read(appDatabaseProvider);
     final now = DateTime.now();
@@ -726,10 +728,11 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       try {
         await client.from('goals').insert(newGoal.toInsertJson());
         await db.updateGoal(id, const LocalGoalsCompanion(synced: Value(true)));
-        return;
+        return id;
       } catch (_) {}
     }
     await db.enqueueSyncOp('insert_goal', payload);
+    return id;
   }
 
   // ── Delete Goal ───────────────────────────────────────────────────────────
@@ -2193,6 +2196,88 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     for (final m in result.milestones) {
       await addMilestone(goalId, m.name);
     }
+  }
+
+  // ── Mission Templates ─────────────────────────────────────────────────────
+
+  /// Instantiates a full goal (sub-goals + tasks + milestones) from a saved
+  /// [template]. Reuses the existing add* methods so local persistence, online
+  /// sync and the offline queue all behave exactly as for manual entry.
+  /// Returns the new goal id, or null on failure.
+  Future<String?> createGoalFromTemplate(
+    MissionTemplate template, {
+    required String name,
+    DateTime? deadline,
+  }) async {
+    final goalId = await addGoal(
+      name: name,
+      deadline: deadline,
+      colorHex: template.colorHex,
+    );
+    if (goalId == null) return null;
+
+    if (template.category != null) {
+      await updateGoalSettings(
+          goalId, GoalSettings(category: template.category));
+    }
+
+    for (final sg in template.structure.subGoals) {
+      await _instantiateTemplateSubGoal(goalId, null, sg);
+    }
+    for (final m in template.structure.milestones) {
+      await addMilestone(
+        goalId,
+        m.name,
+        kind: m.kind,
+        unit: m.unit,
+        startValue: m.startValue,
+        targetValue: m.targetValue,
+        direction: m.direction,
+      );
+    }
+    return goalId;
+  }
+
+  Future<void> _instantiateTemplateSubGoal(
+      String goalId, String? parentId, TemplateSubGoal tsg) async {
+    await addSubGoal(goalId, tsg.name, parentSubGoalId: parentId);
+    // addSubGoal appends optimistically, so the new node is the last child of
+    // its parent (or the last root sub-goal).
+    final created = parentId == null
+        ? _goalById(goalId)?.subGoals.lastOrNull
+        : _allSubGoals(_goalById(goalId)?.subGoals ?? const [])
+            .where((s) => s.id == parentId)
+            .firstOrNull
+            ?.children
+            .lastOrNull;
+    if (created == null) return;
+
+    for (final t in tsg.tasks) {
+      await addTask(
+          goalId: goalId,
+          subGoalId: created.id,
+          name: t.name,
+          weight: t.weight);
+    }
+    for (final child in tsg.children) {
+      await _instantiateTemplateSubGoal(goalId, created.id, child);
+    }
+  }
+
+  /// Snapshots a goal's structure (no dates/progress/ids) into a reusable user
+  /// template.
+  Future<MissionTemplate?> saveGoalAsTemplate(
+      String goalId, String name) async {
+    final goal = _goalById(goalId);
+    if (goal == null) return null;
+    final structure = TemplateStructure.fromGoal(goal);
+    return ref.read(missionTemplatesProvider.notifier).createTemplate(
+          name: name,
+          description: goal.description,
+          category: goal.settings.category,
+          colorHex: goal.colorHex,
+          structure: structure,
+        );
   }
 
   // ── Save map positions ────────────────────────────────────────────────────

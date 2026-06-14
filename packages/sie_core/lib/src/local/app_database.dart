@@ -207,6 +207,23 @@ class LocalGoalProgressSnapshots extends Table {
   @override Set<Column> get primaryKey => {id};
 }
 
+@DataClassName('LocalMissionTemplate')
+class LocalMissionTemplates extends Table {
+  TextColumn get id             => text()();
+  TextColumn get userId         => text().nullable()(); // null = system
+  TextColumn get name           => text()();
+  TextColumn get description    => text().nullable()();
+  TextColumn get category       => text().nullable()();
+  BoolColumn get isSystem       => boolean().withDefault(const Constant(false))();
+  BoolColumn get isPublic       => boolean().withDefault(const Constant(false))();
+  TextColumn get colorHex       => text().withDefault(const Constant('#5AADA0'))();
+  TextColumn get structureJson  => text()();
+  IntColumn  get createdAtMs    => integer()();
+  BoolColumn get synced         => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
+  @override Set<Column> get primaryKey => {id};
+}
+
 @DataClassName('LocalPlanningTask')
 class LocalPlanningTasks extends Table {
   TextColumn get id             => text()();
@@ -336,12 +353,13 @@ class LocalMapPositions extends Table {
   LocalMapPositions,
   LocalMilestoneLogs,
   LocalGoalProgressSnapshots,
+  LocalMissionTemplates,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 20;
+  int get schemaVersion => 21;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -487,6 +505,9 @@ class AppDatabase extends _$AppDatabase {
             'CREATE INDEX IF NOT EXISTS idx_snapshots_goal '
             'ON local_goal_progress_snapshots(goal_id, captured_at_ms)',
             const []);
+      }
+      if (from < 21) {
+        await m.createTable(localMissionTemplates);
       }
     },
   );
@@ -1028,6 +1049,28 @@ class AppDatabase extends _$AppDatabase {
       (update(localGoalProgressSnapshots)..where((t) => t.id.equals(id)))
           .write(const LocalGoalProgressSnapshotsCompanion(
               synced: Value(true)));
+
+  // ── Mission Templates ─────────────────────────────────────────────────────
+
+  Future<void> upsertMissionTemplate(LocalMissionTemplatesCompanion row) =>
+      into(localMissionTemplates).insertOnConflictUpdate(row);
+
+  Future<List<LocalMissionTemplate>> templatesForUser(String userId) =>
+      (select(localMissionTemplates)
+            ..where((t) =>
+                (t.userId.equals(userId) | t.isSystem.equals(true)) &
+                t.deletedLocally.equals(false))
+            ..orderBy([(t) => OrderingTerm(expression: t.createdAtMs)]))
+          .get();
+
+  Future<void> deleteMissionTemplateLocally(String id) =>
+      (update(localMissionTemplates)..where((t) => t.id.equals(id)))
+          .write(const LocalMissionTemplatesCompanion(
+              deletedLocally: Value(true)));
+
+  Future<void> markMissionTemplateSynced(String id) =>
+      (update(localMissionTemplates)..where((t) => t.id.equals(id)))
+          .write(const LocalMissionTemplatesCompanion(synced: Value(true)));
 
   // ── Mission Medals ────────────────────────────────────────────────────────
 

@@ -265,6 +265,21 @@ class SyncService {
               'captured_at': payload['captured_at'],
             }, onConflict: 'id');
             await _db.markGoalSnapshotSynced(payload['id'] as String);
+          case 'insert_mission_template':
+            await client.from('mission_templates').upsert({
+              'id': payload['id'],
+              if (payload['user_id'] != null) 'user_id': payload['user_id'],
+              'name': payload['name'],
+              if (payload['description'] != null)
+                'description': payload['description'],
+              if (payload['category'] != null) 'category': payload['category'],
+              'is_system': payload['is_system'] ?? false,
+              'is_public': payload['is_public'] ?? false,
+              'color_hex': payload['color_hex'] ?? '#5AADA0',
+              'structure_json': payload['structure_json'],
+              'created_at': payload['created_at'],
+            }, onConflict: 'id');
+            await _db.markMissionTemplateSynced(payload['id'] as String);
           case 'insert_habit_link':
             await client.from('goal_habit_links').upsert({
               'id': payload['id'],
