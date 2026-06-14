@@ -265,6 +265,16 @@ class LocalMissionMedals extends Table {
   @override Set<Column> get primaryKey => {id};
 }
 
+@DataClassName('LocalTaskDependency')
+class LocalTaskDependencies extends Table {
+  TextColumn get taskId          => text()();
+  TextColumn get dependsOnTaskId => text()();
+  TextColumn get goalId          => text()();
+  BoolColumn get synced          => boolean().withDefault(const Constant(false))();
+  IntColumn  get createdAtMs     => integer()();
+  @override Set<Column> get primaryKey => {taskId, dependsOnTaskId};
+}
+
 @DataClassName('LocalGoalHabitLink')
 class LocalGoalHabitLinks extends Table {
   TextColumn get id             => text()();
@@ -357,12 +367,13 @@ class LocalMapPositions extends Table {
   LocalMilestoneLogs,
   LocalGoalProgressSnapshots,
   LocalMissionTemplates,
+  LocalTaskDependencies,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 22;
+  int get schemaVersion => 23;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -518,6 +529,13 @@ class AppDatabase extends _$AppDatabase {
         await m.issueCustomQuery(
             'CREATE INDEX IF NOT EXISTS idx_focus_goal '
             'ON local_focus_sessions(goal_id)',
+            const []);
+      }
+      if (from < 23) {
+        await m.createTable(localTaskDependencies);
+        await m.issueCustomQuery(
+            'CREATE INDEX IF NOT EXISTS idx_task_deps_goal '
+            'ON local_task_dependencies(goal_id)',
             const []);
       }
     },
@@ -920,6 +938,39 @@ class AppDatabase extends _$AppDatabase {
           );
         }
       });
+
+  // ── Task Dependencies (Stage 8) ────────────────────────────────────────────
+
+  Future<void> upsertTaskDependency(LocalTaskDependenciesCompanion row) =>
+      into(localTaskDependencies).insertOnConflictUpdate(row);
+
+  Future<void> deleteTaskDependency(
+          String taskId, String dependsOnTaskId) =>
+      (delete(localTaskDependencies)
+            ..where((t) =>
+                t.taskId.equals(taskId) &
+                t.dependsOnTaskId.equals(dependsOnTaskId)))
+          .go();
+
+  Future<List<LocalTaskDependency>> dependenciesForGoals(
+          List<String> goalIds) =>
+      goalIds.isEmpty
+          ? Future.value(const [])
+          : (select(localTaskDependencies)
+                ..where((t) => t.goalId.isIn(goalIds)))
+              .get();
+
+  Future<List<LocalTaskDependency>> unsyncedTaskDependencies() =>
+      (select(localTaskDependencies)..where((t) => t.synced.equals(false)))
+          .get();
+
+  Future<void> markTaskDependencySynced(
+          String taskId, String dependsOnTaskId) =>
+      (update(localTaskDependencies)
+            ..where((t) =>
+                t.taskId.equals(taskId) &
+                t.dependsOnTaskId.equals(dependsOnTaskId)))
+          .write(const LocalTaskDependenciesCompanion(synced: Value(true)));
 
   Future<void> upsertGoalHabitLink(LocalGoalHabitLinksCompanion row) =>
       into(localGoalHabitLinks).insertOnConflictUpdate(row);

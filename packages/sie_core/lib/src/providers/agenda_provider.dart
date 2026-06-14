@@ -14,12 +14,17 @@ class AgendaItem {
     required this.goal,
     required this.subGoalId,
     required this.subGoalName,
+    this.isBlocked = false,
+    this.blockerNames = const [],
   });
 
   final PlanningTask task;
   final Goal goal;
   final String subGoalId;
   final String subGoalName;
+  // Stage 8: blocked by incomplete prerequisites.
+  final bool isBlocked;
+  final List<String> blockerNames;
 }
 
 /// A milestone surfaced on the agenda horizon, with its owning goal.
@@ -114,13 +119,17 @@ final agendaProvider = Provider.autoDispose<AgendaBuckets>((ref) {
   var todayCompleted = 0;
 
   for (final goal in state.activeGoals) {
+    final byId = tasksById(goal);
     for (final sg in flattenSubGoals(goal.subGoals)) {
       for (final task in sg.tasks) {
+        final blockers = taskBlockers(task, byId);
         final item = AgendaItem(
           task: task,
           goal: goal,
           subGoalId: sg.id,
           subGoalName: sg.name,
+          isBlocked: blockers.isNotEmpty,
+          blockerNames: [for (final b in blockers) b.name],
         );
 
         if (task.isCompleted) {

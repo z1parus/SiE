@@ -280,6 +280,23 @@ class SyncService {
               'created_at': payload['created_at'],
             }, onConflict: 'id');
             await _db.markMissionTemplateSynced(payload['id'] as String);
+          case 'insert_dependency':
+            await client.from('task_dependencies').upsert({
+              'task_id': payload['task_id'],
+              'depends_on_task_id': payload['depends_on_task_id'],
+              'goal_id': payload['goal_id'],
+              'user_id': payload['user_id'],
+            }, onConflict: 'task_id,depends_on_task_id');
+            await _db.markTaskDependencySynced(
+                payload['task_id'] as String,
+                payload['depends_on_task_id'] as String);
+          case 'delete_dependency':
+            await client
+                .from('task_dependencies')
+                .delete()
+                .eq('task_id', payload['task_id'] as String)
+                .eq('depends_on_task_id',
+                    payload['depends_on_task_id'] as String);
           case 'insert_habit_link':
             await client.from('goal_habit_links').upsert({
               'id': payload['id'],

@@ -85,6 +85,7 @@ class PlanningTask {
     this.recurrenceRule,
     this.recurrenceUntil,
     this.recurrenceParentId,
+    this.dependsOn = const [],
   });
 
   final String id;
@@ -101,8 +102,11 @@ class PlanningTask {
   final String? recurrenceRule; // 'daily'|'weekly:1,3'|'monthly:15'|'every:N'
   final DateTime? recurrenceUntil;
   final String? recurrenceParentId;
+  // Dependencies (stage 8): ids of tasks that must be completed before this one.
+  final List<String> dependsOn;
 
   bool get isRecurring => recurrenceRule != null && recurrenceRule!.isNotEmpty;
+  bool get hasDependencies => dependsOn.isNotEmpty;
 
   PlanningTask copyWith({
     String? subGoalId,
@@ -114,6 +118,7 @@ class PlanningTask {
     Object? recurrenceRule = _unset,
     Object? recurrenceUntil = _unset,
     Object? recurrenceParentId = _unset,
+    List<String>? dependsOn,
   }) =>
       PlanningTask(
         id: id,
@@ -135,6 +140,7 @@ class PlanningTask {
         recurrenceParentId: recurrenceParentId == _unset
             ? this.recurrenceParentId
             : recurrenceParentId as String?,
+        dependsOn: dependsOn ?? this.dependsOn,
         createdAt: createdAt,
       );
 
@@ -733,6 +739,72 @@ double metricProgress(Milestone m) {
   final range = target - start;
   if (range == 0) return current == target ? 1.0 : 0.0;
   return ((current - start) / range).clamp(0.0, 1.0);
+}
+
+// ─── Task dependencies (Stage 8) ────────────────────────────────────────────
+
+/// Flattens every task of a goal into an id→task lookup.
+Map<String, PlanningTask> tasksById(Goal goal) {
+  final map = <String, PlanningTask>{};
+  for (final sg in _allSubGoals(goal.subGoals)) {
+    for (final t in sg.tasks) {
+      map[t.id] = t;
+    }
+  }
+  return map;
+}
+
+/// A task is unblocked when all of its (still-existing) prerequisites are done.
+/// Prerequisites that no longer exist are treated as satisfied.
+bool isTaskUnblocked(PlanningTask task, Map<String, PlanningTask> byId) {
+  for (final depId in task.dependsOn) {
+    final dep = byId[depId];
+    if (dep != null && !dep.isCompleted) return false;
+  }
+  return true;
+}
+
+/// The incomplete prerequisites still blocking [task] (for the "Ждёт: …" hint).
+List<PlanningTask> taskBlockers(
+    PlanningTask task, Map<String, PlanningTask> byId) {
+  final blockers = <PlanningTask>[];
+  for (final depId in task.dependsOn) {
+    final dep = byId[depId];
+    if (dep != null && !dep.isCompleted) blockers.add(dep);
+  }
+  return blockers;
+}
+
+/// Incomplete tasks of [goal] whose prerequisites are all done.
+List<PlanningTask> readyTasks(Goal goal) {
+  final byId = tasksById(goal);
+  final ready = <PlanningTask>[];
+  for (final t in byId.values) {
+    if (!t.isCompleted && isTaskUnblocked(t, byId)) ready.add(t);
+  }
+  return ready;
+}
+
+/// Whether adding edge [taskId] depends-on [dependsOnTaskId] would create a
+/// cycle, given the current adjacency (taskId → its dependsOn list). A cycle
+/// forms if [dependsOnTaskId] can already reach [taskId] by following deps.
+bool wouldCreateDependencyCycle(
+  String taskId,
+  String dependsOnTaskId,
+  Map<String, List<String>> adjacency,
+) {
+  if (taskId == dependsOnTaskId) return true;
+  final visited = <String>{};
+  bool dfs(String node) {
+    if (node == taskId) return true;
+    if (!visited.add(node)) return false;
+    for (final next in adjacency[node] ?? const <String>[]) {
+      if (dfs(next)) return true;
+    }
+    return false;
+  }
+
+  return dfs(dependsOnTaskId);
 }
 
 bool isGoalFatigued(Goal g) {

@@ -1019,9 +1019,14 @@ class _TaskTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = task;
     final focusSecs = ref.watch(taskFocusSecondsProvider(t.id)).valueOrNull ?? 0;
+    final byId = tasksById(goal);
+    final blockers = taskBlockers(t, byId);
+    final isBlocked = blockers.isNotEmpty && !t.isCompleted;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
+      child: Opacity(
+        opacity: isBlocked ? 0.6 : 1.0,
+        child: Row(
         children: [
           if (canEdit) ...[
             ReorderableDragStartListener(
@@ -1039,7 +1044,9 @@ class _TaskTile extends ConsumerWidget {
             child: Icon(
               t.isCompleted
                   ? Icons.check_circle
-                  : Icons.radio_button_unchecked,
+                  : isBlocked
+                      ? Icons.lock_outline
+                      : Icons.radio_button_unchecked,
               color: t.isCompleted ? goal.color : sc.textSecondary,
               size: 20,
             ),
@@ -1100,10 +1107,38 @@ class _TaskTile extends ConsumerWidget {
                       ],
                     ],
                   ),
+                if (isBlocked)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      'Ждёт: ${blockers.map((b) => b.name).join(', ')}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: sc.textSecondary,
+                          fontSize: 10,
+                          fontStyle: FontStyle.italic),
+                    ),
+                  ),
               ],
             ),
           ),
-          if (!t.isCompleted) ...[
+          if (canEdit) ...[
+            GestureDetector(
+              onTap: () => _showDependencySheet(context, ref, t, sc),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(
+                  t.hasDependencies
+                      ? Icons.account_tree
+                      : Icons.account_tree_outlined,
+                  size: 16,
+                  color: t.hasDependencies ? sc.accentSecondary : sc.textSecondary,
+                ),
+              ),
+            ),
+          ],
+          if (!t.isCompleted && !isBlocked) ...[
             GestureDetector(
               onTap: () => _startFocusOnTask(context, t, subGoal, goal),
               child: Padding(
@@ -1133,7 +1168,18 @@ class _TaskTile extends ConsumerWidget {
             ),
           ],
         ],
+        ),
       ),
+    );
+  }
+
+  void _showDependencySheet(
+      BuildContext context, WidgetRef ref, PlanningTask t, SieColors sc) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _DependencySheet(task: t, goal: goal, sc: sc),
     );
   }
 
@@ -1153,6 +1199,150 @@ class _TaskTile extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+// ─── Dependency management sheet (Stage 8) ─────────────────────────────────────
+
+class _DependencySheet extends ConsumerWidget {
+  const _DependencySheet({
+    required this.task,
+    required this.goal,
+    required this.sc,
+  });
+
+  final PlanningTask task;
+  final Goal goal;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Re-read live task from provider so the checkbox state stays in sync.
+    final liveGoal = ref.watch(planningProvider).valueOrNull?.goals
+            .where((g) => g.id == goal.id)
+            .firstOrNull ??
+        goal;
+    final byId = tasksById(liveGoal);
+    final t = byId[task.id] ?? task;
+
+    // Candidate predecessors: every other task of the same goal.
+    final candidates = byId.values.where((c) => c.id != t.id).toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
+      constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.7),
+      decoration: BoxDecoration(
+        color: sc.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: sc.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('ЗАВИСИТ ОТ…',
+              style: TextStyle(
+                  color: sc.textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 2)),
+          const SizedBox(height: 4),
+          Text(t.name,
+              style: TextStyle(
+                  color: sc.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text(
+            'Эта задача станет доступной, когда выбранные будут выполнены.',
+            style: TextStyle(color: sc.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          if (candidates.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text('Нет других задач в этой цели.',
+                  style: TextStyle(color: sc.textSecondary, fontSize: 13)),
+            )
+          else
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: candidates.map((cand) {
+                  final selected = t.dependsOn.contains(cand.id);
+                  return InkWell(
+                    onTap: () => _toggle(context, ref, t, cand, selected),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Row(
+                        children: [
+                          Icon(
+                            selected
+                                ? Icons.check_box
+                                : Icons.check_box_outline_blank,
+                            size: 20,
+                            color:
+                                selected ? sc.accentSecondary : sc.textSecondary,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              cand.name,
+                              style: TextStyle(
+                                color: sc.textPrimary,
+                                fontSize: 14,
+                                decoration: cand.isCompleted
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ),
+                            ),
+                          ),
+                          if (cand.isCompleted)
+                            Icon(Icons.check_circle,
+                                size: 14, color: goal.color),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _toggle(BuildContext context, WidgetRef ref, PlanningTask t,
+      PlanningTask cand, bool selected) async {
+    final notifier = ref.read(planningProvider.notifier);
+    if (selected) {
+      await notifier.removeDependency(goal.id, t.id, cand.id);
+      return;
+    }
+    final result = await notifier.addDependency(goal.id, t.id, cand.id);
+    if (!context.mounted) return;
+    if (result != DependencyResult.ok) {
+      final msg = switch (result) {
+        DependencyResult.cycle =>
+          'Это создаст замкнутый круг зависимостей.',
+        DependencyResult.duplicate => 'Зависимость уже добавлена.',
+        _ => 'Не удалось добавить зависимость.',
+      };
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: sc.surface,
+        ),
+      );
+    } else {
+      SieHaptics.selection();
+    }
   }
 }
 
