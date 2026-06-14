@@ -34,6 +34,12 @@ class LocalHabits extends Table {
   TextColumn get reminderTime => text().nullable()();
   // Stage 6: life area ('health'|'mind'|'productivity'|'relationships'|'finance'|'spirit'|null)
   TextColumn get area => text().nullable()();
+  // Stage 7: polarity — 'build' (default) | 'avoid' (break a bad habit).
+  TextColumn get polarity =>
+      text().withDefault(const Constant('build'))();
+  // Stage 7: highest abstinence milestone (days) already rewarded; resets on lapse.
+  IntColumn get lastAbstinenceMilestone =>
+      integer().withDefault(const Constant(0))();
   BoolColumn get deletedLocally =>
       boolean().withDefault(const Constant(false))();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
@@ -404,7 +410,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 29;
+  int get schemaVersion => 30;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -592,6 +598,10 @@ class AppDatabase extends _$AppDatabase {
       if (from < 29) {
         await m.addColumn(localHabits, localHabits.area);
       }
+      if (from < 30) {
+        await m.addColumn(localHabits, localHabits.polarity);
+        await m.addColumn(localHabits, localHabits.lastAbstinenceMilestone);
+      }
     },
   );
 
@@ -620,6 +630,12 @@ class AppDatabase extends _$AppDatabase {
       (update(localHabits)..where((t) => t.id.equals(habitId))).write(
         const LocalHabitsCompanion(
             deletedLocally: Value(true), synced: Value(false)),
+      );
+
+  // Stage 7: persist the highest abstinence milestone already rewarded.
+  Future<void> setAbstinenceMilestone(String habitId, int milestone) =>
+      (update(localHabits)..where((t) => t.id.equals(habitId))).write(
+        LocalHabitsCompanion(lastAbstinenceMilestone: Value(milestone)),
       );
 
   Future<List<LocalHabit>> unsyncedHabits(String userId) =>

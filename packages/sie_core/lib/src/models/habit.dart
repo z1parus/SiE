@@ -39,6 +39,10 @@ class Habit {
   /// Stage 6 — optional life area for grouping (null = no area).
   final LifeArea? area;
 
+  /// Stage 7 — habit polarity: 'build' (default, do the good thing) |
+  /// 'avoid' (abstain from a bad thing; success = a day without a lapse).
+  final String polarity;
+
   const Habit({
     required this.id,
     required this.userId,
@@ -55,6 +59,7 @@ class Habit {
     this.step,
     this.reminderTime,
     this.area,
+    this.polarity = 'build',
     required this.createdAt,
   });
 
@@ -78,6 +83,9 @@ class Habit {
         step: (map['step'] as num?)?.toDouble(),
         reminderTime: map['reminder_time']?.toString(),
         area: LifeAreaX.fromString(map['area']?.toString()),
+        polarity: (map['polarity']?.toString().isNotEmpty ?? false)
+            ? map['polarity'].toString()
+            : 'build',
         createdAt:
             DateTime.tryParse(map['created_at']?.toString() ?? '') ??
                 DateTime.now(),
@@ -97,6 +105,7 @@ class Habit {
     Object? step = _sentinel,
     Object? reminderTime = _sentinel,
     Object? area = _sentinel,
+    String? polarity,
   }) =>
       Habit(
         id: id,
@@ -118,8 +127,12 @@ class Habit {
             ? this.reminderTime
             : reminderTime as String?,
         area: area == _sentinel ? this.area : area as LifeArea?,
+        polarity: polarity ?? this.polarity,
         createdAt: createdAt,
       );
+
+  /// Stage 7 — true for "avoid" (break a bad habit) polarity.
+  bool get isAvoid => polarity == 'avoid';
 
   /// True when this habit uses a non-daily schedule.
   bool get hasCustomSchedule => schedule != 'daily';
@@ -296,6 +309,9 @@ class HabitsState {
   /// Stage 5 — habitId → remaining freeze count for the current streak window.
   final Map<String, int> freezesAvailable;
 
+  /// Stage 7 — habitId → set of 'yyyy-MM-dd' lapse dates (avoid habits).
+  final Map<String, Set<String>> lapseDates;
+
   const HabitsState({
     required this.habits,
     required this.logDates,
@@ -304,6 +320,7 @@ class HabitsState {
     this.logValues = const {},
     this.restDates = const {},
     this.freezesAvailable = const {},
+    this.lapseDates = const {},
   });
 
   static const empty =
@@ -409,4 +426,71 @@ int freezesAvailableFor(
   final budget = allScheduled.length ~/ 7;
   final detail = _resilientStreakDetail(habit, doneDates, restDates);
   return budget - detail.$2;
+}
+
+// ── Abstinence streak (Stage 7 — avoid habits) ───────────────────────────────
+
+/// Abstinence milestones (in days) that grant event-based XP.
+const abstinenceMilestones = <int>[1, 7, 30, 90, 180, 365];
+
+/// Number of clean days since the most recent lapse, inclusive of today.
+///
+/// With no lapses the count runs from the habit's creation date. A lapse
+/// recorded today yields 0 (the streak just reset).
+int abstinenceStreak(Habit habit, Set<String> lapseDates) {
+  final today = _dateOnly(DateTime.now());
+  final last = _lastLapseDate(lapseDates);
+  final from = last != null
+      ? last.add(const Duration(days: 1)) // first clean day after the lapse
+      : _dateOnly(habit.createdAt);
+  if (from.isAfter(today)) return 0;
+  return today.difference(from).inDays + 1;
+}
+
+/// Longest run of consecutive clean days ever achieved.
+///
+/// Considers the gaps between successive lapses plus the open final stretch
+/// from the last lapse to today (and the opening stretch from creation to the
+/// first lapse).
+int longestClean(Habit habit, Set<String> lapseDates) {
+  final today = _dateOnly(DateTime.now());
+  final created = _dateOnly(habit.createdAt);
+  final lapses = lapseDates
+      .map(DateTime.tryParse)
+      .whereType<DateTime>()
+      .map(_dateOnly)
+      .toList()
+    ..sort();
+
+  if (lapses.isEmpty) {
+    return today.difference(created).inDays + 1;
+  }
+
+  var longest = 0;
+  // Opening stretch: creation → day before first lapse.
+  final opening = lapses.first.difference(created).inDays; // exclusive of lapse
+  if (opening > longest) longest = opening;
+
+  // Gaps between successive lapses.
+  for (var i = 1; i < lapses.length; i++) {
+    final gap = lapses[i].difference(lapses[i - 1]).inDays - 1;
+    if (gap > longest) longest = gap;
+  }
+
+  // Final open stretch: day after last lapse → today.
+  final tail = today.difference(lapses.last).inDays; // clean days after lapse
+  if (tail > longest) longest = tail;
+
+  return longest < 0 ? 0 : longest;
+}
+
+DateTime? _lastLapseDate(Set<String> lapseDates) {
+  DateTime? last;
+  for (final s in lapseDates) {
+    final d = DateTime.tryParse(s);
+    if (d == null) continue;
+    final dd = _dateOnly(d);
+    if (last == null || dd.isAfter(last)) last = dd;
+  }
+  return last;
 }
