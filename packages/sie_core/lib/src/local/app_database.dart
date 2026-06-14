@@ -21,6 +21,10 @@ class LocalHabits extends Table {
   BoolColumn get isArchived =>
       boolean().withDefault(const Constant(false))();
   IntColumn get createdAtMs => integer()();
+  // Stage 1 (habits): flexible schedule descriptor — 'daily' | 'weekdays:…'
+  // | 'weekly:N' | 'interval:N'. Defaults to legacy daily behaviour.
+  TextColumn get schedule =>
+      text().withDefault(const Constant('daily'))();
   BoolColumn get deletedLocally =>
       boolean().withDefault(const Constant(false))();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
@@ -387,7 +391,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 24;
+  int get schemaVersion => 25;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -554,6 +558,9 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 24) {
         await m.createTable(localWeeklyReviews);
+      }
+      if (from < 25) {
+        await m.addColumn(localHabits, localHabits.schedule);
       }
     },
   );

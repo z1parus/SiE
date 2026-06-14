@@ -23,6 +23,8 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
   bool _onboardingDismissed = false;
   bool _showOnboardingManual = false;
   HabitViewMode _viewMode = HabitViewMode.today;
+  // Stage 1 — "Не сегодня" section collapsed by default.
+  bool _notTodayExpanded = false;
 
   Future<void> _onRefresh() async {
     ref.invalidate(habitsProvider);
@@ -120,55 +122,113 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                     children: [_EmptyState(onAdd: () => _showHabitDialog(null))],
                   );
                 }
+
+                Widget buildCard(Habit habit) {
+                  final logDates = state.logDates[habit.id] ?? {};
+                  final entries  = state.logEntries[habit.id] ?? [];
+                  final todayEntry = entries.cast<HabitLogEntry?>()
+                      .firstWhere((e) => e?.completedAt == today,
+                          orElse: () => null);
+                  void onTapDetail() => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => HabitDetailScreen(habit: habit),
+                    ),
+                  );
+                  if (_viewMode == HabitViewMode.week) {
+                    return _WeekViewHabitCard(
+                      key: ValueKey('w_${habit.id}'),
+                      habit: habit,
+                      logDates: logDates,
+                      streak: state.streaks[habit.id] ?? 0,
+                      onTap: onTapDetail,
+                    );
+                  }
+                  if (_viewMode == HabitViewMode.allTime) {
+                    return _AllTimeHabitCard(
+                      key: ValueKey('a_${habit.id}'),
+                      habit: habit,
+                      logDates: logDates,
+                      onTap: onTapDetail,
+                    );
+                  }
+                  return _SwipeableHabitCard(
+                    key: ValueKey(habit.id),
+                    habit: habit,
+                    completedToday: logDates.contains(today),
+                    streak: state.streaks[habit.id] ?? 0,
+                    todayEmoji: todayEntry?.emoji,
+                    onTap: onTapDetail,
+                    onDelete: () => ref
+                        .read(habitsProvider.notifier)
+                        .deleteHabit(habit.id),
+                    onTogglePin: () => ref
+                        .read(habitsProvider.notifier)
+                        .togglePin(habit.id),
+                  );
+                }
+
+                // Stage 1 — in Today view, split scheduled-for-today from the
+                // rest and tuck the latter into a collapsed "Не сегодня" group.
+                if (_viewMode == HabitViewMode.today) {
+                  final now = DateTime.now();
+                  final due = <Habit>[];
+                  final notToday = <Habit>[];
+                  for (final h in visibleHabits) {
+                    final firstLog =
+                        firstLogDate(state.logDates[h.id] ?? const {});
+                    if (isScheduledOn(h, now, firstLog: firstLog)) {
+                      due.add(h);
+                    } else {
+                      notToday.add(h);
+                    }
+                  }
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                    children: [
+                      for (final h in due)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: buildCard(h),
+                        ),
+                      if (due.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 24),
+                          child: Text(
+                            'На сегодня привычек не запланировано',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                color: sc.textSecondary, fontSize: 13),
+                          ),
+                        ),
+                      if (notToday.isNotEmpty) ...[
+                        _NotTodayHeader(
+                          sc: sc,
+                          count: notToday.length,
+                          expanded: _notTodayExpanded,
+                          onTap: () => setState(
+                              () => _notTodayExpanded = !_notTodayExpanded),
+                        ),
+                        if (_notTodayExpanded)
+                          for (final h in notToday)
+                            Opacity(
+                              opacity: 0.55,
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: buildCard(h),
+                              ),
+                            ),
+                      ],
+                    ],
+                  );
+                }
+
                 return ListView.separated(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
                   itemCount: visibleHabits.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (context, i) {
-                    final habit    = visibleHabits[i];
-                    final logDates = state.logDates[habit.id] ?? {};
-                    final entries  = state.logEntries[habit.id] ?? [];
-                    final todayEntry = entries.cast<HabitLogEntry?>()
-                        .firstWhere((e) => e?.completedAt == today,
-                            orElse: () => null);
-                    void onTapDetail() => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => HabitDetailScreen(habit: habit),
-                      ),
-                    );
-                    if (_viewMode == HabitViewMode.week) {
-                      return _WeekViewHabitCard(
-                        key: ValueKey('w_${habit.id}'),
-                        habit: habit,
-                        logDates: logDates,
-                        streak: state.streaks[habit.id] ?? 0,
-                        onTap: onTapDetail,
-                      );
-                    }
-                    if (_viewMode == HabitViewMode.allTime) {
-                      return _AllTimeHabitCard(
-                        key: ValueKey('a_${habit.id}'),
-                        habit: habit,
-                        logDates: logDates,
-                        onTap: onTapDetail,
-                      );
-                    }
-                    return _SwipeableHabitCard(
-                      key: ValueKey(habit.id),
-                      habit: habit,
-                      completedToday: logDates.contains(today),
-                      streak: state.streaks[habit.id] ?? 0,
-                      todayEmoji: todayEntry?.emoji,
-                      onTap: onTapDetail,
-                      onDelete: () => ref
-                          .read(habitsProvider.notifier)
-                          .deleteHabit(habit.id),
-                      onTogglePin: () => ref
-                          .read(habitsProvider.notifier)
-                          .togglePin(habit.id),
-                    );
-                  },
+                  itemBuilder: (context, i) => buildCard(visibleHabits[i]),
                 );
               },
             ),
@@ -249,11 +309,16 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
       isScrollControlled: true,
       builder: (_) => _HabitDialog(
         existing: existing,
-        onSave: (title, description, color, icon) {
+        onSave: (title, description, color, icon, schedule) {
           if (existing == null) {
             ref
                 .read(habitsProvider.notifier)
-                .addHabit(title: title, description: description, color: color, icon: icon)
+                .addHabit(
+                    title: title,
+                    description: description,
+                    color: color,
+                    icon: icon,
+                    schedule: schedule)
                 .then((awarded) {
               if (awarded && mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -302,6 +367,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                   description: description,
                   color: color,
                   icon: icon,
+                  schedule: schedule,
                 );
           }
         },
@@ -639,8 +705,18 @@ class _WeekViewHabitCard extends ConsumerWidget {
               final label = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'][d.weekday - 1];
               final done = logDates.contains(_fmt(d));
               final isToday = _fmt(d) == _fmt(today);
+              // Stage 1 — dim days the habit isn't scheduled for so a "miss"
+              // on an off-day doesn't read as failure. weekly:N counts any day,
+              // so all days stay active.
+              final scheduled = isScheduledOn(habit, d,
+                  firstLog: firstLogDate(logDates));
+              final emptyColor = scheduled
+                  ? sc.border.withValues(alpha: 0.25)
+                  : sc.border.withValues(alpha: 0.08);
               return Expanded(
-                child: Column(
+                child: Opacity(
+                  opacity: scheduled || done ? 1 : 0.4,
+                  child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
@@ -650,7 +726,7 @@ class _WeekViewHabitCard extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(4),
                         color: done
                             ? accentColor.withValues(alpha: 0.80)
-                            : sc.border.withValues(alpha: 0.25),
+                            : emptyColor,
                         border: isToday
                             ? Border.all(color: accentColor.withValues(alpha: 0.70), width: 1)
                             : null,
@@ -668,6 +744,7 @@ class _WeekViewHabitCard extends ConsumerWidget {
                       ),
                     ),
                   ],
+                ),
                 ),
               );
             }).toList(),
@@ -1454,7 +1531,8 @@ class _AddButtonState extends ConsumerState<_AddButton>
 // ─────────────────────────────────────────────────────────────────────────────
 class _HabitDialog extends ConsumerStatefulWidget {
   final Habit? existing;
-  final void Function(String title, String? description, String color, String? icon) onSave;
+  final void Function(String title, String? description, String color,
+      String? icon, String schedule) onSave;
 
   const _HabitDialog({this.existing, required this.onSave});
 
@@ -1467,6 +1545,50 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
   late final TextEditingController _descCtrl;
   late String _selectedColor;
   String? _selectedIcon;
+
+  // Stage 1 — schedule editor state.
+  String _scheduleMode = 'daily'; // daily | weekdays | weekly | interval
+  Set<int> _weekdays = {1, 3, 5}; // ISO Mon=1 … Sun=7
+  int _weeklyCount = 3;
+  int _intervalDays = 2;
+
+  void _parseSchedule(String s) {
+    if (s.startsWith('weekdays:')) {
+      _scheduleMode = 'weekdays';
+      final days = s
+          .substring('weekdays:'.length)
+          .split(',')
+          .map((e) => int.tryParse(e.trim()))
+          .whereType<int>()
+          .toSet();
+      if (days.isNotEmpty) _weekdays = days;
+    } else if (s.startsWith('weekly:')) {
+      _scheduleMode = 'weekly';
+      _weeklyCount =
+          (int.tryParse(s.substring('weekly:'.length)) ?? 3).clamp(1, 7);
+    } else if (s.startsWith('interval:')) {
+      _scheduleMode = 'interval';
+      _intervalDays =
+          (int.tryParse(s.substring('interval:'.length)) ?? 2).clamp(2, 30);
+    } else {
+      _scheduleMode = 'daily';
+    }
+  }
+
+  String _composeSchedule() {
+    switch (_scheduleMode) {
+      case 'weekdays':
+        final sorted = _weekdays.toList()..sort();
+        if (sorted.isEmpty) return 'daily';
+        return 'weekdays:${sorted.join(',')}';
+      case 'weekly':
+        return 'weekly:$_weeklyCount';
+      case 'interval':
+        return 'interval:$_intervalDays';
+      default:
+        return 'daily';
+    }
+  }
 
   static const _colorOptions = [
     '#5AADA0',
@@ -1495,6 +1617,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
     _descCtrl  = TextEditingController(text: widget.existing?.description ?? '');
     _selectedColor = widget.existing?.color ?? '#5AADA0';
     _selectedIcon  = widget.existing?.icon;
+    if (widget.existing != null) _parseSchedule(widget.existing!.schedule);
   }
 
   @override
@@ -1588,6 +1711,35 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
             accentColor: _toColor(_selectedColor),
             onSelect: (v) => setState(() => _selectedIcon = v),
           ),
+          const SizedBox(height: 20),
+          Text(
+            'SCHEDULE',
+            style: TextStyle(
+              color: sc.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _ScheduleEditor(
+            sc: sc,
+            accent: _toColor(_selectedColor),
+            mode: _scheduleMode,
+            weekdays: _weekdays,
+            weeklyCount: _weeklyCount,
+            intervalDays: _intervalDays,
+            onModeChanged: (m) => setState(() => _scheduleMode = m),
+            onToggleWeekday: (d) => setState(() {
+              if (_weekdays.contains(d)) {
+                if (_weekdays.length > 1) _weekdays = {..._weekdays}..remove(d);
+              } else {
+                _weekdays = {..._weekdays, d};
+              }
+            }),
+            onWeeklyChanged: (n) => setState(() => _weeklyCount = n),
+            onIntervalChanged: (n) => setState(() => _intervalDays = n),
+          ),
           const SizedBox(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -1611,6 +1763,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
                         : _descCtrl.text.trim(),
                     _selectedColor,
                     _selectedIcon,
+                    _composeSchedule(),
                   );
                   Navigator.of(context).pop();
                 },
@@ -1620,6 +1773,282 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
         ],
       ),
     ));
+  }
+}
+
+// ── "Не сегодня" collapsible header (Stage 1) ─────────────────
+
+class _NotTodayHeader extends StatelessWidget {
+  final SieColors sc;
+  final int count;
+  final bool expanded;
+  final VoidCallback onTap;
+
+  const _NotTodayHeader({
+    required this.sc,
+    required this.count,
+    required this.expanded,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Text(
+              'НЕ СЕГОДНЯ · $count',
+              style: TextStyle(
+                color: sc.textSecondary,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: Divider(color: sc.border, height: 1)),
+            const SizedBox(width: 8),
+            Icon(
+              expanded ? Icons.expand_less : Icons.expand_more,
+              size: 18,
+              color: sc.textSecondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Schedule Editor (Stage 1) ─────────────────────────────────
+
+class _ScheduleEditor extends StatelessWidget {
+  final SieColors sc;
+  final Color accent;
+  final String mode;
+  final Set<int> weekdays;
+  final int weeklyCount;
+  final int intervalDays;
+  final ValueChanged<String> onModeChanged;
+  final ValueChanged<int> onToggleWeekday;
+  final ValueChanged<int> onWeeklyChanged;
+  final ValueChanged<int> onIntervalChanged;
+
+  const _ScheduleEditor({
+    required this.sc,
+    required this.accent,
+    required this.mode,
+    required this.weekdays,
+    required this.weeklyCount,
+    required this.intervalDays,
+    required this.onModeChanged,
+    required this.onToggleWeekday,
+    required this.onWeeklyChanged,
+    required this.onIntervalChanged,
+  });
+
+  static const _modes = [
+    ('daily', 'Каждый день'),
+    ('weekdays', 'По дням'),
+    ('weekly', 'N раз в неделю'),
+    ('interval', 'Каждые N дней'),
+  ];
+  static const _dayLabels = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _modes.map((m) {
+            final sel = m.$1 == mode;
+            return GestureDetector(
+              onTap: () => onModeChanged(m.$1),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: sel
+                      ? accent.withValues(alpha: 0.16)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: sel ? accent : sc.border),
+                ),
+                child: Text(
+                  m.$2,
+                  style: TextStyle(
+                    color: sel ? accent : sc.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        if (mode == 'weekdays') ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 6,
+            children: List.generate(7, (i) {
+              final day = i + 1; // Mon=1 … Sun=7
+              final sel = weekdays.contains(day);
+              return GestureDetector(
+                onTap: () => onToggleWeekday(day),
+                child: Container(
+                  width: 38,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color:
+                        sel ? accent.withValues(alpha: 0.16) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: sel ? accent : sc.border),
+                  ),
+                  child: Text(
+                    _dayLabels[i],
+                    style: TextStyle(
+                      color: sel ? accent : sc.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
+        if (mode == 'weekly') ...[
+          const SizedBox(height: 12),
+          _StepperRow(
+            sc: sc,
+            accent: accent,
+            label: 'Раз в неделю',
+            value: weeklyCount,
+            suffix: weeklyCount == 1 ? 'раз' : 'раза',
+            min: 1,
+            max: 7,
+            onChanged: onWeeklyChanged,
+          ),
+        ],
+        if (mode == 'interval') ...[
+          const SizedBox(height: 12),
+          _StepperRow(
+            sc: sc,
+            accent: accent,
+            label: 'Интервал',
+            value: intervalDays,
+            suffix: 'дн.',
+            min: 2,
+            max: 30,
+            onChanged: onIntervalChanged,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Отсчёт — от первого выполнения',
+            style: TextStyle(color: sc.textSecondary, fontSize: 10),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _StepperRow extends StatelessWidget {
+  final SieColors sc;
+  final Color accent;
+  final String label;
+  final int value;
+  final String suffix;
+  final int min;
+  final int max;
+  final ValueChanged<int> onChanged;
+
+  const _StepperRow({
+    required this.sc,
+    required this.accent,
+    required this.label,
+    required this.value,
+    required this.suffix,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(label,
+              style: TextStyle(color: sc.textPrimary, fontSize: 13)),
+        ),
+        _RoundStep(
+          sc: sc,
+          accent: accent,
+          icon: Icons.remove,
+          enabled: value > min,
+          onTap: () => onChanged(value - 1),
+        ),
+        Container(
+          width: 64,
+          alignment: Alignment.center,
+          child: Text(
+            '$value $suffix',
+            style: TextStyle(
+                color: accent, fontSize: 14, fontWeight: FontWeight.w700),
+          ),
+        ),
+        _RoundStep(
+          sc: sc,
+          accent: accent,
+          icon: Icons.add,
+          enabled: value < max,
+          onTap: () => onChanged(value + 1),
+        ),
+      ],
+    );
+  }
+}
+
+class _RoundStep extends StatelessWidget {
+  final SieColors sc;
+  final Color accent;
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _RoundStep({
+    required this.sc,
+    required this.accent,
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: 34,
+        height: 34,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: enabled ? accent : sc.border),
+        ),
+        child: Icon(icon,
+            size: 18, color: enabled ? accent : sc.textSecondary),
+      ),
+    );
   }
 }
 
@@ -3136,13 +3565,14 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                         isScrollControlled: true,
                         builder: (_) => _HabitDialog(
                           existing: widget.habit,
-                          onSave: (title, description, color, icon) {
+                          onSave: (title, description, color, icon, schedule) {
                             ref.read(habitsProvider.notifier).updateHabit(
                                   habitId: widget.habit.id,
                                   title: title,
                                   description: description,
                                   color: color,
                                   icon: icon,
+                                  schedule: schedule,
                                 );
                           },
                         ),

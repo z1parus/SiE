@@ -74,6 +74,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
             icon: Value(h.icon),
             isPinned: Value(h.isPinned),
             isArchived: Value(h.isArchived),
+            schedule: Value(h.schedule),
             createdAtMs: Value(h.createdAt.millisecondsSinceEpoch),
             synced: const Value(true),
           ));
@@ -100,7 +101,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         }
 
         final streaks = <String, int>{
-          for (final h in habits) h.id: _streak(logDates[h.id] ?? {}),
+          for (final h in habits) h.id: scheduleAwareStreak(h, logDates[h.id] ?? {}),
         };
         return HabitsState(
             habits: habits,
@@ -126,6 +127,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
               icon: h.icon,
               isPinned: h.isPinned,
               isArchived: h.isArchived,
+              schedule: h.schedule,
               createdAt:
                   DateTime.fromMillisecondsSinceEpoch(h.createdAtMs),
             ))
@@ -149,7 +151,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     }
 
     final streaks = <String, int>{
-      for (final h in habits) h.id: _streak(logDates[h.id] ?? {}),
+      for (final h in habits) h.id: scheduleAwareStreak(h, logDates[h.id] ?? {}),
     };
     return HabitsState(
         habits: habits,
@@ -158,14 +160,15 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         logEntries: logEntries);
   }
 
-  int _streak(Set<String> dates) {
-    var n = 0;
-    var day = DateTime.now();
-    while (dates.contains(_fmt(day))) {
-      n++;
-      day = day.subtract(const Duration(days: 1));
+  /// Schedule-aware streak for a habit identified by [habitId]. Looks up the
+  /// habit in current state to honour its schedule; falls back to daily if not
+  /// found (e.g. brand-new optimistic insert).
+  int _streakById(String habitId, Set<String> dates) {
+    final habits = state.valueOrNull?.habits ?? const <Habit>[];
+    for (final h in habits) {
+      if (h.id == habitId) return scheduleAwareStreak(h, dates);
     }
-    return n;
+    return dates.isEmpty ? 0 : dates.length;
   }
 
   // Returns true if the first-habit achievement was just awarded.
@@ -174,6 +177,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     String? description,
     String color = '#00C8FF',
     String? icon,
+    String schedule = 'daily',
   }) async {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
@@ -194,6 +198,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       description: description,
       color: color,
       icon: icon,
+      schedule: schedule,
       createdAt: now,
     );
     if (prev != null) {
@@ -213,6 +218,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       description: Value(description),
       color: Value(color),
       icon: Value(icon),
+      schedule: Value(schedule),
       createdAtMs: Value(now.millisecondsSinceEpoch),
       synced: Value(isOnline),
     ));
@@ -227,6 +233,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
             'description': description,
           'color': color,
           if (icon != null) 'icon': icon,
+          'schedule': schedule,
         });
         state = AsyncData(await _load());
         if (isFirstHabit) {
@@ -242,6 +249,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
             'description': description,
           'color': color,
           if (icon != null) 'icon': icon,
+          'schedule': schedule,
         }));
         state = AsyncData(await _load());
       }
@@ -260,6 +268,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     String? description,
     required String color,
     Object? icon = _noChange,
+    String? schedule,
   }) async {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
@@ -278,13 +287,20 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       description: description,
       color: color,
       icon: icon,
+      schedule: schedule,
     );
     final newHabits = [...prev.habits]..[idx] = updated;
+    final resolvedSchedule = schedule ?? prev.habits[idx].schedule;
 
     state = AsyncData(HabitsState(
       habits: newHabits,
       logDates: prev.logDates,
-      streaks: prev.streaks,
+      // Schedule change can flip the streak — recompute for this habit.
+      streaks: {
+        ...prev.streaks,
+        habitId:
+            scheduleAwareStreak(updated, prev.logDates[habitId] ?? const {}),
+      },
       logEntries: prev.logEntries,
     ));
 
@@ -297,6 +313,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       description: Value(description?.isNotEmpty == true ? description : null),
       color: Value(color),
       icon: Value(resolvedIcon),
+      schedule: Value(resolvedSchedule),
       createdAtMs: Value(
           prev.habits[idx].createdAt.millisecondsSinceEpoch),
       synced: Value(isOnline),
@@ -312,6 +329,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
             'description': null,
           'color': color,
           if (resolvedIcon != null) 'icon': resolvedIcon,
+          'schedule': resolvedSchedule,
         }).eq('id', habitId).eq('user_id', userId);
       } else {
         await db.enqueueSyncOp('update_habit', jsonEncode({
@@ -321,6 +339,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
               description?.isNotEmpty == true ? description : null,
           'color': color,
           if (resolvedIcon != null) 'icon': resolvedIcon,
+          'schedule': resolvedSchedule,
         }));
       }
     } catch (e, st) {
@@ -494,7 +513,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     state = AsyncData(HabitsState(
       habits: prev.habits,
       logDates: newLogDates,
-      streaks: {...prev.streaks, habitId: _streak(habitDates)},
+      streaks: {...prev.streaks, habitId: _streakById(habitId, habitDates)},
       logEntries: newLogEntries,
     ));
 
@@ -673,7 +692,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       habits: prev.habits,
       logDates: updatedLogDates,
       streaks: idx < 0
-          ? {...prev.streaks, habitId: _streak(updatedLogDates[habitId] ?? {})}
+          ? {...prev.streaks, habitId: _streakById(habitId, updatedLogDates[habitId] ?? {})}
           : prev.streaks,
       logEntries: updatedEntries,
     ));
@@ -832,6 +851,7 @@ final archivedHabitsProvider =
             icon: h.icon,
             isPinned: h.isPinned,
             isArchived: true,
+            schedule: h.schedule,
             createdAt: DateTime.fromMillisecondsSinceEpoch(h.createdAtMs),
           ))
       .toList();
