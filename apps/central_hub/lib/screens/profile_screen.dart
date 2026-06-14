@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 
+import 'customization_screen.dart';
 import 'edit_profile_screen.dart';
 import 'friends_list_screen.dart';
 import 'knowledge_base_screen.dart';
@@ -210,7 +211,7 @@ class _ProfileContent extends ConsumerWidget {
                     ),
                   ],
                   const SizedBox(height: 20),
-                  // Progress Hub + База Знаний — square 2-column grid
+                  // Progress Hub + База Знаний + Облик — square nav grid
                   Row(
                     children: [
                       Expanded(
@@ -234,6 +235,22 @@ class _ProfileContent extends ConsumerWidget {
                           ),
                         ),
                       ),
+                      if (profile != null) ...[
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _SquareNavButton(
+                            icon: Icons.palette_outlined,
+                            label: 'ОБЛИК',
+                            iconColor: c.accent,
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    CustomizationScreen(profile: profile!),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 28),

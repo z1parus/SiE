@@ -350,9 +350,9 @@ class _AchievementsSection extends ConsumerWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 6,
-            crossAxisSpacing: 6,
-            mainAxisSpacing: 6,
+            crossAxisCount: 4,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
             childAspectRatio: 1.0,
           ),
           itemCount: achievements.length,
@@ -586,12 +586,34 @@ class _PublicMedalsSection extends ConsumerWidget {
 
 // ── Friend Action Section ─────────────────────────────────────────────────────
 
-class _FriendActionSection extends ConsumerWidget {
+class _FriendActionSection extends ConsumerStatefulWidget {
   final PublicProfile profile;
   const _FriendActionSection({required this.profile});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_FriendActionSection> createState() =>
+      _FriendActionSectionState();
+}
+
+class _FriendActionSectionState extends ConsumerState<_FriendActionSection> {
+  bool _busy = false;
+
+  Future<void> _run(Future<void> Function() action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await action();
+      SieHaptics.success();
+    } catch (_) {
+      SieHaptics.warning();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = widget.profile;
     final myId = Supabase.instance.client.auth.currentUser?.id;
     if (myId == null || myId == profile.id) return const SizedBox.shrink();
 
@@ -610,13 +632,11 @@ class _FriendActionSection extends ConsumerWidget {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-      child: _buildButtons(context, ref, friend, sent, received),
+      child: _buildButtons(friend, sent, received),
     );
   }
 
   Widget _buildButtons(
-    BuildContext ctx,
-    WidgetRef ref,
     FriendRow? friend,
     FriendRow? sent,
     FriendRow? received,
@@ -628,7 +648,8 @@ class _FriendActionSection extends ConsumerWidget {
         label: 'Удалить из друзей',
         icon: Icons.person_remove_outlined,
         filled: false,
-        onTap: () => _confirmRemove(ctx, ref, friend.friendshipId),
+        busy: _busy,
+        onTap: () => _confirmRemove(friend.friendshipId),
       );
     }
     if (sent != null) {
@@ -636,7 +657,8 @@ class _FriendActionSection extends ConsumerWidget {
         label: 'Отменить запрос',
         icon: Icons.cancel_outlined,
         filled: false,
-        onTap: () => notifier.cancelRequest(sent.friendshipId),
+        busy: _busy,
+        onTap: () => _run(() => notifier.cancelRequest(sent.friendshipId)),
       );
     }
     if (received != null) {
@@ -646,16 +668,18 @@ class _FriendActionSection extends ConsumerWidget {
             label: 'Принять запрос',
             icon: Icons.check,
             filled: true,
-            onTap: () => notifier.acceptRequest(received.friendshipId),
+            busy: _busy,
+            onTap: () => _run(() => notifier.acceptRequest(received.friendshipId)),
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         Expanded(
           child: _SocialBtn(
             label: 'Отклонить',
             icon: Icons.close,
             filled: false,
-            onTap: () => notifier.declineRequest(received.friendshipId),
+            busy: _busy,
+            onTap: () => _run(() => notifier.declineRequest(received.friendshipId)),
           ),
         ),
       ]);
@@ -664,16 +688,20 @@ class _FriendActionSection extends ConsumerWidget {
       label: 'Добавить в друзья',
       icon: Icons.person_add_outlined,
       filled: true,
-      onTap: () => notifier.sendRequest(profile.id),
+      busy: _busy,
+      onTap: () => _run(() => notifier.sendRequest(profile.id)),
     );
   }
 
-  Future<void> _confirmRemove(
-      BuildContext ctx, WidgetRef ref, String friendshipId) async {
+  Future<void> _confirmRemove(String friendshipId) async {
     final ok = await showDialog<bool>(
-      context: ctx,
+      context: context,
       builder: (d) => AlertDialog(
         title: const Text('Удалить из друзей?'),
+        content: Text(
+          'Убрать ${widget.profile.username ?? 'этого оперативника'} '
+          'из списка друзей?',
+        ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(d, false),
@@ -685,7 +713,8 @@ class _FriendActionSection extends ConsumerWidget {
       ),
     );
     if (ok == true) {
-      ref.read(friendsProvider.notifier).removeFriend(friendshipId);
+      await _run(
+          () => ref.read(friendsProvider.notifier).removeFriend(friendshipId));
     }
   }
 }
@@ -694,44 +723,64 @@ class _SocialBtn extends ConsumerWidget {
   final String label;
   final IconData icon;
   final bool filled;
+  final bool busy;
   final VoidCallback onTap;
 
   const _SocialBtn({
     required this.label,
     required this.icon,
     required this.filled,
+    required this.busy,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 40,
-        decoration: BoxDecoration(
-          color: filled ? c.accent.withValues(alpha: 0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: filled
-                  ? c.accent.withValues(alpha: 0.5)
-                  : c.border),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: filled ? c.accent : c.textSecondary, size: 15),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: filled ? c.accent : c.textSecondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
+    final fg = filled ? c.accent : c.textSecondary;
+    return Semantics(
+      button: true,
+      enabled: !busy,
+      label: label,
+      child: GestureDetector(
+        onTap: busy ? null : onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Opacity(
+          opacity: busy ? 0.6 : 1.0,
+          child: Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color:
+                  filled ? c.accent.withValues(alpha: 0.1) : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: filled ? c.accent.withValues(alpha: 0.5) : c.border),
             ),
-          ],
+            child: busy
+                ? Center(
+                    child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          color: fg, strokeWidth: 1.5),
+                    ),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(icon, color: fg, size: 15),
+                      const SizedBox(width: 8),
+                      Text(
+                        label,
+                        style: TextStyle(
+                          color: fg,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
         ),
       ),
     );
