@@ -154,6 +154,22 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                       builder: (_) => HabitDetailScreen(habit: habit),
                     ),
                   );
+                  // Stage 7 — avoid habits use a dedicated "shield" card with
+                  // an abstinence counter and a "Был срыв" action.
+                  if (habit.isAvoid) {
+                    final lapses = state.lapseDates[habit.id] ?? const {};
+                    return _AvoidHabitCard(
+                      key: ValueKey('av_${habit.id}'),
+                      habit: habit,
+                      cleanDays: state.streaks[habit.id] ?? 0,
+                      recordDays: longestClean(habit, lapses),
+                      lapsedToday: lapses.contains(today),
+                      onTap: onTapDetail,
+                      onLapse: () => ref
+                          .read(habitsProvider.notifier)
+                          .recordLapse(habit.id, DateTime.now()),
+                    );
+                  }
                   if (_viewMode == HabitViewMode.week) {
                     return _WeekViewHabitCard(
                       key: ValueKey('w_${habit.id}'),
@@ -356,7 +372,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
       builder: (_) => _HabitDialog(
         existing: existing,
         onSave: (title, description, color, icon, schedule, kind,
-            targetValue, unit, step, reminderTime, area) {
+            targetValue, unit, step, reminderTime, area, polarity) {
           if (existing == null) {
             ref
                 .read(habitsProvider.notifier)
@@ -371,7 +387,8 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                     unit: unit,
                     step: step,
                     reminderTime: reminderTime,
-                    area: area)
+                    area: area,
+                    polarity: polarity)
                 .then((awarded) {
               if (awarded && mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -427,6 +444,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                   step: step,
                   reminderTime: reminderTime,
                   area: area,
+                  polarity: polarity,
                 );
           }
         },
@@ -1710,7 +1728,8 @@ class _HabitDialog extends ConsumerStatefulWidget {
   final Habit? existing;
   final void Function(String title, String? description, String color,
       String? icon, String schedule, String kind, double? targetValue,
-      String? unit, double? step, String? reminderTime, LifeArea? area) onSave;
+      String? unit, double? step, String? reminderTime, LifeArea? area,
+      String polarity) onSave;
 
   const _HabitDialog({this.existing, required this.onSave});
 
@@ -1724,6 +1743,8 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
   late String _selectedColor;
   String? _selectedIcon;
   LifeArea? _selectedArea;
+  // Stage 7 — polarity: 'build' (develop) | 'avoid' (break a bad habit).
+  String _polarity = 'build';
 
   // Stage 1 — schedule editor state.
   String _scheduleMode = 'daily'; // daily | weekdays | weekly | interval
@@ -1808,6 +1829,7 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
     _selectedColor = widget.existing?.color ?? '#5AADA0';
     _selectedIcon  = widget.existing?.icon;
     _selectedArea  = widget.existing?.area;
+    _polarity      = widget.existing?.polarity ?? 'build';
     if (widget.existing != null) {
       _parseSchedule(widget.existing!.schedule);
       _kind = widget.existing!.kind;
@@ -1878,6 +1900,51 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
               controller: _descCtrl,
               label: 'DESCRIPTION (OPTIONAL)'),
           const SizedBox(height: 20),
+          // ── Polarity (Stage 7) ───────────────────────────────────────
+          Text(
+            'ПОЛЯРНОСТЬ',
+            style: TextStyle(
+              color: sc.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _PolarityOption(
+                sc: sc,
+                accent: _toColor(_selectedColor),
+                icon: Icons.trending_up,
+                label: 'Развивать',
+                selected: _polarity == 'build',
+                onTap: () => setState(() => _polarity = 'build'),
+              ),
+              const SizedBox(width: 8),
+              _PolarityOption(
+                sc: sc,
+                accent: const Color(0xFF6FA8DC),
+                icon: Icons.shield_outlined,
+                label: 'Избавиться',
+                selected: _polarity == 'avoid',
+                onTap: () => setState(() => _polarity = 'avoid'),
+              ),
+            ],
+          ),
+          if (_polarity == 'avoid') ...[
+            const SizedBox(height: 8),
+            Text(
+              'Успех — это день без срыва. Счётчик «N дней без…» растёт сам; '
+              'кнопка на карточке — «Был срыв».',
+              style: TextStyle(
+                color: sc.textSecondary.withValues(alpha: 0.7),
+                fontSize: 11,
+                height: 1.35,
+              ),
+            ),
+          ],
+          const SizedBox(height: 20),
           Text(
             'COLOR',
             style: TextStyle(
@@ -1915,67 +1982,71 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
             accentColor: _toColor(_selectedColor),
             onSelect: (v) => setState(() => _selectedIcon = v),
           ),
-          const SizedBox(height: 20),
-          Text(
-            'ТИП',
-            style: TextStyle(
-              color: sc.textSecondary,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 2.5,
+          // ТИП and SCHEDULE only apply to "build" habits — avoid habits are
+          // binary and continuous (success = a day without a lapse).
+          if (_polarity == 'build') ...[
+            const SizedBox(height: 20),
+            Text(
+              'ТИП',
+              style: TextStyle(
+                color: sc.textSecondary,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 2.5,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          _HabitTypeEditor(
-            sc: sc,
-            accent: _toColor(_selectedColor),
-            kind: _kind,
-            targetValue: _targetValue,
-            unit: _unit,
-            step: _step,
-            onKindChanged: (k) => setState(() {
-              _kind = k;
-              if (k == 'duration') {
-                _targetValue = 20 * 60; // 20 min in seconds
-                _step = 300;
-              } else {
-                _targetValue = 8;
-                _step = 1;
-              }
-            }),
-            onTargetChanged: (v) => setState(() => _targetValue = v),
-            onUnitChanged: (v) => setState(() => _unit = v),
-            onStepChanged: (v) => setState(() => _step = v),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'SCHEDULE',
-            style: TextStyle(
-              color: sc.textSecondary,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 2.5,
+            const SizedBox(height: 8),
+            _HabitTypeEditor(
+              sc: sc,
+              accent: _toColor(_selectedColor),
+              kind: _kind,
+              targetValue: _targetValue,
+              unit: _unit,
+              step: _step,
+              onKindChanged: (k) => setState(() {
+                _kind = k;
+                if (k == 'duration') {
+                  _targetValue = 20 * 60; // 20 min in seconds
+                  _step = 300;
+                } else {
+                  _targetValue = 8;
+                  _step = 1;
+                }
+              }),
+              onTargetChanged: (v) => setState(() => _targetValue = v),
+              onUnitChanged: (v) => setState(() => _unit = v),
+              onStepChanged: (v) => setState(() => _step = v),
             ),
-          ),
-          const SizedBox(height: 8),
-          _ScheduleEditor(
-            sc: sc,
-            accent: _toColor(_selectedColor),
-            mode: _scheduleMode,
-            weekdays: _weekdays,
-            weeklyCount: _weeklyCount,
-            intervalDays: _intervalDays,
-            onModeChanged: (m) => setState(() => _scheduleMode = m),
-            onToggleWeekday: (d) => setState(() {
-              if (_weekdays.contains(d)) {
-                if (_weekdays.length > 1) _weekdays = {..._weekdays}..remove(d);
-              } else {
-                _weekdays = {..._weekdays, d};
-              }
-            }),
-            onWeeklyChanged: (n) => setState(() => _weeklyCount = n),
-            onIntervalChanged: (n) => setState(() => _intervalDays = n),
-          ),
+            const SizedBox(height: 20),
+            Text(
+              'SCHEDULE',
+              style: TextStyle(
+                color: sc.textSecondary,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 2.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _ScheduleEditor(
+              sc: sc,
+              accent: _toColor(_selectedColor),
+              mode: _scheduleMode,
+              weekdays: _weekdays,
+              weeklyCount: _weeklyCount,
+              intervalDays: _intervalDays,
+              onModeChanged: (m) => setState(() => _scheduleMode = m),
+              onToggleWeekday: (d) => setState(() {
+                if (_weekdays.contains(d)) {
+                  if (_weekdays.length > 1) _weekdays = {..._weekdays}..remove(d);
+                } else {
+                  _weekdays = {..._weekdays, d};
+                }
+              }),
+              onWeeklyChanged: (n) => setState(() => _weeklyCount = n),
+              onIntervalChanged: (n) => setState(() => _intervalDays = n),
+            ),
+          ],
           const SizedBox(height: 20),
           Text(
             'REMINDER',
@@ -2099,6 +2170,10 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
                   final reminderTime = _reminderEnabled
                       ? '${_reminderHour.toString().padLeft(2, '0')}:${_reminderMinute.toString().padLeft(2, '0')}'
                       : null;
+                  final isAvoid = _polarity == 'avoid';
+                  final kind = isAvoid ? 'binary' : _kind;
+                  final schedule =
+                      isAvoid ? 'daily' : _composeSchedule();
                   widget.onSave(
                     title,
                     _descCtrl.text.trim().isEmpty
@@ -2106,13 +2181,14 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
                         : _descCtrl.text.trim(),
                     _selectedColor,
                     _selectedIcon,
-                    _composeSchedule(),
-                    _kind,
-                    _kind != 'binary' ? _targetValue : null,
-                    _kind == 'count' ? _unit : null,
-                    _kind != 'binary' ? _step : null,
+                    schedule,
+                    kind,
+                    !isAvoid && _kind != 'binary' ? _targetValue : null,
+                    !isAvoid && _kind == 'count' ? _unit : null,
+                    !isAvoid && _kind != 'binary' ? _step : null,
                     reminderTime,
                     _selectedArea,
+                    _polarity,
                   );
                   Navigator.of(context).pop();
                 },
@@ -4137,7 +4213,8 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                         builder: (_) => _HabitDialog(
                           existing: widget.habit,
                           onSave: (title, description, color, icon, schedule,
-                              kind, targetValue, unit, step, reminderTime, area) {
+                              kind, targetValue, unit, step, reminderTime, area,
+                              polarity) {
                             ref.read(habitsProvider.notifier).updateHabit(
                                   habitId: widget.habit.id,
                                   title: title,
@@ -4151,6 +4228,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                                   step: step,
                                   reminderTime: reminderTime,
                                   area: area,
+                                  polarity: polarity,
                                 );
                           },
                         ),
@@ -4312,6 +4390,13 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
         .firstWhere((e) => e?.completedAt == today, orElse: () => null);
     final totalDone   = logDates.length;
 
+    // Stage 7 — avoid-habit specifics.
+    final isAvoid     = widget.habit.isAvoid;
+    final lapseDates  = habitsState?.lapseDates[widget.habit.id] ?? {};
+    final recordClean = longestClean(widget.habit, lapseDates);
+    final lapsedToday = lapseDates.contains(today);
+    final totalLapses = lapseDates.length;
+
     final now  = DateTime.now();
     final days = List.generate(7, (i) => now.subtract(Duration(days: 6 - i)));
 
@@ -4390,42 +4475,122 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
               // ── Stats strip ──────────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                child: Row(
-                  children: [
-                    _StatChip(
-                      label: 'STREAK',
-                      value: '$streak',
-                      accentColor: accentColor,
-                      subtitle: metrics.hasEnoughData ? 'рек. ${metrics.longestStreak}' : null,
-                    ),
-                    const SizedBox(width: 8),
-                    _StatChip(
-                      label: 'СЕГОДНЯ',
-                      value: completedToday ? 'ДА' : (restToday ? '❄️' : 'НЕТ'),
-                      accentColor: completedToday
-                          ? accentColor
-                          : restToday
-                              ? Colors.lightBlue
-                              : sc.textSecondary.withValues(alpha: 0.5),
-                    ),
-                    const SizedBox(width: 8),
-                    _StatChip(
-                      label: '❄️ ФРИЗЫ',
-                      value: '$freezesLeft',
-                      accentColor: freezesLeft > 0
-                          ? Colors.lightBlue
-                          : sc.textSecondary.withValues(alpha: 0.4),
-                    ),
-                    const SizedBox(width: 8),
-                    _StatChip(
-                      label: 'ВСЕГО',
-                      value: '$totalDone',
-                      accentColor: accentColor,
-                    ),
-                  ],
-                ),
+                child: isAvoid
+                    ? Row(
+                        children: [
+                          _StatChip(
+                            label: 'ДНЕЙ БЕЗ СРЫВА',
+                            value: '$streak',
+                            accentColor: accentColor,
+                          ),
+                          const SizedBox(width: 8),
+                          _StatChip(
+                            label: 'РЕКОРД',
+                            value: '$recordClean',
+                            accentColor: accentColor,
+                          ),
+                          const SizedBox(width: 8),
+                          _StatChip(
+                            label: 'СРЫВОВ',
+                            value: '$totalLapses',
+                            accentColor: totalLapses > 0
+                                ? const Color(0xFFD98C6F)
+                                : sc.textSecondary.withValues(alpha: 0.5),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          _StatChip(
+                            label: 'STREAK',
+                            value: '$streak',
+                            accentColor: accentColor,
+                            subtitle: metrics.hasEnoughData ? 'рек. ${metrics.longestStreak}' : null,
+                          ),
+                          const SizedBox(width: 8),
+                          _StatChip(
+                            label: 'СЕГОДНЯ',
+                            value: completedToday ? 'ДА' : (restToday ? '❄️' : 'НЕТ'),
+                            accentColor: completedToday
+                                ? accentColor
+                                : restToday
+                                    ? Colors.lightBlue
+                                    : sc.textSecondary.withValues(alpha: 0.5),
+                          ),
+                          const SizedBox(width: 8),
+                          _StatChip(
+                            label: '❄️ ФРИЗЫ',
+                            value: '$freezesLeft',
+                            accentColor: freezesLeft > 0
+                                ? Colors.lightBlue
+                                : sc.textSecondary.withValues(alpha: 0.4),
+                          ),
+                          const SizedBox(width: 8),
+                          _StatChip(
+                            label: 'ВСЕГО',
+                            value: '$totalDone',
+                            accentColor: accentColor,
+                          ),
+                        ],
+                      ),
               ),
               // ── Today card ───────────────────────────────────────────────
+              if (isAvoid)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                  child: SieGlassCard(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              lapsedToday
+                                  ? Icons.refresh
+                                  : Icons.shield_outlined,
+                              color: accentColor,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                lapsedToday
+                                    ? 'Сегодня был срыв. Это часть пути — '
+                                        'завтра начинаем заново.'
+                                    : 'Держишься $streak '
+                                        '${_AvoidHabitCard._pluralDays(streak)}. '
+                                        'Продолжай в том же духе.',
+                                style: TextStyle(
+                                  color: sc.textSecondary,
+                                  fontSize: 12,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        _DetailActionBtn(
+                          label: lapsedToday ? 'СНЯТЬ СРЫВ' : 'БЫЛ СРЫВ',
+                          icon: lapsedToday
+                              ? Icons.undo
+                              : Icons.report_gmailerrorred_outlined,
+                          accentColor: lapsedToday
+                              ? sc.textSecondary.withValues(alpha: 0.7)
+                              : const Color(0xFFD98C6F),
+                          onTap: () {
+                            SieHaptics.light();
+                            ref
+                                .read(habitsProvider.notifier)
+                                .recordLapse(widget.habit.id, DateTime.now());
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
                 child: SieGlassCard(
@@ -4534,14 +4699,16 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                 ),
               ),
               // ── Analytics ────────────────────────────────────────────────
-              _HabitAnalyticsSection(
-                habit: widget.habit,
-                logDates: logDates,
-                logValues: logValues,
-                accentColor: accentColor,
-                sc: sc,
-                metrics: metrics,
-              ),
+              // Completion-based analytics don't apply to avoid habits.
+              if (!isAvoid)
+                _HabitAnalyticsSection(
+                  habit: widget.habit,
+                  logDates: logDates,
+                  logValues: logValues,
+                  accentColor: accentColor,
+                  sc: sc,
+                  metrics: metrics,
+                ),
               // ── Journal header ───────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
@@ -5154,6 +5321,298 @@ class _AreaSectionHeader extends StatelessWidget {
           letterSpacing: 2.5,
           fontWeight: FontWeight.w700,
         ),
+      ),
+    );
+  }
+}
+
+// ── Stage 7: Polarity Option (dialog) ─────────────────────────
+
+class _PolarityOption extends StatelessWidget {
+  final SieColors sc;
+  final Color accent;
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _PolarityOption({
+    required this.sc,
+    required this.accent,
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? accent : sc.border,
+              width: selected ? 1.5 : 1.0,
+            ),
+            color: selected ? accent.withValues(alpha: 0.12) : Colors.transparent,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon,
+                  size: 16,
+                  color: selected
+                      ? accent
+                      : sc.textSecondary.withValues(alpha: 0.7)),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: selected
+                        ? accent
+                        : sc.textSecondary.withValues(alpha: 0.7),
+                    fontSize: 12,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Stage 7: Avoid Habit Card ("щит" / abstinence counter) ────
+
+class _AvoidHabitCard extends ConsumerWidget {
+  final Habit habit;
+  final int cleanDays;
+  final int recordDays;
+  final bool lapsedToday;
+  final VoidCallback onTap;
+  final VoidCallback onLapse;
+
+  const _AvoidHabitCard({
+    super.key,
+    required this.habit,
+    required this.cleanDays,
+    required this.recordDays,
+    required this.lapsedToday,
+    required this.onTap,
+    required this.onLapse,
+  });
+
+  static Color _hex(String hex) {
+    final h = hex.replaceAll('#', '').padLeft(6, '0');
+    return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF6FA8DC);
+  }
+
+  static String _pluralDays(int n) {
+    final mod10 = n % 10;
+    final mod100 = n % 100;
+    if (mod10 == 1 && mod100 != 11) return 'день';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'дня';
+    return 'дней';
+  }
+
+  void _confirmLapse(BuildContext context, SieColors sc) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        margin: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: sc.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: sc.border),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              lapsedToday ? 'ОТМЕНИТЬ СРЫВ?' : 'ОТМЕТИТЬ СРЫВ?',
+              style: TextStyle(
+                color: sc.textPrimary,
+                fontSize: 13,
+                letterSpacing: 1.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              lapsedToday
+                  ? 'Сегодняшний срыв будет снят, счётчик восстановится.'
+                  : 'Срыв — часть пути. Твой рекорд $recordDays '
+                      '${_pluralDays(recordDays)}. Счётчик обнулится, и мы '
+                      'продолжаем дальше.',
+              style: TextStyle(
+                color: sc.textSecondary,
+                fontSize: 12,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _SheetTextBtn(
+                  label: 'ОТМЕНА',
+                  color: sc.textSecondary,
+                  onTap: () => Navigator.of(context).pop(),
+                ),
+                const SizedBox(width: 12),
+                _SheetTextBtn(
+                  label: lapsedToday ? 'СНЯТЬ' : 'БЫЛ СРЫВ',
+                  color: const Color(0xFFD98C6F),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    SieHaptics.light();
+                    onLapse();
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+    final accent = _hex(habit.color);
+    return SieGlassCard(
+      onTap: onTap,
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+      child: Row(
+        children: [
+          // Shield emblem.
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: accent.withValues(alpha: 0.12),
+              border: Border.all(color: accent.withValues(alpha: 0.4)),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              lapsedToday ? Icons.refresh : Icons.shield_outlined,
+              color: accent,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    if (habit.icon != null) ...[
+                      Text(habit.icon!, style: const TextStyle(fontSize: 13)),
+                      const SizedBox(width: 6),
+                    ],
+                    Expanded(
+                      child: Text(
+                        habit.title.toUpperCase(),
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: sc.textPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      '$cleanDays',
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        height: 1.0,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        '${_pluralDays(cleanDays)} без срыва',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: sc.textSecondary.withValues(alpha: 0.8),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (recordDays > cleanDays) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'рекорд: $recordDays ${_pluralDays(recordDays)}',
+                    style: TextStyle(
+                      color: sc.textSecondary.withValues(alpha: 0.5),
+                      fontSize: 9,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // "Был срыв" action.
+          GestureDetector(
+            onTap: () => _confirmLapse(context, sc),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: lapsedToday
+                      ? const Color(0xFFD98C6F)
+                      : sc.border,
+                ),
+                color: lapsedToday
+                    ? const Color(0xFFD98C6F).withValues(alpha: 0.12)
+                    : Colors.transparent,
+              ),
+              child: Text(
+                lapsedToday ? 'СРЫВ ✓' : 'СРЫВ',
+                style: TextStyle(
+                  color: lapsedToday
+                      ? const Color(0xFFD98C6F)
+                      : sc.textSecondary.withValues(alpha: 0.7),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
