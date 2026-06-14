@@ -169,6 +169,12 @@ class SyncService {
               'weight': payload['weight'] ?? 1,
               'order_index': payload['order_index'] ?? localTask?.orderIndex ?? 0,
               if (payload['due_date'] != null) 'due_date': payload['due_date'],
+              if (payload['recurrence_rule'] != null)
+                'recurrence_rule': payload['recurrence_rule'],
+              if (payload['recurrence_until'] != null)
+                'recurrence_until': payload['recurrence_until'],
+              if (payload['recurrence_parent_id'] != null)
+                'recurrence_parent_id': payload['recurrence_parent_id'],
               'is_completed': localTask?.isCompleted ?? false,
               if (localTask?.completedAtMs != null)
                 'completed_at': DateTime.fromMillisecondsSinceEpoch(
@@ -182,6 +188,18 @@ class SyncService {
               'is_completed': isCompleted,
               'completed_at': payload['completed_at'],
             }).eq('id', payload['id'] as String);
+            await _db.updatePlanningTask(payload['id'] as String,
+                const LocalPlanningTasksCompanion(synced: Value(true)));
+          case 'reschedule_task':
+            await client.from('planning_tasks').update({
+              'due_date': payload['due_date'],
+            }).eq('id', payload['id'] as String).eq('user_id', userId);
+            await _db.updatePlanningTask(payload['id'] as String,
+                const LocalPlanningTasksCompanion(synced: Value(true)));
+          case 'end_recurrence':
+            await client.from('planning_tasks').update({
+              'recurrence_rule': null,
+            }).eq('id', payload['id'] as String).eq('user_id', userId);
             await _db.updatePlanningTask(payload['id'] as String,
                 const LocalPlanningTasksCompanion(synced: Value(true)));
           case 'delete_task':
@@ -199,9 +217,31 @@ class SyncService {
               'name': payload['name'],
               if (payload['target_date'] != null) 'target_date': payload['target_date'],
               'is_completed': localMs?.isCompleted ?? false,
+              'kind': payload['kind'] ?? 'binary',
+              if (payload['unit'] != null) 'unit': payload['unit'],
+              if (payload['start_value'] != null) 'start_value': payload['start_value'],
+              if (payload['target_value'] != null) 'target_value': payload['target_value'],
+              if (payload['current_value'] != null) 'current_value': payload['current_value'],
+              'direction': payload['direction'] ?? 'up',
             }, onConflict: 'id');
             await _db.upsertMilestone(LocalMilestonesCompanion(
                 id: Value(msId), synced: const Value(true)));
+          case 'insert_milestone_log':
+            await client.from('milestone_logs').upsert({
+              'id': payload['id'],
+              'milestone_id': payload['milestone_id'],
+              'user_id': payload['user_id'],
+              'value': payload['value'],
+              'recorded_at': payload['recorded_at'],
+            }, onConflict: 'id');
+            await _db.insertMilestoneLog(LocalMilestoneLogsCompanion(
+                id: Value(payload['id'] as String),
+                synced: const Value(true)));
+          case 'delete_milestone_log':
+            await client
+                .from('milestone_logs')
+                .delete()
+                .eq('id', payload['id'] as String);
           case 'complete_milestone':
             await client
                 .from('milestones')
@@ -214,6 +254,58 @@ class SyncService {
                 .from('milestones')
                 .delete()
                 .eq('id', payload['id'] as String);
+          case 'insert_goal_snapshot':
+            await client.from('goal_progress_snapshots').upsert({
+              'id': payload['id'],
+              'goal_id': payload['goal_id'],
+              'user_id': payload['user_id'],
+              'progress': payload['progress'],
+              'completed_tasks': payload['completed_tasks'],
+              'total_tasks': payload['total_tasks'],
+              'captured_at': payload['captured_at'],
+            }, onConflict: 'id');
+            await _db.markGoalSnapshotSynced(payload['id'] as String);
+          case 'insert_mission_template':
+            await client.from('mission_templates').upsert({
+              'id': payload['id'],
+              if (payload['user_id'] != null) 'user_id': payload['user_id'],
+              'name': payload['name'],
+              if (payload['description'] != null)
+                'description': payload['description'],
+              if (payload['category'] != null) 'category': payload['category'],
+              'is_system': payload['is_system'] ?? false,
+              'is_public': payload['is_public'] ?? false,
+              'color_hex': payload['color_hex'] ?? '#5AADA0',
+              'structure_json': payload['structure_json'],
+              'created_at': payload['created_at'],
+            }, onConflict: 'id');
+            await _db.markMissionTemplateSynced(payload['id'] as String);
+          case 'insert_weekly_review':
+            // RPC is idempotent per (user, week_start) and updates the streak.
+            await client.rpc('log_weekly_review', params: {
+              'p_week_start': payload['week_start'],
+              'p_completed_tasks': payload['completed_tasks'] ?? 0,
+              'p_notes': payload['notes'],
+              'p_focus_goal_ids': payload['focus_goal_ids'] ?? const [],
+            });
+            await _db.markWeeklyReviewSynced(payload['id'] as String);
+          case 'insert_dependency':
+            await client.from('task_dependencies').upsert({
+              'task_id': payload['task_id'],
+              'depends_on_task_id': payload['depends_on_task_id'],
+              'goal_id': payload['goal_id'],
+              'user_id': payload['user_id'],
+            }, onConflict: 'task_id,depends_on_task_id');
+            await _db.markTaskDependencySynced(
+                payload['task_id'] as String,
+                payload['depends_on_task_id'] as String);
+          case 'delete_dependency':
+            await client
+                .from('task_dependencies')
+                .delete()
+                .eq('task_id', payload['task_id'] as String)
+                .eq('depends_on_task_id',
+                    payload['depends_on_task_id'] as String);
           case 'insert_habit_link':
             await client.from('goal_habit_links').upsert({
               'id': payload['id'],
@@ -325,6 +417,8 @@ class SyncService {
           'duration_seconds': s.durationSeconds,
           'is_completed': true,
           'xp_gained': s.xpAwarded,
+          if (s.taskId != null) 'task_id': s.taskId,
+          if (s.goalId != null) 'goal_id': s.goalId,
         }, onConflict: 'id');
         await _db.markFocusSessionSynced(s.id);
       } catch (e) {

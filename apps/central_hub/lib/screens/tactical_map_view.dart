@@ -617,6 +617,21 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
         final lp = _positions[l.id];
         if (lp != null) edges.add(_Edge(goalPos, lp, _EType.goalHabit));
       }
+      // Dependency edges (Stage 8): predecessor → dependent (arrow points to
+      // the task that gets unblocked). Drawn last so they sit atop hierarchy.
+      for (final sg in _flat) {
+        for (final t in sg.tasks) {
+          if (t.dependsOn.isEmpty) continue;
+          final dstPos = _positions[t.id];
+          if (dstPos == null) continue;
+          for (final depId in t.dependsOn) {
+            final srcPos = _positions[depId];
+            if (srcPos != null) {
+              edges.add(_Edge(srcPos, dstPos, _EType.dependency));
+            }
+          }
+        }
+      }
       return edges;
     }
 
@@ -950,7 +965,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
 
 // ─── Edge types & data ────────────────────────────────────────────────────────
 
-enum _EType { goalSub, subSub, subTask, goalMs, goalHabit }
+enum _EType { goalSub, subSub, subTask, goalMs, goalHabit, dependency }
 
 class _Edge {
   const _Edge(this.src, this.dst, this.type, {this.fogHidden = false});
@@ -1004,6 +1019,7 @@ class _EdgePainter extends CustomPainter {
         _EType.subTask => (c.border.withValues(alpha: 0.8), 1.5, false),
         _EType.goalMs => (c.accentSecondary.withValues(alpha: 0.45), 1.5, true),
         _EType.goalHabit => (c.dp.withValues(alpha: 0.35), 1.2, false),
+        _EType.dependency => (c.warning.withValues(alpha: 0.7), 1.6, true),
       };
       if (e.fogHidden) {
         color = color.withValues(alpha: color.a * 0.4);
@@ -1019,6 +1035,20 @@ class _EdgePainter extends CustomPainter {
       final diff = dst - src;
       final dist = diff.distance;
       if (dist < 1) continue;
+
+      // Dependency edges are drawn as a straight dashed line with an arrowhead
+      // at the dependent end — visually distinct from hierarchical curves.
+      if (e.type == _EType.dependency) {
+        final dir = diff / dist;
+        // Stop short of the node so the arrow is visible.
+        final tip = dst - dir * 22.0;
+        final straight = Path()
+          ..moveTo(src.dx, src.dy)
+          ..lineTo(tip.dx, tip.dy);
+        _drawDashed(canvas, straight, paint);
+        _drawArrowHead(canvas, tip, dir, color);
+        continue;
+      }
       final px = -diff.dy / dist * dist * 0.28;
       final py = diff.dx / dist * dist * 0.28;
       final cp1 = Offset(src.dx + diff.dx * 0.38 + px, src.dy + diff.dy * 0.38 + py);
@@ -1052,6 +1082,19 @@ class _EdgePainter extends CustomPainter {
         draw = !draw;
       }
     }
+  }
+
+  // Filled triangle arrowhead at [tip], pointing along unit vector [dir].
+  void _drawArrowHead(Canvas canvas, Offset tip, Offset dir, Color color) {
+    const size = 9.0;
+    final back = tip - dir * size;
+    final normal = Offset(-dir.dy, dir.dx) * (size * 0.5);
+    final path = Path()
+      ..moveTo(tip.dx, tip.dy)
+      ..lineTo(back.dx + normal.dx, back.dy + normal.dy)
+      ..lineTo(back.dx - normal.dx, back.dy - normal.dy)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color..style = PaintingStyle.fill);
   }
 
   @override
