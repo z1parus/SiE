@@ -99,6 +99,42 @@ class _ProfilePatternLayerState extends State<ProfilePatternLayer>
   }
 }
 
+/// Painter for a pattern [slug] tinted with [color] at animation [time]
+/// (0..1 loop). Returns null for unknown slugs.
+CustomPainter? patternPainterForSlug(String slug, Color color,
+    {double time = 0}) {
+  return switch (slug) {
+    'neural_threads' => NeuralNetworkPainter(color: color, time: time),
+    'dot_matrix'     => DotMatrixPainter(color: color, time: time),
+    'low_poly'       => LowPolyPainter(color: color, time: time),
+    'iso_grid'       => IsoGridPainter(color: color, time: time),
+    _                => null,
+  };
+}
+
+/// Static (non-animated) thumbnail of a pattern — used in shop/customization
+/// grids where dozens of live tickers would be wasteful.
+class ProfilePatternThumb extends StatelessWidget {
+  const ProfilePatternThumb({
+    super.key,
+    required this.pattern,
+    required this.accent,
+  });
+
+  final CosmeticAsset pattern;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = accent.withValues(
+      alpha: pattern.patternOpacity.clamp(0.0, 1.0),
+    );
+    final painter = patternPainterForSlug(pattern.patternSlug, color);
+    if (painter == null) return const SizedBox.shrink();
+    return SizedBox.expand(child: CustomPaint(painter: painter));
+  }
+}
+
 // ── Dot matrix ───────────────────────────────────────────────────────────────
 
 /// Strict grid of dots with a soft diagonal brightness wave travelling across.
