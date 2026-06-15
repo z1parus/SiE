@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 import '../widgets/habit_heatmap.dart';
 import 'habits_overview_screen.dart';
+import 'habit_library_screen.dart';
 import 'routine_editor_screen.dart';
 
 enum HabitViewMode { today, week, allTime }
@@ -139,7 +140,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                 if (visibleHabits.isEmpty) {
                   return ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    children: [_EmptyState(onAdd: () => _showHabitDialog(null))],
+                    children: [_EmptyState(onAdd: _showAddChooser)],
                   );
                 }
 
@@ -331,7 +332,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
               left: 24,
               right: 24,
               child: _BottomActionBar(
-                onAdd: () => _showHabitDialog(null),
+                onAdd: _showAddChooser,
                 isEmpty: isListEmpty,
                 onMorning: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -359,6 +360,52 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => const HabitArchiveScreen(),
+      ),
+    );
+  }
+
+  // Stage 8 — "+" offers a custom habit or the curated library.
+  void _showAddChooser() {
+    final sc = ref.read(sieColorsProvider);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: sc.surface.withValues(alpha: 0.97),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: sc.border),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _OptionTile(
+              icon: Icons.edit_outlined,
+              label: 'СВОЯ ПРИВЫЧКА',
+              color: sc.accent,
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _showHabitDialog(null);
+              },
+            ),
+            const SizedBox(height: 8),
+            _OptionTile(
+              icon: Icons.auto_awesome_outlined,
+              label: 'ИЗ БИБЛИОТЕКИ',
+              color: sc.accent,
+              onTap: () {
+                Navigator.of(ctx).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const HabitLibraryScreen(),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
