@@ -95,6 +95,15 @@ class SyncService {
             await client
                 .from('habit_routines')
                 .upsert(payload, onConflict: 'id');
+          case 'update_routine_meta':
+            await client
+                .from('habit_routines')
+                .update({
+                  'name': payload['name'],
+                  'anchor_cue': payload['anchor_cue'],
+                })
+                .eq('id', payload['id'] as String)
+                .eq('user_id', userId);
           case 'sync_routine_members':
             // Bug 2: payload now includes stable IDs; upsert to handle re-sync safely.
             final routineId = payload['routine_id'] as String;

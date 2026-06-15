@@ -70,6 +70,8 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
       final routineIds = {
         ...?routineData?.morning?.habits.map((h) => h.id),
         ...?routineData?.evening?.habits.map((h) => h.id),
+        for (final s in routineData?.namedStacks ?? const [])
+          ...s.habits.map((h) => h.id),
       };
       return habitsData.habits.where((h) => !routineIds.contains(h.id)).isEmpty;
     }();
@@ -107,6 +109,16 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                     routine: routines.evening,
                     habitsState: habitsAsync.valueOrNull,
                   ),
+                  // Stage 8b — named habit stacks.
+                  for (final stack in routines.namedStacks) ...[
+                    const SizedBox(height: 8),
+                    _StackChainCard(
+                      stack: stack,
+                      habitsState: habitsAsync.valueOrNull,
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  _CreateStackButton(onCreate: _createStack),
                   const SizedBox(height: 12),
                 ],
               ),
@@ -133,6 +145,9 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                 final routineHabitIds = {
                   ...?routinesAsync.valueOrNull?.morning?.habits.map((h) => h.id),
                   ...?routinesAsync.valueOrNull?.evening?.habits.map((h) => h.id),
+                  for (final s
+                      in routinesAsync.valueOrNull?.namedStacks ?? const [])
+                    ...s.habits.map((h) => h.id),
                 };
                 final visibleHabits = state.habits
                     .where((h) => !routineHabitIds.contains(h.id))
@@ -361,6 +376,26 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
       MaterialPageRoute<void>(
         builder: (_) => const HabitArchiveScreen(),
       ),
+    );
+  }
+
+  // Stage 8b — create a named stack, then open its editor.
+  void _createStack() {
+    showStackMetaDialog(
+      context,
+      ref,
+      saveLabel: 'СОЗДАТЬ',
+      onSave: (name, cue) async {
+        final id = await ref
+            .read(habitRoutinesProvider.notifier)
+            .createStack(name: name, anchorCue: cue);
+        if (!mounted) return;
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => RoutineEditorScreen(stackId: id),
+          ),
+        );
+      },
     );
   }
 
@@ -5660,6 +5695,271 @@ class _AvoidHabitCard extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Stage 8b: Habit Stack Chain Card ──────────────────────────
+
+class _StackChainCard extends ConsumerWidget {
+  final HabitRoutine stack;
+  final HabitsState? habitsState;
+
+  const _StackChainCard({required this.stack, this.habitsState});
+
+  static String _fmt(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+    final today = _fmt(DateTime.now());
+    final habits = stack.habits;
+
+    bool done(Habit h) =>
+        habitsState?.logDates[h.id]?.contains(today) ?? false;
+    final completed = habits.where(done).length;
+    final allDone = habits.isNotEmpty && completed == habits.length;
+
+    void openEditor() => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => RoutineEditorScreen(stackId: stack.id),
+          ),
+        );
+
+    return SieGlassCard(
+      onTap: openEditor,
+      padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.account_tree_outlined,
+                  size: 16,
+                  color: allDone ? sc.accent : sc.textSecondary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  stack.displayName.toUpperCase(),
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: sc.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              if (habits.isNotEmpty)
+                Text(
+                  '$completed/${habits.length}',
+                  style: TextStyle(
+                    color: allDone
+                        ? sc.accent
+                        : sc.textSecondary.withValues(alpha: 0.7),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+            ],
+          ),
+          if (stack.anchorCue != null) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(Icons.link,
+                    size: 11, color: sc.accent.withValues(alpha: 0.7)),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    stack.anchorCue!,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: sc.textSecondary.withValues(alpha: 0.8),
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (habits.isEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Нажмите, чтобы добавить привычки в стэк',
+              style: TextStyle(
+                color: sc.textSecondary.withValues(alpha: 0.55),
+                fontSize: 11,
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 10),
+            for (var i = 0; i < habits.length; i++)
+              _StackChainRow(
+                habit: habits[i],
+                isLast: i == habits.length - 1,
+                completed: done(habits[i]),
+                onToggle: () {
+                  SieHaptics.selection();
+                  ref
+                      .read(habitsProvider.notifier)
+                      .toggleHabit(habits[i].id, DateTime.now());
+                },
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StackChainRow extends StatelessWidget {
+  final Habit habit;
+  final bool isLast;
+  final bool completed;
+  final VoidCallback onToggle;
+
+  const _StackChainRow({
+    required this.habit,
+    required this.isLast,
+    required this.completed,
+    required this.onToggle,
+  });
+
+  static Color _hex(String hex) {
+    final h = hex.replaceAll('#', '').padLeft(6, '0');
+    return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF5AADA0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _hex(habit.color);
+    return Builder(builder: (context) {
+      return IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Check + connector column.
+            Column(
+              children: [
+                GestureDetector(
+                  onTap: onToggle,
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: completed
+                          ? accent.withValues(alpha: 0.9)
+                          : Colors.transparent,
+                      border: Border.all(
+                        color: completed
+                            ? accent
+                            : accent.withValues(alpha: 0.5),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: completed
+                        ? const Icon(Icons.check,
+                            size: 13, color: Colors.white)
+                        : null,
+                  ),
+                ),
+                if (!isLast)
+                  Expanded(
+                    child: Container(
+                      width: 1.5,
+                      margin: const EdgeInsets.symmetric(vertical: 2),
+                      color: accent.withValues(alpha: 0.25),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(bottom: isLast ? 0 : 10, top: 2),
+                child: GestureDetector(
+                  onTap: onToggle,
+                  behavior: HitTestBehavior.opaque,
+                  child: Row(
+                    children: [
+                      if (habit.icon != null) ...[
+                        Text(habit.icon!,
+                            style: const TextStyle(fontSize: 12)),
+                        const SizedBox(width: 6),
+                      ],
+                      Expanded(
+                        child: Text(
+                          habit.title,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.color
+                                ?.withValues(alpha: completed ? 0.5 : 1.0),
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            decoration: completed
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+}
+
+class _CreateStackButton extends ConsumerWidget {
+  final VoidCallback onCreate;
+  const _CreateStackButton({required this.onCreate});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+    return GestureDetector(
+      onTap: onCreate,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: sc.border,
+            style: BorderStyle.solid,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add, size: 15,
+                color: sc.textSecondary.withValues(alpha: 0.8)),
+            const SizedBox(width: 6),
+            Text(
+              'СОЗДАТЬ СТЭК',
+              style: TextStyle(
+                color: sc.textSecondary.withValues(alpha: 0.8),
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

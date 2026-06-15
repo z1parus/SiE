@@ -116,7 +116,10 @@ class LocalProfiles extends Table {
 class LocalRoutines extends Table {
   TextColumn get id          => text()();
   TextColumn get userId      => text()();
-  TextColumn get routineType => text()(); // 'morning' | 'evening'
+  TextColumn get routineType => text()(); // 'morning' | 'evening' | 'stack'
+  // Stage 8b: named stacks + anchor cue (null for legacy morning/evening).
+  TextColumn get name        => text().nullable()();
+  TextColumn get anchorCue   => text().nullable()();
   IntColumn  get createdAtMs => integer()();
   BoolColumn get synced      => boolean().withDefault(const Constant(false))();
 
@@ -410,7 +413,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 30;
+  int get schemaVersion => 31;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -601,6 +604,10 @@ class AppDatabase extends _$AppDatabase {
       if (from < 30) {
         await m.addColumn(localHabits, localHabits.polarity);
         await m.addColumn(localHabits, localHabits.lastAbstinenceMilestone);
+      }
+      if (from < 31) {
+        await m.addColumn(localRoutines, localRoutines.name);
+        await m.addColumn(localRoutines, localRoutines.anchorCue);
       }
     },
   );
