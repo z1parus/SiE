@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 import '../widgets/habit_heatmap.dart';
 import 'habits_overview_screen.dart';
+import 'habit_library_screen.dart';
 import 'routine_editor_screen.dart';
 
 enum HabitViewMode { today, week, allTime }
@@ -69,6 +70,8 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
       final routineIds = {
         ...?routineData?.morning?.habits.map((h) => h.id),
         ...?routineData?.evening?.habits.map((h) => h.id),
+        for (final s in routineData?.namedStacks ?? const [])
+          ...s.habits.map((h) => h.id),
       };
       return habitsData.habits.where((h) => !routineIds.contains(h.id)).isEmpty;
     }();
@@ -106,6 +109,16 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                     routine: routines.evening,
                     habitsState: habitsAsync.valueOrNull,
                   ),
+                  // Stage 8b — named habit stacks.
+                  for (final stack in routines.namedStacks) ...[
+                    const SizedBox(height: 8),
+                    _StackChainCard(
+                      stack: stack,
+                      habitsState: habitsAsync.valueOrNull,
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  _CreateStackButton(onCreate: _createStack),
                   const SizedBox(height: 12),
                 ],
               ),
@@ -132,6 +145,9 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                 final routineHabitIds = {
                   ...?routinesAsync.valueOrNull?.morning?.habits.map((h) => h.id),
                   ...?routinesAsync.valueOrNull?.evening?.habits.map((h) => h.id),
+                  for (final s
+                      in routinesAsync.valueOrNull?.namedStacks ?? const [])
+                    ...s.habits.map((h) => h.id),
                 };
                 final visibleHabits = state.habits
                     .where((h) => !routineHabitIds.contains(h.id))
@@ -139,7 +155,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                 if (visibleHabits.isEmpty) {
                   return ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    children: [_EmptyState(onAdd: () => _showHabitDialog(null))],
+                    children: [_EmptyState(onAdd: _showAddChooser)],
                   );
                 }
 
@@ -331,7 +347,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
               left: 24,
               right: 24,
               child: _BottomActionBar(
-                onAdd: () => _showHabitDialog(null),
+                onAdd: _showAddChooser,
                 isEmpty: isListEmpty,
                 onMorning: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -363,13 +379,77 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
     );
   }
 
-  void _showHabitDialog(Habit? existing) {
+  // Stage 8b — create a named stack, then open its editor.
+  void _createStack() {
+    showStackMetaDialog(
+      context,
+      ref,
+      saveLabel: 'СОЗДАТЬ',
+      onSave: (name, cue) async {
+        final id = await ref
+            .read(habitRoutinesProvider.notifier)
+            .createStack(name: name, anchorCue: cue);
+        if (!mounted) return;
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => RoutineEditorScreen(stackId: id),
+          ),
+        );
+      },
+    );
+  }
+
+  // Stage 8 — "+" offers a custom habit or the curated library.
+  void _showAddChooser() {
     final sc = ref.read(sieColorsProvider);
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => _HabitDialog(
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: sc.surface.withValues(alpha: 0.97),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: sc.border),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _OptionTile(
+              icon: Icons.edit_outlined,
+              label: 'СВОЯ ПРИВЫЧКА',
+              color: sc.accent,
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _showHabitDialog(null);
+              },
+            ),
+            const SizedBox(height: 8),
+            _OptionTile(
+              icon: Icons.auto_awesome_outlined,
+              label: 'ИЗ БИБЛИОТЕКИ',
+              color: sc.accent,
+              onTap: () {
+                Navigator.of(ctx).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const HabitLibraryScreen(),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showHabitDialog(Habit? existing) {
+    final sc = ref.read(sieColorsProvider);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => HabitEditorScreen(
         existing: existing,
         onSave: (title, description, color, icon, schedule, kind,
             targetValue, unit, step, reminderTime, area, polarity) {
@@ -448,6 +528,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                 );
           }
         },
+        ),
       ),
     );
   }
@@ -1724,20 +1805,22 @@ class _AddButtonState extends ConsumerState<_AddButton>
 // ─────────────────────────────────────────────────────────────────────────────
 // Add / Edit Protocol Dialog
 // ─────────────────────────────────────────────────────────────────────────────
-class _HabitDialog extends ConsumerStatefulWidget {
+/// Full-screen editor for creating or editing a habit ("protocol").
+/// Replaces the former bottom-sheet dialog so all the fields fit comfortably.
+class HabitEditorScreen extends ConsumerStatefulWidget {
   final Habit? existing;
   final void Function(String title, String? description, String color,
       String? icon, String schedule, String kind, double? targetValue,
       String? unit, double? step, String? reminderTime, LifeArea? area,
       String polarity) onSave;
 
-  const _HabitDialog({this.existing, required this.onSave});
+  const HabitEditorScreen({super.key, this.existing, required this.onSave});
 
   @override
-  ConsumerState<_HabitDialog> createState() => _HabitDialogState();
+  ConsumerState<HabitEditorScreen> createState() => _HabitEditorScreenState();
 }
 
-class _HabitDialogState extends ConsumerState<_HabitDialog> {
+class _HabitEditorScreenState extends ConsumerState<HabitEditorScreen> {
   late final TextEditingController _titleCtrl;
   late final TextEditingController _descCtrl;
   late String _selectedColor;
@@ -1857,44 +1940,62 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
   Widget build(BuildContext context) {
     final sc     = ref.watch(sieColorsProvider);
     final isEdit = widget.existing != null;
-    final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
 
-    return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
-      child: Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + keyboardBottom),
-      decoration: BoxDecoration(
-        color: sc.surface.withOpacity(0.92),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: sc.border),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(2),
-                color: sc.border,
+    return SieBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Top bar ──────────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 16, 4),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: Icon(Icons.arrow_back_ios_new,
+                          color: sc.textSecondary, size: 15),
+                    ),
+                    const SizedBox(width: 16),
+                    RichText(
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+                            text: isEdit ? 'EDIT ' : 'NEW ',
+                            style: TextStyle(
+                              color: sc.accent,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                          TextSpan(
+                            text: 'PROTOCOL',
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineLarge
+                                ?.copyWith(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 3.0,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ),
-          Text(
-            isEdit ? 'EDIT PROTOCOL' : 'NEW PROTOCOL',
-            style: TextStyle(
-              color: sc.textSecondary,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 2.5,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _GlowField(controller: _titleCtrl, label: 'TITLE'),
+              // ── Scrollable form ──────────────────────────────────────
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _GlowField(controller: _titleCtrl, label: 'TITLE'),
           const SizedBox(height: 12),
           _GlowField(
               controller: _descCtrl,
@@ -2151,53 +2252,67 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
                 ),
             ],
           ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              _SheetTextBtn(
-                label: 'CANCEL',
-                color: sc.textSecondary,
-                onTap: () => Navigator.of(context).pop(),
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(width: 12),
-              _SheetTextBtn(
-                label: isEdit ? 'SAVE' : 'DEPLOY',
-                color: _toColor(_selectedColor),
-                onTap: () {
-                  final title = _titleCtrl.text.trim();
-                  if (title.isEmpty) return;
-                  final reminderTime = _reminderEnabled
-                      ? '${_reminderHour.toString().padLeft(2, '0')}:${_reminderMinute.toString().padLeft(2, '0')}'
-                      : null;
-                  final isAvoid = _polarity == 'avoid';
-                  final kind = isAvoid ? 'binary' : _kind;
-                  final schedule =
-                      isAvoid ? 'daily' : _composeSchedule();
-                  widget.onSave(
-                    title,
-                    _descCtrl.text.trim().isEmpty
-                        ? null
-                        : _descCtrl.text.trim(),
-                    _selectedColor,
-                    _selectedIcon,
-                    schedule,
-                    kind,
-                    !isAvoid && _kind != 'binary' ? _targetValue : null,
-                    !isAvoid && _kind == 'count' ? _unit : null,
-                    !isAvoid && _kind != 'binary' ? _step : null,
-                    reminderTime,
-                    _selectedArea,
-                    _polarity,
-                  );
-                  Navigator.of(context).pop();
-                },
+              // ── Sticky action bar ────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+                decoration: BoxDecoration(
+                  color: sc.surface.withOpacity(0.55),
+                  border: Border(top: BorderSide(color: sc.border)),
+                ),
+                child: Row(
+                  children: [
+                    _SheetTextBtn(
+                      label: 'CANCEL',
+                      color: sc.textSecondary,
+                      onTap: () => Navigator.of(context).pop(),
+                    ),
+                    const Spacer(),
+                    _PrimaryActionBtn(
+                      label: isEdit ? 'SAVE' : 'DEPLOY',
+                      color: _toColor(_selectedColor),
+                      onTap: _onSave,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-        ],
+        ),
       ),
-    ));
+    );
+  }
+
+  void _onSave() {
+    final title = _titleCtrl.text.trim();
+    if (title.isEmpty) {
+      SieHaptics.warning();
+      return;
+    }
+    final reminderTime = _reminderEnabled
+        ? '${_reminderHour.toString().padLeft(2, '0')}:${_reminderMinute.toString().padLeft(2, '0')}'
+        : null;
+    final isAvoid = _polarity == 'avoid';
+    final kind = isAvoid ? 'binary' : _kind;
+    final schedule = isAvoid ? 'daily' : _composeSchedule();
+    widget.onSave(
+      title,
+      _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+      _selectedColor,
+      _selectedIcon,
+      schedule,
+      kind,
+      !isAvoid && _kind != 'binary' ? _targetValue : null,
+      !isAvoid && _kind == 'count' ? _unit : null,
+      !isAvoid && _kind != 'binary' ? _step : null,
+      reminderTime,
+      _selectedArea,
+      _polarity,
+    );
+    Navigator.of(context).pop();
   }
 }
 
@@ -2928,6 +3043,66 @@ class _SheetTextBtnState extends State<_SheetTextBtn> {
               fontSize: 11,
               letterSpacing: 1,
               fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Primary filled action button (full-screen editor) ─────────
+
+class _PrimaryActionBtn extends StatefulWidget {
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _PrimaryActionBtn({
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  State<_PrimaryActionBtn> createState() => _PrimaryActionBtnState();
+}
+
+class _PrimaryActionBtnState extends State<_PrimaryActionBtn> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: _pressed
+            ? const Duration(milliseconds: 80)
+            : const Duration(milliseconds: 220),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 13),
+          decoration: BoxDecoration(
+            color: widget.color.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: widget.color, width: 1.4),
+            boxShadow: [
+              BoxShadow(
+                color: widget.color.withValues(alpha: 0.25),
+                blurRadius: 16,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              color: widget.color,
+              fontSize: 13,
+              letterSpacing: 2,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ),
@@ -4206,11 +4381,9 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                     color: sc.textPrimary,
                     onTap: () {
                       Navigator.of(ctx).pop();
-                      showModalBottomSheet<void>(
-                        context: context,
-                        backgroundColor: Colors.transparent,
-                        isScrollControlled: true,
-                        builder: (_) => _HabitDialog(
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => HabitEditorScreen(
                           existing: widget.habit,
                           onSave: (title, description, color, icon, schedule,
                               kind, targetValue, unit, step, reminderTime, area,
@@ -4231,6 +4404,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                                   polarity: polarity,
                                 );
                           },
+                          ),
                         ),
                       );
                     },
@@ -5613,6 +5787,271 @@ class _AvoidHabitCard extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Stage 8b: Habit Stack Chain Card ──────────────────────────
+
+class _StackChainCard extends ConsumerWidget {
+  final HabitRoutine stack;
+  final HabitsState? habitsState;
+
+  const _StackChainCard({required this.stack, this.habitsState});
+
+  static String _fmt(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+    final today = _fmt(DateTime.now());
+    final habits = stack.habits;
+
+    bool done(Habit h) =>
+        habitsState?.logDates[h.id]?.contains(today) ?? false;
+    final completed = habits.where(done).length;
+    final allDone = habits.isNotEmpty && completed == habits.length;
+
+    void openEditor() => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => RoutineEditorScreen(stackId: stack.id),
+          ),
+        );
+
+    return SieGlassCard(
+      onTap: openEditor,
+      padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.account_tree_outlined,
+                  size: 16,
+                  color: allDone ? sc.accent : sc.textSecondary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  stack.displayName.toUpperCase(),
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: sc.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              if (habits.isNotEmpty)
+                Text(
+                  '$completed/${habits.length}',
+                  style: TextStyle(
+                    color: allDone
+                        ? sc.accent
+                        : sc.textSecondary.withValues(alpha: 0.7),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+            ],
+          ),
+          if (stack.anchorCue != null) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(Icons.link,
+                    size: 11, color: sc.accent.withValues(alpha: 0.7)),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    stack.anchorCue!,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: sc.textSecondary.withValues(alpha: 0.8),
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (habits.isEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Нажмите, чтобы добавить привычки в стэк',
+              style: TextStyle(
+                color: sc.textSecondary.withValues(alpha: 0.55),
+                fontSize: 11,
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 10),
+            for (var i = 0; i < habits.length; i++)
+              _StackChainRow(
+                habit: habits[i],
+                isLast: i == habits.length - 1,
+                completed: done(habits[i]),
+                onToggle: () {
+                  SieHaptics.selection();
+                  ref
+                      .read(habitsProvider.notifier)
+                      .toggleHabit(habits[i].id, DateTime.now());
+                },
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StackChainRow extends StatelessWidget {
+  final Habit habit;
+  final bool isLast;
+  final bool completed;
+  final VoidCallback onToggle;
+
+  const _StackChainRow({
+    required this.habit,
+    required this.isLast,
+    required this.completed,
+    required this.onToggle,
+  });
+
+  static Color _hex(String hex) {
+    final h = hex.replaceAll('#', '').padLeft(6, '0');
+    return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF5AADA0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _hex(habit.color);
+    return Builder(builder: (context) {
+      return IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Check + connector column.
+            Column(
+              children: [
+                GestureDetector(
+                  onTap: onToggle,
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: completed
+                          ? accent.withValues(alpha: 0.9)
+                          : Colors.transparent,
+                      border: Border.all(
+                        color: completed
+                            ? accent
+                            : accent.withValues(alpha: 0.5),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: completed
+                        ? const Icon(Icons.check,
+                            size: 13, color: Colors.white)
+                        : null,
+                  ),
+                ),
+                if (!isLast)
+                  Expanded(
+                    child: Container(
+                      width: 1.5,
+                      margin: const EdgeInsets.symmetric(vertical: 2),
+                      color: accent.withValues(alpha: 0.25),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(bottom: isLast ? 0 : 10, top: 2),
+                child: GestureDetector(
+                  onTap: onToggle,
+                  behavior: HitTestBehavior.opaque,
+                  child: Row(
+                    children: [
+                      if (habit.icon != null) ...[
+                        Text(habit.icon!,
+                            style: const TextStyle(fontSize: 12)),
+                        const SizedBox(width: 6),
+                      ],
+                      Expanded(
+                        child: Text(
+                          habit.title,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.color
+                                ?.withValues(alpha: completed ? 0.5 : 1.0),
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            decoration: completed
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+}
+
+class _CreateStackButton extends ConsumerWidget {
+  final VoidCallback onCreate;
+  const _CreateStackButton({required this.onCreate});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+    return GestureDetector(
+      onTap: onCreate,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: sc.border,
+            style: BorderStyle.solid,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add, size: 15,
+                color: sc.textSecondary.withValues(alpha: 0.8)),
+            const SizedBox(width: 6),
+            Text(
+              'СОЗДАТЬ СТЭК',
+              style: TextStyle(
+                color: sc.textSecondary.withValues(alpha: 0.8),
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
