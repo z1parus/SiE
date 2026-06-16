@@ -42,6 +42,10 @@ dependencies:
   sie_core:
     path: ../../packages/sie_core
 
+dependency_overrides:
+  soundpool:
+    path: ../../packages/soundpool
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
