@@ -447,11 +447,9 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
 
   void _showHabitDialog(Habit? existing) {
     final sc = ref.read(sieColorsProvider);
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => _HabitDialog(
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => HabitEditorScreen(
         existing: existing,
         onSave: (title, description, color, icon, schedule, kind,
             targetValue, unit, step, reminderTime, area, polarity) {
@@ -530,6 +528,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                 );
           }
         },
+        ),
       ),
     );
   }
@@ -1806,20 +1805,22 @@ class _AddButtonState extends ConsumerState<_AddButton>
 // ─────────────────────────────────────────────────────────────────────────────
 // Add / Edit Protocol Dialog
 // ─────────────────────────────────────────────────────────────────────────────
-class _HabitDialog extends ConsumerStatefulWidget {
+/// Full-screen editor for creating or editing a habit ("protocol").
+/// Replaces the former bottom-sheet dialog so all the fields fit comfortably.
+class HabitEditorScreen extends ConsumerStatefulWidget {
   final Habit? existing;
   final void Function(String title, String? description, String color,
       String? icon, String schedule, String kind, double? targetValue,
       String? unit, double? step, String? reminderTime, LifeArea? area,
       String polarity) onSave;
 
-  const _HabitDialog({this.existing, required this.onSave});
+  const HabitEditorScreen({super.key, this.existing, required this.onSave});
 
   @override
-  ConsumerState<_HabitDialog> createState() => _HabitDialogState();
+  ConsumerState<HabitEditorScreen> createState() => _HabitEditorScreenState();
 }
 
-class _HabitDialogState extends ConsumerState<_HabitDialog> {
+class _HabitEditorScreenState extends ConsumerState<HabitEditorScreen> {
   late final TextEditingController _titleCtrl;
   late final TextEditingController _descCtrl;
   late String _selectedColor;
@@ -1939,44 +1940,62 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
   Widget build(BuildContext context) {
     final sc     = ref.watch(sieColorsProvider);
     final isEdit = widget.existing != null;
-    final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
 
-    return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
-      child: Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + keyboardBottom),
-      decoration: BoxDecoration(
-        color: sc.surface.withOpacity(0.92),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: sc.border),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(2),
-                color: sc.border,
+    return SieBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Top bar ──────────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 16, 4),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: Icon(Icons.arrow_back_ios_new,
+                          color: sc.textSecondary, size: 15),
+                    ),
+                    const SizedBox(width: 16),
+                    RichText(
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+                            text: isEdit ? 'EDIT ' : 'NEW ',
+                            style: TextStyle(
+                              color: sc.accent,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                          TextSpan(
+                            text: 'PROTOCOL',
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineLarge
+                                ?.copyWith(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 3.0,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ),
-          Text(
-            isEdit ? 'EDIT PROTOCOL' : 'NEW PROTOCOL',
-            style: TextStyle(
-              color: sc.textSecondary,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 2.5,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _GlowField(controller: _titleCtrl, label: 'TITLE'),
+              // ── Scrollable form ──────────────────────────────────────
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _GlowField(controller: _titleCtrl, label: 'TITLE'),
           const SizedBox(height: 12),
           _GlowField(
               controller: _descCtrl,
@@ -2233,53 +2252,67 @@ class _HabitDialogState extends ConsumerState<_HabitDialog> {
                 ),
             ],
           ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              _SheetTextBtn(
-                label: 'CANCEL',
-                color: sc.textSecondary,
-                onTap: () => Navigator.of(context).pop(),
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(width: 12),
-              _SheetTextBtn(
-                label: isEdit ? 'SAVE' : 'DEPLOY',
-                color: _toColor(_selectedColor),
-                onTap: () {
-                  final title = _titleCtrl.text.trim();
-                  if (title.isEmpty) return;
-                  final reminderTime = _reminderEnabled
-                      ? '${_reminderHour.toString().padLeft(2, '0')}:${_reminderMinute.toString().padLeft(2, '0')}'
-                      : null;
-                  final isAvoid = _polarity == 'avoid';
-                  final kind = isAvoid ? 'binary' : _kind;
-                  final schedule =
-                      isAvoid ? 'daily' : _composeSchedule();
-                  widget.onSave(
-                    title,
-                    _descCtrl.text.trim().isEmpty
-                        ? null
-                        : _descCtrl.text.trim(),
-                    _selectedColor,
-                    _selectedIcon,
-                    schedule,
-                    kind,
-                    !isAvoid && _kind != 'binary' ? _targetValue : null,
-                    !isAvoid && _kind == 'count' ? _unit : null,
-                    !isAvoid && _kind != 'binary' ? _step : null,
-                    reminderTime,
-                    _selectedArea,
-                    _polarity,
-                  );
-                  Navigator.of(context).pop();
-                },
+              // ── Sticky action bar ────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+                decoration: BoxDecoration(
+                  color: sc.surface.withOpacity(0.55),
+                  border: Border(top: BorderSide(color: sc.border)),
+                ),
+                child: Row(
+                  children: [
+                    _SheetTextBtn(
+                      label: 'CANCEL',
+                      color: sc.textSecondary,
+                      onTap: () => Navigator.of(context).pop(),
+                    ),
+                    const Spacer(),
+                    _PrimaryActionBtn(
+                      label: isEdit ? 'SAVE' : 'DEPLOY',
+                      color: _toColor(_selectedColor),
+                      onTap: _onSave,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-        ],
+        ),
       ),
-    ));
+    );
+  }
+
+  void _onSave() {
+    final title = _titleCtrl.text.trim();
+    if (title.isEmpty) {
+      SieHaptics.warning();
+      return;
+    }
+    final reminderTime = _reminderEnabled
+        ? '${_reminderHour.toString().padLeft(2, '0')}:${_reminderMinute.toString().padLeft(2, '0')}'
+        : null;
+    final isAvoid = _polarity == 'avoid';
+    final kind = isAvoid ? 'binary' : _kind;
+    final schedule = isAvoid ? 'daily' : _composeSchedule();
+    widget.onSave(
+      title,
+      _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+      _selectedColor,
+      _selectedIcon,
+      schedule,
+      kind,
+      !isAvoid && _kind != 'binary' ? _targetValue : null,
+      !isAvoid && _kind == 'count' ? _unit : null,
+      !isAvoid && _kind != 'binary' ? _step : null,
+      reminderTime,
+      _selectedArea,
+      _polarity,
+    );
+    Navigator.of(context).pop();
   }
 }
 
@@ -3010,6 +3043,66 @@ class _SheetTextBtnState extends State<_SheetTextBtn> {
               fontSize: 11,
               letterSpacing: 1,
               fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Primary filled action button (full-screen editor) ─────────
+
+class _PrimaryActionBtn extends StatefulWidget {
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _PrimaryActionBtn({
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  State<_PrimaryActionBtn> createState() => _PrimaryActionBtnState();
+}
+
+class _PrimaryActionBtnState extends State<_PrimaryActionBtn> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: _pressed
+            ? const Duration(milliseconds: 80)
+            : const Duration(milliseconds: 220),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 13),
+          decoration: BoxDecoration(
+            color: widget.color.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: widget.color, width: 1.4),
+            boxShadow: [
+              BoxShadow(
+                color: widget.color.withValues(alpha: 0.25),
+                blurRadius: 16,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              color: widget.color,
+              fontSize: 13,
+              letterSpacing: 2,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ),
@@ -4288,11 +4381,9 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                     color: sc.textPrimary,
                     onTap: () {
                       Navigator.of(ctx).pop();
-                      showModalBottomSheet<void>(
-                        context: context,
-                        backgroundColor: Colors.transparent,
-                        isScrollControlled: true,
-                        builder: (_) => _HabitDialog(
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => HabitEditorScreen(
                           existing: widget.habit,
                           onSave: (title, description, color, icon, schedule,
                               kind, targetValue, unit, step, reminderTime, area,
@@ -4313,6 +4404,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                                   polarity: polarity,
                                 );
                           },
+                          ),
                         ),
                       );
                     },
