@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 import 'screens/auth_screen.dart';
+import 'screens/habit_tracker_screen.dart';
 import 'screens/main_navigation_shell.dart';
 import 'screens/planning_screen.dart';
 import 'screens/splash_screen.dart';
@@ -28,10 +29,13 @@ void main() async {
 }
 
 void _handleNotificationTap(String? payload) {
-  // All planning reminders deep-link into the War Room agenda.
   final nav = rootNavigatorKey.currentState;
   if (nav == null) return;
-  nav.push(MaterialPageRoute(builder: (_) => const PlanningScreen()));
+  if (payload == 'habits') {
+    nav.push(MaterialPageRoute(builder: (_) => const HabitTrackerScreen()));
+  } else {
+    nav.push(MaterialPageRoute(builder: (_) => const PlanningScreen()));
+  }
 }
 
 class SieApp extends ConsumerStatefulWidget {

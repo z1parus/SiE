@@ -21,15 +21,17 @@ class _CustomizationScreenState extends ConsumerState<CustomizationScreen>
   String? _frameId;
   String? _backgroundId;
   String? _styleId;
+  String? _patternId;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    _tabs         = TabController(length: 3, vsync: this);
+    _tabs         = TabController(length: 4, vsync: this);
     _frameId      = widget.profile.equippedFrameId;
     _backgroundId = widget.profile.equippedBackgroundId;
     _styleId      = widget.profile.equippedStatStyleId;
+    _patternId    = widget.profile.equippedPatternId;
   }
 
   @override
@@ -45,6 +47,7 @@ class _CustomizationScreenState extends ConsumerState<CustomizationScreen>
       final frames      = ref.read(avatarFramesProvider).valueOrNull ?? [];
       final backgrounds = ref.read(profileBackgroundsProvider).valueOrNull ?? [];
       final styles      = ref.read(statStylesProvider).valueOrNull ?? [];
+      final patterns    = ref.read(profilePatternsProvider).valueOrNull ?? [];
 
       bool canApply(CosmeticAsset? asset) =>
           asset != null && (inventory.owns(asset) || asset.priceDP == 0);
@@ -64,11 +67,17 @@ class _CustomizationScreenState extends ConsumerState<CustomizationScreen>
           : canApply(styles.where((a) => a.id == _styleId).firstOrNull)
               ? _styleId
               : widget.profile.equippedStatStyleId;
+      final safePatternId = _patternId == null
+          ? _patternId
+          : canApply(patterns.where((a) => a.id == _patternId).firstOrNull)
+              ? _patternId
+              : widget.profile.equippedPatternId;
 
       await applyCustomization(
         frameId: safeFrameId,
         backgroundId: safeBgId,
         styleId: safeStyleId,
+        patternId: safePatternId,
       );
       ref.invalidate(userProfileProvider);
       if (mounted) Navigator.of(context).pop();
@@ -89,15 +98,18 @@ class _CustomizationScreenState extends ConsumerState<CustomizationScreen>
     final frames      = ref.watch(avatarFramesProvider).valueOrNull ?? [];
     final backgrounds = ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
     final styles      = ref.watch(statStylesProvider).valueOrNull ?? [];
+    final patterns    = ref.watch(profilePatternsProvider).valueOrNull ?? [];
     final inventory   = ref.watch(inventoryProvider).valueOrNull ?? InventoryState.empty;
 
     final equipped = EquippedAssets.resolve(
       frames: frames,
       backgrounds: backgrounds,
       styles: styles,
+      patterns: patterns,
       frameId: _frameId,
       backgroundId: _backgroundId,
       styleId: _styleId,
+      patternId: _patternId,
     );
 
     final c = ref.watch(sieColorsProvider);
@@ -145,6 +157,13 @@ class _CustomizationScreenState extends ConsumerState<CustomizationScreen>
                       equippedId: widget.profile.equippedStatStyleId,
                       onSelect: (id) => setState(() => _styleId = id),
                     ),
+                    _AssetGrid(
+                      assets: patterns,
+                      inventory: inventory,
+                      selectedId: _patternId,
+                      equippedId: widget.profile.equippedPatternId,
+                      onSelect: (id) => setState(() => _patternId = id),
+                    ),
                   ],
                 ),
               ),
@@ -171,6 +190,7 @@ class _CustomizationScreenState extends ConsumerState<CustomizationScreen>
         Tab(text: 'РАМКИ'),
         Tab(text: 'ФОНЫ'),
         Tab(text: 'СТИЛИ'),
+        Tab(text: 'УЗОРЫ'),
       ],
     );
   }
@@ -345,7 +365,14 @@ class _Preview extends ConsumerWidget {
         decoration: _cardDecoration(c, bg),
         child: Stack(
           children: [
-            if (showNeural)
+            if (equipped.pattern != null)
+              Positioned.fill(
+                child: ProfilePatternLayer(
+                  pattern: equipped.pattern,
+                  accent: bg?.accentColor ?? c.accent,
+                ),
+              )
+            else if (showNeural)
               Positioned.fill(
                 child: NeuralNetworkWidget(
                   color: bg.accentColor.withValues(alpha: 0.40),
@@ -863,7 +890,33 @@ class _AssetVisual extends StatelessWidget {
         AssetType.avatarFrame       => _FramePreview(asset: asset),
         AssetType.profileBackground => _BackgroundPreview(asset: asset),
         AssetType.statStyle         => _StatStylePreview(asset: asset),
+        AssetType.profilePattern    => _PatternPreview(asset: asset),
       };
+}
+
+class _PatternPreview extends ConsumerWidget {
+  final CosmeticAsset asset;
+  const _PatternPreview({required this.asset});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        width: 56,
+        height: 40,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF0D2A42), Color(0xFF071520)],
+          ),
+        ),
+        child: ProfilePatternThumb(pattern: asset, accent: c.accent),
+      ),
+    );
+  }
 }
 
 class _FramePreview extends StatelessWidget {

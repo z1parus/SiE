@@ -598,6 +598,7 @@ class _LeaderRow extends ConsumerWidget {
       equippedFrameId: entry.equippedFrameId,
       equippedBackgroundId: entry.equippedBackgroundId,
       equippedStatStyleId: entry.equippedStatStyleId,
+      equippedPatternId: entry.equippedPatternId,
       totalXp: entry.totalXp,
     );
     Navigator.of(context).push(

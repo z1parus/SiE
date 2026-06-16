@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:sie_core/src/models/habit.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -24,6 +25,10 @@ class NotificationService {
   static const _channelId = 'sie_planning_reminders';
   static const _channelName = 'Планирование';
   static const _channelDesc = 'Напоминания о задачах, вехах и дедлайнах целей';
+
+  static const _habitChannelId = 'sie_habit_reminders';
+  static const _habitChannelName = 'Привычки';
+  static const _habitChannelDesc = 'Напоминания о привычках и вечерняя сводка';
 
   /// Stable positive 31-bit id from a string key.
   static int _idFor(String key) => key.hashCode & 0x7fffffff;
@@ -305,6 +310,159 @@ class NotificationService {
 
   Future<void> cancelStagnationNudge(String goalId) =>
       cancel(_idFor('stagnation_$goalId'));
+
+  // ── Habit Reminders (Stage 3) ─────────────────────────────────────────────
+
+  NotificationDetails get _habitDetails => const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _habitChannelId,
+          _habitChannelName,
+          channelDescription: _habitChannelDesc,
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+        ),
+        iOS: DarwinNotificationDetails(),
+      );
+
+  /// Schedules repeating reminder(s) for [habit] according to its schedule.
+  /// Existing notifications for the same habit are cancelled first so
+  /// re-scheduling replaces rather than stacks.
+  Future<void> scheduleHabitReminder(Habit habit) async {
+    if (!_inited || kIsWeb) return;
+    if (habit.reminderTime == null) return;
+
+    await cancelHabitReminder(habit.id);
+
+    final parts = habit.reminderTime!.split(':');
+    if (parts.length != 2) return;
+    final hour   = int.tryParse(parts[0]) ?? 0;
+    final minute = int.tryParse(parts[1]) ?? 0;
+
+    final schedule = habit.schedule;
+
+    if (schedule.startsWith('weekdays:')) {
+      final days = schedule
+          .substring('weekdays:'.length)
+          .split(',')
+          .map(int.tryParse)
+          .whereType<int>()
+          .toList();
+      for (final day in days) {
+        await _scheduleWeeklyHabit(
+          id: _idFor('habit_${habit.id}_wd$day'),
+          habit: habit,
+          weekday: day,
+          hour: hour,
+          minute: minute,
+        );
+      }
+    } else {
+      // 'daily', 'weekly:N', 'interval:N' — all get a daily repeating reminder.
+      await _scheduleDailyHabit(
+        id: _idFor('habit_${habit.id}'),
+        habit: habit,
+        hour: hour,
+        minute: minute,
+      );
+    }
+  }
+
+  Future<void> _scheduleDailyHabit({
+    required int id,
+    required Habit habit,
+    required int hour,
+    required int minute,
+  }) async {
+    final now  = DateTime.now();
+    var next   = DateTime(now.year, now.month, now.day, hour, minute);
+    if (!next.isAfter(now)) next = next.add(const Duration(days: 1));
+    try {
+      await _plugin.zonedSchedule(
+        id: id,
+        title: '💪 Пора: ${habit.title}',
+        body: habit.description ?? 'Не забудь выполнить привычку сегодня',
+        scheduledDate: _instant(next),
+        notificationDetails: _habitDetails,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        payload: 'habits',
+        matchDateTimeComponents: DateTimeComponents.time,
+      );
+    } catch (e) {
+      debugPrint('SiE Notifications: habit daily schedule failed — $e');
+    }
+  }
+
+  Future<void> _scheduleWeeklyHabit({
+    required int id,
+    required Habit habit,
+    required int weekday,
+    required int hour,
+    required int minute,
+  }) async {
+    final now     = DateTime.now();
+    var next      = DateTime(now.year, now.month, now.day, hour, minute);
+    var addDays   = (weekday - now.weekday) % 7;
+    if (addDays < 0) addDays += 7;
+    next = next.add(Duration(days: addDays));
+    if (!next.isAfter(now)) next = next.add(const Duration(days: 7));
+    try {
+      await _plugin.zonedSchedule(
+        id: id,
+        title: '💪 Пора: ${habit.title}',
+        body: habit.description ?? 'Не забудь выполнить привычку сегодня',
+        scheduledDate: _instant(next),
+        notificationDetails: _habitDetails,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        payload: 'habits',
+        matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+      );
+    } catch (e) {
+      debugPrint('SiE Notifications: habit weekly schedule failed — $e');
+    }
+  }
+
+  /// Cancels all pending notifications for [habitId].
+  Future<void> cancelHabitReminder(String habitId) async {
+    // Cancel daily / weekdays:1..7 slots (up to 8 IDs per habit).
+    await cancel(_idFor('habit_$habitId'));
+    for (var d = 1; d <= 7; d++) {
+      await cancel(_idFor('habit_${habitId}_wd$d'));
+    }
+  }
+
+  /// Schedules (or replaces) the evening habit digest at [hour]:[minute].
+  /// Call on app start and whenever the time pref changes.
+  Future<void> scheduleHabitDigest({
+    required int hour,
+    required int minute,
+    required int pendingCount,
+  }) async {
+    if (!_inited || kIsWeb) return;
+    final id = _idFor('habit_digest');
+    if (pendingCount == 0) {
+      await cancel(id);
+      return;
+    }
+    final now  = DateTime.now();
+    var next   = DateTime(now.year, now.month, now.day, hour, minute);
+    if (!next.isAfter(now)) next = next.add(const Duration(days: 1));
+    try {
+      await _plugin.zonedSchedule(
+        id: id,
+        title: '📋 Сводка привычек',
+        body: 'Ещё не закрыто: $pendingCount. Успеть до конца дня!',
+        scheduledDate: _instant(next),
+        notificationDetails: _habitDetails,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        payload: 'habits',
+        matchDateTimeComponents: DateTimeComponents.time,
+      );
+    } catch (e) {
+      debugPrint('SiE Notifications: habit digest schedule failed — $e');
+    }
+  }
+
+  Future<void> cancelHabitDigest() => cancel(_idFor('habit_digest'));
 
   Future<void> cancel(int id) async {
     if (!_inited || kIsWeb) return;

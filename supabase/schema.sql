@@ -109,6 +109,25 @@ create policy "public read stat_styles"
 grant select on public.stat_styles to authenticated, anon;
 
 
+-- ── Узоры профиля (анимированный слой поверх фона) ────────────
+create table public.profile_patterns (
+  id           uuid                   primary key default gen_random_uuid(),
+  slug         text                   not null unique,
+  name         text                   not null,
+  image_url    text,
+  rarity       public.cosmetic_rarity not null default 'common',
+  style_config jsonb                  not null default '{}',
+  price_dp     integer                not null default 0
+);
+
+alter table public.profile_patterns enable row level security;
+
+create policy "public read profile_patterns"
+  on public.profile_patterns for select using (true);
+
+grant select on public.profile_patterns to authenticated, anon;
+
+
 /* ══════════════════════════════════════════════════════════════
    4. ПРОФИЛИ
    ══════════════════════════════════════════════════════════════ */
@@ -135,7 +154,8 @@ create table public.profiles (
   -- Активная косметика (FK на каталоги)
   equipped_frame_id       uuid references public.avatar_frames(id)       on delete set null,
   equipped_background_id  uuid references public.profile_backgrounds(id)  on delete set null,
-  equipped_stat_style_id  uuid references public.stat_styles(id)          on delete set null
+  equipped_stat_style_id  uuid references public.stat_styles(id)          on delete set null,
+  equipped_pattern_id     uuid references public.profile_patterns(id)     on delete set null
 );
 
 create trigger trg_profiles_updated_at
@@ -361,7 +381,7 @@ create policy "owner can insert own focus_sessions"
 create table public.user_inventory (
   id          uuid        primary key default gen_random_uuid(),
   user_id     uuid        not null references public.profiles on delete cascade,
-  asset_type  text        not null check (asset_type in ('avatar_frame', 'profile_background', 'stat_style')),
+  asset_type  text        not null check (asset_type in ('avatar_frame', 'profile_background', 'stat_style', 'profile_pattern')),
   asset_id    uuid        not null,
   acquired_at timestamptz not null default now(),
   unique (user_id, asset_type, asset_id)
@@ -546,6 +566,7 @@ returns table (
   equipped_frame_id      uuid,
   equipped_background_id uuid,
   equipped_stat_style_id uuid,
+  equipped_pattern_id    uuid,
   total_xp               integer,
   daily_xp               integer,
   rank                   bigint
@@ -563,6 +584,7 @@ as $$
       p.equipped_frame_id,
       p.equipped_background_id,
       p.equipped_stat_style_id,
+      p.equipped_pattern_id,
       p.total_xp,
       (
         coalesce(
@@ -598,6 +620,7 @@ as $$
     equipped_frame_id,
     equipped_background_id,
     equipped_stat_style_id,
+    equipped_pattern_id,
     total_xp,
     daily_xp,
     rank() over (order by daily_xp desc, total_xp desc) as rank
@@ -797,6 +820,14 @@ insert into public.stat_styles (slug, name, rarity, style_config, price_dp) valu
    '{"accent_color":"#FF4444","border_color":"#3D1A1A","glow_color":"#FF444420","glow_radius":6}',  1500),
   ('gold',     'Золото',   'legendary',
    '{"accent_color":"#FFD700","border_color":"#3D3000","glow_color":"#FFD70020","glow_radius":8}',  4000)
+on conflict (slug) do nothing;
+
+-- ── Узоры профиля ─────────────────────────────────────────────
+insert into public.profile_patterns (slug, name, rarity, style_config, price_dp) values
+  ('iso_grid',       'Изо-сетка',      'common', '{"pattern_slug":"iso_grid","opacity":0.40}',       0),
+  ('low_poly',       'Полигоны',       'rare',   '{"pattern_slug":"low_poly","opacity":0.40}',       500),
+  ('dot_matrix',     'Точечный',       'epic',   '{"pattern_slug":"dot_matrix","opacity":0.40}',     1000),
+  ('neural_threads', 'Нейронные нити', 'epic',   '{"pattern_slug":"neural_threads","opacity":0.40}', 1500)
 on conflict (slug) do nothing;
 
 

@@ -413,7 +413,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           final profiles = await client
               .from('profiles')
               .select('id, username, avatar_url, equipped_frame_id, '
-                  'equipped_background_id, equipped_stat_style_id, total_xp, design_points')
+                  'equipped_background_id, equipped_stat_style_id, equipped_pattern_id, total_xp, design_points')
               .inFilter('id', sharedOwnerIds);
           for (final p in profiles) {
             ownerProfileMap[p['id'] as String] = PublicProfile.fromJson(p);
@@ -430,7 +430,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           final profiles = await client
               .from('profiles')
               .select('id, username, avatar_url, equipped_frame_id, '
-                  'equipped_background_id, equipped_stat_style_id, total_xp, design_points')
+                  'equipped_background_id, equipped_stat_style_id, equipped_pattern_id, total_xp, design_points')
               .inFilter('id', collabUserIds);
           for (final p in profiles) {
             collabProfileMap[p['id'] as String] = PublicProfile.fromJson(p);

@@ -99,6 +99,44 @@ class _SieSkeletonState extends ConsumerState<SieSkeleton>
   }
 }
 
+/// Grid of square [SieSkeleton] tiles for medal/achievement grid placeholders.
+class SieSkeletonGrid extends StatelessWidget {
+  const SieSkeletonGrid({
+    super.key,
+    this.columns = 3,
+    this.count = 6,
+    this.spacing = 10,
+    this.tileRadius = 14,
+    this.childAspectRatio = 0.88,
+    this.padding = EdgeInsets.zero,
+  });
+
+  final int columns;
+  final int count;
+  final double spacing;
+  final double tileRadius;
+  final double childAspectRatio;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      padding: padding,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columns,
+        crossAxisSpacing: spacing,
+        mainAxisSpacing: spacing,
+        childAspectRatio: childAspectRatio,
+      ),
+      itemCount: count,
+      itemBuilder: (_, _) =>
+          SieSkeleton(height: double.infinity, radius: tileRadius),
+    );
+  }
+}
+
 /// Vertical stack of [SieSkeleton] card rows for list placeholders.
 class SieSkeletonList extends StatelessWidget {
   const SieSkeletonList({

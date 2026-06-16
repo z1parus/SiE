@@ -16,87 +16,119 @@ class PublicProfileScreen extends ConsumerWidget {
     final frames      = ref.watch(avatarFramesProvider).valueOrNull ?? [];
     final backgrounds = ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
     final styles      = ref.watch(statStylesProvider).valueOrNull ?? [];
+    final patterns    = ref.watch(profilePatternsProvider).valueOrNull ?? [];
 
     final equipped = EquippedAssets.resolve(
       frames: frames,
       backgrounds: backgrounds,
       styles: styles,
+      patterns: patterns,
       frameId: profile.equippedFrameId,
       backgroundId: profile.equippedBackgroundId,
       styleId: profile.equippedStatStyleId,
+      patternId: profile.equippedPatternId,
     );
 
     return SieBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: Stack(
-          children: [
-            RefreshIndicator(
-              color: c.accent,
-              backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
-              onRefresh: () async {
-                ref.invalidate(publicStatsProvider(profile.id));
-                ref.invalidate(publicAchievementsProvider(profile.id));
-                ref.invalidate(publicMissionMedalsProvider(profile.id));
-                ref.invalidate(friendsProvider);
-                await ref.read(publicStatsProvider(profile.id).future);
-              },
-              child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverToBoxAdapter(
-                  child: _HeroSection(profile: profile, equipped: equipped),
-                ),
-                SliverToBoxAdapter(
-                  child: _FriendActionSection(profile: profile),
-                ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 48),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _StatsRow(
-                            profile: profile, statStyle: equipped.statStyle),
-                        const SizedBox(height: 16),
-                        _SectionBlock(
-                          title: 'AWARDS',
-                          child: _AchievementsSection(userId: profile.id),
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              _PublicTopBar(
+                title: (profile.username ?? 'OPERATIVE').toUpperCase(),
+                onBack: () => Navigator.of(context).pop(),
+              ),
+              Expanded(
+                child: RefreshIndicator(
+                  color: c.accent,
+                  backgroundColor:
+                      c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+                  onRefresh: () async {
+                    ref.invalidate(publicStatsProvider(profile.id));
+                    ref.invalidate(publicAchievementsProvider(profile.id));
+                    ref.invalidate(publicMissionMedalsProvider(profile.id));
+                    ref.invalidate(friendsProvider);
+                    await ref.read(publicStatsProvider(profile.id).future);
+                  },
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child:
+                            _HeroSection(profile: profile, equipped: equipped),
+                      ),
+                      SliverToBoxAdapter(
+                        child: _FriendActionSection(profile: profile),
+                      ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 20, 20, 48),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _StatsRow(
+                                  profile: profile,
+                                  statStyle: equipped.statStyle),
+                              const SizedBox(height: 16),
+                              _SectionBlock(
+                                title: 'AWARDS',
+                                child: _AchievementsSection(userId: profile.id),
+                              ),
+                              const SizedBox(height: 16),
+                              _SectionBlock(
+                                title: 'MISSION MEDALS',
+                                child:
+                                    _PublicMedalsSection(userId: profile.id),
+                              ),
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 16),
-                        _SectionBlock(
-                          title: 'MISSION MEDALS',
-                          child: _PublicMedalsSection(userId: profile.id),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            ),
-            SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.only(left: 4, top: 4),
-                child: IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: Icon(
-                    Icons.arrow_back_ios_new,
-                    color: c.isLightMode ? c.textPrimary : Colors.white,
-                    size: 18,
-                  ),
-                  style: IconButton.styleFrom(
-                    backgroundColor: c.isLightMode
-                        ? c.surface.withValues(alpha: 0.85)
-                        : Colors.black45,
-                    shape: const CircleBorder(),
-                    padding: const EdgeInsets.all(8),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Top Bar ───────────────────────────────────────────────────
+
+class _PublicTopBar extends StatelessWidget {
+  final String title;
+  final VoidCallback onBack;
+  const _PublicTopBar({required this.title, required this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+          ),
+          Expanded(
+            child: Text(
+              title,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(letterSpacing: 2),
+            ),
+          ),
+          const SizedBox(width: 48),
+        ],
       ),
     );
   }
@@ -109,215 +141,32 @@ class _HeroSection extends ConsumerWidget {
   final EquippedAssets equipped;
   const _HeroSection({required this.profile, required this.equipped});
 
-  static String _rankLabel(int level) {
-    if (level <= 5)  return 'Recruit';
-    if (level <= 10) return 'Operative';
-    if (level <= 20) return 'Explorer';
-    return 'Commander';
-  }
-
-  static BoxDecoration _cardDecoration(SieColors c, CosmeticAsset? bg) {
-    if (bg?.backgroundColor != null) {
-      return BoxDecoration(
-        color: bg!.backgroundColor,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: bg.accentColor.withValues(alpha: 0.25)),
-      );
-    }
-    if (bg?.backgroundGradient != null) {
-      return BoxDecoration(
-        gradient: bg!.backgroundGradient,
-        borderRadius: BorderRadius.circular(24),
-      );
-    }
-    return c.flatCard(radius: 24);
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c          = ref.watch(sieColorsProvider);
-    final bg         = equipped.background;
-    final xp         = profile.totalXp;
-    final level      = profile.level;
-    final xpInLevel  = profile.xpInLevel;
-    final progress   = (xpInLevel / 1000.0).clamp(0.0, 1.0);
-    final xpToNext   = 1000 - xpInLevel;
-    final hasCustomBg = bg != null &&
-        (bg.backgroundColor != null || bg.backgroundGradient != null);
-    final textMain = hasCustomBg ? Colors.white : c.textPrimary;
-    final textSub  = hasCustomBg ? Colors.white60 : c.textSecondary;
-    final showNeural = bg != null &&
-        (bg.backgroundColor != null || bg.useNeuralPattern);
-
+    final c = ref.watch(sieColorsProvider);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       child: Column(
         children: [
-          Container(
-            clipBehavior: Clip.hardEdge,
-            decoration: _cardDecoration(c, bg),
-            child: Stack(
-              children: [
-                if (showNeural)
-                  Positioned.fill(
-                    child: NeuralNetworkWidget(
-                      color: bg.accentColor.withValues(alpha: 0.40),
-                    ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          _AvatarWithFrame(
-                              profile: profile, frame: equipped.frame),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  profile.username?.toUpperCase() ?? 'UNKNOWN',
-                                  style: TextStyle(
-                                    color: textMain,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    _HeroChip(
-                                      label: 'LEVEL $level',
-                                      borderColor:
-                                          c.accent.withValues(alpha: 0.5),
-                                      textColor: c.accent,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    _HeroChip(
-                                      label: '${profile.designPoints} DP',
-                                      borderColor:
-                                          c.dp.withValues(alpha: 0.45),
-                                      textColor: c.dp,
-                                      icon: Icons.palette_outlined,
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '$xp XP TOTAL',
-                            style: TextStyle(
-                              color: c.accent,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 1.2,
-                            ),
-                          ),
-                          Text(
-                            '$xpToNext XP TO LVL ${level + 1}',
-                            style: TextStyle(color: textSub, fontSize: 10),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(3),
-                        child: Stack(
-                          children: [
-                            Container(height: 6, color: c.border),
-                            FractionallySizedBox(
-                              widthFactor: progress,
-                              child: Container(
-                                height: 6,
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [c.accent, c.accentSecondary],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${(progress * 100).toStringAsFixed(0)}%  ·  '
-                        '${_rankLabel(level).toUpperCase()}  ·  '
-                        'LVL $level → LVL ${level + 1}',
-                        style: TextStyle(
-                          color: textSub,
-                          fontSize: 9,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          ProfileHeroCard(
+            username: profile.username ?? '',
+            avatarUrl: profile.avatarUrl,
+            totalXp: profile.totalXp,
+            designPoints: profile.designPoints,
+            frame: equipped.frame,
+            background: equipped.background,
+            pattern: equipped.pattern,
+            avatarSize: 96,
           ),
           if (equipped.statStyle != null) ...[
             const SizedBox(height: 12),
             _StatStyleBanner(
               statStyle: equipped.statStyle!,
-              level: level,
-              xp: xp,
+              level: profile.level,
+              xp: profile.totalXp,
               c: c,
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroChip extends StatelessWidget {
-  final String label;
-  final Color borderColor;
-  final Color textColor;
-  final IconData? icon;
-  const _HeroChip({
-    required this.label,
-    required this.borderColor,
-    required this.textColor,
-    this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        border: Border.all(color: borderColor),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 9, color: textColor),
-            const SizedBox(width: 3),
-          ],
-          Text(
-            label,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-            ),
-          ),
         ],
       ),
     );
@@ -363,68 +212,6 @@ class _StatStyleBanner extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ── Avatar with Frame ─────────────────────────────────────────
-
-class _AvatarWithFrame extends ConsumerWidget {
-  final PublicProfile profile;
-  final CosmeticAsset? frame;
-  const _AvatarWithFrame({required this.profile, this.frame});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c = ref.watch(sieColorsProvider);
-    final letter = (profile.username?.isNotEmpty == true)
-        ? profile.username![0].toUpperCase()
-        : '?';
-    final decoration = frame?.buildFrameDecoration(surfaceColor: c.surface, suppressGlow: c.isLightMode) ??
-        BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: c.accent.withValues(alpha: 0.6), width: 1.5),
-          color: c.surface,
-          boxShadow: null,
-        );
-
-    return Container(
-      width: 88,
-      height: 88,
-      decoration: decoration,
-      child: ClipOval(
-        child: profile.avatarUrl != null
-            ? Image.network(
-                profile.avatarUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => _Initials(letter: letter),
-              )
-            : _Initials(letter: letter),
-      ),
-    );
-  }
-}
-
-class _Initials extends ConsumerWidget {
-  final String letter;
-  const _Initials({required this.letter});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c = ref.watch(sieColorsProvider);
-    return ColoredBox(
-      color: c.surface,
-      child: Center(
-        child: Text(
-          letter,
-          style: TextStyle(
-            color: c.accent,
-            fontSize: 32,
-            fontWeight: FontWeight.w200,
-            letterSpacing: 1,
-          ),
-        ),
       ),
     );
   }
@@ -569,12 +356,7 @@ class _AchievementsSection extends ConsumerWidget {
     final achAsync = ref.watch(publicAchievementsProvider(userId));
 
     return achAsync.when(
-      loading: () => SizedBox(
-        height: 80,
-        child: Center(
-          child: CircularProgressIndicator(color: c.accent, strokeWidth: 1.5),
-        ),
-      ),
+      loading: () => const SieSkeletonGrid(columns: 4, count: 8),
       error: (_, _) => Text(
         'AWARDS DATA UNAVAILABLE',
         style: TextStyle(
@@ -592,10 +374,10 @@ class _AchievementsSection extends ConsumerWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 6,
-            crossAxisSpacing: 6,
-            mainAxisSpacing: 6,
-            childAspectRatio: 1.0,
+            crossAxisCount: 4,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 1.1,
           ),
           itemCount: achievements.length,
           itemBuilder: (_, i) => GestureDetector(
@@ -773,13 +555,13 @@ class _SectionBlock extends ConsumerWidget {
     final c = ref.watch(sieColorsProvider);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: c.flatCard(radius: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SectionHeader(title: title),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           child,
         ],
       ),
@@ -800,11 +582,7 @@ class _PublicMedalsSection extends ConsumerWidget {
     final medalsAsync = ref.watch(publicMissionMedalsProvider(userId));
 
     return medalsAsync.when(
-      loading: () => SizedBox(
-        height: 60,
-        child: Center(
-            child: CircularProgressIndicator(color: c.accent, strokeWidth: 1.5)),
-      ),
+      loading: () => const SieSkeletonGrid(columns: 4, count: 4, childAspectRatio: 1.0),
       error: (_, _) => const SizedBox.shrink(),
       data: (medals) {
         if (medals.isEmpty) {
@@ -828,12 +606,34 @@ class _PublicMedalsSection extends ConsumerWidget {
 
 // ── Friend Action Section ─────────────────────────────────────────────────────
 
-class _FriendActionSection extends ConsumerWidget {
+class _FriendActionSection extends ConsumerStatefulWidget {
   final PublicProfile profile;
   const _FriendActionSection({required this.profile});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_FriendActionSection> createState() =>
+      _FriendActionSectionState();
+}
+
+class _FriendActionSectionState extends ConsumerState<_FriendActionSection> {
+  bool _busy = false;
+
+  Future<void> _run(Future<void> Function() action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await action();
+      SieHaptics.success();
+    } catch (_) {
+      SieHaptics.warning();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = widget.profile;
     final myId = Supabase.instance.client.auth.currentUser?.id;
     if (myId == null || myId == profile.id) return const SizedBox.shrink();
 
@@ -852,13 +652,11 @@ class _FriendActionSection extends ConsumerWidget {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-      child: _buildButtons(context, ref, friend, sent, received),
+      child: _buildButtons(friend, sent, received),
     );
   }
 
   Widget _buildButtons(
-    BuildContext ctx,
-    WidgetRef ref,
     FriendRow? friend,
     FriendRow? sent,
     FriendRow? received,
@@ -870,7 +668,8 @@ class _FriendActionSection extends ConsumerWidget {
         label: 'Удалить из друзей',
         icon: Icons.person_remove_outlined,
         filled: false,
-        onTap: () => _confirmRemove(ctx, ref, friend.friendshipId),
+        busy: _busy,
+        onTap: () => _confirmRemove(friend.friendshipId),
       );
     }
     if (sent != null) {
@@ -878,7 +677,8 @@ class _FriendActionSection extends ConsumerWidget {
         label: 'Отменить запрос',
         icon: Icons.cancel_outlined,
         filled: false,
-        onTap: () => notifier.cancelRequest(sent.friendshipId),
+        busy: _busy,
+        onTap: () => _run(() => notifier.cancelRequest(sent.friendshipId)),
       );
     }
     if (received != null) {
@@ -888,16 +688,18 @@ class _FriendActionSection extends ConsumerWidget {
             label: 'Принять запрос',
             icon: Icons.check,
             filled: true,
-            onTap: () => notifier.acceptRequest(received.friendshipId),
+            busy: _busy,
+            onTap: () => _run(() => notifier.acceptRequest(received.friendshipId)),
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         Expanded(
           child: _SocialBtn(
             label: 'Отклонить',
             icon: Icons.close,
             filled: false,
-            onTap: () => notifier.declineRequest(received.friendshipId),
+            busy: _busy,
+            onTap: () => _run(() => notifier.declineRequest(received.friendshipId)),
           ),
         ),
       ]);
@@ -906,16 +708,20 @@ class _FriendActionSection extends ConsumerWidget {
       label: 'Добавить в друзья',
       icon: Icons.person_add_outlined,
       filled: true,
-      onTap: () => notifier.sendRequest(profile.id),
+      busy: _busy,
+      onTap: () => _run(() => notifier.sendRequest(widget.profile.id)),
     );
   }
 
-  Future<void> _confirmRemove(
-      BuildContext ctx, WidgetRef ref, String friendshipId) async {
+  Future<void> _confirmRemove(String friendshipId) async {
     final ok = await showDialog<bool>(
-      context: ctx,
+      context: context,
       builder: (d) => AlertDialog(
         title: const Text('Удалить из друзей?'),
+        content: Text(
+          'Убрать ${widget.profile.username ?? 'этого оперативника'} '
+          'из списка друзей?',
+        ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(d, false),
@@ -927,7 +733,8 @@ class _FriendActionSection extends ConsumerWidget {
       ),
     );
     if (ok == true) {
-      ref.read(friendsProvider.notifier).removeFriend(friendshipId);
+      await _run(
+          () => ref.read(friendsProvider.notifier).removeFriend(friendshipId));
     }
   }
 }
@@ -936,44 +743,64 @@ class _SocialBtn extends ConsumerWidget {
   final String label;
   final IconData icon;
   final bool filled;
+  final bool busy;
   final VoidCallback onTap;
 
   const _SocialBtn({
     required this.label,
     required this.icon,
     required this.filled,
+    required this.busy,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 40,
-        decoration: BoxDecoration(
-          color: filled ? c.accent.withValues(alpha: 0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: filled
-                  ? c.accent.withValues(alpha: 0.5)
-                  : c.border),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: filled ? c.accent : c.textSecondary, size: 15),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: filled ? c.accent : c.textSecondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
+    final fg = filled ? c.accent : c.textSecondary;
+    return Semantics(
+      button: true,
+      enabled: !busy,
+      label: label,
+      child: GestureDetector(
+        onTap: busy ? null : onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Opacity(
+          opacity: busy ? 0.6 : 1.0,
+          child: Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color:
+                  filled ? c.accent.withValues(alpha: 0.1) : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: filled ? c.accent.withValues(alpha: 0.5) : c.border),
             ),
-          ],
+            child: busy
+                ? Center(
+                    child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          color: fg, strokeWidth: 1.5),
+                    ),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(icon, color: fg, size: 15),
+                      const SizedBox(width: 8),
+                      Text(
+                        label,
+                        style: TextStyle(
+                          color: fg,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
         ),
       ),
     );
