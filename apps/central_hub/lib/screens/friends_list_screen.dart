@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
@@ -16,8 +18,13 @@ class FriendsListScreen extends ConsumerWidget {
     final friendsAsync = ref.watch(friendsProvider);
     final state = friendsAsync.valueOrNull ?? const FriendsState();
 
-    return SieBackground(
-      child: DefaultTabController(
+    return PopScope(
+      canPop: !Platform.isAndroid,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) Navigator.of(context).pop();
+      },
+      child: SieBackground(
+        child: DefaultTabController(
         length: 3,
         child: Scaffold(
           backgroundColor: Colors.transparent,
@@ -124,6 +131,7 @@ class FriendsListScreen extends ConsumerWidget {
               ],
             ),
           ),
+        ),
         ),
       ),
     );
