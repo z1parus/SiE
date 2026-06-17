@@ -1106,6 +1106,21 @@ class AppDatabase extends _$AppDatabase {
   Future<void> upsertGoalHabitLink(LocalGoalHabitLinksCompanion row) =>
       into(localGoalHabitLinks).insertOnConflictUpdate(row);
 
+  // Partial UPDATE helpers — use these instead of upsert when only updating
+  // a subset of fields (e.g. synced flag, isCompleted). upsert requires all
+  // non-nullable fields for its INSERT portion and throws otherwise.
+  Future<void> patchGoal(String id, LocalGoalsCompanion patch) =>
+      (update(localGoals)..where((t) => t.id.equals(id))).write(patch);
+
+  Future<void> patchSubGoal(String id, LocalSubGoalsCompanion patch) =>
+      (update(localSubGoals)..where((t) => t.id.equals(id))).write(patch);
+
+  Future<void> patchMilestone(String id, LocalMilestonesCompanion patch) =>
+      (update(localMilestones)..where((t) => t.id.equals(id))).write(patch);
+
+  Future<void> patchPlanningTask(String id, LocalPlanningTasksCompanion patch) =>
+      (update(localPlanningTasks)..where((t) => t.id.equals(id))).write(patch);
+
   Future<List<LocalGoal>> goalsForUser(String uid) =>
       (select(localGoals)
             ..where((t) =>
@@ -1211,201 +1226,40 @@ class AppDatabase extends _$AppDatabase {
       (update(localGoalHabitLinks)..where((t) => t.id.equals(id)))
           .write(const LocalGoalHabitLinksCompanion(deletedLocally: Value(true)));
 
+  // ── Planning lookups (used by sync_service) ──────────────────────────────
+
   Future<LocalPlanningTask?> getPlanningTask(String id) =>
-      (select(localPlanningTasks)..where((t) => t.id.equals(id))).getSingleOrNull();
+      (select(localPlanningTasks)..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
 
   Future<LocalSubGoal?> getSubGoal(String id) =>
-      (select(localSubGoals)..where((t) => t.id.equals(id))).getSingleOrNull();
+      (select(localSubGoals)..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
 
   Future<LocalMilestone?> getMilestone(String id) =>
-      (select(localMilestones)..where((t) => t.id.equals(id))).getSingleOrNull();
-
-  Future<void> updateMilestoneCurrentValue(String milestoneId, double? value) =>
-      (update(localMilestones)..where((t) => t.id.equals(milestoneId)))
-          .write(LocalMilestonesCompanion(
-            currentValue: Value(value),
-            synced: const Value(false),
-          ));
-
-  // ── Milestone Logs ────────────────────────────────────────────────────────
-
-  Future<void> insertMilestoneLog(LocalMilestoneLogsCompanion row) =>
-      into(localMilestoneLogs).insertOnConflictUpdate(row);
-
-  Future<List<LocalMilestoneLog>> logsForMilestone(String milestoneId) =>
-      (select(localMilestoneLogs)
-            ..where((t) => t.milestoneId.equals(milestoneId))
-            ..orderBy([(t) => OrderingTerm(expression: t.recordedAtMs)]))
-          .get();
-
-  Future<void> deleteMilestoneLogLocally(String id) =>
-      (delete(localMilestoneLogs)..where((t) => t.id.equals(id))).go();
-
-  // ── Goal Progress Snapshots ───────────────────────────────────────────────
-
-  Future<void> upsertGoalSnapshot(LocalGoalProgressSnapshotsCompanion row) =>
-      into(localGoalProgressSnapshots).insertOnConflictUpdate(row);
-
-  /// Whether a snapshot already exists for [goalId] on the local day [dayKeyMs].
-  Future<bool> hasGoalSnapshotForDay(String goalId, int dayKeyMs) async {
-    final row = await (select(localGoalProgressSnapshots)
-          ..where((t) =>
-              t.goalId.equals(goalId) & t.dayKeyMs.equals(dayKeyMs))
-          ..limit(1))
-        .getSingleOrNull();
-    return row != null;
-  }
-
-  Future<List<LocalGoalProgressSnapshot>> snapshotsForGoal(String goalId) =>
-      (select(localGoalProgressSnapshots)
-            ..where((t) => t.goalId.equals(goalId))
-            ..orderBy([(t) => OrderingTerm(expression: t.capturedAtMs)]))
-          .get();
-
-  Future<List<LocalGoalProgressSnapshot>> unsyncedGoalSnapshots(
-          String userId) =>
-      (select(localGoalProgressSnapshots)
-            ..where((t) =>
-                t.userId.equals(userId) & t.synced.equals(false)))
-          .get();
-
-  Future<void> markGoalSnapshotSynced(String id) =>
-      (update(localGoalProgressSnapshots)..where((t) => t.id.equals(id)))
-          .write(const LocalGoalProgressSnapshotsCompanion(
-              synced: Value(true)));
-
-  // ── Mission Templates ─────────────────────────────────────────────────────
-
-  Future<void> upsertMissionTemplate(LocalMissionTemplatesCompanion row) =>
-      into(localMissionTemplates).insertOnConflictUpdate(row);
-
-  Future<List<LocalMissionTemplate>> templatesForUser(String userId) =>
-      (select(localMissionTemplates)
-            ..where((t) =>
-                (t.userId.equals(userId) | t.isSystem.equals(true)) &
-                t.deletedLocally.equals(false))
-            ..orderBy([(t) => OrderingTerm(expression: t.createdAtMs)]))
-          .get();
-
-  Future<void> deleteMissionTemplateLocally(String id) =>
-      (update(localMissionTemplates)..where((t) => t.id.equals(id)))
-          .write(const LocalMissionTemplatesCompanion(
-              deletedLocally: Value(true)));
-
-  Future<void> markMissionTemplateSynced(String id) =>
-      (update(localMissionTemplates)..where((t) => t.id.equals(id)))
-          .write(const LocalMissionTemplatesCompanion(synced: Value(true)));
-
-  // ── Mission Medals ────────────────────────────────────────────────────────
-
-  Future<void> upsertMedalLocally(LocalMissionMedalsCompanion row) =>
-      into(localMissionMedals).insertOnConflictUpdate(row);
-
-  Future<List<LocalMissionMedal>> medalsForUser(String userId) =>
-      (select(localMissionMedals)
-            ..where((t) => t.userId.equals(userId))
-            ..orderBy(
-                [(t) => OrderingTerm(expression: t.earnedAtMs, mode: OrderingMode.desc)]))
-          .get();
-
-  Future<void> markMedalSynced(String id) =>
-      (update(localMissionMedals)..where((t) => t.id.equals(id)))
-          .write(const LocalMissionMedalsCompanion(synced: Value(true)));
-
-  // ── Meditation Sessions ───────────────────────────────────────────────────
-
-  Future<void> insertMeditationSession(LocalMeditationSessionsCompanion row) =>
-      into(localMeditationSessions).insertOnConflictUpdate(row);
-
-  Future<List<LocalMeditationSession>> unsyncedMeditationSessions(
-          String userId) =>
-      (select(localMeditationSessions)
-            ..where((t) =>
-                t.userId.equals(userId) & t.synced.equals(false)))
-          .get();
-
-  Future<void> markMeditationSessionSynced(String id) =>
-      (update(localMeditationSessions)..where((t) => t.id.equals(id)))
-          .write(
-              const LocalMeditationSessionsCompanion(synced: Value(true)));
-
-  Future<int> meditationSecondsThisWeek(String userId) async {
-    final now = DateTime.now();
-    final startOfWeek = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: now.weekday - 1));
-    final startMs = startOfWeek.millisecondsSinceEpoch;
-    final rows = await (select(localMeditationSessions)
-          ..where((t) =>
-              t.userId.equals(userId) &
-              t.completedAtMs.isBiggerOrEqualValue(startMs)))
-        .get();
-    return rows.fold<int>(0, (sum, r) => sum + r.durationSeconds);
-  }
-
-  // ── Meditation Presets ────────────────────────────────────────────────────
-
-  Future<void> upsertMeditationPreset(LocalMeditationPresetsCompanion row) =>
-      into(localMeditationPresets).insertOnConflictUpdate(row);
-
-  Future<List<LocalMeditationPreset>> presetsForUser(String userId) =>
-      (select(localMeditationPresets)
-            ..where((t) =>
-                (t.userId.equals(userId) | t.isSystem.equals(true)) &
-                t.deletedLocally.equals(false)))
-          .get();
-
-  Future<void> deletePresetLocally(String id) =>
-      (update(localMeditationPresets)..where((t) => t.id.equals(id)))
-          .write(const LocalMeditationPresetsCompanion(
-              deletedLocally: Value(true)));
-
-  // ── Weekly Reviews (Stage 9) ───────────────────────────────────────────────
-
-  Future<void> upsertWeeklyReview(LocalWeeklyReviewsCompanion row) =>
-      into(localWeeklyReviews).insertOnConflictUpdate(row);
-
-  Future<LocalWeeklyReview?> weeklyReviewForWeek(
-          String userId, int weekStartMs) =>
-      (select(localWeeklyReviews)
-            ..where((t) =>
-                t.userId.equals(userId) & t.weekStartMs.equals(weekStartMs))
-            ..limit(1))
+      (select(localMilestones)..where((t) => t.id.equals(id)))
           .getSingleOrNull();
 
-  Future<LocalWeeklyReview?> latestWeeklyReview(String userId) =>
-      (select(localWeeklyReviews)
-            ..where((t) => t.userId.equals(userId))
-            ..orderBy([
-              (t) => OrderingTerm(
-                  expression: t.weekStartMs, mode: OrderingMode.desc)
-            ])
-            ..limit(1))
-          .getSingleOrNull();
+  // ── Unsynced ID sets (used by _mirrorToLocal) ─────────────────────────────
 
-  Future<List<LocalWeeklyReview>> unsyncedWeeklyReviews(String userId) =>
-      (select(localWeeklyReviews)
-            ..where((t) =>
-                t.userId.equals(userId) & t.synced.equals(false)))
-          .get();
+  Future<Set<String>> unsyncedSubGoalIds() async =>
+      (await (select(localSubGoals)..where((t) => t.synced.equals(false))).get())
+          .map((e) => e.id)
+          .toSet();
 
-  Future<void> markWeeklyReviewSynced(String id) =>
-      (update(localWeeklyReviews)..where((t) => t.id.equals(id)))
-          .write(const LocalWeeklyReviewsCompanion(synced: Value(true)));
+  Future<Set<String>> unsyncedTaskIds() async =>
+      (await (select(localPlanningTasks)
+            ..where((t) => t.synced.equals(false)))
+          .get())
+          .map((e) => e.id)
+          .toSet();
 
-  Future<Set<String>> unsyncedPlanningIds() async {
-    final goals = await (select(localGoals)..where((t) => t.synced.equals(false))).get();
-    final subs = await (select(localSubGoals)..where((t) => t.synced.equals(false))).get();
-    final tasks = await (select(localPlanningTasks)..where((t) => t.synced.equals(false))).get();
-    final ms = await (select(localMilestones)..where((t) => t.synced.equals(false))).get();
-    final links = await (select(localGoalHabitLinks)..where((t) => t.synced.equals(false))).get();
-    return {
-      for (final g in goals) g.id,
-      for (final s in subs) s.id,
-      for (final t in tasks) t.id,
-      for (final m in ms) m.id,
-      for (final l in links) l.id,
-    };
-  }
+  Future<Set<String>> unsyncedMilestoneIds() async =>
+      (await (select(localMilestones)
+            ..where((t) => t.synced.equals(false)))
+          .get())
+          .map((e) => e.id)
+          .toSet();
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────
