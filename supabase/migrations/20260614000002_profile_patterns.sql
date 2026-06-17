@@ -5,7 +5,7 @@
 -- inherits the background accent colour, so style_config only carries the
 -- pattern kind (`pattern_slug`) and overlay `opacity`.
 
-create table public.profile_patterns (
+create table if not exists public.profile_patterns (
   id           uuid                   primary key default gen_random_uuid(),
   slug         text                   not null unique,
   name         text                   not null,

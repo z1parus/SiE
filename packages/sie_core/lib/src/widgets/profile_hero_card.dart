@@ -89,12 +89,7 @@ class ProfileHeroCard extends ConsumerWidget {
     final hasCustomBg = background != null &&
         (background!.backgroundColor != null ||
             background!.backgroundGradient != null);
-    // Legacy behaviour: backgrounds with a custom colour or the
-    // `use_neural_pattern` flag rendered the neural overlay before patterns
-    // existed as a first-class asset.
-    final legacyNeural = background != null &&
-        (background!.backgroundColor != null || background!.useNeuralPattern);
-    final showPattern = pattern != null || legacyNeural;
+    final showPattern = pattern != null;
     final decorated = hasCustomBg || showPattern;
 
     // With a decorative background/pattern we darken behind the text with a
@@ -118,9 +113,11 @@ class ProfileHeroCard extends ConsumerWidget {
                   child: ProfilePatternLayer(
                     pattern: pattern,
                     accent: background?.accentColor ?? c.accent,
-                    legacyNeural: legacyNeural,
                   ),
                 ),
+              // Light readability scrim — darkens only the top (callsign) and
+              // bottom (XP) edges so the chosen background colour stays vivid in
+              // the middle. Strokes-only patterns already keep the colour visible.
               if (decorated)
                 Positioned.fill(
                   child: DecoratedBox(
@@ -129,9 +126,11 @@ class ProfileHeroCard extends ConsumerWidget {
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          Colors.black.withValues(alpha: 0.10),
-                          Colors.black.withValues(alpha: 0.34),
+                          Colors.black.withValues(alpha: 0.16),
+                          Colors.black.withValues(alpha: 0.0),
+                          Colors.black.withValues(alpha: 0.20),
                         ],
+                        stops: const [0.0, 0.45, 1.0],
                       ),
                     ),
                   ),

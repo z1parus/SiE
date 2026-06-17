@@ -822,12 +822,13 @@ insert into public.stat_styles (slug, name, rarity, style_config, price_dp) valu
    '{"accent_color":"#FFD700","border_color":"#3D3000","glow_color":"#FFD70020","glow_radius":8}',  4000)
 on conflict (slug) do nothing;
 
--- ── Узоры профиля ─────────────────────────────────────────────
+-- ── Узоры профиля (штриховые, без заливки) ───────────────────
 insert into public.profile_patterns (slug, name, rarity, style_config, price_dp) values
-  ('iso_grid',       'Изо-сетка',      'common', '{"pattern_slug":"iso_grid","opacity":0.40}',       0),
-  ('low_poly',       'Полигоны',       'rare',   '{"pattern_slug":"low_poly","opacity":0.40}',       500),
-  ('dot_matrix',     'Точечный',       'epic',   '{"pattern_slug":"dot_matrix","opacity":0.40}',     1000),
-  ('neural_threads', 'Нейронные нити', 'epic',   '{"pattern_slug":"neural_threads","opacity":0.40}', 1500)
+  ('topo',             'Топографика',     'common',    '{"pattern_slug":"topo","opacity":0.5}',             0),
+  ('hud_grid',         'Тактическая сетка','rare',     '{"pattern_slug":"hud_grid","opacity":0.5}',         0),
+  ('radar',            'Радар',           'epic',      '{"pattern_slug":"radar","opacity":0.55}',           0),
+  ('sphere_meridians', 'Меридианы сферы', 'epic',      '{"pattern_slug":"sphere_meridians","opacity":0.5}', 0),
+  ('guilloche',        'Гильош',          'legendary', '{"pattern_slug":"guilloche","opacity":0.5}',         0)
 on conflict (slug) do nothing;
 
 
