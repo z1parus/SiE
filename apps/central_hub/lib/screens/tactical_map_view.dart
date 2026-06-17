@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:sie_core/sie_core.dart';
+import '../widgets/attachment_gallery.dart';
 
 // ─── Public entry-point ───────────────────────────────────────────────────────
 
@@ -1197,6 +1198,8 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       isScrollControlled: true,
       builder: (ctx) => _AddNodeSheet(
         sc: c,
+        goalId: goal.id,
+        canEdit: widget.canEdit,
         onAddSubGoal: (name) {
           ref.read(planningProvider.notifier).addSubGoal(goal.id, name);
           Navigator.pop(ctx);
@@ -1220,6 +1223,8 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       builder: (ctx) => _SubGoalSheet(
         sg: sg,
         sc: c,
+        goalId: goal.id,
+        canEdit: canEdit,
         onAddTask: canEdit
             ? (name, weight) {
                 ref
@@ -1270,6 +1275,8 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       builder: (ctx) => _TaskSheet(
         task: task,
         sc: c,
+        goalId: goal.id,
+        canEdit: canEdit,
         onToggle: canEdit
             ? () {
                 ref
@@ -1300,6 +1307,8 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       builder: (ctx) => _MilestoneSheet(
         ms: ms,
         sc: c,
+        goalId: goal.id,
+        canEdit: canEdit,
         onComplete: (canEdit && !ms.isCompleted)
             ? () {
                 ref
@@ -1589,7 +1598,8 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                             80,
                             goal,
                             _MilestoneNode(
-                                ms: ms, sc: c, dragging: _draggingId == ms.id),
+                                ms: ms, sc: c, dragging: _draggingId == ms.id,
+                                attachmentCount: goal.attachmentsFor(ms.id).length),
                           ),
                         // Tasks and nested sub-goals (all depths)
                         for (final sg in _flat) ...[
@@ -1654,6 +1664,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               child: _GoalNode(
                 goal: goal,
                 sc: c,
+                attachmentCount: goal.attachmentsFor(goal.id).length,
                 onTap: () {
                   if (_tool == _MapTool.connector && widget.canEdit) {
                     _handleConnectorEndpoint('node:${goal.id}', goal);
@@ -1811,7 +1822,8 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               _scheduleSave(goal);
               setState(() => _draggingId = null);
             },
-      child: _TaskNode(task: task, sc: c, dragging: _draggingId == task.id),
+      child: _TaskNode(task: task, sc: c, dragging: _draggingId == task.id,
+          attachmentCount: goal.attachmentsFor(task.id).length),
     );
     if (hidden) node = Opacity(opacity: 0.25, child: node);
     return Positioned(
@@ -1904,6 +1916,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
         isHoverTarget: _hoverTargetId == sg.id,
         hoverAnim: _hoverTargetId == sg.id ? _hoverAnim : null,
         onAdd: widget.canEdit ? () => _showSubGoalSheet(sg, goal, c) : null,
+        attachmentCount: goal.attachmentsFor(sg.id).length,
       ),
     );
     if (hidden) node = Opacity(opacity: 0.25, child: node);
@@ -2115,10 +2128,16 @@ class _EdgePainter extends CustomPainter {
 // ─── Goal Node ────────────────────────────────────────────────────────────────
 
 class _GoalNode extends StatelessWidget {
-  const _GoalNode({required this.goal, required this.sc, required this.onTap});
+  const _GoalNode({
+    required this.goal,
+    required this.sc,
+    required this.onTap,
+    this.attachmentCount = 0,
+  });
   final Goal goal;
   final SieColors sc;
   final VoidCallback onTap;
+  final int attachmentCount;
 
   @override
   Widget build(BuildContext context) {
@@ -2128,25 +2147,37 @@ class _GoalNode extends StatelessWidget {
       child: SizedBox(
         width: 160,
         height: 160,
-        child: CustomPaint(
-          painter: _GoalRingPainter(goal: goal, progress: progress),
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(22),
-              child: Text(
-                goal.name,
-                textAlign: TextAlign.center,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: sc.textPrimary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  height: 1.3,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _GoalRingPainter(goal: goal, progress: progress),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(22),
+                    child: Text(
+                      goal.name,
+                      textAlign: TextAlign.center,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: sc.textPrimary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
+            if (attachmentCount > 0)
+              Positioned(
+                top: 14,
+                right: 14,
+                child: _AttachmentBadge(count: attachmentCount, sc: sc),
+              ),
+          ],
         ),
       ),
     );
@@ -2222,6 +2253,7 @@ class _SubGoalNode extends StatelessWidget {
     required this.isHoverTarget,
     this.onAdd,
     this.hoverAnim,
+    this.attachmentCount = 0,
   });
   final SubGoal sg;
   final SieColors sc;
@@ -2229,6 +2261,7 @@ class _SubGoalNode extends StatelessWidget {
   final bool isHoverTarget;
   final Animation<double>? hoverAnim;
   final VoidCallback? onAdd;
+  final int attachmentCount;
 
   @override
   Widget build(BuildContext context) {
@@ -2350,6 +2383,12 @@ class _SubGoalNode extends StatelessWidget {
               ),
             ),
           ),
+        if (attachmentCount > 0)
+          Positioned(
+            bottom: -8,
+            left: 6,
+            child: _AttachmentBadge(count: attachmentCount, sc: c),
+          ),
       ],
     );
   }
@@ -2358,10 +2397,11 @@ class _SubGoalNode extends StatelessWidget {
 // ─── Task Node ────────────────────────────────────────────────────────────────
 
 class _TaskNode extends StatelessWidget {
-  const _TaskNode({required this.task, required this.sc, required this.dragging});
+  const _TaskNode({required this.task, required this.sc, required this.dragging, this.attachmentCount = 0});
   final PlanningTask task;
   final SieColors sc;
   final bool dragging;
+  final int attachmentCount;
 
   @override
   Widget build(BuildContext context) {
@@ -2413,6 +2453,12 @@ class _TaskNode extends StatelessWidget {
               bottom: 0,
               child: Center(child: Icon(Icons.check, size: 10, color: c.accent)),
             ),
+          if (attachmentCount > 0)
+            Positioned(
+              right: 5,
+              top: 2,
+              child: _AttachmentBadge(count: attachmentCount, sc: c),
+            ),
         ],
       ),
     );
@@ -2422,10 +2468,11 @@ class _TaskNode extends StatelessWidget {
 // ─── Milestone Node ───────────────────────────────────────────────────────────
 
 class _MilestoneNode extends StatelessWidget {
-  const _MilestoneNode({required this.ms, required this.sc, required this.dragging});
+  const _MilestoneNode({required this.ms, required this.sc, required this.dragging, this.attachmentCount = 0});
   final Milestone ms;
   final SieColors sc;
   final bool dragging;
+  final int attachmentCount;
 
   @override
   Widget build(BuildContext context) {
@@ -2478,6 +2525,8 @@ class _MilestoneNode extends StatelessWidget {
             '${ms.targetDate!.day}.${ms.targetDate!.month.toString().padLeft(2, '0')}',
             style: TextStyle(color: c.textSecondary.withValues(alpha: 0.6), fontSize: 7),
           ),
+        if (attachmentCount > 0)
+          _AttachmentBadge(count: attachmentCount, sc: c),
       ],
     );
   }
@@ -2512,20 +2561,25 @@ class _HabitLinkNode extends StatelessWidget {
 
 // ─── Sheet: Add node (SubGoal / Milestone) ────────────────────────────────────
 
-class _AddNodeSheet extends StatefulWidget {
-  const _AddNodeSheet(
-      {required this.sc,
-      required this.onAddSubGoal,
-      required this.onAddMilestone});
+class _AddNodeSheet extends ConsumerStatefulWidget {
+  const _AddNodeSheet({
+    required this.sc,
+    required this.goalId,
+    required this.canEdit,
+    required this.onAddSubGoal,
+    required this.onAddMilestone,
+  });
   final SieColors sc;
+  final String goalId;
+  final bool canEdit;
   final ValueChanged<String> onAddSubGoal;
   final ValueChanged<String> onAddMilestone;
 
   @override
-  State<_AddNodeSheet> createState() => _AddNodeSheetState();
+  ConsumerState<_AddNodeSheet> createState() => _AddNodeSheetState();
 }
 
-class _AddNodeSheetState extends State<_AddNodeSheet> {
+class _AddNodeSheetState extends ConsumerState<_AddNodeSheet> {
   final _ctrl = TextEditingController();
   String _mode = 'subgoal';
 
@@ -2538,6 +2592,15 @@ class _AddNodeSheetState extends State<_AddNodeSheet> {
   @override
   Widget build(BuildContext context) {
     final c = widget.sc;
+    final attachments = ref.watch(
+      planningProvider.select((s) {
+        final goals = s.valueOrNull?.goals ?? const [];
+        for (final g in goals) {
+          if (g.id == widget.goalId) return g.attachmentsFor(widget.goalId);
+        }
+        return const <NodeAttachment>[];
+      }),
+    );
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
@@ -2549,6 +2612,17 @@ class _AddNodeSheetState extends State<_AddNodeSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (attachments.isNotEmpty || widget.canEdit) ...[
+            AttachmentGallery(
+              goalId: widget.goalId,
+              nodeType: 'goal',
+              nodeId: widget.goalId,
+              attachments: attachments,
+              canEdit: widget.canEdit,
+              compactMode: true,
+            ),
+            const SizedBox(height: 16),
+          ],
           Row(
             children: [
               _Chip(label: 'Под-цель', selected: _mode == 'subgoal', sc: c,
@@ -2597,10 +2671,12 @@ class _AddNodeSheetState extends State<_AddNodeSheet> {
 
 // ─── Sheet: SubGoal ───────────────────────────────────────────────────────────
 
-class _SubGoalSheet extends StatefulWidget {
+class _SubGoalSheet extends ConsumerStatefulWidget {
   const _SubGoalSheet({
     required this.sg,
     required this.sc,
+    required this.goalId,
+    this.canEdit = true,
     this.onAddTask,
     this.onAddSubGoal,
     this.onComplete,
@@ -2609,6 +2685,8 @@ class _SubGoalSheet extends StatefulWidget {
   });
   final SubGoal sg;
   final SieColors sc;
+  final String goalId;
+  final bool canEdit;
   final void Function(String name, int weight)? onAddTask;
   final ValueChanged<String>? onAddSubGoal;
   final VoidCallback? onComplete;
@@ -2616,10 +2694,10 @@ class _SubGoalSheet extends StatefulWidget {
   final VoidCallback? onDelete;
 
   @override
-  State<_SubGoalSheet> createState() => _SubGoalSheetState();
+  ConsumerState<_SubGoalSheet> createState() => _SubGoalSheetState();
 }
 
-class _SubGoalSheetState extends State<_SubGoalSheet> {
+class _SubGoalSheetState extends ConsumerState<_SubGoalSheet> {
   bool _adding = false;
   bool _addingSubGoal = false;
   final _ctrl = TextEditingController();
@@ -2636,6 +2714,15 @@ class _SubGoalSheetState extends State<_SubGoalSheet> {
   @override
   Widget build(BuildContext context) {
     final c = widget.sc;
+    final attachments = ref.watch(
+      planningProvider.select((s) {
+        final goals = s.valueOrNull?.goals ?? const [];
+        for (final g in goals) {
+          if (g.id == widget.goalId) return g.attachmentsFor(widget.sg.id);
+        }
+        return const <NodeAttachment>[];
+      }),
+    );
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
@@ -2648,7 +2735,16 @@ class _SubGoalSheetState extends State<_SubGoalSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SheetHeader(title: widget.sg.name, icon: Icons.layers_outlined, sc: c),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          AttachmentGallery(
+            goalId: widget.goalId,
+            nodeType: 'subgoal',
+            nodeId: widget.sg.id,
+            attachments: attachments,
+            canEdit: widget.canEdit,
+            compactMode: true,
+          ),
+          const SizedBox(height: 12),
           if (!_adding && !_addingSubGoal) ...[
             if (widget.onComplete != null) ...[
               _ActionBtn(
@@ -2805,20 +2901,34 @@ class _SubGoalSheetState extends State<_SubGoalSheet> {
 
 // ─── Sheet: Task ──────────────────────────────────────────────────────────────
 
-class _TaskSheet extends StatelessWidget {
-  const _TaskSheet(
-      {required this.task,
-      required this.sc,
-      this.onToggle,
-      this.onDelete});
+class _TaskSheet extends ConsumerWidget {
+  const _TaskSheet({
+    required this.task,
+    required this.sc,
+    required this.goalId,
+    this.canEdit = true,
+    this.onToggle,
+    this.onDelete,
+  });
   final PlanningTask task;
   final SieColors sc;
+  final String goalId;
+  final bool canEdit;
   final VoidCallback? onToggle;
   final VoidCallback? onDelete;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = sc;
+    final attachments = ref.watch(
+      planningProvider.select((s) {
+        final goals = s.valueOrNull?.goals ?? const [];
+        for (final g in goals) {
+          if (g.id == goalId) return g.attachmentsFor(task.id);
+        }
+        return const <NodeAttachment>[];
+      }),
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
       child: Column(
@@ -2841,7 +2951,16 @@ class _TaskSheet extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          AttachmentGallery(
+            goalId: goalId,
+            nodeType: 'task',
+            nodeId: task.id,
+            attachments: attachments,
+            canEdit: canEdit,
+            compactMode: true,
+          ),
+          const SizedBox(height: 12),
           if (onToggle != null) ...[
             _ActionBtn(
               label: task.isCompleted ? 'Отметить невыполненной' : 'Выполнено',
@@ -2867,17 +2986,34 @@ class _TaskSheet extends StatelessWidget {
 
 // ─── Sheet: Milestone ─────────────────────────────────────────────────────────
 
-class _MilestoneSheet extends StatelessWidget {
-  const _MilestoneSheet(
-      {required this.ms, required this.sc, this.onComplete, this.onDelete});
+class _MilestoneSheet extends ConsumerWidget {
+  const _MilestoneSheet({
+    required this.ms,
+    required this.sc,
+    required this.goalId,
+    this.canEdit = true,
+    this.onComplete,
+    this.onDelete,
+  });
   final Milestone ms;
   final SieColors sc;
+  final String goalId;
+  final bool canEdit;
   final VoidCallback? onComplete;
   final VoidCallback? onDelete;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = sc;
+    final attachments = ref.watch(
+      planningProvider.select((s) {
+        final goals = s.valueOrNull?.goals ?? const [];
+        for (final g in goals) {
+          if (g.id == goalId) return g.attachmentsFor(ms.id);
+        }
+        return const <NodeAttachment>[];
+      }),
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
       child: Column(
@@ -2897,7 +3033,16 @@ class _MilestoneSheet extends StatelessWidget {
                 style: TextStyle(color: c.textSecondary, fontSize: 12),
               ),
             ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          AttachmentGallery(
+            goalId: goalId,
+            nodeType: 'milestone',
+            nodeId: ms.id,
+            attachments: attachments,
+            canEdit: canEdit,
+            compactMode: true,
+          ),
+          const SizedBox(height: 12),
           if (onComplete != null) ...[
             _ActionBtn(
                 label: 'Достигнут',
@@ -2946,6 +3091,36 @@ class _HabitLinkSheet extends StatelessWidget {
               color: const Color(0xFFE03050),
               sc: c,
               onTap: onUnlink),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Attachment badge (map nodes) ─────────────────────────────────────────────
+
+class _AttachmentBadge extends StatelessWidget {
+  const _AttachmentBadge({required this.count, required this.sc});
+  final int count;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: sc.surface.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: sc.border, width: 0.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.attach_file, size: 8, color: sc.textSecondary),
+          Text(
+            '$count',
+            style: TextStyle(color: sc.textSecondary, fontSize: 8, fontWeight: FontWeight.w600),
+          ),
         ],
       ),
     );

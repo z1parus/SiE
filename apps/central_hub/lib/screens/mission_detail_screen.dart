@@ -10,6 +10,7 @@ import 'ai_decomposition_sheet.dart';
 import 'milestone_metric_screen.dart';
 import 'focus_protocol_screen.dart';
 import '../widgets/sparkline.dart';
+import '../widgets/attachment_gallery.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -861,6 +862,20 @@ class _SubGoalTile extends ConsumerWidget {
             Divider(height: 1, color: sc.border),
             Column(
               children: [
+                Builder(builder: (ctx) {
+                  final atts = goal.attachmentsFor(sg.id);
+                  if (atts.isEmpty && !canEdit) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                    child: AttachmentGallery(
+                      goalId: goal.id,
+                      nodeType: 'subgoal',
+                      nodeId: sg.id,
+                      attachments: atts,
+                      canEdit: canEdit,
+                    ),
+                  );
+                }),
                 ReorderableListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -1145,6 +1160,21 @@ class _TaskTile extends ConsumerWidget {
                           fontStyle: FontStyle.italic),
                     ),
                   ),
+                Builder(builder: (ctx) {
+                  final atts = goal.attachmentsFor(t.id);
+                  if (atts.isEmpty && !canEdit) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: AttachmentGallery(
+                      goalId: goal.id,
+                      nodeType: 'task',
+                      nodeId: t.id,
+                      attachments: atts,
+                      canEdit: canEdit,
+                      compactMode: true,
+                    ),
+                  );
+                }),
               ],
             ),
           ),
@@ -1510,50 +1540,68 @@ class _MilestoneTile extends ConsumerWidget {
     final m = milestone;
     if (m.isMetric) return _MetricMilestoneTile(milestone: m, goal: goal, sc: sc, canEdit: canEdit);
 
+    final atts = goal.attachmentsFor(m.id);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
-            onTap: canEdit && !m.isCompleted
-                ? () => ref
-                    .read(planningProvider.notifier)
-                    .completeMilestone(m.id, goal.id)
-                : null,
-            child: Icon(
-              m.isCompleted ? Icons.flag : Icons.outlined_flag,
-              color: m.isCompleted ? goal.color : sc.textSecondary,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  m.name,
-                  style: TextStyle(
-                    color: m.isCompleted ? sc.textSecondary : sc.textPrimary,
-                    fontSize: 14,
-                    decoration:
-                        m.isCompleted ? TextDecoration.lineThrough : null,
-                  ),
+          Row(
+            children: [
+              GestureDetector(
+                onTap: canEdit && !m.isCompleted
+                    ? () => ref
+                        .read(planningProvider.notifier)
+                        .completeMilestone(m.id, goal.id)
+                    : null,
+                child: Icon(
+                  m.isCompleted ? Icons.flag : Icons.outlined_flag,
+                  color: m.isCompleted ? goal.color : sc.textSecondary,
+                  size: 22,
                 ),
-                if (m.targetDate != null)
-                  Text(
-                    _formatDate(m.targetDate!),
-                    style: TextStyle(color: sc.textSecondary, fontSize: 10),
-                  ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      m.name,
+                      style: TextStyle(
+                        color: m.isCompleted ? sc.textSecondary : sc.textPrimary,
+                        fontSize: 14,
+                        decoration:
+                            m.isCompleted ? TextDecoration.lineThrough : null,
+                      ),
+                    ),
+                    if (m.targetDate != null)
+                      Text(
+                        _formatDate(m.targetDate!),
+                        style: TextStyle(color: sc.textSecondary, fontSize: 10),
+                      ),
+                  ],
+                ),
+              ),
+              if (canEdit && !m.isCompleted)
+                GestureDetector(
+                  onTap: () => _confirmDeleteMilestone(
+                      context, ref, m.id, goal.id, sc),
+                  child:
+                      Icon(Icons.close, size: 14, color: sc.textSecondary),
+                ),
+            ],
           ),
-          if (canEdit && !m.isCompleted)
-            GestureDetector(
-              onTap: () => _confirmDeleteMilestone(
-                  context, ref, m.id, goal.id, sc),
-              child:
-                  Icon(Icons.close, size: 14, color: sc.textSecondary),
+          if (atts.isNotEmpty || canEdit)
+            Padding(
+              padding: const EdgeInsets.only(left: 32, top: 4),
+              child: AttachmentGallery(
+                goalId: goal.id,
+                nodeType: 'milestone',
+                nodeId: m.id,
+                attachments: atts,
+                canEdit: canEdit,
+                compactMode: true,
+              ),
             ),
         ],
       ),

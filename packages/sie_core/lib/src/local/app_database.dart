@@ -409,6 +409,25 @@ class LocalMapElements extends Table {
   @override Set<Column> get primaryKey => {id};
 }
 
+// Stage 2: node attachments (images/files attached to plan nodes).
+@DataClassName('LocalNodeAttachment')
+class LocalNodeAttachments extends Table {
+  TextColumn get id           => text()();
+  TextColumn get goalId       => text()();
+  TextColumn get nodeType     => text()();      // goal|subgoal|task|milestone
+  TextColumn get nodeId       => text()();
+  TextColumn get storagePath  => text()();      // path in goal-attachments bucket
+  TextColumn get localPath    => text().nullable()(); // offline cache path
+  TextColumn get fileName     => text()();
+  TextColumn get mimeType     => text()();
+  IntColumn  get sizeBytes    => integer().withDefault(const Constant(0))();
+  TextColumn get uploadedBy   => text()();
+  IntColumn  get createdAtMs  => integer()();
+  BoolColumn get synced          => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally  => boolean().withDefault(const Constant(false))();
+  @override Set<Column> get primaryKey => {id};
+}
+
 // ── Database ───────────────────────────────────────────────────────────────
 
 @DriftDatabase(tables: [
@@ -435,12 +454,13 @@ class LocalMapElements extends Table {
   LocalTaskDependencies,
   LocalWeeklyReviews,
   LocalMapElements,
+  LocalNodeAttachments,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 33;
+  int get schemaVersion => 34;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -642,6 +662,13 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 33) {
         await m.addColumn(localMapElements, localMapElements.styleJsonText);
+      }
+      if (from < 34) {
+        await m.createTable(localNodeAttachments);
+        await m.issueCustomQuery(
+            'CREATE INDEX IF NOT EXISTS idx_attach_node_id '
+            'ON local_node_attachments(node_id)',
+            const []);
       }
     },
   );
@@ -1097,6 +1124,40 @@ class AppDatabase extends _$AppDatabase {
   Future<void> markMapElementSynced(String id) =>
       (update(localMapElements)..where((t) => t.id.equals(id)))
           .write(const LocalMapElementsCompanion(synced: Value(true)));
+
+  // ── Node attachments (Stage 2) ────────────────────────────────────────────
+
+  Future<List<LocalNodeAttachment>> attachmentsForGoals(List<String> goalIds) =>
+      (select(localNodeAttachments)
+            ..where((t) =>
+                t.goalId.isIn(goalIds) & t.deletedLocally.equals(false)))
+          .get();
+
+  Future<List<LocalNodeAttachment>> unsyncedAttachments() =>
+      (select(localNodeAttachments)
+            ..where((t) =>
+                t.synced.equals(false) & t.deletedLocally.equals(false)))
+          .get();
+
+  Future<void> upsertNodeAttachment(LocalNodeAttachmentsCompanion row) =>
+      into(localNodeAttachments).insertOnConflictUpdate(row);
+
+  Future<void> deleteAttachmentLocally(String id) =>
+      (update(localNodeAttachments)..where((t) => t.id.equals(id)))
+          .write(const LocalNodeAttachmentsCompanion(
+              deletedLocally: Value(true), synced: Value(false)));
+
+  Future<void> purgeAttachment(String id) =>
+      (delete(localNodeAttachments)..where((t) => t.id.equals(id))).go();
+
+  Future<void> markAttachmentSynced(String id) =>
+      (update(localNodeAttachments)..where((t) => t.id.equals(id)))
+          .write(const LocalNodeAttachmentsCompanion(synced: Value(true)));
+
+  Future<void> updateAttachmentStoragePath(String id, String path) =>
+      (update(localNodeAttachments)..where((t) => t.id.equals(id)))
+          .write(LocalNodeAttachmentsCompanion(
+              storagePath: Value(path), synced: const Value(false)));
 
   Future<void> updateSubGoalOrderIndex(String id, int idx) =>
       (update(localSubGoals)..where((t) => t.id.equals(id)))

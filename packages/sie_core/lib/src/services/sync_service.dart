@@ -384,6 +384,41 @@ class SyncService {
                 .eq('user_id', userId);
             await _db.updateGoal(payload['id'] as String,
                 const LocalGoalsCompanion(synced: Value(true)));
+          case 'upload_attachment':
+            // Attachment bytes were already uploaded at creation time if online;
+            // this case handles the case where upload failed offline. For now,
+            // just sync the metadata row — bytes must already be in Storage.
+            await client.from('goal_node_attachments').upsert({
+              'id': payload['id'],
+              'goal_id': payload['goal_id'],
+              'node_type': payload['node_type'],
+              'node_id': payload['node_id'],
+              'storage_path': payload['storage_path'],
+              'file_name': payload['file_name'],
+              'mime_type': payload['mime_type'],
+              'size_bytes': payload['size_bytes'] ?? 0,
+              'uploaded_by': payload['uploaded_by'],
+              'created_at': payload['created_at'],
+            }, onConflict: 'id');
+            await _db.markAttachmentSynced(payload['id'] as String);
+          case 'delete_attachment':
+            try {
+              final rows = await client
+                  .from('goal_node_attachments')
+                  .select('storage_path')
+                  .eq('id', payload['id'] as String)
+                  .maybeSingle();
+              if (rows != null) {
+                await client.storage
+                    .from('goal-attachments')
+                    .remove([rows['storage_path'] as String]);
+              }
+              await client
+                  .from('goal_node_attachments')
+                  .delete()
+                  .eq('id', payload['id'] as String);
+              await _db.purgeAttachment(payload['id'] as String);
+            } catch (_) {}
           case 'upsert_map_element':
             await client
                 .from('goal_map_elements')

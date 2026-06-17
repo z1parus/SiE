@@ -57,6 +57,7 @@ export 'src/utils/fog_of_war_utils.dart';
 export 'src/providers/user_timezone_provider.dart';
 export 'src/models/planning.dart';
 export 'src/models/map_element.dart';
+export 'src/models/node_attachment.dart';
 export 'src/models/goal_analytics.dart';
 export 'src/models/mission_medal.dart';
 export 'src/models/mission_template.dart';

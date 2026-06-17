@@ -2,6 +2,7 @@ import 'dart:ui' show Offset;
 import 'package:flutter/material.dart';
 import 'goal_collaborator.dart';
 import 'map_element.dart';
+import 'node_attachment.dart';
 import 'public_profile.dart';
 
 const _unset = Object();
@@ -413,6 +414,7 @@ class Goal {
     this.collaborators = const [],
     this.ownerProfile,
     this.mapElements = const [],
+    this.attachments = const {},
   });
 
   final String id;
@@ -435,6 +437,10 @@ class Goal {
   final List<GoalCollaborator> collaborators;
   final PublicProfile? ownerProfile; // populated for shared goals
   final List<MapElement> mapElements; // map-native content (Tactical Map only)
+  final Map<String, List<NodeAttachment>> attachments; // nodeId → attachments
+
+  List<NodeAttachment> attachmentsFor(String nodeId) =>
+      attachments[nodeId] ?? const [];
 
   Color get color =>
       Color(int.parse('0xFF${colorHex.replaceAll('#', '')}'));
@@ -471,6 +477,7 @@ class Goal {
     List<GoalCollaborator>? collaborators,
     PublicProfile? ownerProfile,
     List<MapElement>? mapElements,
+    Map<String, List<NodeAttachment>>? attachments,
   }) =>
       Goal(
         id: id,
@@ -493,6 +500,7 @@ class Goal {
         collaborators: collaborators ?? this.collaborators,
         ownerProfile: ownerProfile ?? this.ownerProfile,
         mapElements: mapElements ?? this.mapElements,
+        attachments: attachments ?? this.attachments,
       );
 
   factory Goal.fromJson(Map<String, dynamic> j) {

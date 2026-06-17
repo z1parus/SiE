@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import '../local/app_database.dart';
 import '../models/planning.dart';
 import '../models/map_element.dart';
+import '../models/node_attachment.dart';
 import '../models/goal_analytics.dart';
 import '../models/goal_collaborator.dart';
 import '../models/public_profile.dart';
@@ -141,6 +142,9 @@ final milestoneLogsProvider = FutureProvider.autoDispose
 });
 
 class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
+  // Signed URL cache: storagePath → (signedUrl, expiresAt). TTL 1 hour.
+  final Map<String, ({String url, DateTime expiresAt})> _signedUrlCache = {};
+
   @override
   Future<PlanningState> build() async {
     ref.watch(authStateProvider);
@@ -600,6 +604,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       }
     }
     await _mirrorMapElements(db, goals);
+    await _mirrorAttachments(db, goals);
   }
 
   /// Mirrors server map elements into the local store. Synced rows are replaced
@@ -649,6 +654,198 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     }
   }
 
+  /// Mirrors server attachments into the local store (same pattern as map elements).
+  Future<void> _mirrorAttachments(AppDatabase db, List<Goal> goals) async {
+    final goalIds = [for (final g in goals) g.id];
+    if (goalIds.isEmpty) return;
+    final localUnsynced = {
+      for (final a in await db.unsyncedAttachments()) a.id
+    };
+    final serverIds = <String>{};
+    try {
+      final rows = await Supabase.instance.client
+          .from('goal_node_attachments')
+          .select()
+          .inFilter('goal_id', goalIds);
+      for (final row in rows as List<dynamic>) {
+        final m = row as Map<String, dynamic>;
+        final id = m['id'] as String;
+        serverIds.add(id);
+        if (localUnsynced.contains(id)) continue;
+        await db.upsertNodeAttachment(LocalNodeAttachmentsCompanion(
+          id: Value(id),
+          goalId: Value(m['goal_id'] as String),
+          nodeType: Value(m['node_type'] as String),
+          nodeId: Value(m['node_id'] as String),
+          storagePath: Value(m['storage_path'] as String),
+          fileName: Value(m['file_name'] as String),
+          mimeType: Value(m['mime_type'] as String),
+          sizeBytes: Value((m['size_bytes'] as num?)?.toInt() ?? 0),
+          uploadedBy: Value(m['uploaded_by'] as String),
+          createdAtMs: Value(DateTime.parse(m['created_at'] as String)
+              .millisecondsSinceEpoch),
+          synced: const Value(true),
+          deletedLocally: const Value(false),
+        ));
+      }
+    } catch (_) {}
+    final localAll = await db.attachmentsForGoals(goalIds);
+    for (final row in localAll) {
+      if (row.synced && !serverIds.contains(row.id)) {
+        await db.purgeAttachment(row.id);
+      }
+    }
+  }
+
+  // ── Node Attachments (Stage 2) ────────────────────────────────────────────
+
+  /// Generates (or returns a cached) signed URL for a file in goal-attachments.
+  /// TTL: 1 hour. CachedNetworkImage should use [storagePath] as cacheKey so
+  /// re-generated URLs don't cause redundant downloads.
+  Future<String> getSignedUrl(String storagePath) async {
+    final cached = _signedUrlCache[storagePath];
+    if (cached != null &&
+        cached.expiresAt.isAfter(DateTime.now().add(const Duration(minutes: 5)))) {
+      return cached.url;
+    }
+    final result = await Supabase.instance.client.storage
+        .from('goal-attachments')
+        .createSignedUrl(storagePath, 3600); // 1 hour
+    _signedUrlCache[storagePath] = (
+      url: result,
+      expiresAt: DateTime.now().add(const Duration(hours: 1)),
+    );
+    return result;
+  }
+
+  /// Uploads a file to the goal-attachments bucket and attaches it to a node.
+  Future<NodeAttachment?> addAttachment({
+    required String goalId,
+    required String nodeType,
+    required String nodeId,
+    required List<int> bytes,
+    required String fileName,
+    required String mimeType,
+  }) async {
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session == null) return null;
+    final userId = session.user.id;
+    final id = _uuid.v4();
+    final ext = fileName.contains('.') ? fileName.split('.').last : 'bin';
+    final path = '$goalId/$id.$ext';
+
+    String storagePath = path;
+    bool synced = false;
+
+    try {
+      await Supabase.instance.client.storage
+          .from('goal-attachments')
+          .uploadBinary(
+            path,
+            Uint8List.fromList(bytes),
+            fileOptions: FileOptions(upsert: false, contentType: mimeType),
+          );
+      // Insert to Supabase
+      await Supabase.instance.client.from('goal_node_attachments').insert({
+        'id': id,
+        'goal_id': goalId,
+        'node_type': nodeType,
+        'node_id': nodeId,
+        'storage_path': path,
+        'file_name': fileName,
+        'mime_type': mimeType,
+        'size_bytes': bytes.length,
+        'uploaded_by': userId,
+      });
+      synced = true;
+    } catch (_) {}
+
+    final attachment = NodeAttachment(
+      id: id,
+      goalId: goalId,
+      nodeType: nodeType,
+      nodeId: nodeId,
+      storagePath: storagePath,
+      fileName: fileName,
+      mimeType: mimeType,
+      sizeBytes: bytes.length,
+      uploadedBy: userId,
+      createdAt: DateTime.now(),
+    );
+
+    final db = ref.read(appDatabaseProvider);
+    await db.upsertNodeAttachment(LocalNodeAttachmentsCompanion(
+      id: Value(id),
+      goalId: Value(goalId),
+      nodeType: Value(nodeType),
+      nodeId: Value(nodeId),
+      storagePath: Value(storagePath),
+      fileName: Value(fileName),
+      mimeType: Value(mimeType),
+      sizeBytes: Value(bytes.length),
+      uploadedBy: Value(userId),
+      createdAtMs: Value(attachment.createdAt.millisecondsSinceEpoch),
+      synced: Value(synced),
+      deletedLocally: const Value(false),
+    ));
+
+    if (!synced) {
+      await db.enqueueSyncOp('upload_attachment',
+          jsonEncode(attachment.toUpsertJson()));
+    }
+
+    _updateGoalInState(goalId, (g) {
+      final current = Map<String, List<NodeAttachment>>.from(g.attachments);
+      current[nodeId] = [...(current[nodeId] ?? []), attachment];
+      return g.copyWith(attachments: current);
+    });
+
+    return attachment;
+  }
+
+  /// Removes an attachment from the node and queues Storage deletion.
+  Future<void> deleteAttachment(String goalId, String nodeId, String attachmentId) async {
+    _updateGoalInState(goalId, (g) {
+      final current = Map<String, List<NodeAttachment>>.from(g.attachments);
+      current[nodeId] = (current[nodeId] ?? [])
+          .where((a) => a.id != attachmentId)
+          .toList();
+      if (current[nodeId]!.isEmpty) current.remove(nodeId);
+      return g.copyWith(attachments: current);
+    });
+
+    final db = ref.read(appDatabaseProvider);
+    await db.deleteAttachmentLocally(attachmentId);
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        // Fetch the storagePath before deleting the DB row
+        final rows = await Supabase.instance.client
+            .from('goal_node_attachments')
+            .select('storage_path')
+            .eq('id', attachmentId)
+            .maybeSingle();
+        if (rows != null) {
+          final storagePath = rows['storage_path'] as String;
+          await Supabase.instance.client.storage
+              .from('goal-attachments')
+              .remove([storagePath]);
+        }
+        await Supabase.instance.client
+            .from('goal_node_attachments')
+            .delete()
+            .eq('id', attachmentId);
+        await db.purgeAttachment(attachmentId);
+        _signedUrlCache.remove(
+            rows?['storage_path'] as String? ?? '');
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp(
+        'delete_attachment', jsonEncode({'id': attachmentId, 'goal_id': goalId}));
+  }
+
   Future<PlanningState> _loadFromLocal(AppDatabase db, String userId,
       [List<Goal>? serverGoals]) async {
     // Build a lookup map from server data for collaborator/owner enrichment
@@ -669,6 +866,33 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final positionsByGoal = await db.mapPositionsForGoals(goalIds);
     final rawDeps = await db.dependenciesForGoals(goalIds);
     final rawElements = await db.mapElementsForGoals(goalIds);
+    final rawAttachments = await db.attachmentsForGoals(goalIds);
+
+    // Group attachments by nodeId (Stage 2).
+    final attachmentsByNode = <String, List<NodeAttachment>>{};
+    for (final ra in rawAttachments) {
+      (attachmentsByNode[ra.nodeId] ??= []).add(NodeAttachment(
+        id: ra.id,
+        goalId: ra.goalId,
+        nodeType: ra.nodeType,
+        nodeId: ra.nodeId,
+        storagePath: ra.storagePath,
+        localPath: ra.localPath,
+        fileName: ra.fileName,
+        mimeType: ra.mimeType,
+        sizeBytes: ra.sizeBytes,
+        uploadedBy: ra.uploadedBy,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(ra.createdAtMs),
+      ));
+    }
+
+    // Group attachments by goalId for Goal.attachments map.
+    final attachmentsByGoal = <String, Map<String, List<NodeAttachment>>>{};
+    for (final entry in attachmentsByNode.entries) {
+      for (final att in entry.value) {
+        (attachmentsByGoal[att.goalId] ??= {})[entry.key] = entry.value;
+      }
+    }
 
     // Group map-native elements by goal (Tactical Map Stage 1).
     final elementsByGoal = <String, List<MapElement>>{};
@@ -803,6 +1027,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         collaborators: serverMap[rg.id]?.collaborators ?? const [],
         ownerProfile: serverMap[rg.id]?.ownerProfile,
         mapElements: elementsByGoal[rg.id] ?? const [],
+        attachments: attachmentsByGoal[rg.id] ?? const {},
       ));
     }
 
