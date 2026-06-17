@@ -3,6 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../theme/sie_colors.dart';
 
+/// Flat card widget with press-scale feedback.
+///
+/// Interactive press feedback when [onTap] is non-null:
+///   • Scale squeezes to 0.97 on tap-down.
+///   • Returns to 1.0 with ease-out on release.
 class SieGlassCard extends ConsumerStatefulWidget {
   const SieGlassCard({
     super.key,
@@ -47,19 +52,13 @@ class _SieGlassCardState extends ConsumerState<SieGlassCard>
 
   void _onTapDown(TapDownDetails _) {
     if (widget.onTap == null) return;
-    _pressCtrl.animateTo(
-      1.0,
-      duration: const Duration(milliseconds: 80),
-      curve: Curves.easeIn,
-    );
+    _pressCtrl.animateTo(1.0,
+        duration: const Duration(milliseconds: 80), curve: Curves.easeIn);
   }
 
   void _onRelease() {
-    _pressCtrl.animateTo(
-      0.0,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-    );
+    _pressCtrl.animateTo(0.0,
+        duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
   }
 
   @override

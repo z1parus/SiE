@@ -18,6 +18,15 @@ const _uuid = Uuid();
 
 typedef FocusSessionResult = ({int xpGained, int dpGained, Achievement? newAchievement});
 
+/// Optional planning context for a focus session (Stage 7). When present, the
+/// completed session's time is attributed to this task/goal.
+typedef FocusTaskRef = ({
+  String taskId,
+  String subGoalId,
+  String goalId,
+  String taskTitle,
+});
+
 enum FocusPhase { idle, work, breakTime }
 
 // ── Settings ──────────────────────────────────────────────────
@@ -62,6 +71,8 @@ class FocusTimerState {
   final int completedSessions;
   final int totalDurationSecs;
   final FocusSessionResult? pendingResult;
+  // Stage 7: planning context bound to the current session (null = free focus).
+  final FocusTaskRef? taskRef;
 
   const FocusTimerState({
     this.settings = const FocusSettings(),
@@ -71,6 +82,7 @@ class FocusTimerState {
     this.completedSessions = 0,
     this.totalDurationSecs = 25 * 60,
     this.pendingResult,
+    this.taskRef,
   });
 
   double get progress => totalDurationSecs > 0
@@ -91,6 +103,7 @@ class FocusTimerState {
     int? completedSessions,
     int? totalDurationSecs,
     Object? pendingResult = _omit,
+    Object? taskRef = _omit,
   }) =>
       FocusTimerState(
         settings: settings ?? this.settings,
@@ -102,6 +115,9 @@ class FocusTimerState {
         pendingResult: identical(pendingResult, _omit)
             ? this.pendingResult
             : pendingResult as FocusSessionResult?,
+        taskRef: identical(taskRef, _omit)
+            ? this.taskRef
+            : taskRef as FocusTaskRef?,
       );
 }
 
@@ -117,6 +133,10 @@ const _kFocusBreakMinutes    = 'focus_break_minutes';
 const _kFocusWorkMusic       = 'focus_work_music_enabled';
 const _kFocusBreakMusic      = 'focus_break_music_enabled';
 const _kFocusCompletedSess   = 'focus_completed_sessions';
+const _kFocusTaskId          = 'focus_task_id';
+const _kFocusSubGoalId       = 'focus_sub_goal_id';
+const _kFocusGoalId          = 'focus_goal_id';
+const _kFocusTaskTitle       = 'focus_task_title';
 
 // ── Notifier ──────────────────────────────────────────────────
 
@@ -174,6 +194,19 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
       isBreakMusicEnabled: breakMusic,
     );
 
+    final taskId = prefs.getString(_kFocusTaskId);
+    final subGoalId = prefs.getString(_kFocusSubGoalId);
+    final goalId = prefs.getString(_kFocusGoalId);
+    final taskTitle = prefs.getString(_kFocusTaskTitle);
+    final restoredRef = (taskId != null && subGoalId != null && goalId != null)
+        ? (
+            taskId: taskId,
+            subGoalId: subGoalId,
+            goalId: goalId,
+            taskTitle: taskTitle ?? '',
+          )
+        : null;
+
     state = FocusTimerState(
       settings: settings,
       phase: phase,
@@ -181,6 +214,7 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
       isRunning: false,
       completedSessions: completedSess,
       totalDurationSecs: totalDurSecs,
+      taskRef: restoredRef,
     );
   }
 
@@ -197,6 +231,18 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
     await prefs.setBool(_kFocusWorkMusic, state.settings.isWorkMusicEnabled);
     await prefs.setBool(_kFocusBreakMusic, state.settings.isBreakMusicEnabled);
     await prefs.setInt(_kFocusCompletedSess, state.completedSessions);
+    final ref_ = state.taskRef;
+    if (ref_ != null) {
+      await prefs.setString(_kFocusTaskId, ref_.taskId);
+      await prefs.setString(_kFocusSubGoalId, ref_.subGoalId);
+      await prefs.setString(_kFocusGoalId, ref_.goalId);
+      await prefs.setString(_kFocusTaskTitle, ref_.taskTitle);
+    } else {
+      await prefs.remove(_kFocusTaskId);
+      await prefs.remove(_kFocusSubGoalId);
+      await prefs.remove(_kFocusGoalId);
+      await prefs.remove(_kFocusTaskTitle);
+    }
     if (state.isRunning && _phaseStartedAt != null) {
       await prefs.setInt(
           _kFocusPhaseStartMs, _phaseStartedAt!.millisecondsSinceEpoch);
@@ -211,7 +257,8 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
       _kFocusPhase, _kFocusPhaseStartMs, _kFocusSecsRemaining,
       _kFocusIsRunning, _kFocusTotalDurSecs, _kFocusWorkMinutes,
       _kFocusBreakMinutes, _kFocusWorkMusic, _kFocusBreakMusic,
-      _kFocusCompletedSess,
+      _kFocusCompletedSess, _kFocusTaskId, _kFocusSubGoalId, _kFocusGoalId,
+      _kFocusTaskTitle,
     ]) {
       await prefs.remove(key);
     }
@@ -256,7 +303,7 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
     }
   }
 
-  void start() {
+  void start({FocusTaskRef? taskRef}) {
     if (state.isRunning) return;
     final audio = ref.read(audioServiceProvider);
 
@@ -269,6 +316,8 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
         isRunning: true,
         completedSessions: state.completedSessions,
         totalDurationSecs: state.settings.workSecs,
+        // A fresh start adopts the provided binding (or clears a stale one).
+        taskRef: taskRef,
       );
       if (state.settings.isWorkMusicEnabled) {
         audio.startAmbient();
@@ -365,6 +414,7 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
     _ambientActive = false;
 
     if (state.phase == FocusPhase.work) {
+      final boundRef = state.taskRef;
       final result = await _saveWorkSession(settings: settings);
       state = FocusTimerState(
         settings: settings,
@@ -374,6 +424,9 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
         completedSessions: completedSessions + 1,
         totalDurationSecs: settings.breakSecs,
         pendingResult: result,
+        // Keep the binding through the break so the result overlay can offer
+        // "mark task done" and the header keeps showing context.
+        taskRef: boundRef,
       );
       _phaseStartedAt = null;
       _saveSession();
@@ -401,6 +454,8 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     final db = ref.read(appDatabaseProvider);
     final sessionId = _uuid.v4();
+    // Capture planning binding before any async gap (Stage 7).
+    final taskRef = state.taskRef;
 
     // Always record locally.
     await db.insertFocusSession(LocalFocusSessionsCompanion(
@@ -411,6 +466,8 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
       xpAwarded: const Value(_focusXp),
       dpAwarded: const Value(_focusDp),
       synced: Value(isOnline),
+      taskId: Value(taskRef?.taskId),
+      goalId: Value(taskRef?.goalId),
     ));
 
     Achievement? earned;
@@ -423,6 +480,8 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
           'duration_seconds': settings.workSecs,
           'is_completed': true,
           'xp_gained': _focusXp,
+          if (taskRef != null) 'task_id': taskRef.taskId,
+          if (taskRef != null) 'goal_id': taskRef.goalId,
         });
 
         await Future.wait([

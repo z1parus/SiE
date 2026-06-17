@@ -21,7 +21,7 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    _tabs = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -38,20 +38,24 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
       ref.invalidate(inventoryProvider);
       ref.invalidate(userProfileProvider);
       if (!mounted) return;
+      SieHaptics.success();
       ref.read(audioServiceProvider).playPurchase().ignore();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
+          behavior: SnackBarBehavior.floating,
           content: Text('ПРОТОКОЛ ВИЗУАЛИЗАЦИИ УСПЕШНО ПРИОБРЕТЁН'),
         ),
       );
     } catch (e) {
       if (!mounted) return;
       final isInsufficient = e.toString().contains('INSUFFICIENT_DP');
+      SieHaptics.warning();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
+          behavior: SnackBarBehavior.floating,
           content: Text(
             isInsufficient
-                ? 'НЕДОСТАТОЧНО РЕСУРСОВ (DP)'
+                ? 'Недостаточно DP. Зарабатывайте их, выполняя задания и миссии.'
                 : 'ОШИБКА ТРАНЗАКЦИИ',
           ),
         ),
@@ -66,8 +70,11 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
       await equipAsset(asset);
       ref.invalidate(userProfileProvider);
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('ОСНАЩЕНИЕ ПРИМЕНЕНО')));
+      SieHaptics.success();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text('ОСНАЩЕНИЕ ПРИМЕНЕНО'),
+      ));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -97,6 +104,7 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
     final frames      = ref.watch(avatarFramesProvider).valueOrNull ?? [];
     final backgrounds = ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
     final styles      = ref.watch(statStylesProvider).valueOrNull ?? [];
+    final patterns    = ref.watch(profilePatternsProvider).valueOrNull ?? [];
     final inventory   = ref.watch(inventoryProvider).valueOrNull ?? InventoryState.empty;
     final dp          = profile?.designPoints ?? 0;
 
@@ -148,6 +156,15 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
                       onEquip: _onEquip,
                       onPreview: (a) => _showPreview(a, profile),
                     ),
+                    _ShopGrid(
+                      assets: patterns,
+                      inventory: inventory,
+                      profile: profile,
+                      buyingId: _buyingId,
+                      onBuy: _onBuy,
+                      onEquip: _onEquip,
+                      onPreview: (a) => _showPreview(a, profile),
+                    ),
                   ],
                 ),
               ),
@@ -174,6 +191,7 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
         Tab(text: 'РАМКИ'),
         Tab(text: 'ФОНЫ'),
         Tab(text: 'СТИЛИ'),
+        Tab(text: 'УЗОРЫ'),
       ],
     );
   }
@@ -262,45 +280,75 @@ class _ShopGrid extends ConsumerWidget {
         AssetType.avatarFrame       => profile?.equippedFrameId == asset.id,
         AssetType.profileBackground => profile?.equippedBackgroundId == asset.id,
         AssetType.statStyle         => profile?.equippedStatStyleId == asset.id,
+        AssetType.profilePattern    => profile?.equippedPatternId == asset.id,
       };
+
+  Future<void> _onRefresh(WidgetRef ref) async {
+    ref.invalidate(avatarFramesProvider);
+    ref.invalidate(profileBackgroundsProvider);
+    ref.invalidate(statStylesProvider);
+    ref.invalidate(profilePatternsProvider);
+    ref.invalidate(inventoryProvider);
+    ref.invalidate(userProfileProvider);
+    await ref.read(inventoryProvider.future);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
     if (assets.isEmpty) {
-      return Center(
-        child: CircularProgressIndicator(
-            color: c.accent, strokeWidth: 1.5),
+      return RefreshIndicator(
+        color: c.accent,
+        backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+        onRefresh: () => _onRefresh(ref),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(
+              height: 300,
+              child: Center(
+                child: CircularProgressIndicator(
+                    color: c.accent, strokeWidth: 1.5),
+              ),
+            ),
+          ],
+        ),
       );
     }
-    return GridView.builder(
-      padding: const EdgeInsets.all(14),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 0.70,
+    return RefreshIndicator(
+      color: c.accent,
+      backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+      onRefresh: () => _onRefresh(ref),
+      child: GridView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(14),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 0.70,
+        ),
+        itemCount: assets.length,
+        itemBuilder: (_, i) {
+          final asset      = assets[i];
+          final purchased  = inventory.owns(asset);
+          final accessible = purchased || asset.priceDP == 0;
+          final equipped   = _isEquipped(asset);
+          return RepaintBoundary(
+            child: _ShopCard(
+              asset: asset,
+              accessible: accessible,
+              purchased: purchased,
+              equipped: equipped,
+              loading: buyingId == asset.id,
+              dp: profile?.designPoints ?? 0,
+              onBuy: () => onBuy(asset),
+              onEquip: () => onEquip(asset),
+              onPreview: () => onPreview(asset),
+            ),
+          );
+        },
       ),
-      itemCount: assets.length,
-      itemBuilder: (_, i) {
-        final asset      = assets[i];
-        final purchased  = inventory.owns(asset);
-        final accessible = purchased || asset.priceDP == 0;
-        final equipped   = _isEquipped(asset);
-        return RepaintBoundary(
-          child: _ShopCard(
-            asset: asset,
-            accessible: accessible,
-            purchased: purchased,
-            equipped: equipped,
-            loading: buyingId == asset.id,
-            dp: profile?.designPoints ?? 0,
-            onBuy: () => onBuy(asset),
-            onEquip: () => onEquip(asset),
-            onPreview: () => onPreview(asset),
-          ),
-        );
-      },
     );
   }
 }
@@ -458,7 +506,7 @@ class _CardContent extends ConsumerWidget {
     final borderColor = equipped
         ? c.accent
         : accessible
-            ? c.accentSecondary.withValues(alpha: 0.5)
+            ? c.accent.withValues(alpha: 0.30)
             : c.border;
 
     final cardChild = Column(
@@ -497,7 +545,7 @@ class _CardContent extends ConsumerWidget {
                       left: 7,
                       child: _Badge(
                           label: 'КУПЛЕНО',
-                          color: c.accentSecondary,
+                          color: c.accent,
                           filled: false),
                     ),
                   // Preview eye
@@ -602,7 +650,7 @@ class _CardContent extends ConsumerWidget {
                 color: equipped
                     ? c.textSecondary
                     : accessible
-                        ? c.accentSecondary
+                        ? c.accent
                         : (canAfford ? c.accent : c.textSecondary),
                 enabled: !equipped && !loading,
                 loading: loading,
@@ -801,7 +849,33 @@ class _AssetVisualBig extends StatelessWidget {
         AssetType.avatarFrame       => _FrameVisual(asset: asset),
         AssetType.profileBackground => _BackgroundVisual(asset: asset),
         AssetType.statStyle         => _StatStyleVisual(asset: asset),
+        AssetType.profilePattern    => _PatternVisual(asset: asset),
       };
+}
+
+class _PatternVisual extends ConsumerWidget {
+  final CosmeticAsset asset;
+  const _PatternVisual({required this.asset});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        width: 84,
+        height: 56,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF0D2A42), Color(0xFF071520)],
+          ),
+        ),
+        child: ProfilePatternThumb(pattern: asset, accent: c.accent),
+      ),
+    );
+  }
 }
 
 class _FrameVisual extends StatelessWidget {
@@ -825,18 +899,45 @@ class _BackgroundVisual extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ClipRRect(
         borderRadius: BorderRadius.circular(4),
-        child: Container(
+        child: _buildBgContainer(
           width: 84,
           height: 56,
-          decoration: BoxDecoration(
-            gradient: asset.backgroundGradient ??
-                const LinearGradient(
-                  colors: [Color(0xFF0D2A42), Color(0xFF071520)],
-                ),
-          ),
-          child: CustomPaint(painter: _GridPainter()),
+          asset: asset,
         ),
       );
+
+  Widget _buildBgContainer({
+    required double width,
+    required double height,
+    required CosmeticAsset asset,
+  }) {
+    Widget pattern;
+    if (asset.useNeuralPattern) {
+      pattern = NeuralNetworkWidget(color: asset.accentColor.withValues(alpha: 0.20));
+    } else {
+      pattern = CustomPaint(painter: _GridPainter());
+    }
+
+    if (asset.backgroundColor != null) {
+      return Container(
+        width: width,
+        height: height,
+        color: asset.backgroundColor,
+        child: pattern,
+      );
+    }
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        gradient: asset.backgroundGradient ??
+            const LinearGradient(
+              colors: [Color(0xFF0D2A42), Color(0xFF071520)],
+            ),
+      ),
+      child: NeuralNetworkWidget(color: asset.accentColor.withValues(alpha: 0.18)),
+    );
+  }
 }
 
 class _StatStyleVisual extends StatelessWidget {
@@ -885,7 +986,7 @@ class _GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final p = Paint()
-      ..color = const Color(0xFF00C8FF).withValues(alpha: 0.06)
+      ..color = const Color(0xFFC8A84B).withValues(alpha: 0.06)
       ..strokeWidth = 0.5;
     const step = 14.0;
     for (var x = 0.0; x < size.width; x += step) {
@@ -900,6 +1001,49 @@ class _GridPainter extends CustomPainter {
   bool shouldRepaint(_GridPainter _) => false;
 }
 
+// ── Preview Background Box ────────────────────────────────────
+class _PreviewBgBox extends StatelessWidget {
+  final CosmeticAsset? bg;
+  final SieColors c;
+  final Widget child;
+  const _PreviewBgBox({required this.bg, required this.c, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    BoxDecoration decoration;
+    if (bg?.backgroundColor != null) {
+      decoration = BoxDecoration(
+        color: bg!.backgroundColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.accent.withValues(alpha: 0.3)),
+      );
+    } else {
+      decoration = BoxDecoration(
+        gradient: bg?.backgroundGradient ??
+            (c.isLightMode
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [c.border, c.surface],
+                  )
+                : const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF0D2A42), Color(0xFF071520)],
+                  )),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.accent.withValues(alpha: 0.3)),
+      );
+    }
+    return Container(
+      height: 130,
+      clipBehavior: Clip.hardEdge,
+      decoration: decoration,
+      child: child,
+    );
+  }
+}
+
 // ── Preview Sheet ─────────────────────────────────────────────
 
 class _PreviewSheet extends ConsumerWidget {
@@ -912,6 +1056,7 @@ class _PreviewSheet extends ConsumerWidget {
     final frames      = ref.watch(avatarFramesProvider).valueOrNull ?? [];
     final backgrounds = ref.watch(profileBackgroundsProvider).valueOrNull ?? [];
     final styles      = ref.watch(statStylesProvider).valueOrNull ?? [];
+    final patterns    = ref.watch(profilePatternsProvider).valueOrNull ?? [];
 
     final c = ref.watch(sieColorsProvider);
 
@@ -919,6 +1064,7 @@ class _PreviewSheet extends ConsumerWidget {
       frames: frames,
       backgrounds: backgrounds,
       styles: styles,
+      patterns: patterns,
       frameId: asset.type == AssetType.avatarFrame
           ? asset.id
           : profile?.equippedFrameId,
@@ -928,6 +1074,9 @@ class _PreviewSheet extends ConsumerWidget {
       styleId: asset.type == AssetType.statStyle
           ? asset.id
           : profile?.equippedStatStyleId,
+      patternId: asset.type == AssetType.profilePattern
+          ? asset.id
+          : profile?.equippedPatternId,
     );
 
     final letter = profile?.username?.isNotEmpty == true
@@ -963,28 +1112,25 @@ class _PreviewSheet extends ConsumerWidget {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 16),
-          Container(
-            height: 130,
-            clipBehavior: Clip.hardEdge,
-            decoration: BoxDecoration(
-              gradient: previewEquipped.background?.backgroundGradient ??
-                  (c.isLightMode
-                      ? LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [c.border, c.surface],
-                        )
-                      : const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Color(0xFF0D2A42), Color(0xFF071520)],
-                        )),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: c.accent.withValues(alpha: 0.3)),
-            ),
+          _PreviewBgBox(
+            bg: previewEquipped.background,
+            c: c,
             child: Stack(
               children: [
-                CustomPaint(painter: _GridPainter(), size: Size.infinite),
+                if (previewEquipped.pattern != null)
+                  Positioned.fill(
+                    child: ProfilePatternLayer(
+                      pattern: previewEquipped.pattern,
+                      accent: previewEquipped.background?.accentColor ?? c.accent,
+                    ),
+                  )
+                else if (previewEquipped.background?.useNeuralPattern ?? false)
+                  NeuralNetworkWidget(
+                    color: (previewEquipped.background?.accentColor ?? c.accent)
+                        .withValues(alpha: 0.20),
+                  )
+                else
+                  CustomPaint(painter: _GridPainter(), size: Size.infinite),
                 Positioned.fill(
                   child: Container(
                     decoration: BoxDecoration(

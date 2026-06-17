@@ -4,13 +4,13 @@ import 'package:flutter/material.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 // SieThemeMode
 //
-// Three tiers of visual fidelity — persisted via sieThemeModeProvider.
+// Two tiers of visual fidelity — persisted via sieThemeModeProvider.
 // ─────────────────────────────────────────────────────────────────────────────
 enum SieThemeMode {
-  /// Flat anthracite dark mode. Gold-sand accents.
+  /// Flat anthracite dark mode. No shaders, no starfield. Gold-sand accents.
   classicDark,
 
-  /// Flat light mode. Seafoam-teal accents.
+  /// Flat light mode. Gold-sand primary accents, seafoam-teal secondary.
   classicLight,
 }
 
@@ -18,7 +18,7 @@ enum SieThemeMode {
 // SieTheme
 // ─────────────────────────────────────────────────────────────────────────────
 class SieTheme {
-  // ── Cosmic palette (cosmicLiquidGlass) ─────────────────────────────────────
+  // ── Cyber-Space palette (used as fallback colors in cosmetic_asset models) ──
 
   static const background      = Color(0xFF07111D);
   static const surface         = Color(0xFF0B1E30);
@@ -30,9 +30,6 @@ class SieTheme {
   static const borderDefault   = Color(0xFF1A3A5C);
   static const borderAccent    = Color(0xFF005F80);
   static const dp              = Color(0xFF9D50BB);
-
-  static const _spaceVacuum   = Color(0xFF0A0E1A);
-  static const _mutedGreyBlue = Color(0xFF90A4AE);
 
   // ── Classic Dark palette ───────────────────────────────────────────────────
 
@@ -46,13 +43,14 @@ class SieTheme {
 
   // ── Classic Light palette ──────────────────────────────────────────────────
 
-  static const clBackground    = Color(0xFFF5F6FA); // crisp light grey
-  static const clSurface       = Color(0xFFFFFFFF);
-  static const clAccent        = Color(0xFF5AADA0); // seafoam teal
-  static const clBorder        = Color(0xFFE4E4EE);
-  static const clTextPrimary   = Color(0xFF1C1C22);
-  static const clTextSecondary = Color(0xFF646470);
-  static const clDp            = Color(0xFF8B5CF6); // muted violet
+  static const clBackground      = Color(0xFFF5F6FA); // crisp light grey
+  static const clSurface         = Color(0xFFFFFFFF);
+  static const clAccent          = Color(0xFFC8A84B); // gold sand — primary
+  static const clAccentSecondary = Color(0xFF5AADA0); // marine foam — secondary
+  static const clBorder          = Color(0xFFE4E4EE);
+  static const clTextPrimary     = Color(0xFF1C1C22);
+  static const clTextSecondary   = Color(0xFF646470);
+  static const clDp              = Color(0xFF8B5CF6); // muted violet
 
   // ── Theme routing ──────────────────────────────────────────────────────────
 
@@ -60,72 +58,6 @@ class SieTheme {
     SieThemeMode.classicDark  => classicDarkTheme,
     SieThemeMode.classicLight => classicLightTheme,
   };
-
-  // ── Legacy dark theme (preserved for backward compatibility) ───────────────
-
-  static ThemeData get dark => ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: background,
-        colorScheme: const ColorScheme.dark(
-          primary: accent,
-          secondary: accentSecondary,
-          surface: surface,
-          onSurface: textPrimary,
-          onPrimary: background,
-        ),
-        cardTheme: const CardThemeData(
-          color: surface,
-          elevation: 0,
-          margin: EdgeInsets.zero,
-        ),
-        snackBarTheme: SnackBarThemeData(
-          backgroundColor: surfaceAlt,
-          contentTextStyle: const TextStyle(
-            color: textPrimary,
-            fontSize: 13,
-            letterSpacing: 0.5,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(4),
-            side: const BorderSide(color: borderAccent),
-          ),
-          behavior: SnackBarBehavior.floating,
-        ),
-        scrollbarTheme: ScrollbarThemeData(
-          thumbColor: const WidgetStatePropertyAll(borderAccent),
-          trackColor:
-              WidgetStatePropertyAll(borderDefault.withValues(alpha: 0.4)),
-          thickness: const WidgetStatePropertyAll(4),
-          radius: const Radius.circular(2),
-          thumbVisibility: const WidgetStatePropertyAll(false),
-          trackVisibility: const WidgetStatePropertyAll(false),
-        ),
-        textTheme: const TextTheme(
-          headlineMedium: TextStyle(
-            color: textPrimary,
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 2.5,
-          ),
-          titleMedium: TextStyle(
-            color: textPrimary,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.8,
-          ),
-          bodyMedium: TextStyle(
-            color: textSecondary,
-            fontSize: 13,
-            height: 1.5,
-          ),
-          labelSmall: TextStyle(
-            color: accent,
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.5,
-          ),
-        ),
-      );
 
   // ── Classic Dark theme ─────────────────────────────────────────────────────
 
@@ -216,7 +148,7 @@ class SieTheme {
         scaffoldBackgroundColor: clBackground,
         colorScheme: ColorScheme.light(
           primary: clAccent,
-          secondary: clAccent,
+          secondary: clAccentSecondary,
           surface: clSurface,
           onSurface: clTextPrimary,
           onPrimary: clSurface,

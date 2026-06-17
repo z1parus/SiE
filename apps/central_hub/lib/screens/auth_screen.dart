@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -97,7 +98,22 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   ],
                   const SizedBox(height: 24),
                   _buildSubmitButton(),
-                  const SizedBox(height: 20),
+                  if (_isLogin)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _isLoading ? null : _forgotPassword,
+                        child: Text(
+                          'ЗАБЫЛИ ПАРОЛЬ?',
+                          style: TextStyle(
+                            color: c.textSecondary,
+                            fontSize: 11,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 12),
                   _buildToggle(c),
                 ],
               ),
@@ -193,24 +209,50 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
 
   Widget _buildError(SieColors c) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.redAccent),
-        borderRadius: BorderRadius.circular(10),
-        color: c.isLightMode
-            ? Colors.redAccent.withValues(alpha: 0.1)
-            : const Color(0xFF1A0808),
-      ),
-      child: Text(
-        _errorMessage!,
-        style: const TextStyle(
-          color: Colors.redAccent,
-          fontSize: 11,
-          letterSpacing: 1.5,
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: c.danger),
+          borderRadius: BorderRadius.circular(10),
+          color: c.danger.withValues(alpha: c.isLightMode ? 0.1 : 0.14),
+        ),
+        child: Text(
+          _errorMessage!,
+          style: TextStyle(
+            color: c.danger,
+            fontSize: 11,
+            letterSpacing: 1.5,
+          ),
         ),
       ),
     );
+  }
+
+  Future<void> _forgotPassword() async {
+    final c = ref.read(sieColorsProvider);
+    final email = _emailController.text.trim();
+    if (!email.contains('@')) {
+      setState(() => _errorMessage = 'ENTER EMAIL FIRST');
+      return;
+    }
+    try {
+      await SupabaseService.resetPassword(email: email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: c.surface,
+          content: Text(
+            'Письмо для сброса пароля отправлено на $email',
+            style: TextStyle(color: c.textPrimary),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (mounted) setState(() => _errorMessage = 'CONNECTION ERROR');
+    }
   }
 
   Widget _buildSubmitButton() {
@@ -358,6 +400,7 @@ class _NeonField extends ConsumerStatefulWidget {
 class _NeonFieldState extends ConsumerState<_NeonField> {
   final _focus = FocusNode();
   bool _focused = false;
+  late bool _obscured = widget.obscureText;
 
   @override
   void initState() {
@@ -404,7 +447,7 @@ class _NeonFieldState extends ConsumerState<_NeonField> {
       child: TextFormField(
         controller: widget.controller,
         focusNode: _focus,
-        obscureText: widget.obscureText,
+        obscureText: _obscured,
         keyboardType: widget.keyboardType,
         validator: widget.validator,
         style: TextStyle(
@@ -428,6 +471,19 @@ class _NeonFieldState extends ConsumerState<_NeonField> {
                 : SieTheme.borderAccent,
             fontSize: 13,
           ),
+          suffixIcon: widget.obscureText
+              ? IconButton(
+                  icon: Icon(
+                    _obscured
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                    color: c.iconMuted,
+                    size: 20,
+                  ),
+                  tooltip: _obscured ? 'Показать пароль' : 'Скрыть пароль',
+                  onPressed: () => setState(() => _obscured = !_obscured),
+                )
+              : null,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           border: InputBorder.none,
@@ -435,8 +491,8 @@ class _NeonFieldState extends ConsumerState<_NeonField> {
           focusedBorder: InputBorder.none,
           errorBorder: InputBorder.none,
           focusedErrorBorder: InputBorder.none,
-          errorStyle: const TextStyle(
-            color: Colors.redAccent,
+          errorStyle: TextStyle(
+            color: c.danger,
             fontSize: 10,
             letterSpacing: 1.0,
           ),
@@ -464,19 +520,23 @@ class _PendingConfirmScreen extends ConsumerWidget {
         Text('CONFIRMATION REQUIRED', style: theme.textTheme.labelSmall),
         const SizedBox(height: 8),
         Text(
-          'Confirm your email to activate operative access.',
+          'Подтвердите email, чтобы активировать доступ оператора. '
+          'Откройте письмо и перейдите по ссылке.',
           style: theme.textTheme.bodyMedium,
         ),
-        const SizedBox(height: 12),
-        Text(
-          'Local dev — check Mailpit:',
-          style: TextStyle(color: c.textSecondary, fontSize: 12),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'http://127.0.0.1:54324',
-          style: TextStyle(color: c.accent, fontSize: 13, letterSpacing: 0.5),
-        ),
+        // Dev-only Mailpit hint — never shown in release builds.
+        if (!kReleaseMode) ...[
+          const SizedBox(height: 12),
+          Text(
+            'Local dev — check Mailpit:',
+            style: TextStyle(color: c.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'http://127.0.0.1:54324',
+            style: TextStyle(color: c.accent, fontSize: 13, letterSpacing: 0.5),
+          ),
+        ],
       ],
     );
 

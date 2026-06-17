@@ -9,21 +9,28 @@ import 'habit_tracker_screen.dart' show HabitDetailScreen;
 // ─────────────────────────────────────────────────────────────────────────────
 
 class RoutineEditorScreen extends ConsumerWidget {
-  const RoutineEditorScreen({super.key, required this.routineType});
+  const RoutineEditorScreen({super.key, this.routineType, this.stackId})
+      : assert(routineType != null || stackId != null,
+            'Provide either routineType or stackId');
 
-  final String routineType; // 'morning' | 'evening'
+  final String? routineType; // 'morning' | 'evening' (legacy)
+  final String? stackId; // named stack id (Stage 8b)
 
-  String get _title =>
-      routineType == 'morning' ? 'УТРЕННЯЯ РУТИНА' : 'ВЕЧЕРНЯЯ РУТИНА';
+  bool get _isStack => stackId != null;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sc          = ref.watch(sieColorsProvider);
     final routinesVal = ref.watch(habitRoutinesProvider).valueOrNull;
-    final routine     = routineType == 'morning'
-        ? routinesVal?.morning
-        : routinesVal?.evening;
+    final routine     = _isStack
+        ? routinesVal?.byId(stackId!)
+        : (routineType == 'morning'
+            ? routinesVal?.morning
+            : routinesVal?.evening);
     final habits = routine?.habits ?? [];
+    final title = _isStack
+        ? (routine?.displayName.toUpperCase() ?? 'СТЭК ПРИВЫЧЕК')
+        : (routineType == 'morning' ? 'УТРЕННЯЯ РУТИНА' : 'ВЕЧЕРНЯЯ РУТИНА');
 
     return SieBackground(
       child: Scaffold(
@@ -32,7 +39,33 @@ class RoutineEditorScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _EditorTopBar(title: _title),
+              _EditorTopBar(
+                title: title,
+                onEditMeta: _isStack && routine != null
+                    ? () => _editStackMeta(context, ref, routine)
+                    : null,
+              ),
+              if (_isStack && routine != null && routine.anchorCue != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                  child: Row(
+                    children: [
+                      Icon(Icons.link, size: 13,
+                          color: sc.accent.withValues(alpha: 0.8)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          routine.anchorCue!,
+                          style: TextStyle(
+                            color: sc.textSecondary,
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               Expanded(
                 child: habits.isEmpty
                     ? Center(
@@ -68,9 +101,10 @@ class RoutineEditorScreen extends ConsumerWidget {
                     : ReorderableListView.builder(
                         padding:
                             const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                        proxyDecorator: (child, _, _) =>
+                        buildDefaultDragHandles: false,
+                        proxyDecorator: (child, _, __) =>
                             Material(color: Colors.transparent, child: child),
-                        onReorderItem: (oldIdx, newIdx) {
+                        onReorder: (oldIdx, newIdx) {
                           if (routine == null) return;
                           final reordered = [...habits];
                           final moved = reordered.removeAt(oldIdx);
@@ -85,13 +119,30 @@ class RoutineEditorScreen extends ConsumerWidget {
                         itemCount: habits.length,
                         itemBuilder: (context, i) => _RoutineMemberTile(
                           key: ValueKey(habits[i].id),
+                          index: i,
                           habit: habits[i],
                           onRemove: routine == null
                               ? null
-                              : () => ref
-                                  .read(habitRoutinesProvider.notifier)
-                                  .removeHabitFromRoutine(
-                                      routine.id, habits[i].id),
+                              : () {
+                                  final notifier = ref.read(
+                                      habitRoutinesProvider.notifier);
+                                  final removedId = habits[i].id;
+                                  final prevOrder =
+                                      habits.map((h) => h.id).toList();
+                                  notifier.removeHabitFromRoutine(
+                                      routine.id, removedId);
+                                  showUndoSnackbar(
+                                    context,
+                                    ref,
+                                    message: 'Привычка убрана из рутины',
+                                    onUndo: () async {
+                                      await notifier.addHabitToRoutine(
+                                          routine.id, removedId);
+                                      await notifier.reorderMembers(
+                                          routine.id, prevOrder);
+                                    },
+                                  );
+                                },
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute<void>(
                               builder: (_) =>
@@ -120,14 +171,158 @@ class RoutineEditorScreen extends ConsumerWidget {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.of(context).size.width - 40,
+      ),
       builder: (_) => _HabitPickerSheet(
-        routineType: routineType,
-        currentRoutineId: routine?.id,
+        // For stacks the routine already exists, so the fallback type is unused.
+        routineType: routine?.routineType ?? routineType ?? 'stack',
+        currentRoutineId: routine?.id ?? stackId,
         existingHabitIds:
             routine?.habits.map((h) => h.id).toSet() ?? {},
       ),
     );
   }
+
+  void _editStackMeta(
+      BuildContext context, WidgetRef ref, HabitRoutine routine) {
+    showStackMetaDialog(
+      context,
+      ref,
+      initialName: routine.name,
+      initialCue: routine.anchorCue,
+      onSave: (name, cue) => ref
+          .read(habitRoutinesProvider.notifier)
+          .updateStackMeta(routine.id, name: name, anchorCue: cue),
+    );
+  }
+}
+
+/// Shared name + anchor-cue editor used when creating or editing a stack.
+void showStackMetaDialog(
+  BuildContext context,
+  WidgetRef ref, {
+  String? initialName,
+  String? initialCue,
+  required void Function(String name, String? cue) onSave,
+  String saveLabel = 'СОХРАНИТЬ',
+}) {
+  final sc        = ref.read(sieColorsProvider);
+  final nameCtrl  = TextEditingController(text: initialName ?? '');
+  final cueCtrl   = TextEditingController(text: initialCue ?? '');
+
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (ctx) => Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: sc.surface.withValues(alpha: 0.95),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: sc.border),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'СТЭК ПРИВЫЧЕК',
+                style: TextStyle(
+                  color: sc.textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 2.5,
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: nameCtrl,
+                style: TextStyle(color: sc.textPrimary, fontSize: 14),
+                decoration: InputDecoration(
+                  labelText: 'НАЗВАНИЕ',
+                  labelStyle:
+                      TextStyle(color: sc.textSecondary, fontSize: 11),
+                  enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: sc.border)),
+                  focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: sc.accent)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: cueCtrl,
+                style: TextStyle(color: sc.textPrimary, fontSize: 14),
+                decoration: InputDecoration(
+                  labelText: 'ЯКОРЬ-ТРИГГЕР (необязательно)',
+                  hintText: 'После утреннего кофе…',
+                  hintStyle: TextStyle(
+                      color: sc.textSecondary.withValues(alpha: 0.4),
+                      fontSize: 12),
+                  labelStyle:
+                      TextStyle(color: sc.textSecondary, fontSize: 11),
+                  enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: sc.border)),
+                  focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: sc.accent)),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.of(ctx).pop(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
+                      child: Text('ОТМЕНА',
+                          style: TextStyle(
+                              color: sc.textSecondary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () {
+                      final name = nameCtrl.text.trim();
+                      if (name.isEmpty) return;
+                      final cue = cueCtrl.text.trim();
+                      Navigator.of(ctx).pop();
+                      onSave(name, cue.isEmpty ? null : cue);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        color: sc.accent.withValues(alpha: 0.15),
+                        border: Border.all(
+                            color: sc.accent.withValues(alpha: 0.6)),
+                      ),
+                      child: Text(saveLabel,
+                          style: TextStyle(
+                              color: sc.accent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -135,8 +330,9 @@ class RoutineEditorScreen extends ConsumerWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _EditorTopBar extends ConsumerWidget {
-  const _EditorTopBar({required this.title});
+  const _EditorTopBar({required this.title, this.onEditMeta});
   final String title;
+  final VoidCallback? onEditMeta;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -163,6 +359,12 @@ class _EditorTopBar extends ConsumerWidget {
               ),
             ),
           ),
+          if (onEditMeta != null)
+            _EditorIconBtn(
+              icon: Icons.edit_outlined,
+              onTap: onEditMeta!,
+              size: 16,
+            ),
         ],
       ),
     );
@@ -208,10 +410,12 @@ class _EditorIconBtn extends ConsumerWidget {
 class _RoutineMemberTile extends ConsumerWidget {
   const _RoutineMemberTile({
     super.key,
+    required this.index,
     required this.habit,
     this.onRemove,
     this.onTap,
   });
+  final int index;
   final Habit habit;
   final VoidCallback? onRemove;
   final VoidCallback? onTap;
@@ -250,24 +454,42 @@ class _RoutineMemberTile extends ConsumerWidget {
                 ),
               ),
             ),
-            if (onRemove != null) ...[
-              GestureDetector(
-                onTap: onRemove,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Icon(
-                    Icons.remove_circle_outline,
-                    color: sc.textSecondary.withValues(alpha: 0.50),
-                    size: 18,
+            if (onRemove != null)
+              Semantics(
+                button: true,
+                label: 'Убрать из рутины',
+                child: GestureDetector(
+                  onTap: onRemove,
+                  behavior: HitTestBehavior.opaque,
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: Center(
+                      child: Icon(
+                        Icons.remove_circle_outline,
+                        color: sc.textSecondary.withValues(alpha: 0.50),
+                        size: 18,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ],
-            const SizedBox(width: 4),
-            Icon(
-              Icons.drag_handle,
-              color: sc.textSecondary.withValues(alpha: 0.35),
-              size: 20,
+            ReorderableDragStartListener(
+              index: index,
+              child: Semantics(
+                label: 'Перетащите для сортировки',
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Center(
+                    child: Icon(
+                      Icons.drag_handle,
+                      color: sc.textSecondary.withValues(alpha: 0.35),
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -331,123 +553,105 @@ class _HabitPickerSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final sc         = ref.watch(sieColorsProvider);
     final habitsAsync = ref.watch(habitsProvider);
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(20)),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                sc.accent.withValues(alpha: 0.05),
-                sc.surface,
-              ],
-            ),
-            border: Border(
-              top: BorderSide(
-                  color: sc.accent.withValues(alpha: 0.25), width: 1.0),
-              left: BorderSide(
-                  color: sc.accent.withValues(alpha: 0.12), width: 1.0),
-              right: BorderSide(
-                  color: sc.accent.withValues(alpha: 0.12), width: 1.0),
-            ),
-          ),
-          padding: EdgeInsets.fromLTRB(
-            20,
-            14,
-            20,
-            20 + MediaQuery.of(context).padding.bottom,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 3,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(2),
-                    color: Colors.white.withValues(alpha: 0.20),
-                  ),
-                ),
-              ),
-              Text(
-                'ДОБАВИТЬ ПРИВЫЧКУ',
-                style: TextStyle(
-                  color: sc.textPrimary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 2,
-                ),
-              ),
-              const SizedBox(height: 12),
-              habitsAsync.when(
-                loading: () => Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: CircularProgressIndicator(
-                        color: sc.accent, strokeWidth: 1.5),
-                  ),
-                ),
-                error: (e, _) => const SizedBox.shrink(),
-                data: (state) {
-                  final available = state.habits
-                      .where((h) => !existingHabitIds.contains(h.id))
-                      .toList();
-                  if (available.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Center(
-                        child: Text(
-                          'Все активные привычки уже добавлены',
-                          style: TextStyle(
-                            color: sc.textSecondary,
-                            fontSize: 11,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-                  return ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight:
-                          MediaQuery.of(context).size.height * 0.40,
-                    ),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: available.length,
-                      separatorBuilder: (_, _) =>
-                          const SizedBox(height: 8),
-                      itemBuilder: (context, i) {
-                        final habit = available[i];
-                        return _HabitPickerTile(
-                          habit: habit,
-                          onTap: () {
-                            final notifier = ref
-                                .read(habitRoutinesProvider.notifier);
-                            final routineId = currentRoutineId;
-                            Navigator.of(context).pop();
-                            _doAdd(notifier, routineId, habit.id);
-                          },
-                        );
-                      },
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 35, sigmaY: 35),
+      child: Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
+      decoration: BoxDecoration(
+        color: sc.surface.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: sc.border),
       ),
-    );
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(2),
+                color: sc.border,
+              ),
+            ),
+          ),
+          Text(
+            'ADD TO ROUTINE',
+            style: TextStyle(
+              color: sc.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2.5,
+            ),
+          ),
+          const SizedBox(height: 16),
+          habitsAsync.when(
+            loading: () => Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: CircularProgressIndicator(
+                    color: sc.accent, strokeWidth: 1.5),
+              ),
+            ),
+            error: (e, _) => const SizedBox.shrink(),
+            data: (state) {
+              final available = state.habits
+                  .where((h) => !existingHabitIds.contains(h.id))
+                  .toList();
+              if (available.isEmpty) {
+                final noHabitsAtAll = state.habits.isEmpty;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text(
+                      noHabitsAtAll
+                          ? 'Сначала создайте привычки в Архиве'
+                          : 'Все активные привычки уже добавлены',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: sc.textSecondary,
+                        fontSize: 12,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
+                );
+              }
+              return ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight:
+                      MediaQuery.of(context).size.height * 0.40,
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: available.length,
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(height: 8),
+                  itemBuilder: (context, i) {
+                    final habit = available[i];
+                    return _HabitPickerTile(
+                      habit: habit,
+                      onTap: () {
+                        final notifier = ref
+                            .read(habitRoutinesProvider.notifier);
+                        final routineId = currentRoutineId;
+                        Navigator.of(context).pop();
+                        _doAdd(notifier, routineId, habit.id);
+                      },
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    ));
   }
 
   Future<void> _doAdd(

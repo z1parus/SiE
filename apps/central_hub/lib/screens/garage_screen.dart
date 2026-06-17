@@ -937,7 +937,7 @@ class _DayLockBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const lockColor = Color(0xFFFF9800); // amber
+    final lockColor = c.warning;
 
     return Container(
       width: double.infinity,
@@ -1083,7 +1083,7 @@ class _ClaimButtonState extends State<_ClaimButton>
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                '✦  ПОЛУЧИТЬ НАГРАДУ  ✦',
+                '★  ПОЛУЧИТЬ НАГРАДУ  ★',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: c.accent,

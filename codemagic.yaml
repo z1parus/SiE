@@ -1,0 +1,22 @@
+workflows:
+  ios-unsigned-build:
+    name: iOS Unsigned IPA Build
+    max_build_duration: 60
+    working_directory: apps/central_hub
+    instance_type: mac_mini_m1
+    environment:
+      flutter: stable
+      xcode: latest
+    scripts:
+      - name: Install dependencies
+        script: |
+          flutter pub get
+      - name: Build iOS (Unsigned IPA)
+        script: |
+          flutter build ipa --release --no-codesign
+    artifacts:
+      - apps/central_hub/build/ios/ipa/*.ipa
+    publishing:
+      email:
+        recipients:
+          - zipadump@gmail.com # Ваш email из git config

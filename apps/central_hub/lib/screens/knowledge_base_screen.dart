@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 
+import 'breathing_exercise_screen.dart';
+import 'focus_protocol_screen.dart';
+import 'habit_tracker_screen.dart';
+
 // ── Knowledge Base Screen ─────────────────────────────────────
 
 class KnowledgeBaseScreen extends ConsumerWidget {
@@ -20,39 +24,56 @@ class KnowledgeBaseScreen extends ConsumerWidget {
               Expanded(
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 48),
-                  children: const [
-                    _SystemHeader(),
-                    SizedBox(height: 28),
-                    _NeonSectionLabel(label: 'МОДУЛИ СИСТЕМЫ'),
-                    SizedBox(height: 14),
+                  children: [
+                    const _SystemHeader(),
+                    const SizedBox(height: 28),
+                    const _NeonSectionLabel(label: 'МОДУЛИ СИСТЕМЫ'),
+                    const SizedBox(height: 14),
                     _KbEntry(
                       moduleTag: 'M-01',
                       label: 'BREATHING',
                       subtitle: 'Сброс нервной системы',
                       body: _breathingBody,
+                      onOpen: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const BreathingExerciseScreen(
+                              openSettings: true),
+                        ),
+                      ),
                     ),
-                    SizedBox(height: 10),
+                    const SizedBox(height: 10),
                     _KbEntry(
                       moduleTag: 'M-02',
                       label: 'HABIT ARCHIVE',
                       subtitle: 'Архив нейронных связей',
                       body: _habitsBody,
+                      onOpen: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const HabitTrackerScreen(),
+                        ),
+                      ),
                     ),
-                    SizedBox(height: 10),
+                    const SizedBox(height: 10),
                     _KbEntry(
                       moduleTag: 'M-03',
                       label: 'FOCUS PROTOCOL',
                       subtitle: 'Протокол глубокой работы',
                       body: _focusBody,
+                      onOpen: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              const FocusProtocolScreen(openSettings: true),
+                        ),
+                      ),
                     ),
-                    SizedBox(height: 28),
-                    _NeonSectionLabel(label: 'ТАБЛИЦА ПРОГРЕССА'),
-                    SizedBox(height: 14),
-                    _XpTable(),
-                    SizedBox(height: 28),
-                    _NeonSectionLabel(label: 'КОРПОРАТИВНАЯ ЭТИКА'),
-                    SizedBox(height: 14),
-                    _EthicsSection(),
+                    const SizedBox(height: 28),
+                    const _NeonSectionLabel(label: 'ТАБЛИЦА ПРОГРЕССА'),
+                    const SizedBox(height: 14),
+                    const _XpTable(),
+                    const SizedBox(height: 28),
+                    const _NeonSectionLabel(label: 'КОРПОРАТИВНАЯ ЭТИКА'),
+                    const SizedBox(height: 14),
+                    const _EthicsSection(),
                   ],
                 ),
               ),
@@ -201,11 +222,15 @@ class _KbEntry extends ConsumerStatefulWidget {
   final String subtitle;
   final String body;
 
+  /// Optional deep-link — opens the corresponding module (and its settings).
+  final VoidCallback? onOpen;
+
   const _KbEntry({
     required this.moduleTag,
     required this.label,
     required this.subtitle,
     required this.body,
+    this.onOpen,
   });
 
   @override
@@ -391,6 +416,52 @@ class _KbEntryState extends ConsumerState<_KbEntry>
                                 ),
                               ),
                             ),
+                            if (widget.onOpen != null)
+                              Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Semantics(
+                                    button: true,
+                                    label: 'Открыть модуль',
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () {
+                                        SieHaptics.selection();
+                                        widget.onOpen!();
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 16, vertical: 10),
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          border:
+                                              Border.all(color: c.accent),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              'ОТКРЫТЬ МОДУЛЬ',
+                                              style: TextStyle(
+                                                color: c.accent,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                letterSpacing: 1.5,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Icon(Icons.arrow_forward,
+                                                color: c.accent, size: 14),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       )

@@ -117,29 +117,39 @@ class _ErrorState extends ConsumerWidget {
 
 // ── Main Body ─────────────────────────────────────────────────
 
-class _AnalyticsBody extends StatelessWidget {
+class _AnalyticsBody extends ConsumerWidget {
   final AnalyticsData data;
   const _AnalyticsBody({required this.data});
 
   @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
-      children: [
-        _StatsRow(data: data),
-        const SizedBox(height: 28),
-        const _SectionLabel(label: 'ACTIVITY MATRIX'),
-        const SizedBox(height: 12),
-        _HeatMap(heatMap: data.heatMap),
-        const SizedBox(height: 28),
-        const _SectionLabel(label: 'XP GROWTH — 7 DAYS'),
-        const SizedBox(height: 12),
-        _XpLineChart(points: data.xpHistory),
-        const SizedBox(height: 28),
-        const _SectionLabel(label: 'FOCUS TIME — 7 DAYS'),
-        const SizedBox(height: 12),
-        _FocusBarChart(points: data.focusByDay),
-      ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return RefreshIndicator(
+      color: c.accent,
+      backgroundColor: c.background,
+      onRefresh: () async {
+        ref.invalidate(analyticsProvider);
+        await ref.read(analyticsProvider.future);
+      },
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+        children: [
+          _StatsRow(data: data),
+          const SizedBox(height: 28),
+          const _SectionLabel(label: 'ACTIVITY MATRIX'),
+          const SizedBox(height: 12),
+          _HeatMap(heatMap: data.heatMap),
+          const SizedBox(height: 28),
+          const _SectionLabel(label: 'XP GROWTH — 7 DAYS'),
+          const SizedBox(height: 12),
+          _XpLineChart(points: data.xpHistory),
+          const SizedBox(height: 28),
+          const _SectionLabel(label: 'FOCUS TIME — 7 DAYS'),
+          const SizedBox(height: 12),
+          _FocusBarChart(points: data.focusByDay),
+        ],
+      ),
     );
   }
 }
@@ -222,7 +232,7 @@ class _StatsRow extends ConsumerWidget {
               icon: Icons.local_fire_department_outlined,
               value: '${data.currentStreak}',
               label: 'DAY\nSTREAK',
-              color: const Color(0xFFFFB347),
+              color: c.warning,
               c: c,
             ),
           ),
@@ -513,8 +523,21 @@ class _XpLineChart extends ConsumerWidget {
                 },
               ),
             ),
-            topTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
+            topTitles: AxisTitles(
+              axisNameSize: 20,
+              axisNameWidget: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Container(width: 10, height: 2,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: [c.accent, c.accentSecondary]),
+                        borderRadius: BorderRadius.circular(1),
+                      )),
+                  const SizedBox(width: 4),
+                  Text('XP / ДЕНЬ', style: TextStyle(color: c.accent.withValues(alpha: 0.55), fontSize: 8, letterSpacing: 1)),
+                  const SizedBox(width: 4),
+                ],
+              ),
             ),
             rightTitles: const AxisTitles(
               sideTitles: SideTitles(showTitles: false),
@@ -669,8 +692,22 @@ class _FocusBarChart extends ConsumerWidget {
                 },
               ),
             ),
-            topTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
+            topTitles: AxisTitles(
+              axisNameSize: 20,
+              axisNameWidget: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Container(width: 8, height: 8,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter,
+                            colors: [c.accentSecondary.withValues(alpha: 0.7), c.accent]),
+                        borderRadius: BorderRadius.circular(2),
+                      )),
+                  const SizedBox(width: 4),
+                  Text('МИН / ДЕНЬ', style: TextStyle(color: c.accent.withValues(alpha: 0.55), fontSize: 8, letterSpacing: 1)),
+                  const SizedBox(width: 4),
+                ],
+              ),
             ),
             rightTitles: const AxisTitles(
               sideTitles: SideTitles(showTitles: false),

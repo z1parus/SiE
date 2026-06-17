@@ -19,7 +19,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 2.5.3+1
 
 environment:
-  sdk: ^3.11.5
+  sdk: ^3.8.1
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -42,6 +42,10 @@ dependencies:
   sie_core:
     path: ../../packages/sie_core
 
+dependency_overrides:
+  soundpool:
+    path: ../../packages/soundpool
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -54,7 +58,7 @@ flutter_launcher_icons:
   ios: true
   image_path: "assets/icons/app_icon.png"
   min_sdk_android: 21
-  adaptive_icon_background: "#0A0E1A"
+  adaptive_icon_background: "#1C1C22"
   adaptive_icon_foreground: "assets/icons/app_icon.png"
 
 # For information on the generic Dart part of this file, see the
@@ -71,6 +75,9 @@ flutter:
   assets:
     - assets/audio/
     - assets/icons/
+
+  shaders:
+    - assets/shaders/breathing_sphere.frag
 
   # To add assets to your application, add an assets section, like this:
   # assets:

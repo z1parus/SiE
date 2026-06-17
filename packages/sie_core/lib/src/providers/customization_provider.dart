@@ -33,10 +33,22 @@ final statStylesProvider = FutureProvider<List<CosmeticAsset>>((ref) async {
       .toList();
 });
 
+final profilePatternsProvider =
+    FutureProvider<List<CosmeticAsset>>((ref) async {
+  final data = await SupabaseService.client
+      .from('profile_patterns')
+      .select()
+      .order('rarity');
+  return data
+      .map((r) => CosmeticAsset.fromJson(r, AssetType.profilePattern))
+      .toList();
+});
+
 Future<void> applyCustomization({
   required String? frameId,
   required String? backgroundId,
   required String? styleId,
+  required String? patternId,
 }) async {
   final userId = SupabaseService.client.auth.currentUser?.id;
   if (userId == null) return;
@@ -44,5 +56,6 @@ Future<void> applyCustomization({
     'equipped_frame_id': frameId,
     'equipped_background_id': backgroundId,
     'equipped_stat_style_id': styleId,
+    'equipped_pattern_id': patternId,
   }).eq('id', userId);
 }

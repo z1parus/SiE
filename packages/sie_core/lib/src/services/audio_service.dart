@@ -93,14 +93,15 @@ class AudioService {
       // iOS native warm-up: AVAudioEngine needs at least one play() before the
       // first real sound to prime its internal buffer pipeline.
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-        final warmIds = [_inhaleId, _exhaleId, _chimeId, _heartbeatId, _tickId];
-        final streams = await Future.wait(warmIds.map((id) => _pool.play(id)));
-        for (var i = 0; i < streams.length; i++) {
-          final s = streams[i];
-          if (s > 0) {
-            _pool.setVolume(soundId: warmIds[i], streamId: s, volume: 0).ignore();
-            _pool.stop(s).ignore();
-          }
+        final streams = await Future.wait([
+          _pool.play(_inhaleId),
+          _pool.play(_exhaleId),
+          _pool.play(_chimeId),
+          _pool.play(_heartbeatId),
+          _pool.play(_tickId),
+        ]);
+        for (final s in streams) {
+          if (s > 0) _pool.stop(s).ignore();
         }
       }
     } catch (e) {
@@ -381,6 +382,28 @@ class AudioService {
     }
   }
 
+  void fadeHumTo(double volumeFactor, {int durationMs = 1500}) {
+    _humFadeTimer?.cancel();
+    final target = (volumeFactor * 0.18).clamp(0.0, 1.0);
+    final start  = _humVolume;
+    if ((start - target).abs() < 0.001) return;
+    final steps = (durationMs / 80).round().clamp(1, 500);
+    var step = 0;
+    _humFadeTimer = Timer.periodic(
+      const Duration(milliseconds: 80),
+      (t) {
+        step++;
+        _humVolume = (start + (target - start) * step / steps).clamp(0.0, 1.0);
+        _hum.setVolume(_humVolume);
+        if (step >= steps) {
+          t.cancel();
+          _humVolume = target;
+          _hum.setVolume(_humVolume);
+        }
+      },
+    );
+  }
+
   Future<void> stopHum({int durationMs = 2000}) async {
     _humFadeTimer?.cancel();
     if (_humVolume <= 0.001) {
@@ -495,7 +518,7 @@ class AudioService {
 
     final dubFadeN = sr * 12 ~/ 1000;
     for (var i = 0; i < dubFadeN; i++) {
-      final w = 0.5 * (1 + math.cos(math.pi * i / (dubFadeN - 1)));
+      final w = 0.5 * (1 + math.cos(math.pi * i / (lubFadeN - 1)));
       raw[dubStart + nDub - dubFadeN + i] *= w;
     }
 

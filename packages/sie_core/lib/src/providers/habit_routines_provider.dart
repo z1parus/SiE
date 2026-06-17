@@ -38,23 +38,27 @@ class HabitRoutinesNotifier
         final routinesRaw = await client
             .from('habit_routines')
             .select(
-              'id, routine_type, created_at, '
+              'id, routine_type, name, anchor_cue, created_at, '
               'habit_routine_members(id, habit_id, position, habits(*))',
             )
-            .eq('user_id', userId);
+            .eq('user_id', userId)
+            .order('created_at');
 
-        HabitRoutine? morning;
-        HabitRoutine? evening;
+        final routines = <HabitRoutine>[];
 
         for (final row in routinesRaw) {
           final rId   = row['id'] as String;
           final rType = row['routine_type'] as String;
+          final rName = row['name'] as String?;
+          final rCue  = row['anchor_cue'] as String?;
           final rAt   = DateTime.parse(row['created_at'] as String);
 
           await db.upsertRoutine(LocalRoutinesCompanion(
             id:          Value(rId),
             userId:      Value(userId),
             routineType: Value(rType),
+            name:        Value(rName),
+            anchorCue:   Value(rCue),
             createdAtMs: Value(rAt.millisecondsSinceEpoch),
             synced:      const Value(true),
           ));
@@ -80,18 +84,18 @@ class HabitRoutinesNotifier
             ));
           }
 
-          final routine = HabitRoutine(
+          routines.add(HabitRoutine(
             id:          rId,
             userId:      userId,
             routineType: rType,
+            name:        rName,
+            anchorCue:   rCue,
             habits:      habits,
             createdAt:   rAt,
-          );
-          if (rType == 'morning') morning = routine;
-          if (rType == 'evening') evening = routine;
+          ));
         }
 
-        return HabitRoutinesState(morning: morning, evening: evening);
+        return HabitRoutinesState(stacks: routines);
       } catch (e) {
         debugPrint('SiE Routines: online load failed, falling back to local — $e');
       }
@@ -103,14 +107,14 @@ class HabitRoutinesNotifier
 
   Future<HabitRoutinesState> _loadFromLocal(
       String userId, AppDatabase db) async {
-    final localRoutines = await db.routinesForUser(userId);
+    final localRoutines = await db.routinesForUser(userId)
+      ..sort((a, b) => a.createdAtMs.compareTo(b.createdAtMs));
     final allHabits     = await db.habitsForUser(userId);
 
     // O1: O(1) map lookup instead of O(n) firstWhere per member.
     final habitById = {for (final h in allHabits) h.id: h};
 
-    HabitRoutine? morning;
-    HabitRoutine? evening;
+    final routines = <HabitRoutine>[];
 
     for (final lr in localRoutines) {
       final members = await db.routineMembersForRoutine(lr.id);
@@ -130,18 +134,18 @@ class HabitRoutinesNotifier
               ))
           .toList();
 
-      final routine = HabitRoutine(
+      routines.add(HabitRoutine(
         id:          lr.id,
         userId:      lr.userId,
         routineType: lr.routineType,
+        name:        lr.name,
+        anchorCue:   lr.anchorCue,
         habits:      habits,
         createdAt:   DateTime.fromMillisecondsSinceEpoch(lr.createdAtMs),
-      );
-      if (lr.routineType == 'morning') morning = routine;
-      if (lr.routineType == 'evening') evening = routine;
+      ));
     }
 
-    return HabitRoutinesState(morning: morning, evening: evening);
+    return HabitRoutinesState(stacks: routines);
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
@@ -175,9 +179,7 @@ class HabitRoutinesNotifier
     );
 
     final prev = state.valueOrNull ?? HabitRoutinesState.empty;
-    state = AsyncData(routineType == 'morning'
-        ? prev.copyWith(morning: newRoutine)
-        : prev.copyWith(evening: newRoutine));
+    state = AsyncData(HabitRoutinesState(stacks: [...prev.stacks, newRoutine]));
 
     try {
       if (isOnline) {
@@ -186,10 +188,8 @@ class HabitRoutinesNotifier
           'user_id':      userId,
           'routine_type': routineType,
         });
-        await db.upsertRoutine(LocalRoutinesCompanion(
-          id:     Value(routineId),
-          synced: const Value(true),
-        ));
+        await db.updateRoutine(routineId,
+            const LocalRoutinesCompanion(synced: Value(true)));
       } else {
         await db.enqueueSyncOp('insert_routine', jsonEncode({
           'id':           routineId,
@@ -204,6 +204,128 @@ class HabitRoutinesNotifier
     return routineId;
   }
 
+  /// Stage 8b — creates a named habit stack with an optional anchor cue.
+  /// Returns the new stack ID.
+  Future<String> createStack({String? name, String? anchorCue}) async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final db       = ref.read(appDatabaseProvider);
+    final stackId  = _uuid.v4();
+    final now      = DateTime.now();
+    final cleanName = (name == null || name.trim().isEmpty) ? null : name.trim();
+    final cleanCue  =
+        (anchorCue == null || anchorCue.trim().isEmpty) ? null : anchorCue.trim();
+
+    await db.upsertRoutine(LocalRoutinesCompanion(
+      id:          Value(stackId),
+      userId:      Value(userId),
+      routineType: const Value('stack'),
+      name:        Value(cleanName),
+      anchorCue:   Value(cleanCue),
+      createdAtMs: Value(now.millisecondsSinceEpoch),
+      synced:      Value(isOnline),
+    ));
+
+    final newStack = HabitRoutine(
+      id:          stackId,
+      userId:      userId,
+      routineType: 'stack',
+      name:        cleanName,
+      anchorCue:   cleanCue,
+      habits:      const [],
+      createdAt:   now,
+    );
+
+    final prev = state.valueOrNull ?? HabitRoutinesState.empty;
+    state = AsyncData(HabitRoutinesState(stacks: [...prev.stacks, newStack]));
+
+    try {
+      if (isOnline) {
+        await client.from('habit_routines').insert({
+          'id':           stackId,
+          'user_id':      userId,
+          'routine_type': 'stack',
+          if (cleanName != null) 'name': cleanName,
+          if (cleanCue != null) 'anchor_cue': cleanCue,
+        });
+        await db.updateRoutine(stackId,
+            const LocalRoutinesCompanion(synced: Value(true)));
+      } else {
+        await db.enqueueSyncOp('insert_routine', jsonEncode({
+          'id':           stackId,
+          'user_id':      userId,
+          'routine_type': 'stack',
+          'name':         cleanName,
+          'anchor_cue':   cleanCue,
+        }));
+      }
+    } catch (e) {
+      debugPrint('SiE Routines: createStack failed — $e');
+    }
+
+    return stackId;
+  }
+
+  /// Stage 8b — updates a stack's [name] and/or [anchorCue].
+  Future<void> updateStackMeta(
+    String stackId, {
+    String? name,
+    String? anchorCue,
+  }) async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final db       = ref.read(appDatabaseProvider);
+    final cleanName = (name == null || name.trim().isEmpty) ? null : name.trim();
+    final cleanCue  =
+        (anchorCue == null || anchorCue.trim().isEmpty) ? null : anchorCue.trim();
+
+    final prev = state.valueOrNull ?? HabitRoutinesState.empty;
+    final target = prev.byId(stackId);
+    if (target == null) return;
+    final updated = HabitRoutine(
+      id:          target.id,
+      userId:      target.userId,
+      routineType: target.routineType,
+      name:        cleanName,
+      anchorCue:   cleanCue,
+      habits:      target.habits,
+      createdAt:   target.createdAt,
+    );
+    state = AsyncData(HabitRoutinesState(stacks: [
+      for (final s in prev.stacks) s.id == stackId ? updated : s,
+    ]));
+
+    await db.updateRoutine(stackId, LocalRoutinesCompanion(
+      name:      Value(cleanName),
+      anchorCue: Value(cleanCue),
+      synced:    Value(isOnline),
+    ));
+
+    try {
+      if (isOnline) {
+        await client.from('habit_routines').update({
+          'name':       cleanName,
+          'anchor_cue': cleanCue,
+        }).eq('id', stackId).eq('user_id', userId);
+      } else {
+        await db.enqueueSyncOp('update_routine_meta', jsonEncode({
+          'id':         stackId,
+          'user_id':    userId,
+          'name':       cleanName,
+          'anchor_cue': cleanCue,
+        }));
+      }
+    } catch (e) {
+      debugPrint('SiE Routines: updateStackMeta failed — $e');
+    }
+  }
+
   /// Adds [habitId] to the routine [routineId] at the end of the list.
   Future<void> addHabitToRoutine(String routineId, String habitId) async {
     final client = Supabase.instance.client;
@@ -214,7 +336,7 @@ class HabitRoutinesNotifier
     final db       = ref.read(appDatabaseProvider);
 
     final prev = state.valueOrNull ?? HabitRoutinesState.empty;
-    final routine = prev.morning?.id == routineId ? prev.morning : prev.evening;
+    final routine = prev.byId(routineId);
     if (routine == null) return;
 
     final newPosition = routine.habits.length;
@@ -239,10 +361,8 @@ class HabitRoutinesNotifier
           'habit_id':  habitId,
           'position':  newPosition,
         });
-        await db.upsertRoutineMember(LocalRoutineMembersCompanion(
-          id:     Value(memberId),
-          synced: const Value(true),
-        ));
+        await db.updateRoutineMember(memberId,
+            const LocalRoutineMembersCompanion(synced: Value(true)));
       } else {
         await _enqueueMembersSync(db, routineId, userId);
       }
@@ -261,7 +381,7 @@ class HabitRoutinesNotifier
     final db       = ref.read(appDatabaseProvider);
 
     final prev    = state.valueOrNull ?? HabitRoutinesState.empty;
-    final routine = prev.morning?.id == routineId ? prev.morning : prev.evening;
+    final routine = prev.byId(routineId);
     if (routine == null) return;
 
     // Bug 1+3: atomic delete+reinsert and preserve existing member IDs.
@@ -374,14 +494,14 @@ class HabitRoutinesNotifier
     final db       = ref.read(appDatabaseProvider);
 
     final prev = state.valueOrNull ?? HabitRoutinesState.empty;
-    final isMorning = prev.morning?.id == routineId;
 
     await db.deleteRoutineMembers(routineId);
     await db.deleteRoutine(routineId);
 
-    state = AsyncData(isMorning
-        ? prev.copyWith(clearMorning: true)
-        : prev.copyWith(clearEvening: true));
+    state = AsyncData(HabitRoutinesState(stacks: [
+      for (final s in prev.stacks)
+        if (s.id != routineId) s,
+    ]));
 
     try {
       if (isOnline) {

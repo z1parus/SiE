@@ -1,11 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sie_core/sie_core.dart';
 import 'mission_accomplished_screen.dart';
+import 'session_orb_painters.dart';
+
+const _kRimGold  = kRimGold;
+const _kRimLight = kRimLight;
 
 // ── Settings ──────────────────────────────────────────────────
 
@@ -119,7 +124,11 @@ enum _Phase { idle, countdown, active, retention, recovery, roundTransition, com
 // ── Screen ───────────────────────────────────────────────────
 
 class BreathingExerciseScreen extends ConsumerStatefulWidget {
-  const BreathingExerciseScreen({super.key});
+  const BreathingExerciseScreen({super.key, this.openSettings = false});
+
+  /// When true, the protocol settings sheet auto-opens on entry — used by the
+  /// Knowledge Base deep-link.
+  final bool openSettings;
 
   @override
   ConsumerState<BreathingExerciseScreen> createState() =>
@@ -132,8 +141,11 @@ class _BreathingExerciseScreenState
   late final AnimationController _circleCtrl;
   late final AnimationController _pulseCtrl;
   late final AnimationController _breathColorCtrl;
+  late final AnimationController _shaderCtrl;
   late final Animation<double> _pulseAnim;
   late final AudioService _audio;
+
+  FragmentShader? _sphereShader;
 
   _Phase _phase = _Phase.idle;
   BreathingSettings _settings = const BreathingSettings();
@@ -170,6 +182,27 @@ class _BreathingExerciseScreenState
     _pulseAnim = Tween<double>(begin: 0.92, end: 1.0).animate(
       CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
     );
+    _shaderCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 60),
+    )..repeat();
+    _loadSphereShader();
+    if (widget.openSettings) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showSettings();
+      });
+    }
+  }
+
+  Future<void> _loadSphereShader() async {
+    try {
+      final program = await FragmentProgram.fromAsset(
+        'assets/shaders/breathing_sphere.frag',
+      );
+      if (mounted) setState(() => _sphereShader = program.fragmentShader());
+    } catch (_) {
+      // Shader unavailable — gradient fallback stays
+    }
   }
 
   @override
@@ -179,6 +212,7 @@ class _BreathingExerciseScreenState
     _circleCtrl.dispose();
     _breathColorCtrl.dispose();
     _pulseCtrl.dispose();
+    _shaderCtrl.dispose();
     super.dispose();
   }
 
@@ -196,6 +230,26 @@ class _BreathingExerciseScreenState
     _audio.stopAll();
     await _awardPartialXpIfEligible();
     if (mounted) Navigator.of(context).pop();
+  }
+
+  bool get _sessionActive =>
+      _phase != _Phase.idle && _phase != _Phase.complete;
+
+  /// Routes both the top-bar back button and the system back gesture through a
+  /// confirmation while a session is running — guards against accidental exit.
+  Future<void> _handleBackRequest() async {
+    if (_sessionActive) {
+      final ok = await confirmDestructive(
+        context,
+        ref,
+        title: 'Прервать сессию?',
+        message: 'Если вы продержались дольше 30 секунд, прогресс '
+            'сохранится частично.',
+        confirmLabel: 'Прервать',
+      );
+      if (!ok) return;
+    }
+    await _onBack();
   }
 
   void _onSphereTap() {
@@ -499,7 +553,13 @@ class _BreathingExerciseScreenState
             profile != null &&
             !profile.hasSeenOnboardingBreathing);
 
-    return Stack(
+    return PopScope(
+      canPop: !_sessionActive,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _handleBackRequest();
+      },
+      child: Stack(
       children: [
         SieBackground(
           child: Scaffold(
@@ -513,7 +573,7 @@ class _BreathingExerciseScreenState
                       phase: _phase,
                       round: _round,
                       totalRounds: _settings.rounds,
-                      onBack: _onBack,
+                      onBack: _handleBackRequest,
                       onInfo: () => setState(() => _showOnboardingManual = true),
                     ),
                   ),
@@ -596,79 +656,99 @@ class _BreathingExerciseScreenState
           ),
         ),
       ],
+      ),
     );
   }
 
   Widget _buildCircle(SieColors c) {
     return AnimatedBuilder(
-      animation: Listenable.merge([_circleCtrl, _pulseAnim, _breathColorCtrl]),
+      animation: Listenable.merge(
+          [_circleCtrl, _pulseAnim, _breathColorCtrl, _shaderCtrl]),
       builder: (_, _) {
-        final t      = _circleCtrl.value;
-        final pulse  = (_phase == _Phase.retention) ? _pulseAnim.value : 1.0;
-        final colorT = _breathColorCtrl.value; // 0 = accent, 1 = accentSecondary
-        final size   = (130.0 + t * 130.0) * pulse;
-
+        final t           = _circleCtrl.value;
+        final pulse       = (_phase == _Phase.retention) ? _pulseAnim.value : 1.0;
+        final colorT      = _breathColorCtrl.value;
+        final size        = (130.0 + t * 130.0) * pulse;
         final bool isRetention = _phase == _Phase.retention;
 
-        final Color accent =
-            Color.lerp(c.accent, c.accentSecondary, colorT) ?? c.accent;
-
-        final double blur = isRetention ? 4.5 : (2.0 + t * 3.5).clamp(2.0, 5.5);
         final double glow = isRetention
             ? 0.70 + (pulse - 0.92) * 3.5
             : (0.55 + t * 0.55) * (1 - colorT) + (0.40 + t * 0.50) * colorT;
 
-        final double glassAlpha = isRetention
-            ? 0.09
-            : (0.03 + t * 0.07) * (1 - colorT) + (0.04 + t * 0.04) * colorT;
+        final double rimIntensity = isRetention
+            ? (0.7 + (pulse - 0.92) * 4.0).clamp(0.0, 1.0)
+            : (0.4 + t * 0.6).clamp(0.0, 1.0);
 
-        final Color glassColor = accent.withValues(alpha: glassAlpha);
+        final double lightAngle = -pi / 4 + t * 0.4;
+        final shaderTime = _shaderCtrl.value * 60.0;
+
+        // Fallback gradient when shader hasn't loaded yet
+        final fallbackColors = c.isLightMode
+            ? <Color>[const Color(0xFFF1F1F5), const Color(0xFFD0D2DC)]
+            : <Color>[const Color(0xFF1C2035), const Color(0xFF2A3048)];
 
         return Stack(
           alignment: Alignment.center,
           children: [
-            // Outer diffuse corona
+            // Layer 1 — Outer golden corona
             Container(
-              width: size + 52,
-              height: size + 52,
+              width: size + 60,
+              height: size + 60,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: accent.withValues(
-                      alpha: t * (c.isLightMode ? 0.12 : 0.24) *
-                          (isRetention ? pulse : 1.0),
-                    ),
-                    blurRadius: 80,
+                    color: _kRimGold.withValues(
+                        alpha: (glow * (c.isLightMode ? 0.07 : 0.14))
+                            .clamp(0.0, 1.0)),
+                    blurRadius: c.isLightMode ? 18 : 22,
                   ),
                 ],
               ),
             ),
 
-            // Breathing sphere
+            // Layer 2 — Cloud sphere (shader IS the sphere, fully opaque)
             ClipOval(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: blur * 8, sigmaY: blur * 8),
-                child: Container(
-                  width: size,
-                  height: size,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        glassColor.withValues(alpha: (glassAlpha * 4).clamp(0.0, 0.35)),
-                        glassColor.withValues(alpha: glassAlpha),
-                      ],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: accent.withValues(alpha: glow.clamp(0.0, 1.0) * 0.35),
-                        blurRadius: 30,
-                        spreadRadius: 4,
+              child: SizedBox(
+                width: size,
+                height: size,
+                child: _sphereShader != null
+                    ? CustomPaint(
+                        painter: _ShaderPainter(
+                          shader: _sphereShader!,
+                          time: shaderTime,
+                          breath: t,
+                          sphereSize: size,
+                          isDark: !c.isLightMode,
+                        ),
+                      )
+                    : Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: fallbackColors,
+                            stops: const [0.0, 1.0],
+                          ),
+                        ),
                       ),
-                    ],
-                  ),
-                  child: switch (_phase) {
+              ),
+            ),
+
+            // Layer 3 — Golden rim
+            CustomPaint(
+              size: Size(size, size),
+              painter: SphereRimPainter(
+                lightAngle: lightAngle,
+                intensity: rimIntensity,
+                isDark: !c.isLightMode,
+              ),
+            ),
+
+            // Layer 4 — Inner content
+            SizedBox(
+              width: size,
+              height: size,
+              child: switch (_phase) {
                 _Phase.idle => Center(
                     child: Icon(
                       Icons.fingerprint,
@@ -684,8 +764,8 @@ class _BreathingExerciseScreenState
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
                           colors: [
-                            c.accentSecondary.withValues(alpha: 0.28),
-                            c.accentSecondary.withValues(alpha: 0.0),
+                            _kRimLight.withValues(alpha: 0.25),
+                            _kRimLight.withValues(alpha: 0.0),
                           ],
                         ),
                       ),
@@ -693,9 +773,7 @@ class _BreathingExerciseScreenState
                   ),
                 _ => const SizedBox.shrink(),
               },
-            ),   // Container
-          ),     // BackdropFilter
-        ),       // ClipOval
+            ),
           ],
         );
       },
@@ -820,6 +898,20 @@ class _BreathingExerciseScreenState
                     'CYCLE ${_cycle + 1} / ${_settings.cyclesPerRound}',
                     style: TextStyle(color: c.textSecondary, fontSize: 12),
                     textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: SizedBox(
+                      width: 120,
+                      height: 3,
+                      child: LinearProgressIndicator(
+                        value: ((_cycle + 1) / _settings.cyclesPerRound)
+                            .clamp(0.0, 1.0),
+                        backgroundColor: c.border,
+                        valueColor: AlwaysStoppedAnimation(activeColor),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -1510,7 +1602,7 @@ class _ToggleRow extends ConsumerWidget {
               style: TextStyle(color: c.textSecondary, fontSize: 12),
             ),
           ),
-          Switch(value: value, onChanged: onChanged, activeThumbColor: c.accent),
+          Switch(value: value, onChanged: onChanged, activeColor: c.accent),
         ],
       ),
     );
@@ -1811,4 +1903,42 @@ class _SieButton extends ConsumerWidget {
       ),
     );
   }
+}
+
+// ── _ShaderPainter ──────────────────────────────────────────────
+class _ShaderPainter extends CustomPainter {
+  final FragmentShader shader;
+  final double time;
+  final double breath;
+  final double sphereSize;
+  final bool isDark;
+
+  _ShaderPainter({
+    required this.shader,
+    required this.time,
+    required this.breath,
+    required this.sphereSize,
+    required this.isDark,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    try {
+      shader.setFloat(0, time);
+      shader.setFloat(1, breath);
+      shader.setFloat(2, size.width);
+      shader.setFloat(3, size.height);
+      shader.setFloat(4, isDark ? 1.0 : 0.0);
+      canvas.drawRect(Offset.zero & size, Paint()..shader = shader);
+    } catch (_) {
+      // Stale cached shader — graceful no-op until next clean build
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ShaderPainter old) =>
+      time != old.time ||
+      breath != old.breath ||
+      sphereSize != old.sphereSize ||
+      isDark != old.isDark;
 }

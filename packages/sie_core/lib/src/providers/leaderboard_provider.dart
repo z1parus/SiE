@@ -6,9 +6,13 @@ import 'user_timezone_provider.dart';
 
 final leaderboardProvider =
     FutureProvider.autoDispose<List<LeaderboardEntry>>((ref) async {
+  // Re-execute when the user changes their timezone.
+  final tzOffset = await ref.watch(userTimezoneProvider.future);
   try {
-    final data =
-        await SupabaseService.client.rpc('get_daily_leaderboard');
+    final data = await SupabaseService.client.rpc(
+      'get_daily_leaderboard',
+      params: {'p_tz_offset_minutes': tzOffset.inMinutes},
+    );
     return (data as List<dynamic>)
         .map((r) =>
             LeaderboardEntry.fromJson(r as Map<String, dynamic>))
@@ -58,10 +62,19 @@ final countdownProvider =
     // Translate to user's configured timezone.
     final localNow = utcNow.add(tzOffset);
     // Next midnight in user's timezone.
+    // Must use DateTime.utc() so both localNow and localMidnight share the
+    // same epoch base — without this the device's system timezone shifts
+    // the difference and the timer freezes at zero.
     final localMidnight =
-        DateTime(localNow.year, localNow.month, localNow.day + 1);
+        DateTime.utc(localNow.year, localNow.month, localNow.day + 1);
     final remaining = localMidnight.difference(localNow);
-    yield remaining < Duration.zero ? Duration.zero : remaining;
+    if (remaining <= Duration.zero) {
+      yield Duration.zero;
+      // Short pause so UI shows the reset, then loop recalculates fresh.
+      await Future.delayed(const Duration(milliseconds: 600));
+      continue;
+    }
+    yield remaining;
     await Future.delayed(const Duration(seconds: 1));
   }
 });

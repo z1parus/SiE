@@ -17,6 +17,15 @@ class SieColors {
     required this.border,
     required this.iconMuted,
     required this.dp,
+    // ── Semantic tokens (Stage 0 — design system) ──────────────────────────
+    // Theme-independent by default; override per mode only where needed.
+    this.rankGold = const Color(0xFFFFD700),
+    this.rankSilver = const Color(0xFFC0C0C8),
+    this.rankBronze = const Color(0xFFCD7F32),
+    this.warning = const Color(0xFFFF9800),
+    this.success = const Color(0xFF34C759),
+    this.danger = const Color(0xFFE03050),
+    this.info = const Color(0xFF00C8FF),
   });
 
   final SieThemeMode mode;
@@ -30,7 +39,40 @@ class SieColors {
   final Color iconMuted;
   final Color dp;
 
+  // ── Semantic tokens ────────────────────────────────────────────────────────
+  /// Leaderboard / medal rank colours.
+  final Color rankGold;
+  final Color rankSilver;
+  final Color rankBronze;
+
+  /// Status semantics — used for locks/fatigue, confirmations, destructive
+  /// actions and decorative info grids respectively.
+  final Color warning;
+  final Color success;
+  final Color danger;
+  final Color info;
+
   bool get isLightMode => mode == SieThemeMode.classicLight;
+
+  /// Goal priority palette (1 = low … 4 = critical). Single source of truth —
+  /// replaces the `_priorityColor` switch duplicated across planning,
+  /// mission_detail and goal_stats screens.
+  Color priorityColor(int priority) => switch (priority) {
+    1 => textSecondary,
+    2 => accent,
+    3 => const Color(0xFFE07830),
+    4 => danger,
+    _ => accent,
+  };
+
+  /// Rank colour for a 1-based leaderboard / medal position.
+  /// Positions beyond 3 fall back to [textSecondary].
+  Color rankColor(int rank) => switch (rank) {
+    1 => rankGold,
+    2 => rankSilver,
+    3 => rankBronze,
+    _ => textSecondary,
+  };
 
   BoxDecoration flatCard({double radius = 16}) {
     if (isLightMode) {
@@ -93,9 +135,9 @@ class SieColors {
     mode: SieThemeMode.classicLight,
     background: Color(0xFFF5F6FA),
     surface: Color(0xFFFFFFFF),
-    accent: Color(0xFF5AADA0),
-    accentSecondary: Color(0xFF3D9489),
-    textPrimary: Color(0xFF1C1C22),
+    accent:          Color(0xFFC8A84B),  // Gold Sand — primary
+    accentSecondary: Color(0xFFE5C16C),  // Light Gold — secondary
+    textPrimary:  Color(0xFF1C1C22),
     textSecondary: Color(0xFF646470),
     border: Color(0xFFE4E4EE),
     iconMuted: Color(0xFF9494A0),
