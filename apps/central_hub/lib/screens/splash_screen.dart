@@ -101,20 +101,31 @@ class _SieSplashScreenState extends ConsumerState<SieSplashScreen>
                   scale: _textScale,
                   child: Semantics(
                     label: 'SiE — загрузка',
-                    child: Text(
-                      'SiE',
-                      style: TextStyle(
-                        fontSize: 80,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 12,
-                        color: textColor,
-                        shadows: [
-                          Shadow(
-                            color: glowColor.withAlpha(100),
-                            blurRadius: 20,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Image.asset(
+                          'assets/icons/orb_icon.png',
+                          width: 160,
+                          height: 160,
+                        ),
+                        const SizedBox(height: 32),
+                        Text(
+                          'SiE',
+                          style: TextStyle(
+                            fontSize: 80,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 12,
+                            color: textColor,
+                            shadows: [
+                              Shadow(
+                                color: glowColor.withAlpha(100),
+                                blurRadius: 20,
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

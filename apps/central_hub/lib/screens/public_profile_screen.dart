@@ -32,74 +32,103 @@ class PublicProfileScreen extends ConsumerWidget {
     return SieBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: Stack(
-          children: [
-            RefreshIndicator(
-              color: c.accent,
-              backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
-              onRefresh: () async {
-                ref.invalidate(publicStatsProvider(profile.id));
-                ref.invalidate(publicAchievementsProvider(profile.id));
-                ref.invalidate(publicMissionMedalsProvider(profile.id));
-                ref.invalidate(friendsProvider);
-                await ref.read(publicStatsProvider(profile.id).future);
-              },
-              child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverToBoxAdapter(
-                  child: _HeroSection(profile: profile, equipped: equipped),
-                ),
-                SliverToBoxAdapter(
-                  child: _FriendActionSection(profile: profile),
-                ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 48),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _StatsRow(
-                            profile: profile, statStyle: equipped.statStyle),
-                        const SizedBox(height: 16),
-                        _SectionBlock(
-                          title: 'AWARDS',
-                          child: _AchievementsSection(userId: profile.id),
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              _PublicTopBar(
+                title: (profile.username ?? 'OPERATIVE').toUpperCase(),
+                onBack: () => Navigator.of(context).pop(),
+              ),
+              Expanded(
+                child: RefreshIndicator(
+                  color: c.accent,
+                  backgroundColor:
+                      c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+                  onRefresh: () async {
+                    ref.invalidate(publicStatsProvider(profile.id));
+                    ref.invalidate(publicAchievementsProvider(profile.id));
+                    ref.invalidate(publicMissionMedalsProvider(profile.id));
+                    ref.invalidate(friendsProvider);
+                    await ref.read(publicStatsProvider(profile.id).future);
+                  },
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child:
+                            _HeroSection(profile: profile, equipped: equipped),
+                      ),
+                      SliverToBoxAdapter(
+                        child: _FriendActionSection(profile: profile),
+                      ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 20, 20, 48),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _StatsRow(
+                                  profile: profile,
+                                  statStyle: equipped.statStyle),
+                              const SizedBox(height: 16),
+                              _SectionBlock(
+                                title: 'AWARDS',
+                                child: _AchievementsSection(userId: profile.id),
+                              ),
+                              const SizedBox(height: 16),
+                              _SectionBlock(
+                                title: 'MISSION MEDALS',
+                                child:
+                                    _PublicMedalsSection(userId: profile.id),
+                              ),
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 16),
-                        _SectionBlock(
-                          title: 'MISSION MEDALS',
-                          child: _PublicMedalsSection(userId: profile.id),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            ),
-            SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.only(left: 4, top: 4),
-                child: IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: Icon(
-                    Icons.arrow_back_ios_new,
-                    color: c.isLightMode ? c.textPrimary : Colors.white,
-                    size: 18,
-                  ),
-                  style: IconButton.styleFrom(
-                    backgroundColor: c.isLightMode
-                        ? c.surface.withValues(alpha: 0.85)
-                        : Colors.black45,
-                    shape: const CircleBorder(),
-                    padding: const EdgeInsets.all(8),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Top Bar ───────────────────────────────────────────────────
+
+class _PublicTopBar extends StatelessWidget {
+  final String title;
+  final VoidCallback onBack;
+  const _PublicTopBar({required this.title, required this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+          ),
+          Expanded(
+            child: Text(
+              title,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(letterSpacing: 2),
+            ),
+          ),
+          const SizedBox(width: 48),
+        ],
       ),
     );
   }
@@ -348,7 +377,7 @@ class _AchievementsSection extends ConsumerWidget {
             crossAxisCount: 4,
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
-            childAspectRatio: 1.0,
+            childAspectRatio: 1.1,
           ),
           itemCount: achievements.length,
           itemBuilder: (_, i) => GestureDetector(
@@ -526,13 +555,13 @@ class _SectionBlock extends ConsumerWidget {
     final c = ref.watch(sieColorsProvider);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: c.flatCard(radius: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SectionHeader(title: title),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           child,
         ],
       ),

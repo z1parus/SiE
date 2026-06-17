@@ -13,11 +13,19 @@ const _kGold    = Color(0xFFFFD700);
 // FocusProtocolScreen
 // ─────────────────────────────────────────────────────────────────────────────
 class FocusProtocolScreen extends ConsumerStatefulWidget {
-  const FocusProtocolScreen({super.key, this.openSettings = false});
+  const FocusProtocolScreen({
+    super.key,
+    this.openSettings = false,
+    this.initialTaskRef,
+  });
 
   /// When true, the settings sheet auto-opens on entry — used by the
   /// Knowledge Base deep-link.
   final bool openSettings;
+
+  /// Optional planning task to focus on (Stage 7). Bound to the session when
+  /// the user starts a fresh protocol.
+  final FocusTaskRef? initialTaskRef;
 
   @override
   ConsumerState<FocusProtocolScreen> createState() =>
@@ -110,6 +118,9 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
     final isBreak    = timerState.phase == FocusPhase.breakTime;
     final phaseColor = isBreak ? c.accentSecondary : c.accent;
 
+    // Active binding (after start) takes precedence over the entry hint.
+    final boundTask = timerState.taskRef ?? widget.initialTaskRef;
+
     final onboardingProfile = ref.watch(userProfileProvider).valueOrNull;
     final showOnboarding = _showOnboardingManual ||
         (!_onboardingDismissed &&
@@ -134,6 +145,9 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
                         onInfo: () =>
                             setState(() => _showOnboardingManual = true),
                       ),
+                      if (boundTask != null)
+                        _FocusTaskBanner(
+                            title: boundTask.taskTitle, color: phaseColor),
                       // Ring fills vertical space between the two chrome bars
                       Expanded(
                         child: Center(
@@ -165,8 +179,9 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
                         child: _BottomHUD(
                           timerState: timerState,
                           phaseColor: phaseColor,
-                          onStart: () =>
-                              ref.read(focusTimerProvider.notifier).start(),
+                          onStart: () => ref
+                              .read(focusTimerProvider.notifier)
+                              .start(taskRef: widget.initialTaskRef),
                           onPause: () =>
                               ref.read(focusTimerProvider.notifier).pause(),
                           onReset: () =>
@@ -180,8 +195,13 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
                 if (timerState.pendingResult != null)
                   _ResultOverlay(
                     result: timerState.pendingResult!,
+                    boundTask: timerState.taskRef,
                     onContinue: () =>
                         ref.read(focusTimerProvider.notifier).clearResult(),
+                    onMarkDone: (taskRef) {
+                      ref.read(planningProvider.notifier).toggleTask(
+                          taskRef.taskId, taskRef.subGoalId, taskRef.goalId);
+                    },
                   ),
               ],
             ),
@@ -554,6 +574,50 @@ class _TopBar extends StatelessWidget {
   }
 }
 
+// Focus Task Banner — shows the planning task this session is bound to.
+class _FocusTaskBanner extends ConsumerWidget {
+  const _FocusTaskBanner({required this.title, required this.color});
+
+  final String title;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          color: color.withValues(alpha: 0.07),
+          border: Border.all(color: color.withValues(alpha: 0.30)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.adjust, size: 14, color: color),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                'ФОКУС: ${title.toUpperCase()}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // Glass circle button — not inside a ScrollView, so useOwnLayer:true is safe.
 class _GlassCircleButton extends ConsumerWidget {
   const _GlassCircleButton({required this.icon, required this.onTap});
@@ -811,9 +875,16 @@ class _SettingsButton extends ConsumerWidget {
 // Session Result Overlay — full-screen reward display
 // ─────────────────────────────────────────────────────────────────────────────
 class _ResultOverlay extends ConsumerStatefulWidget {
-  const _ResultOverlay({required this.result, required this.onContinue});
+  const _ResultOverlay({
+    required this.result,
+    required this.onContinue,
+    this.boundTask,
+    this.onMarkDone,
+  });
   final FocusSessionResult result;
   final VoidCallback       onContinue;
+  final FocusTaskRef?      boundTask;
+  final void Function(FocusTaskRef)? onMarkDone;
 
   @override
   ConsumerState<_ResultOverlay> createState() => _ResultOverlayState();
@@ -821,6 +892,7 @@ class _ResultOverlay extends ConsumerStatefulWidget {
 
 class _ResultOverlayState extends ConsumerState<_ResultOverlay>
     with SingleTickerProviderStateMixin {
+  bool _markedDone = false;
   late final AnimationController _ctrl;
   late final Animation<double> _scale;
   late final Animation<double> _opacity;
@@ -1079,6 +1151,49 @@ class _ResultOverlayState extends ConsumerState<_ResultOverlay>
                                   ),
                                 ),
                               ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // ── Mark bound task done (Stage 7) ────────────
+                  if (widget.boundTask != null &&
+                      widget.onMarkDone != null) ...[
+                    const SizedBox(height: 14),
+                    SieGlassCard(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 22,
+                        vertical: 13,
+                      ),
+                      onTap: _markedDone
+                          ? null
+                          : () {
+                              SieHaptics.success();
+                              widget.onMarkDone!(widget.boundTask!);
+                              setState(() => _markedDone = true);
+                            },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _markedDone
+                                ? Icons.check_circle
+                                : Icons.check_circle_outline,
+                            size: 16,
+                            color: c.accentSecondary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _markedDone
+                                ? 'ЗАДАЧА ВЫПОЛНЕНА'
+                                : 'ОТМЕТИТЬ ЗАДАЧУ ВЫПОЛНЕННОЙ',
+                            style: TextStyle(
+                              color: c.accentSecondary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2,
                             ),
                           ),
                         ],

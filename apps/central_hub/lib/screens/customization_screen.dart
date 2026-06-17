@@ -378,13 +378,6 @@ class _Preview extends ConsumerWidget {
                   color: bg.accentColor.withValues(alpha: 0.40),
                 ),
               ),
-            if (equipped.pattern != null)
-              Positioned.fill(
-                child: ProfilePatternRenderer(
-                  pattern: equipped.pattern,
-                  accentColor: bg?.accentColor ?? c.accent,
-                ),
-              ),
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(

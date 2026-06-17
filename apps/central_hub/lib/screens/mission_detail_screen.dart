@@ -7,6 +7,9 @@ import 'tactical_map_view.dart';
 import 'mission_accomplished_screen.dart';
 import 'goal_stats_screen.dart';
 import 'ai_decomposition_sheet.dart';
+import 'milestone_metric_screen.dart';
+import 'focus_protocol_screen.dart';
+import '../widgets/sparkline.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -277,6 +280,31 @@ class _MissionHeader extends StatelessWidget {
               ],
             ],
           ),
+          // Stage 9: the "why" (motivation) shown as a soft quote.
+          if (goal.settings.why != null) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(left: 14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.format_quote, size: 14, color: sc.accent),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      goal.settings.why!,
+                      style: TextStyle(
+                        color: sc.textSecondary,
+                        fontSize: 13,
+                        height: 1.35,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           _HeaderProgressBar(progress: progress, goalColor: goalColor, sc: sc),
           if (goal.deadline != null) ...[
@@ -1015,9 +1043,15 @@ class _TaskTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = task;
+    final focusSecs = ref.watch(taskFocusSecondsProvider(t.id)).valueOrNull ?? 0;
+    final byId = tasksById(goal);
+    final blockers = taskBlockers(t, byId);
+    final isBlocked = blockers.isNotEmpty && !t.isCompleted;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
+      child: Opacity(
+        opacity: isBlocked ? 0.6 : 1.0,
+        child: Row(
         children: [
           if (canEdit) ...[
             ReorderableDragStartListener(
@@ -1035,7 +1069,9 @@ class _TaskTile extends ConsumerWidget {
             child: Icon(
               t.isCompleted
                   ? Icons.check_circle
-                  : Icons.radio_button_unchecked,
+                  : isBlocked
+                      ? Icons.lock_outline
+                      : Icons.radio_button_unchecked,
               color: t.isCompleted ? goal.color : sc.textSecondary,
               size: 20,
             ),
@@ -1045,23 +1081,109 @@ class _TaskTile extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  t.name,
-                  style: TextStyle(
-                    color: t.isCompleted ? sc.textSecondary : sc.textPrimary,
-                    fontSize: 14,
-                    decoration:
-                        t.isCompleted ? TextDecoration.lineThrough : null,
-                  ),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        t.name,
+                        style: TextStyle(
+                          color: t.isCompleted
+                              ? sc.textSecondary
+                              : sc.textPrimary,
+                          fontSize: 14,
+                          decoration: t.isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
+                        ),
+                      ),
+                    ),
+                    if (t.isRecurring) ...[
+                      const SizedBox(width: 6),
+                      Icon(Icons.repeat, size: 13, color: sc.accentSecondary),
+                    ],
+                  ],
                 ),
-                if (t.dueDate != null)
-                  Text(
-                    _formatDate(t.dueDate!),
-                    style: TextStyle(color: sc.textSecondary, fontSize: 10),
+                if (t.dueDate != null || t.isRecurring || focusSecs > 0)
+                  Row(
+                    children: [
+                      if (t.dueDate != null || t.isRecurring)
+                        Text(
+                          [
+                            if (t.dueDate != null) _formatDate(t.dueDate!),
+                            if (t.isRecurring)
+                              _recurrenceLabel(t.recurrenceRule!),
+                          ].join(' · '),
+                          style: TextStyle(
+                              color: sc.textSecondary, fontSize: 10),
+                        ),
+                      if (focusSecs > 0) ...[
+                        if (t.dueDate != null || t.isRecurring)
+                          Text(' · ',
+                              style: TextStyle(
+                                  color: sc.textSecondary, fontSize: 10)),
+                        Icon(Icons.timer_outlined,
+                            size: 10, color: sc.accentSecondary),
+                        const SizedBox(width: 2),
+                        Text(
+                          formatFocusDuration(focusSecs),
+                          style: TextStyle(
+                              color: sc.accentSecondary, fontSize: 10),
+                        ),
+                      ],
+                    ],
+                  ),
+                if (isBlocked)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      'Ждёт: ${blockers.map((b) => b.name).join(', ')}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: sc.textSecondary,
+                          fontSize: 10,
+                          fontStyle: FontStyle.italic),
+                    ),
                   ),
               ],
             ),
           ),
+          if (canEdit) ...[
+            GestureDetector(
+              onTap: () => _showDependencySheet(context, ref, t, sc),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(
+                  t.hasDependencies
+                      ? Icons.account_tree
+                      : Icons.account_tree_outlined,
+                  size: 16,
+                  color: t.hasDependencies ? sc.accentSecondary : sc.textSecondary,
+                ),
+              ),
+            ),
+          ],
+          if (!t.isCompleted && !isBlocked) ...[
+            GestureDetector(
+              onTap: () => _startFocusOnTask(context, t, subGoal, goal),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.play_circle_outline,
+                    size: 18, color: sc.accent),
+              ),
+            ),
+          ],
+          if (t.isRecurring && canEdit) ...[
+            GestureDetector(
+              onTap: () =>
+                  _confirmEndRecurrence(context, ref, t.id, subGoal.id, goal.id, sc),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.stop_circle_outlined,
+                    size: 16, color: sc.textSecondary),
+              ),
+            ),
+          ],
           _WeightBadge(weight: t.weight, sc: sc),
           if (canEdit) ...[
             const SizedBox(width: 6),
@@ -1071,8 +1193,181 @@ class _TaskTile extends ConsumerWidget {
             ),
           ],
         ],
+        ),
       ),
     );
+  }
+
+  void _showDependencySheet(
+      BuildContext context, WidgetRef ref, PlanningTask t, SieColors sc) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _DependencySheet(task: t, goal: goal, sc: sc),
+    );
+  }
+
+  void _startFocusOnTask(
+      BuildContext context, PlanningTask t, SubGoal sg, Goal g) {
+    SieHaptics.selection();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FocusProtocolScreen(
+          initialTaskRef: (
+            taskId: t.id,
+            subGoalId: sg.id,
+            goalId: g.id,
+            taskTitle: t.name,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Dependency management sheet (Stage 8) ─────────────────────────────────────
+
+class _DependencySheet extends ConsumerWidget {
+  const _DependencySheet({
+    required this.task,
+    required this.goal,
+    required this.sc,
+  });
+
+  final PlanningTask task;
+  final Goal goal;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Re-read live task from provider so the checkbox state stays in sync.
+    final liveGoal = ref.watch(planningProvider).valueOrNull?.goals
+            .where((g) => g.id == goal.id)
+            .firstOrNull ??
+        goal;
+    final byId = tasksById(liveGoal);
+    final t = byId[task.id] ?? task;
+
+    // Candidate predecessors: every other task of the same goal.
+    final candidates = byId.values.where((c) => c.id != t.id).toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
+      constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.7),
+      decoration: BoxDecoration(
+        color: sc.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: sc.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('ЗАВИСИТ ОТ…',
+              style: TextStyle(
+                  color: sc.textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 2)),
+          const SizedBox(height: 4),
+          Text(t.name,
+              style: TextStyle(
+                  color: sc.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text(
+            'Эта задача станет доступной, когда выбранные будут выполнены.',
+            style: TextStyle(color: sc.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          if (candidates.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text('Нет других задач в этой цели.',
+                  style: TextStyle(color: sc.textSecondary, fontSize: 13)),
+            )
+          else
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: candidates.map((cand) {
+                  final selected = t.dependsOn.contains(cand.id);
+                  return InkWell(
+                    onTap: () => _toggle(context, ref, t, cand, selected),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Row(
+                        children: [
+                          Icon(
+                            selected
+                                ? Icons.check_box
+                                : Icons.check_box_outline_blank,
+                            size: 20,
+                            color:
+                                selected ? sc.accentSecondary : sc.textSecondary,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              cand.name,
+                              style: TextStyle(
+                                color: sc.textPrimary,
+                                fontSize: 14,
+                                decoration: cand.isCompleted
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ),
+                            ),
+                          ),
+                          if (cand.isCompleted)
+                            Icon(Icons.check_circle,
+                                size: 14, color: goal.color),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _toggle(BuildContext context, WidgetRef ref, PlanningTask t,
+      PlanningTask cand, bool selected) async {
+    final notifier = ref.read(planningProvider.notifier);
+    if (selected) {
+      await notifier.removeDependency(goal.id, t.id, cand.id);
+      return;
+    }
+    final result = await notifier.addDependency(goal.id, t.id, cand.id);
+    if (!context.mounted) return;
+    if (result != DependencyResult.ok) {
+      final msg = switch (result) {
+        DependencyResult.cycle =>
+          'Это создаст замкнутый круг зависимостей.',
+        DependencyResult.duplicate => 'Зависимость уже добавлена.',
+        _ => 'Не удалось добавить зависимость.',
+      };
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: sc.surface,
+        ),
+      );
+    } else {
+      SieHaptics.selection();
+    }
   }
 }
 
@@ -1213,6 +1508,8 @@ class _MilestoneTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final m = milestone;
+    if (m.isMetric) return _MetricMilestoneTile(milestone: m, goal: goal, sc: sc, canEdit: canEdit);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -1259,6 +1556,356 @@ class _MilestoneTile extends ConsumerWidget {
                   Icon(Icons.close, size: 14, color: sc.textSecondary),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _MetricMilestoneTile extends ConsumerWidget {
+  const _MetricMilestoneTile({
+    required this.milestone,
+    required this.goal,
+    required this.sc,
+    this.canEdit = true,
+  });
+
+  final Milestone milestone;
+  final Goal goal;
+  final SieColors sc;
+  final bool canEdit;
+
+  String _fmt(double v) {
+    if (v == v.truncateToDouble()) return v.toInt().toString();
+    return v.toStringAsFixed(1);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final m = milestone;
+    final logsAsync = ref.watch(milestoneLogsProvider(m.id));
+    final progress = metricProgress(m);
+    final pct = (progress * 100).round();
+    final unit = m.unit ?? '';
+
+    final currentStr = m.currentValue != null
+        ? '${_fmt(m.currentValue!)}${unit.isNotEmpty ? ' $unit' : ''}'
+        : '—';
+    final targetStr = m.targetValue != null
+        ? _fmt(m.targetValue!)
+        : '?';
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => MilestoneMetricScreen(
+                  milestone: m, goalId: goal.id))),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: sc.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: sc.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    m.isCompleted ? Icons.flag : Icons.flag_outlined,
+                    color: m.isCompleted ? sc.accent : sc.textSecondary,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      m.name,
+                      style: TextStyle(
+                        color: m.isCompleted
+                            ? sc.textSecondary
+                            : sc.textPrimary,
+                        fontSize: 14,
+                        decoration: m.isCompleted
+                            ? TextDecoration.lineThrough
+                            : null,
+                      ),
+                    ),
+                  ),
+                  // Sparkline
+                  logsAsync.when(
+                    loading: () => const SizedBox(width: 80, height: 28),
+                    error: (_, __) => const SizedBox(width: 80, height: 28),
+                    data: (logs) => logs.length >= 2
+                        ? Sparkline(
+                            values: logs.map((l) => l.value).toList(),
+                            color: m.isCompleted
+                                ? sc.success
+                                : sc.accentSecondary,
+                            width: 80,
+                            height: 28,
+                          )
+                        : const SizedBox(width: 80, height: 28),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            minHeight: 4,
+                            backgroundColor: sc.border,
+                            valueColor: AlwaysStoppedAnimation(
+                                m.isCompleted ? sc.success : sc.accent),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$currentStr / $targetStr${unit.isNotEmpty ? ' $unit' : ''} · $pct%',
+                          style: TextStyle(
+                              color: sc.textSecondary, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  if (canEdit && !m.isCompleted)
+                    GestureDetector(
+                      onTap: () {
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (_) => _LogMeasurementSheet(
+                              milestone: m, goalId: goal.id, sc: sc),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: sc.accent.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text('ЗАМЕР',
+                            style: TextStyle(
+                                color: sc.accent,
+                                fontSize: 10,
+                                letterSpacing: 1)),
+                      ),
+                    ),
+                  if (canEdit)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: GestureDetector(
+                        onTap: () => _confirmDeleteMilestone(
+                            context, ref, m.id, goal.id, sc),
+                        child: Icon(Icons.close,
+                            size: 14, color: sc.textSecondary),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Inline log sheet (reused from MilestoneMetricScreen context).
+class _LogMeasurementSheet extends ConsumerStatefulWidget {
+  const _LogMeasurementSheet(
+      {required this.milestone, required this.goalId, required this.sc});
+  final Milestone milestone;
+  final String goalId;
+  final SieColors sc;
+
+  @override
+  ConsumerState<_LogMeasurementSheet> createState() =>
+      _LogMeasurementSheetState();
+}
+
+class _LogMeasurementSheetState
+    extends ConsumerState<_LogMeasurementSheet> {
+  late final TextEditingController _ctrl;
+  double? _parsed;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.milestone.currentValue;
+    _ctrl = TextEditingController(
+        text: initial != null ? _fmtV(initial) : '');
+    _parsed = initial;
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  String _fmtV(double v) {
+    if (v == v.truncateToDouble()) return v.toInt().toString();
+    return v.toStringAsFixed(1);
+  }
+
+  void _applyDelta(double delta) {
+    final current = _parsed ?? widget.milestone.currentValue ?? 0;
+    final next = current + delta;
+    setState(() {
+      _parsed = next;
+      _ctrl.text = _fmtV(next);
+      _ctrl.selection = TextSelection.fromPosition(
+          TextPosition(offset: _ctrl.text.length));
+    });
+  }
+
+  void _onChanged(String s) {
+    setState(() => _parsed = double.tryParse(s.replaceAll(',', '.')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sc = widget.sc;
+    final ms = widget.milestone;
+    final unit = ms.unit ?? '';
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomInset),
+      decoration: BoxDecoration(
+        color: sc.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: sc.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('ВНЕСТИ ЗАМЕР',
+              style: TextStyle(
+                  color: sc.textSecondary,
+                  fontSize: 11,
+                  letterSpacing: 1.5)),
+          const SizedBox(height: 4),
+          Text(ms.name,
+              style: TextStyle(
+                  color: sc.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500)),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              _MeasureStepBtn(label: '−0.1', sc: sc, onTap: () => _applyDelta(-0.1)),
+              const SizedBox(width: 8),
+              _MeasureStepBtn(label: '−1', sc: sc, onTap: () => _applyDelta(-1)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _ctrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: sc.textPrimary,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w500),
+                  decoration: InputDecoration(
+                    suffixText: unit,
+                    suffixStyle:
+                        TextStyle(color: sc.textSecondary, fontSize: 14),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: sc.border)),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: sc.border)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: sc.accent)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 14),
+                  ),
+                  onChanged: _onChanged,
+                ),
+              ),
+              const SizedBox(width: 12),
+              _MeasureStepBtn(label: '+1', sc: sc, onTap: () => _applyDelta(1)),
+              const SizedBox(width: 8),
+              _MeasureStepBtn(label: '+0.1', sc: sc, onTap: () => _applyDelta(0.1)),
+            ],
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _parsed == null
+                  ? null
+                  : () {
+                      ref
+                          .read(planningProvider.notifier)
+                          .addMilestoneLog(ms.id, widget.goalId, _parsed!);
+                      SieHaptics.success();
+                      Navigator.pop(context);
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: sc.accent,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              child: const Text('СОХРАНИТЬ',
+                  style: TextStyle(
+                      letterSpacing: 1.5, fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MeasureStepBtn extends StatelessWidget {
+  const _MeasureStepBtn(
+      {required this.label, required this.sc, required this.onTap});
+  final String label;
+  final SieColors sc;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: sc.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: sc.border),
+        ),
+        child: Center(
+          child: Text(label,
+              style: TextStyle(
+                  color: sc.accent,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500)),
+        ),
       ),
     );
   }
@@ -1864,6 +2511,50 @@ Future<void> _confirmDeleteTask(BuildContext context, WidgetRef ref,
   }
 }
 
+Future<void> _confirmEndRecurrence(BuildContext context, WidgetRef ref,
+    String taskId, String subGoalId, String goalId, SieColors sc) async {
+  final confirm = await confirmDestructive(
+    context,
+    ref,
+    title: 'Завершить серию?',
+    message:
+        'Текущая задача останется, но новые повторы создаваться не будут.',
+  );
+  if (confirm) {
+    ref
+        .read(planningProvider.notifier)
+        .endRecurrence(taskId, subGoalId, goalId);
+  }
+}
+
+/// Human-readable label for a recurrence rule (compact format).
+String _recurrenceLabel(String rule) {
+  final parts = rule.split(':');
+  final arg = parts.length > 1 ? parts[1] : '';
+  switch (parts[0]) {
+    case 'daily':
+      return '↻ ежедневно';
+    case 'every':
+      return '↻ каждые $arg дн.';
+    case 'monthly':
+      return '↻ ежемесячно ($arg)';
+    case 'weekly':
+      const names = {
+        '1': 'Пн',
+        '2': 'Вт',
+        '3': 'Ср',
+        '4': 'Чт',
+        '5': 'Пт',
+        '6': 'Сб',
+        '7': 'Вс'
+      };
+      final days = arg.split(',').map((d) => names[d.trim()] ?? d).join(',');
+      return '↻ $days';
+    default:
+      return '↻';
+  }
+}
+
 Future<void> _confirmDeleteMilestone(BuildContext context, WidgetRef ref,
     String milestoneId, String goalId, SieColors sc) async {
   final confirm = await confirmDestructive(
@@ -1936,6 +2627,66 @@ class _AddSubGoalSheetState extends ConsumerState<_AddSubGoalSheet> {
   }
 }
 
+class _RecurChip extends StatelessWidget {
+  const _RecurChip(this.label, this.value, this.current, this.sc, this.onTap);
+
+  final String label;
+  final String value;
+  final String current;
+  final SieColors sc;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = current == value;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: active ? sc.accent.withValues(alpha: 0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: active ? sc.accent : sc.border),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: active ? sc.accent : sc.textSecondary,
+            fontSize: 12,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StepperButton extends StatelessWidget {
+  const _StepperButton(
+      {required this.icon, required this.sc, required this.onTap});
+
+  final IconData icon;
+  final SieColors sc;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: sc.border),
+        ),
+        child: Icon(icon, size: 16, color: sc.textPrimary),
+      ),
+    );
+  }
+}
+
 class _AddTaskSheet extends ConsumerStatefulWidget {
   const _AddTaskSheet(
       {required this.subGoal, required this.goal, required this.sc});
@@ -1952,6 +2703,24 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
   final _ctrl = TextEditingController();
   int _weight = 1;
   DateTime? _dueDate;
+  String _recur = 'none'; // none|daily|weekly|monthly|every
+  int _everyN = 3;
+
+  String? _buildRule() {
+    final anchor = _dueDate ?? DateTime.now();
+    switch (_recur) {
+      case 'daily':
+        return 'daily';
+      case 'weekly':
+        return 'weekly:${anchor.weekday}';
+      case 'monthly':
+        return 'monthly:${anchor.day}';
+      case 'every':
+        return 'every:$_everyN';
+      default:
+        return null;
+    }
+  }
 
   @override
   void dispose() {
@@ -2044,6 +2813,69 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+          Text('ПОВТОР',
+              style: TextStyle(
+                  color: sc.textSecondary,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _RecurChip('Нет', 'none', _recur, sc,
+                  () => setState(() => _recur = 'none')),
+              _RecurChip('Ежедневно', 'daily', _recur, sc,
+                  () => setState(() => _recur = 'daily')),
+              _RecurChip('Еженедельно', 'weekly', _recur, sc,
+                  () => setState(() => _recur = 'weekly')),
+              _RecurChip('Ежемесячно', 'monthly', _recur, sc,
+                  () => setState(() => _recur = 'monthly')),
+              _RecurChip('Каждые N дней', 'every', _recur, sc,
+                  () => setState(() => _recur = 'every')),
+            ],
+          ),
+          if (_recur == 'every') ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Text('Каждые', style: TextStyle(color: sc.textSecondary, fontSize: 13)),
+                const SizedBox(width: 10),
+                _StepperButton(
+                    icon: Icons.remove,
+                    sc: sc,
+                    onTap: () => setState(
+                        () => _everyN = _everyN > 1 ? _everyN - 1 : 1)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text('$_everyN',
+                      style: TextStyle(
+                          color: sc.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700)),
+                ),
+                _StepperButton(
+                    icon: Icons.add,
+                    sc: sc,
+                    onTap: () => setState(
+                        () => _everyN = _everyN < 99 ? _everyN + 1 : 99)),
+                const SizedBox(width: 10),
+                Text('дней', style: TextStyle(color: sc.textSecondary, fontSize: 13)),
+              ],
+            ),
+          ],
+          if (_recur != 'none' && _recur != 'daily' && _recur != 'every')
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                _recur == 'weekly'
+                    ? 'Повтор в этот день недели (по дате дедлайна)'
+                    : 'Повтор в это число месяца (по дате дедлайна)',
+                style: TextStyle(color: sc.textSecondary, fontSize: 11),
+              ),
+            ),
           const SizedBox(height: 20),
           _SheetSubmitButton(
             label: 'ДОБАВИТЬ ЗАДАЧУ',
@@ -2057,6 +2889,7 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
                     name: name,
                     weight: _weight,
                     dueDate: _dueDate,
+                    recurrenceRule: _buildRule(),
                   );
               Navigator.pop(context);
             },
@@ -2128,12 +2961,20 @@ class _AddMilestoneSheet extends ConsumerStatefulWidget {
 }
 
 class _AddMilestoneSheetState extends ConsumerState<_AddMilestoneSheet> {
-  final _ctrl = TextEditingController();
+  final _nameCtrl = TextEditingController();
+  final _unitCtrl = TextEditingController();
+  final _startCtrl = TextEditingController();
+  final _targetCtrl = TextEditingController();
   DateTime? _targetDate;
+  String _kind = 'binary'; // 'binary' | 'metric'
+  String _direction = 'up'; // 'up' | 'down'
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _nameCtrl.dispose();
+    _unitCtrl.dispose();
+    _startCtrl.dispose();
+    _targetCtrl.dispose();
     super.dispose();
   }
 
@@ -2150,7 +2991,71 @@ class _AddMilestoneSheetState extends ConsumerState<_AddMilestoneSheet> {
         children: [
           _SheetTitle('КОНТРОЛЬНАЯ ТОЧКА', sc),
           const SizedBox(height: 12),
-          _SheetTextField('Название точки', _ctrl, sc, autofocus: true),
+          _SheetTextField('Название точки', _nameCtrl, sc, autofocus: true),
+          const SizedBox(height: 16),
+
+          // Kind selector.
+          Row(
+            children: [
+              _KindChip(
+                label: 'Бинарная',
+                selected: _kind == 'binary',
+                sc: sc,
+                onTap: () => setState(() => _kind = 'binary'),
+              ),
+              const SizedBox(width: 8),
+              _KindChip(
+                label: 'Метрика',
+                selected: _kind == 'metric',
+                sc: sc,
+                onTap: () => setState(() => _kind = 'metric'),
+              ),
+            ],
+          ),
+
+          // Metric fields.
+          if (_kind == 'metric') ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _SheetTextField('Старт', _startCtrl, sc,
+                      keyboard: const TextInputType.numberWithOptions(decimal: true)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _SheetTextField('Цель', _targetCtrl, sc,
+                      keyboard: const TextInputType.numberWithOptions(decimal: true)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _SheetTextField('Ед. (кг, \$, км)', _unitCtrl, sc),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Text('Направление:',
+                    style: TextStyle(color: sc.textSecondary, fontSize: 12)),
+                const SizedBox(width: 12),
+                _KindChip(
+                  label: '↑ Увеличивать',
+                  selected: _direction == 'up',
+                  sc: sc,
+                  onTap: () => setState(() => _direction = 'up'),
+                ),
+                const SizedBox(width: 8),
+                _KindChip(
+                  label: '↓ Уменьшать',
+                  selected: _direction == 'down',
+                  sc: sc,
+                  onTap: () => setState(() => _direction = 'down'),
+                ),
+              ],
+            ),
+          ],
+
           const SizedBox(height: 16),
           GestureDetector(
             onTap: () async {
@@ -2195,16 +3100,65 @@ class _AddMilestoneSheetState extends ConsumerState<_AddMilestoneSheet> {
             label: 'ДОБАВИТЬ ТОЧКУ',
             sc: sc,
             onTap: () {
-              final name = _ctrl.text.trim();
+              final name = _nameCtrl.text.trim();
               if (name.isEmpty) return;
-              ref
-                  .read(planningProvider.notifier)
-                  .addMilestone(widget.goal.id, name,
-                      targetDate: _targetDate);
+              final startV =
+                  double.tryParse(_startCtrl.text.replaceAll(',', '.'));
+              final targetV =
+                  double.tryParse(_targetCtrl.text.replaceAll(',', '.'));
+              final unit = _unitCtrl.text.trim();
+              if (_kind == 'metric' && (startV == null || targetV == null)) {
+                return; // Require numeric fields for metric.
+              }
+              ref.read(planningProvider.notifier).addMilestone(
+                    widget.goal.id,
+                    name,
+                    targetDate: _targetDate,
+                    kind: _kind,
+                    unit: unit.isEmpty ? null : unit,
+                    startValue: startV,
+                    targetValue: targetV,
+                    direction: _direction,
+                  );
               Navigator.pop(context);
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _KindChip extends StatelessWidget {
+  const _KindChip(
+      {required this.label,
+      required this.selected,
+      required this.sc,
+      required this.onTap});
+  final String label;
+  final bool selected;
+  final SieColors sc;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? sc.accent.withOpacity(0.2) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: selected ? sc.accent : sc.border, width: 1),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+              color: selected ? sc.accent : sc.textSecondary,
+              fontSize: 12),
+        ),
       ),
     );
   }
@@ -2517,19 +3471,23 @@ class _SheetTitle extends StatelessWidget {
 
 class _SheetTextField extends StatelessWidget {
   const _SheetTextField(this.hint, this.ctrl, this.sc,
-      {this.autofocus = false});
+      {this.autofocus = false, this.keyboard});
 
   final String hint;
   final TextEditingController ctrl;
   final SieColors sc;
   final bool autofocus;
+  final TextInputType? keyboard;
 
   @override
   Widget build(BuildContext context) => TextField(
         controller: ctrl,
         autofocus: autofocus,
+        keyboardType: keyboard,
         style: TextStyle(color: sc.textPrimary, fontSize: 16),
-        textCapitalization: TextCapitalization.sentences,
+        textCapitalization: keyboard != null
+            ? TextCapitalization.none
+            : TextCapitalization.sentences,
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(color: sc.textSecondary, fontSize: 16),
@@ -2603,11 +3561,19 @@ class GoalSettingsScreen extends ConsumerStatefulWidget {
 
 class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
   late GoalSettings _settings;
+  late final TextEditingController _whyCtrl;
 
   @override
   void initState() {
     super.initState();
     _settings = widget.goal.settings;
+    _whyCtrl = TextEditingController(text: _settings.why ?? '');
+  }
+
+  @override
+  void dispose() {
+    _whyCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -2662,6 +3628,49 @@ class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
               Text(
                 'Создано: ${_formatDate(goal.createdAt)}',
                 style: TextStyle(color: sc.textSecondary, fontSize: 12),
+              ),
+              const SizedBox(height: 20),
+              Divider(height: 1, color: sc.border),
+              const SizedBox(height: 16),
+              // Stage 9: the "why" (motivation).
+              Text(
+                'ЗАЧЕМ Я ЭТО ДЕЛАЮ',
+                style: TextStyle(
+                    color: sc.textSecondary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _whyCtrl,
+                maxLines: 3,
+                style: TextStyle(
+                    color: sc.textPrimary, fontSize: 14, height: 1.4),
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (v) {
+                  final trimmed = v.trim();
+                  _settings = _settings.copyWith(
+                      why: trimmed.isEmpty ? null : trimmed);
+                },
+                decoration: InputDecoration(
+                  hintText: 'Моя мотивация и смысл этой цели…',
+                  hintStyle: TextStyle(color: sc.textSecondary, fontSize: 13),
+                  filled: true,
+                  fillColor: sc.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: sc.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: sc.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: sc.accent),
+                  ),
+                ),
               ),
               const SizedBox(height: 20),
               Divider(height: 1, color: sc.border),
