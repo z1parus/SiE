@@ -21,7 +21,7 @@ class ProfilePatternRenderer extends StatelessWidget {
   Widget build(BuildContext context) {
     if (pattern == null) return const SizedBox.shrink();
 
-    final type = pattern!.patternType;
+    final type = pattern!.patternSlug;
     final color = accentColor.withValues(alpha: 0.15);
 
     return switch (type) {
