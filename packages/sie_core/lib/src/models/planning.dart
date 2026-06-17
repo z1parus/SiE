@@ -1,6 +1,7 @@
 import 'dart:ui' show Offset;
 import 'package:flutter/material.dart';
 import 'goal_collaborator.dart';
+import 'map_element.dart';
 import 'public_profile.dart';
 
 const _unset = Object();
@@ -411,6 +412,7 @@ class Goal {
     this.isPinned = false,
     this.collaborators = const [],
     this.ownerProfile,
+    this.mapElements = const [],
   });
 
   final String id;
@@ -432,6 +434,7 @@ class Goal {
   final bool isPinned;
   final List<GoalCollaborator> collaborators;
   final PublicProfile? ownerProfile; // populated for shared goals
+  final List<MapElement> mapElements; // map-native content (Tactical Map only)
 
   Color get color =>
       Color(int.parse('0xFF${colorHex.replaceAll('#', '')}'));
@@ -467,6 +470,7 @@ class Goal {
     bool? isPinned,
     List<GoalCollaborator>? collaborators,
     PublicProfile? ownerProfile,
+    List<MapElement>? mapElements,
   }) =>
       Goal(
         id: id,
@@ -488,6 +492,7 @@ class Goal {
         isPinned: isPinned ?? this.isPinned,
         collaborators: collaborators ?? this.collaborators,
         ownerProfile: ownerProfile ?? this.ownerProfile,
+        mapElements: mapElements ?? this.mapElements,
       );
 
   factory Goal.fromJson(Map<String, dynamic> j) {
@@ -519,6 +524,13 @@ class Goal {
             .toList()
         : <GoalCollaborator>[];
 
+    final rawElements = j['goal_map_elements'];
+    final mapElements = rawElements is List
+        ? rawElements
+            .map((e) => MapElement.fromJson(e as Map<String, dynamic>))
+            .toList()
+        : <MapElement>[];
+
     return Goal(
       id: j['id'] as String,
       userId: j['user_id'] as String,
@@ -544,6 +556,7 @@ class Goal {
       mapPositions: positionsFromJson(j['map_positions'] as Map<String, dynamic>?),
       isPinned: j['is_pinned'] as bool? ?? false,
       collaborators: collaborators,
+      mapElements: mapElements,
     );
   }
 

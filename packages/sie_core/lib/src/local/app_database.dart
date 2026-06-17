@@ -383,6 +383,31 @@ class LocalMapPositions extends Table {
   Set<Column> get primaryKey => {goalId, nodeId};
 }
 
+/// Map-native elements (TacticalMapEvolution Stage 1): notes/labels now,
+/// image cards/groups/connectors later. Polymorphic via [kind].
+@DataClassName('LocalMapElement')
+class LocalMapElements extends Table {
+  TextColumn get id             => text()();
+  TextColumn get goalId         => text()();
+  TextColumn get kind           => text()();            // note|label|image|group|connector
+  RealColumn get x              => real()();
+  RealColumn get y              => real()();
+  RealColumn get w              => real().nullable()();
+  RealColumn get h              => real().nullable()();
+  IntColumn  get zIndex         => integer().withDefault(const Constant(0))();
+  TextColumn get content        => text().nullable()();
+  TextColumn get colorHex       => text().nullable()();
+  TextColumn get mediaUrl       => text().nullable()();
+  TextColumn get fromRef        => text().nullable()();
+  TextColumn get toRef          => text().nullable()();
+  TextColumn get createdBy      => text()();
+  IntColumn  get createdAtMs    => integer()();
+  IntColumn  get updatedAtMs    => integer().nullable()();
+  BoolColumn get synced         => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
+  @override Set<Column> get primaryKey => {id};
+}
+
 // ── Database ───────────────────────────────────────────────────────────────
 
 @DriftDatabase(tables: [
@@ -408,12 +433,13 @@ class LocalMapPositions extends Table {
   LocalMissionTemplates,
   LocalTaskDependencies,
   LocalWeeklyReviews,
+  LocalMapElements,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 31;
+  int get schemaVersion => 32;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -428,6 +454,7 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS idx_goals_user ON local_goals(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_habit_logs_user ON local_habit_logs(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_snapshots_goal ON local_goal_progress_snapshots(goal_id, captured_at_ms)',
+      'CREATE INDEX IF NOT EXISTS idx_map_elements_goal ON local_map_elements(goal_id)',
     ];
     for (final s in stmts) {
       await m.issueCustomQuery(s, const []);
@@ -608,6 +635,9 @@ class AppDatabase extends _$AppDatabase {
       if (from < 31) {
         await m.addColumn(localRoutines, localRoutines.name);
         await m.addColumn(localRoutines, localRoutines.anchorCue);
+      }
+      if (from < 32) {
+        await m.createTable(localMapElements);
       }
     },
   );
@@ -1033,6 +1063,36 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> deleteMapPositionsForGoal(String goalId) =>
       (delete(localMapPositions)..where((t) => t.goalId.equals(goalId))).go();
+
+  // ── Map elements (TacticalMapEvolution Stage 1) ────────────────────────────
+
+  Future<void> upsertMapElement(LocalMapElementsCompanion row) =>
+      into(localMapElements).insertOnConflictUpdate(row);
+
+  Future<List<LocalMapElement>> mapElementsForGoals(List<String> goalIds) async {
+    if (goalIds.isEmpty) return const [];
+    return (select(localMapElements)
+          ..where((t) => t.goalId.isIn(goalIds) & t.deletedLocally.equals(false)))
+        .get();
+  }
+
+  Future<void> deleteMapElementLocally(String id) =>
+      (update(localMapElements)..where((t) => t.id.equals(id))).write(
+        const LocalMapElementsCompanion(
+          deletedLocally: Value(true),
+          synced: Value(false),
+        ),
+      );
+
+  Future<void> purgeMapElement(String id) =>
+      (delete(localMapElements)..where((t) => t.id.equals(id))).go();
+
+  Future<List<LocalMapElement>> unsyncedMapElements() =>
+      (select(localMapElements)..where((t) => t.synced.equals(false))).get();
+
+  Future<void> markMapElementSynced(String id) =>
+      (update(localMapElements)..where((t) => t.id.equals(id)))
+          .write(const LocalMapElementsCompanion(synced: Value(true)));
 
   Future<void> updateSubGoalOrderIndex(String id, int idx) =>
       (update(localSubGoals)..where((t) => t.id.equals(id)))

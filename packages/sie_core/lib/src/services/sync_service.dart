@@ -384,6 +384,17 @@ class SyncService {
                 .eq('user_id', userId);
             await _db.updateGoal(payload['id'] as String,
                 const LocalGoalsCompanion(synced: Value(true)));
+          case 'upsert_map_element':
+            await client
+                .from('goal_map_elements')
+                .upsert(payload, onConflict: 'id');
+            await _db.markMapElementSynced(payload['id'] as String);
+          case 'delete_map_element':
+            await client
+                .from('goal_map_elements')
+                .delete()
+                .eq('id', payload['id'] as String);
+            await _db.purgeMapElement(payload['id'] as String);
 
           default:
             debugPrint(

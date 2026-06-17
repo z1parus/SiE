@@ -28,6 +28,24 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   Timer? _saveTimer;
   final Set<String> _scoutedMapIds = {};
 
+  // ── Tactical Map Evolution Stage 1: map-native elements ───────────────────
+  // Live positions for map elements (notes/labels). Seeded from the model and
+  // mutated during drag without setState (same pattern as node `_positions`).
+  final Map<String, Offset> _elementPositions = {};
+  // Live note sizes (dx=w, dy=h), mutated during resize without setState.
+  final Map<String, Offset> _elementSizes = {};
+  // Active edit-mode tool. `none` = view/select; the rest place new elements.
+  _MapTool _tool = _MapTool.none;
+  bool _editMode = false;
+  // Element whose text is currently being edited inline.
+  String? _editingElementId;
+  final _elementTextCtrl = TextEditingController();
+  Timer? _elementSaveTimer;
+
+  static const _noteColors = <String>[
+    '#C8A84B', '#5AADA0', '#6A8ED8', '#C05080', '#70B870', '#E07830',
+  ];
+
   // Flattened sub-goal list for the current goal, recomputed once per build.
   // Safe to reuse across drag handlers because the goal tree structure does not
   // change during a drag (only positions move).
@@ -60,6 +78,8 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   @override
   void dispose() {
     _saveTimer?.cancel();
+    _elementSaveTimer?.cancel();
+    _elementTextCtrl.dispose();
     _hoverAnim.dispose();
     _tc.dispose();
     _repaint.dispose();
@@ -183,6 +203,214 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       if (!mounted) return;
       ref.read(planningProvider.notifier).saveMapPositions(goal.id, Map.of(_positions));
     });
+  }
+
+  // ── Map elements (Stage 1) ──────────────────────────────────────────────
+
+  void _scheduleSaveElement(Goal goal, String elementId) {
+    _elementSaveTimer?.cancel();
+    final pos = _elementPositions[elementId];
+    if (pos == null) return;
+    _elementSaveTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      ref
+          .read(planningProvider.notifier)
+          .saveMapElementPosition(goal.id, elementId, pos);
+    });
+  }
+
+  /// Converts a tap inside the canvas (already in 0.._cs space) into logical
+  /// coordinates (relative to goal centre) and creates the active element.
+  Future<void> _createElementAt(Offset canvasLocal, Goal goal) async {
+    final kind = switch (_tool) {
+      _MapTool.note => MapElementKind.note,
+      _MapTool.label => MapElementKind.label,
+      _MapTool.none => null,
+    };
+    if (kind == null) return;
+    setState(() => _tool = _MapTool.none); // auto-return to select
+    final logical = Offset(canvasLocal.dx - _cx, canvasLocal.dy - _cx);
+    final isNote = kind == MapElementKind.note;
+    HapticFeedback.lightImpact();
+    final id = await ref.read(planningProvider.notifier).addMapElement(
+          goalId: goal.id,
+          kind: kind,
+          x: logical.dx,
+          y: logical.dy,
+          w: isNote ? 140 : null,
+          h: isNote ? 100 : null,
+          colorHex: isNote ? _noteColors.first : null,
+          content: '',
+        );
+    if (id == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Достигнут лимит элементов на карте')));
+      }
+      return;
+    }
+    _elementPositions[id] = logical;
+    _beginEditElement(id, '');
+  }
+
+  void _beginEditElement(String id, String text) {
+    setState(() {
+      _editingElementId = id;
+      _elementTextCtrl.text = text;
+      _elementTextCtrl.selection =
+          TextSelection.collapsed(offset: text.length);
+    });
+  }
+
+  void _commitElementText(Goal goal, String id) {
+    final text = _elementTextCtrl.text.trim();
+    final wasEditing = _editingElementId == id;
+    if (!wasEditing) return;
+    setState(() => _editingElementId = null);
+    final el = goal.mapElements.where((e) => e.id == id).firstOrNull;
+    if (el == null) return;
+    // Empty note/label → discard (no orphan placeholders).
+    if (text.isEmpty && (el.content ?? '').isEmpty) {
+      ref.read(planningProvider.notifier).deleteMapElement(goal.id, id);
+      return;
+    }
+    if (text != (el.content ?? '')) {
+      ref
+          .read(planningProvider.notifier)
+          .updateMapElement(goal.id, id, content: text);
+    }
+  }
+
+  void _showElementActions(Goal goal, MapElement el, SieColors c) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ElementActionsSheet(
+        element: el,
+        sc: c,
+        colors: _noteColors,
+        onPickColor: (hex) {
+          Navigator.pop(context);
+          ref
+              .read(planningProvider.notifier)
+              .updateMapElement(goal.id, el.id, colorHex: hex);
+        },
+        onEditText: () {
+          Navigator.pop(context);
+          _beginEditElement(el.id, el.content ?? '');
+        },
+        onDelete: () {
+          Navigator.pop(context);
+          _elementPositions.remove(el.id);
+          _elementSizes.remove(el.id);
+          ref.read(planningProvider.notifier).deleteMapElement(goal.id, el.id);
+        },
+      ),
+    );
+  }
+
+  static Color? _hexColor(String? hex) {
+    if (hex == null) return null;
+    final h = hex.replaceAll('#', '');
+    final v = int.tryParse('FF$h', radix: 16);
+    return v == null ? null : Color(v);
+  }
+
+  Widget _elementPosNode(MapElement el, Goal goal, SieColors c) {
+    final pos = _elementPositions[el.id] ?? el.position;
+    final editing = _editingElementId == el.id;
+    final isNote = el.kind == MapElementKind.note;
+    final size = _elementSizes[el.id] ?? Offset(el.w ?? 140, el.h ?? 100);
+    final w = isNote ? size.dx : 170.0;
+    final h = isNote ? size.dy : 46.0;
+    final color = _hexColor(el.colorHex) ?? c.accent;
+
+    final Widget content = isNote
+        ? _NoteElement(
+            element: el,
+            color: color,
+            sc: c,
+            editing: editing,
+            controller: editing ? _elementTextCtrl : null,
+            canEdit: widget.canEdit,
+            onSubmit: () => _commitElementText(goal, el.id),
+            onResize: (!widget.canEdit || editing)
+                ? null
+                : (delta) {
+                    final scale = _tc.value.getMaxScaleOnAxis();
+                    final cur = _elementSizes[el.id] ??
+                        Offset(el.w ?? 140, el.h ?? 100);
+                    _elementSizes[el.id] = Offset(
+                      (cur.dx + delta.dx / scale).clamp(90.0, 460.0),
+                      (cur.dy + delta.dy / scale).clamp(64.0, 460.0),
+                    );
+                    _bumpRepaint();
+                  },
+            onResizeEnd: () {
+              final s = _elementSizes[el.id];
+              if (s != null) {
+                ref
+                    .read(planningProvider.notifier)
+                    .updateMapElement(goal.id, el.id, w: s.dx, h: s.dy);
+              }
+            },
+          )
+        : _LabelElement(
+            element: el,
+            color: color,
+            sc: c,
+            editing: editing,
+            controller: editing ? _elementTextCtrl : null,
+            onSubmit: () => _commitElementText(goal, el.id),
+          );
+
+    Widget node = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: editing
+          ? null
+          : () {
+              if (!widget.canEdit) return;
+              HapticFeedback.selectionClick();
+              _beginEditElement(el.id, el.content ?? '');
+            },
+      onLongPress: widget.canEdit
+          ? () {
+              HapticFeedback.mediumImpact();
+              _showElementActions(goal, el, c);
+            }
+          : null,
+      onPanStart: (!widget.canEdit || editing)
+          ? null
+          : (_) {
+              HapticFeedback.lightImpact();
+              setState(() => _draggingId = el.id);
+            },
+      onPanUpdate: (!widget.canEdit || editing)
+          ? null
+          : (d) {
+              final scale = _tc.value.getMaxScaleOnAxis();
+              _elementPositions[el.id] =
+                  (_elementPositions[el.id] ?? el.position) + d.delta / scale;
+              _bumpRepaint();
+            },
+      onPanEnd: (!widget.canEdit || editing)
+          ? null
+          : (_) {
+              HapticFeedback.lightImpact();
+              _scheduleSaveElement(goal, el.id);
+              setState(() => _draggingId = null);
+            },
+      child: content,
+    );
+
+    return Positioned(
+      key: ValueKey('el-${el.id}'),
+      left: _cx + pos.dx - w / 2,
+      top: _cx + pos.dy - h / 2,
+      width: w,
+      height: h,
+      child: node,
+    );
   }
 
   List<SubGoal> _flatSubGoals(List<SubGoal> roots) {
@@ -580,6 +808,15 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
 
     _ensurePositions(goal);
 
+    // Seed live positions/sizes for map elements (only once per id, like nodes).
+    for (final el in goal.mapElements) {
+      _elementPositions.putIfAbsent(el.id, () => el.position);
+      if (el.kind == MapElementKind.note) {
+        _elementSizes.putIfAbsent(
+            el.id, () => Offset(el.w ?? 140, el.h ?? 100));
+      }
+    }
+
     final fogEnabled = goal.settings.isFogOfWarEnabled;
     final visibleIds = fogEnabled
         ? computeFogVisibleIds(goal.subGoals, _scoutedMapIds, true)
@@ -703,12 +940,25 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                               onHiddenTap: () =>
                                   setState(() => _scoutedMapIds.add(sg.id))),
                         ],
+                        // Map-native elements (notes/labels) — above nodes.
+                        for (final el in goal.mapElements)
+                          _elementPosNode(el, goal, c),
                       ],
                     );
                   },
                 ),
               ),
             ),
+            // Tap-catcher for placing a new element (only while a tool is armed).
+            // Sits above the dynamic layer's empty space but nodes capture their
+            // own taps first (they paint on top with opaque hit-testing).
+            if (_tool != _MapTool.none)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapUp: (d) => _createElementAt(d.localPosition, goal),
+                ),
+              ),
             // Goal (fixed, topmost) — never moves, kept out of the dynamic layer
             Positioned(
               left: _cx - 80,
@@ -758,6 +1008,33 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
             ],
           ),
         ),
+        // Edit-mode toggle (only owners/editors).
+        if (widget.canEdit)
+          Positioned(
+            left: 16,
+            bottom: 16,
+            child: _EditModeButton(
+              active: _editMode,
+              sc: c,
+              onTap: () => setState(() {
+                _editMode = !_editMode;
+                if (!_editMode) _tool = _MapTool.none;
+              }),
+            ),
+          ),
+        // Tool palette — slides up while edit mode is on.
+        if (widget.canEdit)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: _MapToolPalette(
+              visible: _editMode,
+              tool: _tool,
+              sc: c,
+              onPick: (t) => setState(() => _tool = _tool == t ? _MapTool.none : t),
+            ),
+          ),
       ],
     );
   }
@@ -2114,6 +2391,402 @@ class _StyledTextField extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: c.accent),
         ),
+      ),
+    );
+  }
+}
+
+// ─── Tactical Map Evolution Stage 1: map-native elements UI ───────────────────
+
+/// Active placement tool in edit mode.
+enum _MapTool { none, note, label }
+
+/// Floating button to enter/exit the map edit mode.
+class _EditModeButton extends StatelessWidget {
+  const _EditModeButton(
+      {required this.active, required this.onTap, required this.sc});
+  final bool active;
+  final VoidCallback onTap;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: active ? sc.accent.withValues(alpha: 0.16) : sc.surface.withValues(alpha: 0.9),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: active ? sc.accent : sc.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(active ? Icons.check : Icons.edit_outlined,
+                size: 15, color: active ? sc.accent : sc.textSecondary),
+            const SizedBox(width: 7),
+            Text(
+              active ? 'ГОТОВО' : 'РЕДАКТ.',
+              style: TextStyle(
+                color: active ? sc.accent : sc.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom tool palette shown while edit mode is active.
+class _MapToolPalette extends StatelessWidget {
+  const _MapToolPalette(
+      {required this.visible,
+      required this.tool,
+      required this.onPick,
+      required this.sc});
+  final bool visible;
+  final _MapTool tool;
+  final ValueChanged<_MapTool> onPick;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSlide(
+      offset: visible ? Offset.zero : const Offset(0, 1.4),
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+      child: AnimatedOpacity(
+        opacity: visible ? 1 : 0,
+        duration: const Duration(milliseconds: 200),
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          decoration: BoxDecoration(
+            color: sc.surface.withValues(alpha: 0.96),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: sc.border),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _MapToolChip(
+                icon: Icons.sticky_note_2_outlined,
+                label: 'Заметка',
+                selected: tool == _MapTool.note,
+                sc: sc,
+                onTap: () => onPick(_MapTool.note),
+              ),
+              const SizedBox(width: 8),
+              _MapToolChip(
+                icon: Icons.text_fields,
+                label: 'Метка',
+                selected: tool == _MapTool.label,
+                sc: sc,
+                onTap: () => onPick(_MapTool.label),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MapToolChip extends StatelessWidget {
+  const _MapToolChip(
+      {required this.icon,
+      required this.label,
+      required this.selected,
+      required this.onTap,
+      required this.sc});
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? sc.accent.withValues(alpha: 0.16) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: selected ? sc.accent : sc.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: selected ? sc.accent : sc.textSecondary),
+            const SizedBox(width: 7),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? sc.accent : sc.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A sticky note element on the canvas.
+class _NoteElement extends StatelessWidget {
+  const _NoteElement({
+    required this.element,
+    required this.color,
+    required this.sc,
+    required this.editing,
+    required this.canEdit,
+    required this.onSubmit,
+    this.controller,
+    this.onResize,
+    this.onResizeEnd,
+  });
+  final MapElement element;
+  final Color color;
+  final SieColors sc;
+  final bool editing;
+  final bool canEdit;
+  final VoidCallback onSubmit;
+  final TextEditingController? controller;
+  final ValueChanged<Offset>? onResize;
+  final VoidCallback? onResizeEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = element.content ?? '';
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: double.infinity,
+          height: double.infinity,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withValues(alpha: 0.65), width: 1.4),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.18),
+                blurRadius: 12,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: editing && controller != null
+              ? TextField(
+                  controller: controller,
+                  autofocus: true,
+                  maxLines: null,
+                  expands: true,
+                  textAlignVertical: TextAlignVertical.top,
+                  style: TextStyle(color: sc.textPrimary, fontSize: 13, height: 1.3),
+                  cursorColor: color,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    hintText: 'Заметка…',
+                    hintStyle: TextStyle(color: sc.textSecondary, fontSize: 13),
+                  ),
+                  onTapOutside: (_) => onSubmit(),
+                )
+              : Text(
+                  text.isEmpty ? 'Заметка…' : text,
+                  style: TextStyle(
+                    color: text.isEmpty ? sc.textSecondary : sc.textPrimary,
+                    fontSize: 13,
+                    height: 1.3,
+                  ),
+                ),
+        ),
+        if (!editing && canEdit && onResize != null)
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onPanUpdate: (d) => onResize!(d.delta),
+              onPanEnd: (_) => onResizeEnd?.call(),
+              child: Container(
+                width: 22,
+                height: 22,
+                alignment: Alignment.bottomRight,
+                child: Icon(Icons.open_in_full,
+                    size: 13, color: color.withValues(alpha: 0.8)),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// A free text label element (no background).
+class _LabelElement extends StatelessWidget {
+  const _LabelElement({
+    required this.element,
+    required this.color,
+    required this.sc,
+    required this.editing,
+    required this.onSubmit,
+    this.controller,
+  });
+  final MapElement element;
+  final Color color;
+  final SieColors sc;
+  final bool editing;
+  final VoidCallback onSubmit;
+  final TextEditingController? controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = element.content ?? '';
+    return Container(
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: editing && controller != null
+          ? TextField(
+              controller: controller,
+              autofocus: true,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: color, fontSize: 16, fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5),
+              cursorColor: color,
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: 'Метка…',
+                hintStyle: TextStyle(color: sc.textSecondary, fontSize: 16),
+              ),
+              onTapOutside: (_) => onSubmit(),
+              onSubmitted: (_) => onSubmit(),
+            )
+          : Text(
+              text.isEmpty ? 'Метка…' : text,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: text.isEmpty ? sc.textSecondary : color,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+                shadows: [
+                  Shadow(color: sc.background.withValues(alpha: 0.8), blurRadius: 6),
+                ],
+              ),
+            ),
+    );
+  }
+}
+
+/// Long-press actions for a map element: recolor / edit text / delete.
+class _ElementActionsSheet extends StatelessWidget {
+  const _ElementActionsSheet({
+    required this.element,
+    required this.sc,
+    required this.colors,
+    required this.onPickColor,
+    required this.onEditText,
+    required this.onDelete,
+  });
+  final MapElement element;
+  final SieColors sc;
+  final List<String> colors;
+  final ValueChanged<String> onPickColor;
+  final VoidCallback onEditText;
+  final VoidCallback onDelete;
+
+  Color _hex(String hex) =>
+      Color(int.parse('FF${hex.replaceAll('#', '')}', radix: 16));
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+      decoration: BoxDecoration(
+        color: sc.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        border: Border.all(color: sc.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                  color: sc.border, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          Text(
+            element.kind == MapElementKind.note ? 'ЗАМЕТКА' : 'МЕТКА',
+            style: TextStyle(
+                color: sc.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.5),
+          ),
+          const SizedBox(height: 14),
+          Text('Цвет',
+              style: TextStyle(color: sc.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              for (final hex in colors) ...[
+                GestureDetector(
+                  onTap: () => onPickColor(hex),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: _hex(hex).withValues(alpha: 0.85),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: element.colorHex == hex ? sc.textPrimary : Colors.transparent,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
+            ],
+          ),
+          const SizedBox(height: 18),
+          _ActionBtn(
+            label: 'Изменить текст',
+            icon: Icons.edit_outlined,
+            color: sc.accent,
+            sc: sc,
+            onTap: onEditText,
+          ),
+          const SizedBox(height: 10),
+          _ActionBtn(
+            label: 'Удалить',
+            icon: Icons.delete_outline,
+            color: sc.danger,
+            sc: sc,
+            onTap: onDelete,
+          ),
+        ],
       ),
     );
   }

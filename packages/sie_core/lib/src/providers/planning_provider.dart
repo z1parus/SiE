@@ -8,6 +8,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:uuid/uuid.dart';
 import '../local/app_database.dart';
 import '../models/planning.dart';
+import '../models/map_element.dart';
 import '../models/goal_analytics.dart';
 import '../models/goal_collaborator.dart';
 import '../models/public_profile.dart';
@@ -394,7 +395,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         final raw = await client
             .from('goals')
             .select(
-                '*, sub_goals(*, planning_tasks(*)), milestones(*), goal_habit_links(*), goal_collaborators(*)')
+                '*, sub_goals(*, planning_tasks(*)), milestones(*), goal_habit_links(*), goal_collaborators(*), goal_map_elements(*)')
             .neq('status', 'deleted')
             .order('created_at');
 
@@ -598,6 +599,52 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         }
       }
     }
+    await _mirrorMapElements(db, goals);
+  }
+
+  /// Mirrors server map elements into the local store. Synced rows are replaced
+  /// by the server's truth; locally-unsynced elements are preserved for the
+  /// sync queue. Synced-but-gone rows (deleted elsewhere) are purged.
+  Future<void> _mirrorMapElements(AppDatabase db, List<Goal> goals) async {
+    final goalIds = [for (final g in goals) g.id];
+    if (goalIds.isEmpty) return;
+    final localUnsynced = {
+      for (final e in await db.unsyncedMapElements()) e.id
+    };
+    final serverIds = <String>{};
+    for (final g in goals) {
+      for (final el in g.mapElements) {
+        serverIds.add(el.id);
+        if (localUnsynced.contains(el.id)) continue;
+        await db.upsertMapElement(LocalMapElementsCompanion(
+          id: Value(el.id),
+          goalId: Value(el.goalId),
+          kind: Value(el.kind.wire),
+          x: Value(el.x),
+          y: Value(el.y),
+          w: Value(el.w),
+          h: Value(el.h),
+          zIndex: Value(el.zIndex),
+          content: Value(el.content),
+          colorHex: Value(el.colorHex),
+          mediaUrl: Value(el.mediaUrl),
+          fromRef: Value(el.fromRef),
+          toRef: Value(el.toRef),
+          createdBy: Value(el.createdBy),
+          createdAtMs: Value(el.createdAt.millisecondsSinceEpoch),
+          updatedAtMs: Value(el.updatedAt?.millisecondsSinceEpoch),
+          synced: const Value(true),
+          deletedLocally: const Value(false),
+        ));
+      }
+    }
+    // Drop synced-but-gone rows (deleted on another device).
+    final localAll = await db.mapElementsForGoals(goalIds);
+    for (final row in localAll) {
+      if (row.synced && !serverIds.contains(row.id)) {
+        await db.purgeMapElement(row.id);
+      }
+    }
   }
 
   Future<PlanningState> _loadFromLocal(AppDatabase db, String userId,
@@ -619,6 +666,32 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final rawLinksAll = await db.habitLinksForGoals(goalIds);
     final positionsByGoal = await db.mapPositionsForGoals(goalIds);
     final rawDeps = await db.dependenciesForGoals(goalIds);
+    final rawElements = await db.mapElementsForGoals(goalIds);
+
+    // Group map-native elements by goal (Tactical Map Stage 1).
+    final elementsByGoal = <String, List<MapElement>>{};
+    for (final re in rawElements) {
+      (elementsByGoal[re.goalId] ??= []).add(MapElement(
+        id: re.id,
+        goalId: re.goalId,
+        kind: MapElementKind.fromString(re.kind),
+        x: re.x,
+        y: re.y,
+        w: re.w,
+        h: re.h,
+        zIndex: re.zIndex,
+        content: re.content,
+        colorHex: re.colorHex,
+        mediaUrl: re.mediaUrl,
+        fromRef: re.fromRef,
+        toRef: re.toRef,
+        createdBy: re.createdBy,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(re.createdAtMs),
+        updatedAt: re.updatedAtMs != null
+            ? DateTime.fromMillisecondsSinceEpoch(re.updatedAtMs!)
+            : null,
+      ));
+    }
 
     // taskId → ids it depends on (Stage 8).
     final dependsByTask = <String, List<String>>{};
@@ -724,6 +797,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         // Restore collaborators and ownerProfile from server data if available
         collaborators: serverMap[rg.id]?.collaborators ?? const [],
         ownerProfile: serverMap[rg.id]?.ownerProfile,
+        mapElements: elementsByGoal[rg.id] ?? const [],
       ));
     }
 
@@ -2456,6 +2530,164 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           colorHex: goal.colorHex,
           structure: structure,
         );
+  }
+
+  // ── Map elements (TacticalMapEvolution Stage 1) ────────────────────────────
+
+  /// Soft limit per goal (see roadmap open question #3). Beyond this we refuse
+  /// to create more elements to protect render/serialization performance.
+  static const int kMaxMapElementsPerGoal = 200;
+
+  /// Creates a map-native element (note/label/image/group/connector). Returns
+  /// the new element id, or null if the goal is missing or the limit is hit.
+  Future<String?> addMapElement({
+    required String goalId,
+    required MapElementKind kind,
+    required double x,
+    required double y,
+    double? w,
+    double? h,
+    String? content,
+    String? colorHex,
+    String? mediaUrl,
+    String? fromRef,
+    String? toRef,
+  }) async {
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session == null) return null;
+    final userId = session.user.id;
+
+    final current = state.valueOrNull?.goals
+        .where((g) => g.id == goalId)
+        .firstOrNull;
+    if (current == null) return null;
+    if (current.mapElements.length >= kMaxMapElementsPerGoal) return null;
+
+    final id = _uuid.v4();
+    final el = MapElement(
+      id: id,
+      goalId: goalId,
+      kind: kind,
+      x: x,
+      y: y,
+      w: w,
+      h: h,
+      content: content,
+      colorHex: colorHex,
+      mediaUrl: mediaUrl,
+      fromRef: fromRef,
+      toRef: toRef,
+      createdBy: userId,
+      createdAt: DateTime.now(),
+    );
+
+    _updateGoalInState(
+        goalId, (g) => g.copyWith(mapElements: [...g.mapElements, el]));
+    await _persistMapElement(el, synced: false);
+    await _pushMapElement(el);
+    return id;
+  }
+
+  /// Updates mutable fields of an existing element (text/color/size/position).
+  Future<void> updateMapElement(
+    String goalId,
+    String elementId, {
+    double? x,
+    double? y,
+    double? w,
+    double? h,
+    String? content,
+    String? colorHex,
+  }) async {
+    MapElement? updated;
+    _updateGoalInState(goalId, (g) {
+      final list = g.mapElements.map((e) {
+        if (e.id != elementId) return e;
+        updated = e.copyWith(
+          x: x,
+          y: y,
+          w: w,
+          h: h,
+          content: content,
+          colorHex: colorHex,
+          updatedAt: DateTime.now(),
+        );
+        return updated!;
+      }).toList();
+      return g.copyWith(mapElements: list);
+    });
+    if (updated == null) return;
+    await _persistMapElement(updated!, synced: false);
+    await _pushMapElement(updated!);
+  }
+
+  /// Lightweight position-only save used during drag (debounced by the UI).
+  Future<void> saveMapElementPosition(
+          String goalId, String elementId, Offset pos) =>
+      updateMapElement(goalId, elementId, x: pos.dx, y: pos.dy);
+
+  Future<void> deleteMapElement(String goalId, String elementId) async {
+    _updateGoalInState(
+        goalId,
+        (g) => g.copyWith(
+            mapElements:
+                g.mapElements.where((e) => e.id != elementId).toList()));
+    final db = ref.read(appDatabaseProvider);
+    await db.deleteMapElementLocally(elementId);
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await Supabase.instance.client
+            .from('goal_map_elements')
+            .delete()
+            .eq('id', elementId);
+        await db.purgeMapElement(elementId);
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp(
+        'delete_map_element', jsonEncode({'id': elementId}));
+  }
+
+  Future<void> _persistMapElement(MapElement el, {required bool synced}) async {
+    final db = ref.read(appDatabaseProvider);
+    await db.upsertMapElement(LocalMapElementsCompanion(
+      id: Value(el.id),
+      goalId: Value(el.goalId),
+      kind: Value(el.kind.wire),
+      x: Value(el.x),
+      y: Value(el.y),
+      w: Value(el.w),
+      h: Value(el.h),
+      zIndex: Value(el.zIndex),
+      content: Value(el.content),
+      colorHex: Value(el.colorHex),
+      mediaUrl: Value(el.mediaUrl),
+      fromRef: Value(el.fromRef),
+      toRef: Value(el.toRef),
+      createdBy: Value(el.createdBy),
+      createdAtMs: Value(el.createdAt.millisecondsSinceEpoch),
+      updatedAtMs: Value(el.updatedAt?.millisecondsSinceEpoch),
+      synced: Value(synced),
+      deletedLocally: const Value(false),
+    ));
+  }
+
+  Future<void> _pushMapElement(MapElement el) async {
+    final db = ref.read(appDatabaseProvider);
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await Supabase.instance.client
+            .from('goal_map_elements')
+            .upsert(el.toUpsertJson());
+        await db.markMapElementSynced(el.id);
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp(
+        'upsert_map_element', jsonEncode(el.toUpsertJson()));
   }
 
   // ── Save map positions ────────────────────────────────────────────────────
