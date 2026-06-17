@@ -630,6 +630,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           mediaUrl: Value(el.mediaUrl),
           fromRef: Value(el.fromRef),
           toRef: Value(el.toRef),
+          styleJsonText:
+              Value(el.styleJson != null ? jsonEncode(el.styleJson) : null),
           createdBy: Value(el.createdBy),
           createdAtMs: Value(el.createdAt.millisecondsSinceEpoch),
           updatedAtMs: Value(el.updatedAt?.millisecondsSinceEpoch),
@@ -685,6 +687,9 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         mediaUrl: re.mediaUrl,
         fromRef: re.fromRef,
         toRef: re.toRef,
+        styleJson: re.styleJsonText != null
+            ? jsonDecode(re.styleJsonText!) as Map<String, dynamic>
+            : null,
         createdBy: re.createdBy,
         createdAt: DateTime.fromMillisecondsSinceEpoch(re.createdAtMs),
         updatedAt: re.updatedAtMs != null
@@ -2552,6 +2557,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     String? mediaUrl,
     String? fromRef,
     String? toRef,
+    Map<String, dynamic>? styleJson,
   }) async {
     final session = Supabase.instance.client.auth.currentSession;
     if (session == null) return null;
@@ -2577,6 +2583,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       mediaUrl: mediaUrl,
       fromRef: fromRef,
       toRef: toRef,
+      styleJson: styleJson,
       createdBy: userId,
       createdAt: DateTime.now(),
     );
@@ -2598,6 +2605,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     double? h,
     String? content,
     String? colorHex,
+    Map<String, dynamic>? styleJson,
   }) async {
     MapElement? updated;
     _updateGoalInState(goalId, (g) {
@@ -2610,6 +2618,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           h: h,
           content: content,
           colorHex: colorHex,
+          styleJson: styleJson,
           updatedAt: DateTime.now(),
         );
         return updated!;
@@ -2666,6 +2675,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       mediaUrl: Value(el.mediaUrl),
       fromRef: Value(el.fromRef),
       toRef: Value(el.toRef),
+      styleJsonText:
+          Value(el.styleJson != null ? jsonEncode(el.styleJson) : null),
       createdBy: Value(el.createdBy),
       createdAtMs: Value(el.createdAt.millisecondsSinceEpoch),
       updatedAtMs: Value(el.updatedAt?.millisecondsSinceEpoch),

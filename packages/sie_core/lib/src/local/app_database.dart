@@ -400,6 +400,7 @@ class LocalMapElements extends Table {
   TextColumn get mediaUrl       => text().nullable()();
   TextColumn get fromRef        => text().nullable()();
   TextColumn get toRef          => text().nullable()();
+  TextColumn get styleJsonText  => text().nullable()();   // Stage 4 connector style JSON
   TextColumn get createdBy      => text()();
   IntColumn  get createdAtMs    => integer()();
   IntColumn  get updatedAtMs    => integer().nullable()();
@@ -439,7 +440,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 32;
+  int get schemaVersion => 33;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -638,6 +639,9 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 32) {
         await m.createTable(localMapElements);
+      }
+      if (from < 33) {
+        await m.addColumn(localMapElements, localMapElements.styleJsonText);
       }
     },
   );

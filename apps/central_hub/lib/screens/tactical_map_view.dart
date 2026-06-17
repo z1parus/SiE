@@ -42,6 +42,13 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   final _elementTextCtrl = TextEditingController();
   Timer? _elementSaveTimer;
 
+  // ── Tactical Map Evolution Stage 4: groups/connectors ─────────────────────
+  // Live group-draw rectangle endpoints (canvas-space) while the group tool
+  // is active. Connector source ref while picking the second endpoint.
+  Offset? _groupDrawStart;
+  Offset? _groupDrawCurrent;
+  String? _connectorFromRef;
+
   static const _noteColors = <String>[
     '#C8A84B', '#5AADA0', '#6A8ED8', '#C05080', '#70B870', '#E07830',
   ];
@@ -225,7 +232,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     final kind = switch (_tool) {
       _MapTool.note => MapElementKind.note,
       _MapTool.label => MapElementKind.label,
-      _MapTool.none => null,
+      _MapTool.group || _MapTool.connector || _MapTool.none => null,
     };
     if (kind == null) return;
     setState(() => _tool = _MapTool.none); // auto-return to select
@@ -251,6 +258,194 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     }
     _elementPositions[id] = logical;
     _beginEditElement(id, '');
+  }
+
+  // ── Map groups/connectors (Stage 4) ──────────────────────────────────────
+
+  /// Handles a tap on an object while the connector tool is armed. First tap
+  /// sets the source ref; second tap creates the connector. `ref` is prefixed
+  /// `node:<id>` for plan nodes or `el:<id>` for map elements.
+  void _handleConnectorEndpoint(String endRef, Goal goal) {
+    if (_connectorFromRef == null) {
+      setState(() => _connectorFromRef = endRef);
+      HapticFeedback.selectionClick();
+      return;
+    }
+    if (_connectorFromRef == endRef) {
+      // Tapping the source again cancels (no self-loops — open question #1).
+      setState(() => _connectorFromRef = null);
+      return;
+    }
+    final from = _connectorFromRef!;
+    setState(() {
+      _connectorFromRef = null;
+      _tool = _MapTool.none;
+    });
+    HapticFeedback.lightImpact();
+    ref.read(planningProvider.notifier).addMapElement(
+          goalId: goal.id,
+          kind: MapElementKind.connector,
+          x: 0,
+          y: 0,
+          fromRef: from,
+          toRef: endRef,
+          styleJson: const {'dashed': false, 'arrow': 'end'},
+        );
+  }
+
+  /// Creates a group zone from a drag rectangle (canvas-space endpoints).
+  Future<void> _createGroupElement(
+      Offset canvasStart, Offset canvasEnd, Goal goal) async {
+    final lx1 = canvasStart.dx - _cx;
+    final ly1 = canvasStart.dy - _cx;
+    final lx2 = canvasEnd.dx - _cx;
+    final ly2 = canvasEnd.dy - _cx;
+    final w = (lx2 - lx1).abs();
+    final h = (ly2 - ly1).abs();
+    if (w < 60 || h < 40) return; // ignore accidental tiny rectangles
+    final gx = (lx1 + lx2) / 2;
+    final gy = (ly1 + ly2) / 2;
+    HapticFeedback.lightImpact();
+    final id = await ref.read(planningProvider.notifier).addMapElement(
+          goalId: goal.id,
+          kind: MapElementKind.group,
+          x: gx,
+          y: gy,
+          w: w,
+          h: h,
+          colorHex: _noteColors.first,
+          content: 'Группа',
+        );
+    if (id == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Достигнут лимит элементов на карте')));
+      }
+      return;
+    }
+    _elementPositions[id] = Offset(gx, gy);
+    _elementSizes[id] = Offset(w, h);
+  }
+
+  Widget _groupZoneWidget(MapElement el, Goal goal, SieColors c) {
+    final pos = _elementPositions[el.id] ?? el.position;
+    final size = _elementSizes[el.id] ?? Offset(el.w ?? 200, el.h ?? 150);
+    final w = size.dx;
+    final h = size.dy;
+    final color = _hexColor(el.colorHex) ?? c.accent;
+    return Positioned(
+      key: ValueKey('group-${el.id}'),
+      left: _cx + pos.dx - w / 2,
+      top: _cx + pos.dy - h / 2,
+      width: w,
+      height: h,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: (_tool == _MapTool.connector && widget.canEdit)
+            ? () => _handleConnectorEndpoint('el:${el.id}', goal)
+            : null,
+        onLongPress: widget.canEdit
+            ? () {
+                HapticFeedback.mediumImpact();
+                _showGroupActions(goal, el, c);
+              }
+            : null,
+        onPanStart: !widget.canEdit
+            ? null
+            : (_) {
+                HapticFeedback.lightImpact();
+                setState(() => _draggingId = el.id);
+              },
+        onPanUpdate: !widget.canEdit
+            ? null
+            : (d) {
+                final scale = _tc.value.getMaxScaleOnAxis();
+                final delta = d.delta / scale;
+                _elementPositions[el.id] =
+                    (_elementPositions[el.id] ?? el.position) + delta;
+                _bumpRepaint();
+              },
+        onPanEnd: !widget.canEdit
+            ? null
+            : (_) {
+                HapticFeedback.lightImpact();
+                _scheduleSaveElement(goal, el.id);
+                setState(() => _draggingId = null);
+              },
+        child: _GroupZoneElement(element: el, color: color, sc: c),
+      ),
+    );
+  }
+
+  void _showGroupActions(Goal goal, MapElement el, SieColors c) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _GroupActionsSheet(
+        element: el,
+        sc: c,
+        colors: _noteColors,
+        onPickColor: (hex) {
+          Navigator.pop(context);
+          ref
+              .read(planningProvider.notifier)
+              .updateMapElement(goal.id, el.id, colorHex: hex);
+        },
+        onEditLabel: (label) {
+          Navigator.pop(context);
+          ref
+              .read(planningProvider.notifier)
+              .updateMapElement(goal.id, el.id,
+                  content: label.isEmpty ? 'Группа' : label);
+        },
+        onDelete: () {
+          Navigator.pop(context);
+          _elementPositions.remove(el.id);
+          _elementSizes.remove(el.id);
+          ref.read(planningProvider.notifier).deleteMapElement(goal.id, el.id);
+        },
+      ),
+    );
+  }
+
+  void _showConnectorActions(Goal goal, MapElement el, SieColors c) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _ConnectorActionsSheet(
+        element: el,
+        sc: c,
+        colors: _noteColors,
+        onPickColor: (hex) {
+          Navigator.pop(context);
+          final style = Map<String, dynamic>.from(el.styleJson ?? const {});
+          style['color'] = hex;
+          ref
+              .read(planningProvider.notifier)
+              .updateMapElement(goal.id, el.id, styleJson: style);
+        },
+        onToggleDash: () {
+          Navigator.pop(context);
+          final style = Map<String, dynamic>.from(el.styleJson ?? const {});
+          style['dashed'] = !(style['dashed'] == true);
+          ref
+              .read(planningProvider.notifier)
+              .updateMapElement(goal.id, el.id, styleJson: style);
+        },
+        onEditLabel: (label) {
+          Navigator.pop(context);
+          ref
+              .read(planningProvider.notifier)
+              .updateMapElement(goal.id, el.id, content: label);
+        },
+        onDelete: () {
+          Navigator.pop(context);
+          ref.read(planningProvider.notifier).deleteMapElement(goal.id, el.id);
+        },
+      ),
+    );
   }
 
   void _beginEditElement(String id, String text) {
@@ -369,6 +564,10 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       onTap: editing
           ? null
           : () {
+              if (_tool == _MapTool.connector && widget.canEdit) {
+                _handleConnectorEndpoint('el:${el.id}', goal);
+                return;
+              }
               if (!widget.canEdit) return;
               HapticFeedback.selectionClick();
               _beginEditElement(el.id, el.content ?? '');
@@ -613,6 +812,10 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   // ── Interactions ──────────────────────────────────────────────────────────
 
   void _onTap(String nodeId, Goal goal) {
+    if (_tool == _MapTool.connector && widget.canEdit) {
+      _handleConnectorEndpoint('node:$nodeId', goal);
+      return;
+    }
     final c = ref.read(sieColorsProvider);
     if (nodeId == goal.id) {
       _showGoalSheet(goal, c);
@@ -811,9 +1014,13 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     // Seed live positions/sizes for map elements (only once per id, like nodes).
     for (final el in goal.mapElements) {
       _elementPositions.putIfAbsent(el.id, () => el.position);
-      if (el.kind == MapElementKind.note) {
+      if (el.kind == MapElementKind.note || el.kind == MapElementKind.group) {
         _elementSizes.putIfAbsent(
-            el.id, () => Offset(el.w ?? 140, el.h ?? 100));
+            el.id,
+            () => Offset(
+                  el.w ?? (el.kind == MapElementKind.group ? 200 : 140),
+                  el.h ?? (el.kind == MapElementKind.group ? 150 : 100),
+                ));
       }
     }
 
@@ -880,8 +1087,8 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       boundaryMargin: const EdgeInsets.all(800),
       minScale: 0.15,
       maxScale: 3.0,
-      panEnabled: _draggingId == null,
-      scaleEnabled: _draggingId == null,
+      panEnabled: _draggingId == null && _tool != _MapTool.group,
+      scaleEnabled: _draggingId == null && _tool != _MapTool.group,
       child: SizedBox(
         width: _cs,
         height: _cs,
@@ -902,14 +1109,118 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                   valueListenable: _repaint,
                   builder: (_, _, _) {
                     final edges = buildEdges();
+                    // Resolve connector endpoints to canvas-space offsets;
+                    // drop connectors whose endpoints no longer exist (Stage 4).
+                    final connectors = <_ConnectorData>[];
+                    final orphanConnectorIds = <String>[];
+                    Offset? resolveRef(String r) {
+                      Offset? logical;
+                      if (r.startsWith('node:')) {
+                        logical = _positions[r.substring(5)];
+                      } else if (r.startsWith('el:')) {
+                        logical = _elementPositions[r.substring(3)];
+                      }
+                      if (logical == null) return null;
+                      return Offset(_cx + logical.dx, _cx + logical.dy);
+                    }
+                    for (final el in goal.mapElements) {
+                      if (el.kind != MapElementKind.connector) continue;
+                      final f = el.fromRef, t = el.toRef;
+                      final src = f == null ? null : resolveRef(f);
+                      final dst = t == null ? null : resolveRef(t);
+                      if (src == null || dst == null) {
+                        orphanConnectorIds.add(el.id);
+                        continue;
+                      }
+                      final style = el.styleJson ?? const <String, dynamic>{};
+                      final colorHex = style['color'] as String?;
+                      connectors.add(_ConnectorData(
+                        id: el.id,
+                        src: src,
+                        dst: dst,
+                        label: (el.content?.isNotEmpty ?? false)
+                            ? el.content
+                            : null,
+                        dashed: style['dashed'] == true,
+                        color: _hexColor(colorHex) ?? c.accentSecondary,
+                      ));
+                    }
+                    if (orphanConnectorIds.isNotEmpty) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        for (final id in orphanConnectorIds) {
+                          ref
+                              .read(planningProvider.notifier)
+                              .deleteMapElement(goal.id, id);
+                        }
+                      });
+                    }
+                    // Obstacles for smart connector routing (node bounding circles).
+                    final obstacles = <_ObstacleCircle>[];
+                    _computeRadii(goal).forEach((id, radius) {
+                      final logical = _positions[id];
+                      if (logical == null) return;
+                      obstacles.add(_ObstacleCircle(
+                        center: Offset(_cx + logical.dx, _cx + logical.dy),
+                        radius: radius,
+                      ));
+                    });
                     return Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        // Edges
+                        // Group zones — lowest layer (visual backdrop).
+                        for (final el in goal.mapElements)
+                          if (el.kind == MapElementKind.group)
+                            _groupZoneWidget(el, goal, c),
+                        // Edges (hierarchy + dependencies)
                         Positioned.fill(
                           child: CustomPaint(
                               painter: _EdgePainter(edges, _cx, c)),
                         ),
+                        // Free connectors — above hierarchy edges, below nodes.
+                        if (connectors.isNotEmpty)
+                          Positioned.fill(
+                            child: CustomPaint(
+                              painter:
+                                  _ConnectorPainter(connectors, c, obstacles),
+                            ),
+                          ),
+                        // Connector midpoint tap targets (edit only).
+                        if (widget.canEdit)
+                          for (final conn in connectors)
+                            Positioned(
+                              left: (conn.src.dx + conn.dst.dx) / 2 - 20,
+                              top: (conn.src.dy + conn.dst.dy) / 2 - 20,
+                              width: 40,
+                              height: 40,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () {
+                                  final el = goal.mapElements
+                                      .where((e) => e.id == conn.id)
+                                      .firstOrNull;
+                                  if (el != null) {
+                                    _showConnectorActions(goal, el, c);
+                                  }
+                                },
+                                child: const SizedBox.expand(),
+                              ),
+                            ),
+                        // Group-draw live preview rectangle.
+                        if (_groupDrawStart != null &&
+                            _groupDrawCurrent != null)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: CustomPaint(
+                                painter: _GroupDrawPreviewPainter(
+                                  start: _groupDrawStart!,
+                                  end: _groupDrawCurrent!,
+                                  color: _hexColor(_noteColors.first) ??
+                                      c.accent,
+                                ),
+                              ),
+                            ),
+                          ),
                         // Habit links
                         for (final l in goal.habitLinks)
                           _posNode(
@@ -940,23 +1251,50 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                               onHiddenTap: () =>
                                   setState(() => _scoutedMapIds.add(sg.id))),
                         ],
-                        // Map-native elements (notes/labels) — above nodes.
+                        // Map-native notes/labels — above nodes.
                         for (final el in goal.mapElements)
-                          _elementPosNode(el, goal, c),
+                          if (el.kind == MapElementKind.note ||
+                              el.kind == MapElementKind.label)
+                            _elementPosNode(el, goal, c),
                       ],
                     );
                   },
                 ),
               ),
             ),
-            // Tap-catcher for placing a new element (only while a tool is armed).
-            // Sits above the dynamic layer's empty space but nodes capture their
-            // own taps first (they paint on top with opaque hit-testing).
-            if (_tool != _MapTool.none)
+            // Tap-catcher for placing a note/label (nodes capture their own
+            // taps first because they paint on top with opaque hit-testing).
+            if (_tool == _MapTool.note || _tool == _MapTool.label)
               Positioned.fill(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTapUp: (d) => _createElementAt(d.localPosition, goal),
+                ),
+              ),
+            // Group-draw catcher — pan a rectangle to create a zone.
+            if (_tool == _MapTool.group)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onPanStart: (d) {
+                    _groupDrawStart = d.localPosition;
+                    _groupDrawCurrent = d.localPosition;
+                    _bumpRepaint();
+                  },
+                  onPanUpdate: (d) {
+                    _groupDrawCurrent = d.localPosition;
+                    _bumpRepaint();
+                  },
+                  onPanEnd: (_) async {
+                    final start = _groupDrawStart;
+                    final end = _groupDrawCurrent;
+                    _groupDrawStart = null;
+                    _groupDrawCurrent = null;
+                    setState(() => _tool = _MapTool.none);
+                    if (start != null && end != null) {
+                      await _createGroupElement(start, end, goal);
+                    }
+                  },
                 ),
               ),
             // Goal (fixed, topmost) — never moves, kept out of the dynamic layer
@@ -967,6 +1305,10 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                 goal: goal,
                 sc: c,
                 onTap: () {
+                  if (_tool == _MapTool.connector && widget.canEdit) {
+                    _handleConnectorEndpoint('node:${goal.id}', goal);
+                    return;
+                  }
                   HapticFeedback.selectionClick();
                   if (widget.canEdit) _showGoalSheet(goal, c);
                 },
@@ -1018,7 +1360,10 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               sc: c,
               onTap: () => setState(() {
                 _editMode = !_editMode;
-                if (!_editMode) _tool = _MapTool.none;
+                if (!_editMode) {
+                  _tool = _MapTool.none;
+                  _connectorFromRef = null;
+                }
               }),
             ),
           ),
@@ -1032,7 +1377,39 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               visible: _editMode,
               tool: _tool,
               sc: c,
-              onPick: (t) => setState(() => _tool = _tool == t ? _MapTool.none : t),
+              onPick: (t) => setState(() {
+                _tool = _tool == t ? _MapTool.none : t;
+                _connectorFromRef = null;
+              }),
+            ),
+          ),
+        // Connector first-endpoint hint banner.
+        if (widget.canEdit &&
+            _tool == _MapTool.connector &&
+            _connectorFromRef != null)
+          Positioned(
+            top: 12,
+            left: 0,
+            right: 0,
+            child: IgnorePointer(
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: c.accent.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Выберите цель стрелки',
+                    style: TextStyle(
+                      color: c.background,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
       ],
@@ -2399,7 +2776,7 @@ class _StyledTextField extends StatelessWidget {
 // ─── Tactical Map Evolution Stage 1: map-native elements UI ───────────────────
 
 /// Active placement tool in edit mode.
-enum _MapTool { none, note, label }
+enum _MapTool { none, note, label, group, connector }
 
 /// Floating button to enter/exit the map edit mode.
 class _EditModeButton extends StatelessWidget {
@@ -2471,25 +2848,45 @@ class _MapToolPalette extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: sc.border),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _MapToolChip(
-                icon: Icons.sticky_note_2_outlined,
-                label: 'Заметка',
-                selected: tool == _MapTool.note,
-                sc: sc,
-                onTap: () => onPick(_MapTool.note),
-              ),
-              const SizedBox(width: 8),
-              _MapToolChip(
-                icon: Icons.text_fields,
-                label: 'Метка',
-                selected: tool == _MapTool.label,
-                sc: sc,
-                onTap: () => onPick(_MapTool.label),
-              ),
-            ],
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _MapToolChip(
+                  icon: Icons.sticky_note_2_outlined,
+                  label: 'Заметка',
+                  selected: tool == _MapTool.note,
+                  sc: sc,
+                  onTap: () => onPick(_MapTool.note),
+                ),
+                const SizedBox(width: 8),
+                _MapToolChip(
+                  icon: Icons.text_fields,
+                  label: 'Метка',
+                  selected: tool == _MapTool.label,
+                  sc: sc,
+                  onTap: () => onPick(_MapTool.label),
+                ),
+                const SizedBox(width: 8),
+                _MapToolChip(
+                  icon: Icons.crop_free,
+                  label: 'Группа',
+                  selected: tool == _MapTool.group,
+                  sc: sc,
+                  onTap: () => onPick(_MapTool.group),
+                ),
+                const SizedBox(width: 8),
+                _MapToolChip(
+                  icon: Icons.arrow_forward,
+                  label: 'Связь',
+                  selected: tool == _MapTool.connector,
+                  sc: sc,
+                  onTap: () => onPick(_MapTool.connector),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -2785,6 +3182,570 @@ class _ElementActionsSheet extends StatelessWidget {
             color: sc.danger,
             sc: sc,
             onTap: onDelete,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Tactical Map Evolution Stage 4: groups & connectors ──────────────────────
+
+/// A semi-transparent labelled zone that visually clusters nodes. Membership is
+/// purely geometric — nothing about the plan tree changes.
+class _GroupZoneElement extends StatelessWidget {
+  const _GroupZoneElement(
+      {required this.element, required this.color, required this.sc});
+  final MapElement element;
+  final Color color;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context) {
+    final label =
+        (element.content?.isNotEmpty ?? false) ? element.content! : 'Группа';
+    return Container(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.45), width: 1.5),
+      ),
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Resolved connector geometry (canvas-space) plus its rendered style.
+class _ConnectorData {
+  const _ConnectorData({
+    required this.id,
+    required this.src,
+    required this.dst,
+    required this.dashed,
+    required this.color,
+    this.label,
+  });
+  final String id;
+  final Offset src; // canvas space
+  final Offset dst; // canvas space
+  final bool dashed;
+  final Color color;
+  final String? label;
+}
+
+/// A node bounding circle used as a routing obstacle for connectors.
+class _ObstacleCircle {
+  const _ObstacleCircle({required this.center, required this.radius});
+  final Offset center; // canvas space
+  final double radius;
+}
+
+/// Paints free connectors with smart routing — a Bezier that bends around node
+/// obstacles lying close to the straight src→dst line. Distinct from
+/// [_EdgePainter] (hierarchy/dependencies) by colour, curvature and arrowhead.
+class _ConnectorPainter extends CustomPainter {
+  const _ConnectorPainter(this.connectors, this.c, this.obstacles);
+  final List<_ConnectorData> connectors;
+  final SieColors c;
+  final List<_ObstacleCircle> obstacles;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (final conn in connectors) {
+      _drawConnector(canvas, conn);
+    }
+  }
+
+  void _drawConnector(Canvas canvas, _ConnectorData conn) {
+    final diff = conn.dst - conn.src;
+    final dist = diff.distance;
+    if (dist < 2) return;
+    final dir = diff / dist;
+
+    final path = _routeConnector(conn.src, conn.dst, dir, dist);
+    final paint = Paint()
+      ..color = conn.color
+      ..strokeWidth = 1.8
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    if (conn.dashed) {
+      _drawDashed(canvas, path, paint);
+    } else {
+      canvas.drawPath(path, paint);
+    }
+
+    final tip = conn.dst - dir * 20.0;
+    _drawArrowHead(canvas, tip, dir, conn.color);
+
+    if (conn.label != null) {
+      final mid = _pathMidpoint(path);
+      final tp = TextPainter(
+        text: TextSpan(
+          text: conn.label,
+          style: TextStyle(
+            color: c.textPrimary,
+            fontSize: 10,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: 120);
+      final bgRect = Rect.fromCenter(
+          center: mid, width: tp.width + 12, height: tp.height + 6);
+      final rr = RRect.fromRectAndRadius(bgRect, const Radius.circular(4));
+      canvas.drawRRect(
+          rr, Paint()..color = c.surface.withValues(alpha: 0.9));
+      canvas.drawRRect(
+        rr,
+        Paint()
+          ..color = conn.color.withValues(alpha: 0.4)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0,
+      );
+      tp.paint(canvas, mid - Offset(tp.width / 2, tp.height / 2));
+    }
+  }
+
+  /// Builds a cubic path from src→dst, deflected sideways to avoid obstacles
+  /// near the mid-section of the straight line (cheap path-avoidance).
+  Path _routeConnector(Offset src, Offset dst, Offset dir, double dist) {
+    final normal = Offset(-dir.dy, dir.dx);
+    double deflect = 0;
+    for (final obs in obstacles) {
+      // Projection of the obstacle centre onto the src→dst line.
+      final rel = obs.center - src;
+      final t = rel.dx * dir.dx + rel.dy * dir.dy;
+      if (t < dist * 0.1 || t > dist * 0.9) continue;
+      final closest = src + dir * t.clamp(0.0, dist);
+      final closeDist = (closest - obs.center).distance;
+      final threshold = obs.radius + 28.0;
+      if (closeDist < threshold) {
+        final pen = threshold - closeDist;
+        // Which side is the obstacle on? Push the curve the other way.
+        final side = rel.dx * (dst - src).dy - rel.dy * (dst - src).dx;
+        deflect += side > 0 ? -pen * 1.8 : pen * 1.8;
+      }
+    }
+    final cp1 = Offset(
+      src.dx + dir.dx * dist * 0.35 + normal.dx * deflect * 0.6,
+      src.dy + dir.dy * dist * 0.35 + normal.dy * deflect * 0.6,
+    );
+    final cp2 = Offset(
+      src.dx + dir.dx * dist * 0.65 + normal.dx * deflect * 0.6,
+      src.dy + dir.dy * dist * 0.65 + normal.dy * deflect * 0.6,
+    );
+    return Path()
+      ..moveTo(src.dx, src.dy)
+      ..cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy, dst.dx, dst.dy);
+  }
+
+  Offset _pathMidpoint(Path path) {
+    for (final m in path.computeMetrics()) {
+      final tangent = m.getTangentForOffset(m.length / 2);
+      if (tangent != null) return tangent.position;
+    }
+    return Offset.zero;
+  }
+
+  void _drawDashed(Canvas canvas, Path path, Paint paint) {
+    const dash = 7.0, gap = 4.0;
+    for (final m in path.computeMetrics()) {
+      double d = 0;
+      bool draw = true;
+      while (d < m.length) {
+        final len = draw ? dash : gap;
+        if (draw) {
+          canvas.drawPath(
+              m.extractPath(d, math.min(d + len, m.length)), paint);
+        }
+        d += len;
+        draw = !draw;
+      }
+    }
+  }
+
+  void _drawArrowHead(Canvas canvas, Offset tip, Offset dir, Color color) {
+    const sz = 9.0;
+    final back = tip - dir * sz;
+    final n = Offset(-dir.dy, dir.dx) * (sz * 0.5);
+    final path = Path()
+      ..moveTo(tip.dx, tip.dy)
+      ..lineTo(back.dx + n.dx, back.dy + n.dy)
+      ..lineTo(back.dx - n.dx, back.dy - n.dy)
+      ..close();
+    canvas.drawPath(
+        path, Paint()..color = color..style = PaintingStyle.fill);
+  }
+
+  @override
+  bool shouldRepaint(_ConnectorPainter old) =>
+      !identical(old.connectors, connectors) || old.c != c;
+}
+
+/// Live preview rectangle while the user drags out a new group zone.
+class _GroupDrawPreviewPainter extends CustomPainter {
+  const _GroupDrawPreviewPainter(
+      {required this.start, required this.end, required this.color});
+  final Offset start;
+  final Offset end;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if ((end - start).distance < 4) return;
+    final rect = Rect.fromPoints(start, end);
+    final rr = RRect.fromRectAndRadius(rect, const Radius.circular(10));
+    canvas.drawRRect(rr, Paint()..color = color.withValues(alpha: 0.12));
+    canvas.drawRRect(
+      rr,
+      Paint()
+        ..color = color.withValues(alpha: 0.7)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_GroupDrawPreviewPainter old) =>
+      old.start != start || old.end != end;
+}
+
+/// Long-press actions for a group zone: rename / recolor / delete.
+class _GroupActionsSheet extends StatefulWidget {
+  const _GroupActionsSheet({
+    required this.element,
+    required this.sc,
+    required this.colors,
+    required this.onPickColor,
+    required this.onEditLabel,
+    required this.onDelete,
+  });
+  final MapElement element;
+  final SieColors sc;
+  final List<String> colors;
+  final ValueChanged<String> onPickColor;
+  final ValueChanged<String> onEditLabel;
+  final VoidCallback onDelete;
+
+  @override
+  State<_GroupActionsSheet> createState() => _GroupActionsSheetState();
+}
+
+class _GroupActionsSheetState extends State<_GroupActionsSheet> {
+  late final TextEditingController _ctrl =
+      TextEditingController(text: widget.element.content ?? '');
+
+  Color _hex(String hex) =>
+      Color(int.parse('FF${hex.replaceAll('#', '')}', radix: 16));
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.sc;
+    return Container(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        border: Border.all(color: c.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                  color: c.border, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          Text('ГРУППА',
+              style: TextStyle(
+                  color: c.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5)),
+          const SizedBox(height: 14),
+          Text('Название',
+              style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(
+              child: TextField(
+                controller: _ctrl,
+                style: TextStyle(color: c.textPrimary),
+                onSubmitted: widget.onEditLabel,
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: c.border)),
+                  enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: c.border)),
+                  focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: c.accent)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => widget.onEditLabel(_ctrl.text.trim()),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                decoration: BoxDecoration(
+                    color: c.accent, borderRadius: BorderRadius.circular(10)),
+                child: Text('OK',
+                    style: TextStyle(
+                        color: c.background, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 18),
+          Text('Цвет',
+              style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              for (final hex in widget.colors) ...[
+                GestureDetector(
+                  onTap: () => widget.onPickColor(hex),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    margin: const EdgeInsets.only(right: 10),
+                    decoration: BoxDecoration(
+                      color: _hex(hex).withValues(alpha: 0.85),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: widget.element.colorHex == hex
+                            ? c.textPrimary
+                            : Colors.transparent,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 18),
+          _ActionBtn(
+            label: 'Удалить',
+            icon: Icons.delete_outline,
+            color: const Color(0xFFE03050),
+            sc: c,
+            onTap: widget.onDelete,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Long-press / tap-midpoint actions for a connector: label / style / delete.
+class _ConnectorActionsSheet extends StatefulWidget {
+  const _ConnectorActionsSheet({
+    required this.element,
+    required this.sc,
+    required this.colors,
+    required this.onPickColor,
+    required this.onToggleDash,
+    required this.onEditLabel,
+    required this.onDelete,
+  });
+  final MapElement element;
+  final SieColors sc;
+  final List<String> colors;
+  final ValueChanged<String> onPickColor;
+  final VoidCallback onToggleDash;
+  final ValueChanged<String> onEditLabel;
+  final VoidCallback onDelete;
+
+  @override
+  State<_ConnectorActionsSheet> createState() => _ConnectorActionsSheetState();
+}
+
+class _ConnectorActionsSheetState extends State<_ConnectorActionsSheet> {
+  late final TextEditingController _ctrl =
+      TextEditingController(text: widget.element.content ?? '');
+
+  Color _hex(String hex) =>
+      Color(int.parse('FF${hex.replaceAll('#', '')}', radix: 16));
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.sc;
+    final isDashed = widget.element.styleJson?['dashed'] == true;
+    final styleColor = widget.element.styleJson?['color'] as String?;
+    return Container(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        border: Border.all(color: c.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                  color: c.border, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          Text('СВЯЗЬ',
+              style: TextStyle(
+                  color: c.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5)),
+          const SizedBox(height: 14),
+          Text('Подпись',
+              style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(
+              child: TextField(
+                controller: _ctrl,
+                style: TextStyle(color: c.textPrimary),
+                onSubmitted: widget.onEditLabel,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Без подписи…',
+                  hintStyle: TextStyle(color: c.textSecondary, fontSize: 13),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: c.border)),
+                  enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: c.border)),
+                  focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: c.accent)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => widget.onEditLabel(_ctrl.text.trim()),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                decoration: BoxDecoration(
+                    color: c.accent, borderRadius: BorderRadius.circular(10)),
+                child: Text('OK',
+                    style: TextStyle(
+                        color: c.background, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 10),
+          _ActionBtn(
+            label: isDashed ? 'Сделать сплошной' : 'Сделать пунктирной',
+            icon: isDashed ? Icons.horizontal_rule : Icons.more_horiz,
+            color: c.accent,
+            sc: c,
+            onTap: widget.onToggleDash,
+          ),
+          const SizedBox(height: 14),
+          Text('Цвет',
+              style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              for (final hex in widget.colors) ...[
+                GestureDetector(
+                  onTap: () => widget.onPickColor(hex),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    margin: const EdgeInsets.only(right: 10),
+                    decoration: BoxDecoration(
+                      color: _hex(hex).withValues(alpha: 0.85),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: styleColor == hex
+                            ? c.textPrimary
+                            : Colors.transparent,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 18),
+          _ActionBtn(
+            label: 'Удалить',
+            icon: Icons.delete_outline,
+            color: const Color(0xFFE03050),
+            sc: c,
+            onTap: widget.onDelete,
           ),
         ],
       ),

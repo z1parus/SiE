@@ -54,6 +54,7 @@ class MapElement {
     this.mediaUrl,
     this.fromRef,
     this.toRef,
+    this.styleJson,
     this.updatedAt,
   });
 
@@ -70,6 +71,7 @@ class MapElement {
   final String? mediaUrl; // Stage 3 (image)
   final String? fromRef; // Stage 4 (connector)
   final String? toRef; // Stage 4 (connector)
+  final Map<String, dynamic>? styleJson; // Stage 4 (connector style)
   final String createdBy;
   final DateTime createdAt;
   final DateTime? updatedAt;
@@ -87,6 +89,7 @@ class MapElement {
     String? mediaUrl,
     String? fromRef,
     String? toRef,
+    Map<String, dynamic>? styleJson,
     DateTime? updatedAt,
   }) =>
       MapElement(
@@ -103,6 +106,7 @@ class MapElement {
         mediaUrl: mediaUrl ?? this.mediaUrl,
         fromRef: fromRef ?? this.fromRef,
         toRef: toRef ?? this.toRef,
+        styleJson: styleJson ?? this.styleJson,
         createdBy: createdBy,
         createdAt: createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
@@ -122,6 +126,7 @@ class MapElement {
         mediaUrl: j['media_url'] as String?,
         fromRef: j['from_ref'] as String?,
         toRef: j['to_ref'] as String?,
+        styleJson: j['style_json'] as Map<String, dynamic>?,
         createdBy: j['created_by'] as String,
         createdAt: DateTime.parse(j['created_at'] as String),
         updatedAt: j['updated_at'] != null
@@ -144,6 +149,7 @@ class MapElement {
         'media_url': mediaUrl,
         'from_ref': fromRef,
         'to_ref': toRef,
+        'style_json': styleJson,
         'created_by': createdBy,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
