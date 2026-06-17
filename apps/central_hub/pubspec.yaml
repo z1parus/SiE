@@ -40,6 +40,8 @@ dependencies:
   cached_network_image: ^3.4.1
   file_picker: ^8.3.7
   shared_preferences: ^2.3.3
+  share_plus: ^10.1.3
+  path_provider: ^2.1.5
   sie_core:
     path: ../../packages/sie_core
 

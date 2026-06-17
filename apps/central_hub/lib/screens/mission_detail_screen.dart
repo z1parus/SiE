@@ -11,6 +11,7 @@ import 'milestone_metric_screen.dart';
 import 'focus_protocol_screen.dart';
 import '../widgets/sparkline.dart';
 import '../widgets/attachment_gallery.dart';
+import 'goal_export_sheet.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -43,6 +44,7 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
   String? _selectedSubGoalId;
   RealtimeChannel? _presenceChannel;
   Set<String> _onlineUserIds = {};
+  final _mapRepaintKey = GlobalKey();
 
   @override
   void initState() {
@@ -74,6 +76,21 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
   void dispose() {
     _presenceChannel?.unsubscribe();
     super.dispose();
+  }
+
+  void _showExportSheet(BuildContext ctx, Goal goal, SieColors sc) {
+    showModalBottomSheet(
+      context: ctx,
+      backgroundColor: sc.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => GoalExportSheet(
+        goal: goal,
+        sc: sc,
+        mapMode: _mapMode,
+        mapRepaintKey: _mapRepaintKey,
+      ),
+    );
   }
 
   @override
@@ -123,10 +140,14 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
                     ? () => showAiDecompositionSheet(context, goal)
                     : null,
                 isShared: !isOwner,
+                onExport: () => _showExportSheet(context, goal, sc),
               ),
               Expanded(
                 child: _mapMode
-                    ? TacticalMapView(goal: goal, canEdit: canEdit)
+                    ? RepaintBoundary(
+                        key: _mapRepaintKey,
+                        child: TacticalMapView(goal: goal, canEdit: canEdit),
+                      )
                     : _DetailListView(
                         goal: goal,
                         sc: sc,
@@ -170,6 +191,7 @@ class _MissionHeader extends StatelessWidget {
     required this.onStats,
     this.onAiDecompose,
     this.isShared = false,
+    this.onExport,
   });
 
   final Goal goal;
@@ -181,6 +203,7 @@ class _MissionHeader extends StatelessWidget {
   final VoidCallback onStats;
   final VoidCallback? onAiDecompose;
   final bool isShared;
+  final VoidCallback? onExport;
 
   @override
   Widget build(BuildContext context) {
@@ -247,6 +270,17 @@ class _MissionHeader extends StatelessWidget {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
               ),
+              if (onExport != null) ...[
+                const SizedBox(width: 2),
+                IconButton(
+                  icon: Icon(Icons.ios_share_outlined,
+                      color: sc.textSecondary, size: 20),
+                  onPressed: onExport,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Экспорт',
+                ),
+              ],
               const SizedBox(width: 4),
               _ViewToggle(
                   mapMode: mapMode, onToggle: onToggle, goalColor: goalColor, sc: sc),
