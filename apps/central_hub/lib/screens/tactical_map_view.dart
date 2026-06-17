@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:sie_core/sie_core.dart';
 
 // ─── Public entry-point ───────────────────────────────────────────────────────
@@ -48,6 +51,10 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   Offset? _groupDrawStart;
   Offset? _groupDrawCurrent;
   String? _connectorFromRef;
+
+  // ── Tactical Map Evolution Stage 3: image cards ───────────────────────────
+  // Guard against re-entrant image picker / dialog launches.
+  bool _pickingImage = false;
 
   static const _noteColors = <String>[
     '#C8A84B', '#5AADA0', '#6A8ED8', '#C05080', '#70B870', '#E07830',
@@ -232,7 +239,11 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     final kind = switch (_tool) {
       _MapTool.note => MapElementKind.note,
       _MapTool.label => MapElementKind.label,
-      _MapTool.group || _MapTool.connector || _MapTool.none => null,
+      _MapTool.image ||
+      _MapTool.group ||
+      _MapTool.connector ||
+      _MapTool.none =>
+        null,
     };
     if (kind == null) return;
     setState(() => _tool = _MapTool.none); // auto-return to select
@@ -442,6 +453,339 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
         },
         onDelete: () {
           Navigator.pop(context);
+          ref.read(planningProvider.notifier).deleteMapElement(goal.id, el.id);
+        },
+      ),
+    );
+  }
+
+  // ── Image cards (Stage 3) ─────────────────────────────────────────────────
+
+  /// Returns the logical canvas centre of the current viewport so newly
+  /// placed image cards land in a visible area.
+  Offset _logicalViewCenter() {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null) return const Offset(80, 80);
+    final size = box.size;
+    final screenCenter = Offset(size.width / 2, size.height / 2);
+    try {
+      final inv = Matrix4.inverted(_tc.value);
+      final canvas = MatrixUtils.transformPoint(inv, screenCenter);
+      return Offset(canvas.dx - _cx, canvas.dy - _cx);
+    } catch (_) {
+      return const Offset(80, 80);
+    }
+  }
+
+  /// Shows the source-selection sheet: Gallery or URL.
+  void _showImageSourceMenu(Goal goal, SieColors c) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border.all(color: c.border),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                  color: c.border, borderRadius: BorderRadius.circular(2)),
+            ),
+            _ActionBtn(
+              label: 'Выбрать из галереи',
+              icon: Icons.photo_library_outlined,
+              color: c.accent,
+              sc: c,
+              onTap: () {
+                Navigator.pop(context);
+                _pickImageFromGallery(goal, c);
+              },
+            ),
+            const SizedBox(height: 10),
+            _ActionBtn(
+              label: 'Вставить ссылку / URL',
+              icon: Icons.link,
+              color: c.accentSecondary,
+              sc: c,
+              onTap: () {
+                Navigator.pop(context);
+                _showUrlPasteDialog(goal, c);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Picks an image from the gallery, shows a preview with rotate options,
+  /// uploads to goal-media, and places the card on the canvas.
+  Future<void> _pickImageFromGallery(Goal goal, SieColors c) async {
+    if (_pickingImage) return;
+    setState(() => _pickingImage = true);
+    try {
+      final picker = ImagePicker();
+      final file = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1280,
+        maxHeight: 1280,
+        imageQuality: 82,
+      );
+      if (file == null || !mounted) return;
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      final confirmed = await _showImagePreviewDialog(bytes, c);
+      if (confirmed == null || !mounted) return;
+      _uploadAndPlaceImage(
+          goal: goal,
+          bytes: confirmed.bytes,
+          quarterTurns: confirmed.quarterTurns,
+          origW: confirmed.origW,
+          origH: confirmed.origH,
+          ext: 'jpg');
+    } finally {
+      if (mounted) setState(() => _pickingImage = false);
+    }
+  }
+
+  /// Shows a text field for pasting a public image URL (no upload needed).
+  void _showUrlPasteDialog(Goal goal, SieColors c) {
+    final ctrl = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        backgroundColor: c.surface,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: c.border)),
+        title: Text('URL изображения',
+            style: TextStyle(color: c.textPrimary, fontSize: 16)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: TextInputType.url,
+          style: TextStyle(color: c.textPrimary, fontSize: 14),
+          decoration: InputDecoration(
+            hintText: 'https://example.com/image.jpg',
+            hintStyle: TextStyle(color: c.textSecondary),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: c.border)),
+            focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: c.accent)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dctx),
+            child: Text('Отмена',
+                style: TextStyle(color: c.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () {
+              final url = ctrl.text.trim();
+              Navigator.pop(dctx);
+              if (url.startsWith('http')) {
+                _placeImageCardFromUrl(goal: goal, mediaUrl: url);
+              }
+            },
+            child: Text('Добавить',
+                style: TextStyle(color: c.accent, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Shows a fullscreen preview with rotate CW/CCW before uploading.
+  /// Returns the confirmed bytes + rotation, or null if cancelled.
+  Future<({Uint8List bytes, int quarterTurns, double origW, double origH})?>
+      _showImagePreviewDialog(Uint8List bytes, SieColors c) async {
+    // Decode to get natural dimensions.
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    final origW = frame.image.width.toDouble();
+    final origH = frame.image.height.toDouble();
+    frame.image.dispose();
+
+    if (!mounted) return null;
+    return showDialog<({Uint8List bytes, int quarterTurns, double origW, double origH})>(
+      context: context,
+      builder: (dctx) => _ImagePreviewDialog(
+        bytes: bytes,
+        origW: origW,
+        origH: origH,
+        sc: c,
+      ),
+    );
+  }
+
+  /// Uploads bytes to Storage then places the image card at the viewport centre.
+  Future<void> _uploadAndPlaceImage({
+    required Goal goal,
+    required Uint8List bytes,
+    required int quarterTurns,
+    required double origW,
+    required double origH,
+    String ext = 'jpg',
+  }) async {
+    final url = await ref.read(planningProvider.notifier)
+        .uploadMapImage(goal.id, bytes, ext: ext);
+    if (url == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Ошибка загрузки изображения')));
+      }
+      return;
+    }
+    await _placeImageCardFromUrl(
+        goal: goal, mediaUrl: url,
+        quarterTurns: quarterTurns, origW: origW, origH: origH);
+  }
+
+  /// Creates an image card element using a (possibly remote) URL.
+  Future<void> _placeImageCardFromUrl({
+    required Goal goal,
+    required String mediaUrl,
+    int quarterTurns = 0,
+    double origW = 400,
+    double origH = 300,
+  }) async {
+    // Swap dimensions when rotated 90°/270° so the canvas box matches the
+    // physical rotation.
+    final swapped = quarterTurns % 2 == 1;
+    final displayW = swapped ? origH : origW;
+    final displayH = swapped ? origW : origH;
+    final maxSide = math.max(displayW, displayH);
+    const target = 220.0;
+    final scale = target / math.max(maxSide, 1.0);
+    final cardW = (displayW * scale).clamp(80.0, 480.0);
+    final cardH = (displayH * scale).clamp(60.0, 480.0);
+    final logical = _logicalViewCenter();
+
+    final id = await ref.read(planningProvider.notifier).addMapElement(
+          goalId: goal.id,
+          kind: MapElementKind.image,
+          x: logical.dx,
+          y: logical.dy,
+          w: cardW,
+          h: cardH,
+          mediaUrl: mediaUrl,
+          styleJson: {'rotation': quarterTurns},
+        );
+    if (id == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Достигнут лимит элементов на карте')));
+      }
+      return;
+    }
+    _elementPositions[id] = logical;
+    _elementSizes[id] = Offset(cardW, cardH);
+    _bumpRepaint();
+  }
+
+  Widget _imageCardWidget(MapElement el, Goal goal, SieColors c) {
+    final pos = _elementPositions[el.id] ?? el.position;
+    final size = _elementSizes[el.id] ?? Offset(el.w ?? 200, el.h ?? 150);
+    final w = size.dx;
+    final h = size.dy;
+    final quarterTurns = (el.styleJson?['rotation'] as int?) ?? 0;
+
+    return Positioned(
+      key: ValueKey('img-${el.id}'),
+      left: _cx + pos.dx - w / 2,
+      top: _cx + pos.dy - h / 2,
+      width: w,
+      height: h,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onLongPress: widget.canEdit
+            ? () {
+                HapticFeedback.mediumImpact();
+                _showImageCardActions(goal, el, c);
+              }
+            : null,
+        onPanStart: !widget.canEdit
+            ? null
+            : (_) {
+                HapticFeedback.lightImpact();
+                setState(() => _draggingId = el.id);
+              },
+        onPanUpdate: !widget.canEdit
+            ? null
+            : (d) {
+                final scale = _tc.value.getMaxScaleOnAxis();
+                _elementPositions[el.id] =
+                    (_elementPositions[el.id] ?? el.position) + d.delta / scale;
+                _bumpRepaint();
+              },
+        onPanEnd: !widget.canEdit
+            ? null
+            : (_) {
+                HapticFeedback.lightImpact();
+                _scheduleSaveElement(goal, el.id);
+                setState(() => _draggingId = null);
+              },
+        child: _ImageCardElement(
+          element: el,
+          quarterTurns: quarterTurns,
+          sc: c,
+          canEdit: widget.canEdit,
+          onResize: !widget.canEdit
+              ? null
+              : (delta) {
+                  final scale = _tc.value.getMaxScaleOnAxis();
+                  final cur = _elementSizes[el.id] ??
+                      Offset(el.w ?? 200, el.h ?? 150);
+                  // Maintain aspect ratio via the longer axis.
+                  final aspect = cur.dx / math.max(cur.dy, 1.0);
+                  final dw = delta.dx / scale;
+                  _elementSizes[el.id] = Offset(
+                    (cur.dx + dw).clamp(60.0, 600.0),
+                    ((cur.dx + dw) / aspect).clamp(45.0, 600.0),
+                  );
+                  _bumpRepaint();
+                },
+          onResizeEnd: () {
+            final s = _elementSizes[el.id];
+            if (s != null) {
+              ref
+                  .read(planningProvider.notifier)
+                  .updateMapElement(goal.id, el.id, w: s.dx, h: s.dy);
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showImageCardActions(Goal goal, MapElement el, SieColors c) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _ImageCardActionsSheet(
+        element: el,
+        sc: c,
+        onEditCaption: (caption) {
+          Navigator.pop(context);
+          ref.read(planningProvider.notifier)
+              .updateMapElement(goal.id, el.id, content: caption);
+        },
+        onDelete: () {
+          Navigator.pop(context);
+          _elementPositions.remove(el.id);
+          _elementSizes.remove(el.id);
           ref.read(planningProvider.notifier).deleteMapElement(goal.id, el.id);
         },
       ),
@@ -1014,12 +1358,14 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     // Seed live positions/sizes for map elements (only once per id, like nodes).
     for (final el in goal.mapElements) {
       _elementPositions.putIfAbsent(el.id, () => el.position);
-      if (el.kind == MapElementKind.note || el.kind == MapElementKind.group) {
+      if (el.kind == MapElementKind.note ||
+          el.kind == MapElementKind.group ||
+          el.kind == MapElementKind.image) {
         _elementSizes.putIfAbsent(
             el.id,
             () => Offset(
-                  el.w ?? (el.kind == MapElementKind.group ? 200 : 140),
-                  el.h ?? (el.kind == MapElementKind.group ? 150 : 100),
+                  el.w ?? (el.kind == MapElementKind.group ? 200 : el.kind == MapElementKind.image ? 200 : 140),
+                  el.h ?? (el.kind == MapElementKind.group ? 150 : el.kind == MapElementKind.image ? 150 : 100),
                 ));
       }
     }
@@ -1172,6 +1518,10 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                         for (final el in goal.mapElements)
                           if (el.kind == MapElementKind.group)
                             _groupZoneWidget(el, goal, c),
+                        // Image cards — above groups, below edges (Stage 3).
+                        for (final el in goal.mapElements)
+                          if (el.kind == MapElementKind.image)
+                            _imageCardWidget(el, goal, c),
                         // Edges (hierarchy + dependencies)
                         Positioned.fill(
                           child: CustomPaint(
@@ -1377,10 +1727,16 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               visible: _editMode,
               tool: _tool,
               sc: c,
-              onPick: (t) => setState(() {
-                _tool = _tool == t ? _MapTool.none : t;
-                _connectorFromRef = null;
-              }),
+              onPick: (t) {
+                if (t == _MapTool.image) {
+                  if (!_pickingImage) _showImageSourceMenu(goal, c);
+                  return;
+                }
+                setState(() {
+                  _tool = _tool == t ? _MapTool.none : t;
+                  _connectorFromRef = null;
+                });
+              },
             ),
           ),
         // Connector first-endpoint hint banner.
@@ -2776,7 +3132,7 @@ class _StyledTextField extends StatelessWidget {
 // ─── Tactical Map Evolution Stage 1: map-native elements UI ───────────────────
 
 /// Active placement tool in edit mode.
-enum _MapTool { none, note, label, group, connector }
+enum _MapTool { none, note, label, group, connector, image }
 
 /// Floating button to enter/exit the map edit mode.
 class _EditModeButton extends StatelessWidget {
@@ -2884,6 +3240,14 @@ class _MapToolPalette extends StatelessWidget {
                   selected: tool == _MapTool.connector,
                   sc: sc,
                   onTap: () => onPick(_MapTool.connector),
+                ),
+                const SizedBox(width: 8),
+                _MapToolChip(
+                  icon: Icons.image_outlined,
+                  label: 'Изобр.',
+                  selected: false,
+                  sc: sc,
+                  onTap: () => onPick(_MapTool.image),
                 ),
               ],
             ),
@@ -3748,6 +4112,383 @@ class _ConnectorActionsSheetState extends State<_ConnectorActionsSheet> {
             onTap: widget.onDelete,
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Tactical Map Evolution Stage 3: image cards ──────────────────────────────
+
+/// An image card rendered on the canvas background layer. Displays a
+/// [CachedNetworkImage] with an optional caption strip below it.
+/// Rotation is stored in `styleJson['rotation']` as quarter-turns (0–3).
+class _ImageCardElement extends StatelessWidget {
+  const _ImageCardElement({
+    required this.element,
+    required this.quarterTurns,
+    required this.sc,
+    required this.canEdit,
+    this.onResize,
+    this.onResizeEnd,
+  });
+  final MapElement element;
+  final int quarterTurns;
+  final SieColors sc;
+  final bool canEdit;
+  final ValueChanged<Offset>? onResize;
+  final VoidCallback? onResizeEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final caption =
+        element.content?.isNotEmpty == true ? element.content! : null;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: sc.border.withValues(alpha: 0.6)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(9),
+            child: Column(
+              children: [
+                Expanded(
+                  child: RotatedBox(
+                    quarterTurns: quarterTurns,
+                    child: CachedNetworkImage(
+                      imageUrl: element.mediaUrl ?? '',
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      placeholder: (_, __) => Container(
+                        color: sc.surface,
+                        child: Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: sc.accent),
+                          ),
+                        ),
+                      ),
+                      errorWidget: (_, __, ___) => Container(
+                        color: sc.surface,
+                        child: Center(
+                          child: Icon(Icons.broken_image_outlined,
+                              color: sc.textSecondary, size: 28),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                if (caption != null)
+                  Container(
+                    width: double.infinity,
+                    height: 26,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    color: sc.surface.withValues(alpha: 0.92),
+                    alignment: Alignment.center,
+                    child: Text(
+                      caption,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: sc.textSecondary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        if (canEdit && onResize != null)
+          Positioned(
+            right: -4,
+            bottom: -4,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onPanUpdate: (d) => onResize!(d.delta),
+              onPanEnd: (_) => onResizeEnd?.call(),
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: sc.surface,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: sc.border),
+                ),
+                child: Icon(Icons.open_in_full,
+                    size: 12, color: sc.textSecondary),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Preview dialog shown before placing an image. Lets the user rotate 90° CW/CCW.
+class _ImagePreviewDialog extends StatefulWidget {
+  const _ImagePreviewDialog({
+    required this.bytes,
+    required this.origW,
+    required this.origH,
+    required this.sc,
+  });
+  final Uint8List bytes;
+  final double origW;
+  final double origH;
+  final SieColors sc;
+
+  @override
+  State<_ImagePreviewDialog> createState() => _ImagePreviewDialogState();
+}
+
+class _ImagePreviewDialogState extends State<_ImagePreviewDialog> {
+  int _quarterTurns = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.sc;
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(20),
+      child: Container(
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: c.border),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Row(
+                children: [
+                  Text('Предпросмотр',
+                      style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  IconButton(
+                    icon: Icon(Icons.rotate_left, color: c.textSecondary),
+                    tooltip: 'Повернуть влево',
+                    onPressed: () => setState(
+                        () => _quarterTurns = (_quarterTurns - 1 + 4) % 4),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.rotate_right, color: c.textSecondary),
+                    tooltip: 'Повернуть вправо',
+                    onPressed: () =>
+                        setState(() => _quarterTurns = (_quarterTurns + 1) % 4),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 340),
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                color: c.background,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: RotatedBox(
+                  quarterTurns: _quarterTurns,
+                  child: Image.memory(widget.bytes, fit: BoxFit.contain),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: c.border),
+                        ),
+                        child: Text('Отмена',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                color: c.textSecondary,
+                                fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(
+                        context,
+                        (
+                          bytes: widget.bytes,
+                          quarterTurns: _quarterTurns,
+                          origW: widget.origW,
+                          origH: widget.origH,
+                        ),
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        decoration: BoxDecoration(
+                          color: c.accent,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text('Разместить',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                color: c.background,
+                                fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Long-press actions for an image card: edit caption and delete.
+class _ImageCardActionsSheet extends StatefulWidget {
+  const _ImageCardActionsSheet({
+    required this.element,
+    required this.sc,
+    required this.onEditCaption,
+    required this.onDelete,
+  });
+  final MapElement element;
+  final SieColors sc;
+  final ValueChanged<String> onEditCaption;
+  final VoidCallback onDelete;
+
+  @override
+  State<_ImageCardActionsSheet> createState() => _ImageCardActionsSheetState();
+}
+
+class _ImageCardActionsSheetState extends State<_ImageCardActionsSheet> {
+  late final TextEditingController _ctrl =
+      TextEditingController(text: widget.element.content ?? '');
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.sc;
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border.all(color: c.border),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                    color: c.border, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            Text(
+              'ИЗОБРАЖЕНИЕ',
+              style: TextStyle(
+                  color: c.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5),
+            ),
+            const SizedBox(height: 14),
+            Text('Подпись',
+                style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _ctrl,
+                    style: TextStyle(color: c.textPrimary, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Добавить подпись…',
+                      hintStyle: TextStyle(color: c.textSecondary),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 11),
+                      enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: c.border)),
+                      focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: c.accent)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () => widget.onEditCaption(_ctrl.text.trim()),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 11),
+                    decoration: BoxDecoration(
+                        color: c.accent,
+                        borderRadius: BorderRadius.circular(10)),
+                    child: Text('OK',
+                        style: TextStyle(
+                            color: c.background,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            _ActionBtn(
+              label: 'Удалить',
+              icon: Icons.delete_outline,
+              color: const Color(0xFFE03050),
+              sc: c,
+              onTap: widget.onDelete,
+            ),
+          ],
+        ),
       ),
     );
   }

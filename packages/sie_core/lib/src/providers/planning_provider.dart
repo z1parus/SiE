@@ -2595,6 +2595,30 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     return id;
   }
 
+  /// Uploads raw image bytes to the `goal-media` Storage bucket and returns
+  /// the public URL. Used by Stage 3 image cards on the Tactical Map.
+  Future<String?> uploadMapImage(
+      String goalId, Uint8List bytes, {String ext = 'jpg'}) async {
+    try {
+      final path = '$goalId/${_uuid.v4()}.$ext';
+      await Supabase.instance.client.storage
+          .from('goal-media')
+          .uploadBinary(
+            path,
+            bytes,
+            fileOptions: FileOptions(
+              upsert: false,
+              contentType: ext == 'png' ? 'image/png' : 'image/jpeg',
+            ),
+          );
+      return Supabase.instance.client.storage
+          .from('goal-media')
+          .getPublicUrl(path);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Updates mutable fields of an existing element (text/color/size/position).
   Future<void> updateMapElement(
     String goalId,
