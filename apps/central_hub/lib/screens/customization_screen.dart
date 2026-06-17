@@ -355,8 +355,6 @@ class _Preview extends ConsumerWidget {
         (bg.backgroundColor != null || bg.backgroundGradient != null);
     final textMain   = hasCustomBg ? Colors.white : c.textPrimary;
     final textSub    = hasCustomBg ? Colors.white60 : c.textSecondary;
-    final showNeural = bg != null &&
-        (bg.backgroundColor != null || bg.useNeuralPattern);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
@@ -370,12 +368,6 @@ class _Preview extends ConsumerWidget {
                 child: ProfilePatternLayer(
                   pattern: equipped.pattern,
                   accent: bg?.accentColor ?? c.accent,
-                ),
-              )
-            else if (showNeural)
-              Positioned.fill(
-                child: NeuralNetworkWidget(
-                  color: bg.accentColor.withValues(alpha: 0.40),
                 ),
               ),
             Padding(
