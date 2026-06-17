@@ -448,9 +448,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           );
         }).toList();
 
-        await _mirrorToLocal(db, enrichedGoals, userId);
-        await _mirrorDependencies(
-            client, db, enrichedGoals.map((g) => g.id).toList());
+        await _mirrorToLocal(db, enrichedGoals);
+        // await _mirrorDependencies(client, db, enrichedGoals.map((g) => g.id).toList());
         await db.cleanupRemovedSharedGoals(
             enrichedGoals.map((g) => g.id).toSet());
         return _loadFromLocal(db, userId, enrichedGoals);
@@ -468,6 +467,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final unsyncedSgIds = await db.unsyncedSubGoalIds();
     final unsyncedTaskIds = await db.unsyncedTaskIds();
     final unsyncedMsIds = await db.unsyncedMilestoneIds();
+    final unsyncedIds = <String>{}; // TODO: unsynced habit links if needed
 
     for (final g in goals) {
       await db.upsertGoal(LocalGoalsCompanion(
@@ -739,7 +739,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       try {
         await client.from('goals').insert(newGoal.toInsertJson());
         await db.patchGoal(id, LocalGoalsCompanion(synced: const Value(true)));
-        return;
+        return id;
       } catch (_) {}
     }
     await db.enqueueSyncOp('insert_goal', payload);
@@ -872,7 +872,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             .update({'status': newStatus}).eq('id', id).select();
         if (rows.isNotEmpty) {
           await db.patchGoal(id, LocalGoalsCompanion(synced: const Value(true)));
-          return;
+          return medal;
         }
         debugPrint('SiE: updateGoalStatus 0 rows for $id — queuing');
       } catch (e) {
@@ -1117,7 +1117,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           'recurrence_parent_id': t.recurrenceParentId,
           'created_at': t.createdAt.toIso8601String(),
         });
-        await db.patchPlanningTask(id, LocalPlanningTasksCompanion(synced: const Value(true)));
+        await db.patchPlanningTask(t.id, LocalPlanningTasksCompanion(synced: const Value(true)));
         return;
       } catch (_) {}
     }

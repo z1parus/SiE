@@ -1260,6 +1260,113 @@ class AppDatabase extends _$AppDatabase {
           .get())
           .map((e) => e.id)
           .toSet();
+
+  // ── Missing Methods Added Back ──────────────────────────────────────────────
+
+  Future<void> upsertMedalLocally(LocalMissionMedalsCompanion row) =>
+      into(localMissionMedals).insertOnConflictUpdate(row);
+
+  Future<void> markMedalSynced(String id) =>
+      (update(localMissionMedals)..where((t) => t.id.equals(id)))
+          .write(const LocalMissionMedalsCompanion(synced: Value(true)));
+
+  Future<void> insertMilestoneLog(LocalMilestoneLogsCompanion row) =>
+      into(localMilestoneLogs).insert(row);
+
+  Future<void> updateMilestoneCurrentValue(String id, double? val) =>
+      (update(localMilestones)..where((t) => t.id.equals(id)))
+          .write(LocalMilestonesCompanion(currentValue: Value(val)));
+
+  Future<List<LocalMilestoneLog>> logsForMilestone(String milestoneId) =>
+      (select(localMilestoneLogs)..where((t) => t.milestoneId.equals(milestoneId)))
+          .get();
+
+  Future<void> deleteMilestoneLogLocally(String id) =>
+      (delete(localMilestoneLogs)..where((t) => t.id.equals(id))).go();
+
+  Future<void> upsertMissionTemplate(LocalMissionTemplatesCompanion row) =>
+      into(localMissionTemplates).insertOnConflictUpdate(row);
+
+  Future<List<LocalMissionTemplate>> templatesForUser(String userId) =>
+      (select(localMissionTemplates)..where((t) => t.userId.equals(userId) | t.isSystem.equals(true)))
+          .get();
+
+  Future<void> markMissionTemplateSynced(String id) =>
+      (update(localMissionTemplates)..where((t) => t.id.equals(id)))
+          .write(const LocalMissionTemplatesCompanion(synced: Value(true)));
+
+  Future<void> deleteMissionTemplateLocally(String id) =>
+      (delete(localMissionTemplates)..where((t) => t.id.equals(id))).go();
+
+  Future<LocalWeeklyReview?> weeklyReviewForWeek(String userId, int weekStartMs) =>
+      (select(localWeeklyReviews)..where((t) => t.userId.equals(userId) & t.weekStartMs.equals(weekStartMs)))
+          .getSingleOrNull();
+
+  Future<void> upsertWeeklyReview(LocalWeeklyReviewsCompanion row) =>
+      into(localWeeklyReviews).insertOnConflictUpdate(row);
+
+  Future<void> markWeeklyReviewSynced(String id) =>
+      (update(localWeeklyReviews)..where((t) => t.id.equals(id)))
+          .write(const LocalWeeklyReviewsCompanion(synced: Value(true)));
+
+  Future<void> upsertMeditationPreset(LocalMeditationPresetsCompanion row) =>
+      into(localMeditationPresets).insertOnConflictUpdate(row);
+
+  Future<List<LocalMeditationPreset>> presetsForUser(String userId) =>
+      (select(localMeditationPresets)..where((t) => t.userId.equals(userId) | t.isSystem.equals(true)))
+          .get();
+
+  Future<void> deletePresetLocally(String id) =>
+      (delete(localMeditationPresets)..where((t) => t.id.equals(id))).go();
+
+  Future<void> insertMeditationSession(LocalMeditationSessionsCompanion row) =>
+      into(localMeditationSessions).insert(row);
+
+  Future<void> markMeditationSessionSynced(String id) =>
+      (update(localMeditationSessions)..where((t) => t.id.equals(id)))
+          .write(const LocalMeditationSessionsCompanion(synced: Value(true)));
+
+  Future<void> upsertGoalSnapshot(LocalGoalProgressSnapshotsCompanion row) =>
+      into(localGoalProgressSnapshots).insertOnConflictUpdate(row);
+
+  Future<List<LocalGoalProgressSnapshot>> snapshotsForGoal(String goalId) =>
+      (select(localGoalProgressSnapshots)..where((t) => t.goalId.equals(goalId))).get();
+
+  Future<List<LocalGoalProgressSnapshot>> unsyncedGoalSnapshots() =>
+      (select(localGoalProgressSnapshots)..where((t) => t.synced.equals(false))).get();
+
+  Future<LocalWeeklyReview?> latestWeeklyReview(String userId) =>
+      (select(localWeeklyReviews)
+            ..where((t) => t.userId.equals(userId))
+            ..orderBy([(t) => OrderingTerm(expression: t.weekStartMs, mode: OrderingMode.desc)])
+            ..limit(1))
+          .getSingleOrNull();
+
+  Future<List<LocalMissionMedal>> medalsForUser(String userId) =>
+      (select(localMissionMedals)..where((t) => t.userId.equals(userId))).get();
+
+  Future<int> meditationSecondsThisWeek(String userId, [int? startOfWeekMs]) async {
+    final startMs = startOfWeekMs ??
+        DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1)).millisecondsSinceEpoch;
+    final sessions = await (select(localMeditationSessions)
+          ..where((t) => t.userId.equals(userId) & t.completedAtMs.isBiggerOrEqualValue(startMs)))
+        .get();
+    return sessions.fold<int>(0, (sum, s) => sum + s.durationSeconds);
+  }
+
+  Future<bool> hasGoalSnapshotForDay(String goalId, int dayKeyMs) async {
+    final countExp = localGoalProgressSnapshots.id.count();
+    final query = selectOnly(localGoalProgressSnapshots)
+      ..addColumns([countExp])
+      ..where(localGoalProgressSnapshots.goalId.equals(goalId) &
+          localGoalProgressSnapshots.dayKeyMs.equals(dayKeyMs));
+    final count = await query.map((row) => row.read(countExp)).getSingle();
+    return (count ?? 0) > 0;
+  }
+
+  Future<void> markGoalSnapshotSynced(String id) =>
+      (update(localGoalProgressSnapshots)..where((t) => t.id.equals(id)))
+          .write(const LocalGoalProgressSnapshotsCompanion(synced: Value(true)));
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────
