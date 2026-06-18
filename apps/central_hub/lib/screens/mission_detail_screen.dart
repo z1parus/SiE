@@ -886,6 +886,7 @@ class _SubGoalTile extends ConsumerWidget {
                       padding: const EdgeInsets.only(right: 4),
                       child: _AssigneeDot(
                         userId: sg.assigneeIds.first,
+                        goal: goal,
                         sc: sc,
                       ),
                     ),
@@ -1261,6 +1262,7 @@ class _TaskTile extends ConsumerWidget {
               padding: const EdgeInsets.only(right: 4),
               child: _AssigneeDot(
                 userId: t.assigneeIds.first,
+                goal: goal,
                 sc: sc,
               ),
             ),
@@ -1483,15 +1485,35 @@ class _WeightBadge extends StatelessWidget {
 class _AssigneeDot extends StatelessWidget {
   const _AssigneeDot({
     required this.userId,
+    required this.goal,
     required this.sc,
   });
   final String userId;
+  final Goal goal;
   final SieColors sc;
 
   @override
   Widget build(BuildContext context) {
     final color = memberColor(userId, sc);
-    final letter = userId.isNotEmpty ? userId[0].toUpperCase() : '?';
+    // Resolve the assignee's profile from the goal owner / collaborators so we
+    // can show a real avatar + name initial instead of a raw user-id character.
+    final matches = goal.collaborators.where((c) => c.userId == userId);
+    final profile = userId == goal.userId
+        ? goal.ownerProfile
+        : (matches.isEmpty ? null : matches.first.profile);
+    final url = profile?.avatarUrl;
+    final name = profile?.username ?? userId;
+    final letter = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    Widget fallback() => Center(
+          child: Text(
+            letter,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        );
     return Container(
       width: 18,
       height: 18,
@@ -1500,15 +1522,12 @@ class _AssigneeDot extends StatelessWidget {
         color: color.withValues(alpha: 0.85),
         border: Border.all(color: sc.background, width: 1),
       ),
-      child: Center(
-        child: Text(
-          letter,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+      child: ClipOval(
+        child: url != null && url.isNotEmpty
+            ? Image.network(url,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => fallback())
+            : fallback(),
       ),
     );
   }

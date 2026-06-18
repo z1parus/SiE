@@ -361,8 +361,10 @@ class _AddAttachmentSheetState extends ConsumerState<_AddAttachmentSheet> {
   bool _uploading = false;
 
   Future<void> _pickImage(ImageSource source) async {
-    Navigator.pop(context); // close the sheet
-    setState(() => _uploading = true);
+    // Capture notifier before pop — Navigator.pop unmounts this widget,
+    // making ref inaccessible after the first await.
+    final notifier = ref.read(planningProvider.notifier);
+    Navigator.pop(context);
     try {
       final picker = ImagePicker();
       final file = await picker.pickImage(
@@ -374,7 +376,7 @@ class _AddAttachmentSheetState extends ConsumerState<_AddAttachmentSheet> {
       if (file == null) return;
       final bytes = await file.readAsBytes();
       final mimeType = file.mimeType ?? 'image/jpeg';
-      await ref.read(planningProvider.notifier).addAttachment(
+      await notifier.addAttachment(
             goalId: widget.goalId,
             nodeType: widget.nodeType,
             nodeId: widget.nodeId,
@@ -382,14 +384,12 @@ class _AddAttachmentSheetState extends ConsumerState<_AddAttachmentSheet> {
             fileName: file.name,
             mimeType: mimeType,
           );
-    } finally {
-      if (mounted) setState(() => _uploading = false);
-    }
+    } catch (_) {}
   }
 
   Future<void> _pickFile() async {
+    final notifier = ref.read(planningProvider.notifier);
     Navigator.pop(context);
-    setState(() => _uploading = true);
     try {
       final result = await FilePicker.platform.pickFiles(
         withData: true,
@@ -399,7 +399,7 @@ class _AddAttachmentSheetState extends ConsumerState<_AddAttachmentSheet> {
       final file = result.files.first;
       if (file.bytes == null) return;
       final mimeType = _mimeFromExt(file.extension ?? '');
-      await ref.read(planningProvider.notifier).addAttachment(
+      await notifier.addAttachment(
             goalId: widget.goalId,
             nodeType: widget.nodeType,
             nodeId: widget.nodeId,
@@ -407,9 +407,7 @@ class _AddAttachmentSheetState extends ConsumerState<_AddAttachmentSheet> {
             fileName: file.name,
             mimeType: mimeType,
           );
-    } finally {
-      if (mounted) setState(() => _uploading = false);
-    }
+    } catch (_) {}
   }
 
   String _mimeFromExt(String ext) {

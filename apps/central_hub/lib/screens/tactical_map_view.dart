@@ -580,7 +580,12 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
         behavior: HitTestBehavior.opaque,
         onTap: (_tool == _MapTool.connector && widget.canEdit)
             ? () => _handleConnectorEndpoint('el:${el.id}', goal)
-            : null,
+            : widget.canEdit
+                ? () {
+                    HapticFeedback.selectionClick();
+                    _showGroupActions(goal, el, c);
+                  }
+                : null,
         onLongPress: widget.canEdit
             ? () {
                 HapticFeedback.mediumImpact();
@@ -610,7 +615,32 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                 _scheduleSaveElement(goal, el.id);
                 setState(() => _draggingId = null);
               },
-        child: _GroupZoneElement(element: el, color: color, sc: c),
+        child: _GroupZoneElement(
+          element: el,
+          color: color,
+          sc: c,
+          canEdit: widget.canEdit && !_mapLocked,
+          onResize: (!widget.canEdit || _mapLocked)
+              ? null
+              : (delta) {
+                  final scale = _tc.value.getMaxScaleOnAxis();
+                  final cur = _elementSizes[el.id] ??
+                      Offset(el.w ?? 200, el.h ?? 150);
+                  _elementSizes[el.id] = Offset(
+                    (cur.dx + delta.dx / scale).clamp(80.0, 900.0),
+                    (cur.dy + delta.dy / scale).clamp(60.0, 900.0),
+                  );
+                  _bumpRepaint();
+                },
+          onResizeEnd: () {
+            final s = _elementSizes[el.id];
+            if (s != null) {
+              ref
+                  .read(planningProvider.notifier)
+                  .updateMapElement(goal.id, el.id, w: s.dx, h: s.dy);
+            }
+          },
+        ),
       ),
     );
   }
@@ -2000,10 +2030,6 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                         for (final el in goal.mapElements)
                           if (el.kind == MapElementKind.group)
                             _groupZoneWidget(el, goal, c),
-                        // Image cards — above groups, below edges (Stage 3).
-                        for (final el in goal.mapElements)
-                          if (el.kind == MapElementKind.image)
-                            _imageCardWidget(el, goal, c),
                         // Edges (hierarchy + dependencies)
                         Positioned.fill(
                           child: CustomPaint(
@@ -2084,6 +2110,12 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                               onHiddenTap: () =>
                                   setState(() => _scoutedMapIds.add(sg.id))),
                         ],
+                        // Image cards — above nodes so they stay draggable /
+                        // resizable (a centred image would otherwise sit behind
+                        // the node cluster and never receive gestures).
+                        for (final el in goal.mapElements)
+                          if (el.kind == MapElementKind.image)
+                            _imageCardWidget(el, goal, c),
                         // Map-native notes/labels — above nodes.
                         for (final el in goal.mapElements)
                           if (el.kind == MapElementKind.note ||
@@ -2265,23 +2297,6 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               }),
             ),
           ),
-        // Edit-mode toggle (only owners/editors).
-        if (widget.canEdit)
-          Positioned(
-            left: 16,
-            bottom: 16,
-            child: _EditModeButton(
-              active: _editMode,
-              sc: c,
-              onTap: () => setState(() {
-                _editMode = !_editMode;
-                if (!_editMode) {
-                  _tool = _MapTool.none;
-                  _connectorFromRef = null;
-                }
-              }),
-            ),
-          ),
         // Tool palette — slides up while edit mode is on.
         if (widget.canEdit)
           Positioned(
@@ -2302,6 +2317,27 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                   _connectorFromRef = null;
                 });
               },
+            ),
+          ),
+        // Edit-mode toggle (only owners/editors). Declared AFTER the palette so
+        // it renders above it, and lifts above the palette while edit mode is on
+        // so the "Готово" button stays tappable.
+        if (widget.canEdit)
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutCubic,
+            left: 16,
+            bottom: _editMode ? 84 : 16,
+            child: _EditModeButton(
+              active: _editMode,
+              sc: c,
+              onTap: () => setState(() {
+                _editMode = !_editMode;
+                if (!_editMode) {
+                  _tool = _MapTool.none;
+                  _connectorFromRef = null;
+                }
+              }),
             ),
           ),
         // Connector first-endpoint hint banner.
@@ -5198,39 +5234,88 @@ class _ElementActionsSheet extends StatelessWidget {
 /// A semi-transparent labelled zone that visually clusters nodes. Membership is
 /// purely geometric — nothing about the plan tree changes.
 class _GroupZoneElement extends StatelessWidget {
-  const _GroupZoneElement(
-      {required this.element, required this.color, required this.sc});
+  const _GroupZoneElement({
+    required this.element,
+    required this.color,
+    required this.sc,
+    this.canEdit = false,
+    this.onResize,
+    this.onResizeEnd,
+  });
   final MapElement element;
   final Color color;
   final SieColors sc;
+  final bool canEdit;
+  final ValueChanged<Offset>? onResize;
+  final VoidCallback? onResizeEnd;
 
   @override
   Widget build(BuildContext context) {
     final label =
         (element.content?.isNotEmpty ?? false) ? element.content! : 'Группа';
-    return Container(
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.45), width: 1.5),
-      ),
-      child: Align(
-        alignment: Alignment.topLeft,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child: Container(
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(12),
+              border:
+                  Border.all(color: color.withValues(alpha: 0.45), width: 1.5),
+            ),
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
+                // A solid label chip gives a reliable grab/long-press target
+                // even when the zone sits behind the node cluster.
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: sc.surface.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: color.withValues(alpha: 0.5)),
+                  ),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ),
-      ),
+        if (canEdit && onResize != null)
+          Positioned(
+            right: -4,
+            bottom: -4,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onPanUpdate: (d) => onResize!(d.delta),
+              onPanEnd: (_) => onResizeEnd?.call(),
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: sc.surface,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: sc.border),
+                ),
+                child:
+                    Icon(Icons.open_in_full, size: 12, color: sc.textSecondary),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
