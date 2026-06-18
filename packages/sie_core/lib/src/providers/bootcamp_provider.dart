@@ -149,7 +149,7 @@ class BootcampProgressNotifier
   @override
   Future<BootcampProgress> build() async {
     // Re-build whenever auth changes (e.g., different account logs in).
-    ref.watch(authStateProvider);
+    ref.watch(authStateProvider).valueOrNull;
 
     final userId = SupabaseService.client.auth.currentUser?.id;
     if (userId == null) return BootcampProgress.initial();

@@ -147,7 +147,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
   @override
   Future<PlanningState> build() async {
-    ref.watch(authStateProvider);
+    ref.watch(authStateProvider).valueOrNull;
     ref.watch(connectivityProvider);
     final s = await _load();
     // Re-arm local reminders from fresh state (fire-and-forget, never blocks UI).

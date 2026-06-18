@@ -27,7 +27,7 @@ class InventoryState {
 }
 
 final inventoryProvider = FutureProvider.autoDispose<InventoryState>((ref) async {
-  ref.watch(authStateProvider);
+  ref.watch(authStateProvider).valueOrNull;
   final userId = SupabaseService.client.auth.currentUser?.id;
   if (userId == null) return InventoryState.empty;
 

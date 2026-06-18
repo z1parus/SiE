@@ -28,7 +28,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
 
   @override
   Future<HabitsState> build() async {
-    ref.watch(authStateProvider);
+    ref.watch(authStateProvider).valueOrNull;
     ref.watch(connectivityProvider); // reload when connectivity changes
     return _load();
   }
@@ -1504,7 +1504,7 @@ final habitsProvider =
 
 final archivedHabitsProvider =
     AutoDisposeFutureProvider<List<Habit>>((ref) async {
-  ref.watch(authStateProvider);
+  ref.watch(authStateProvider).valueOrNull;
   final client = Supabase.instance.client;
   final session = client.auth.currentSession;
   if (session == null) return [];
@@ -1551,7 +1551,7 @@ final archivedHabitsProvider =
 final habitLogEntriesProvider =
     FutureProvider.autoDispose.family<List<HabitLogEntry>, String>(
   (ref, habitId) async {
-    ref.watch(authStateProvider);
+    ref.watch(authStateProvider).valueOrNull;
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
     if (userId == null) return [];

@@ -6,8 +6,14 @@ import 'user_timezone_provider.dart';
 
 final leaderboardProvider =
     FutureProvider.autoDispose<List<LeaderboardEntry>>((ref) async {
-  // Re-execute when the user changes their timezone.
-  final tzOffset = await ref.watch(userTimezoneProvider.future);
+  // Re-execute when the user changes their timezone. Fall back to device
+  // timezone if the provider errors so the leaderboard still loads.
+  Duration tzOffset;
+  try {
+    tzOffset = await ref.watch(userTimezoneProvider.future);
+  } catch (_) {
+    tzOffset = DateTime.now().timeZoneOffset;
+  }
   try {
     final data = await SupabaseService.client.rpc(
       'get_daily_leaderboard',

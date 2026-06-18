@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:drift/drift.dart' show Value;
@@ -11,7 +12,10 @@ import 'auth_state_provider.dart';
 class UserProfileNotifier extends AsyncNotifier<Profile?> {
   @override
   Future<Profile?> build() async {
-    ref.watch(authStateProvider);
+    // Track auth changes so the provider rebuilds on login/logout.
+    // Read the value (not .future) to avoid auto-propagation of AsyncError
+    // from the stream provider — profile loading has its own fallback.
+    ref.watch(authStateProvider).valueOrNull;
     return _fetchFromServer();
   }
 
@@ -47,25 +51,35 @@ class UserProfileNotifier extends AsyncNotifier<Profile?> {
         totalXp: profile.totalXp + pendingXp,
         designPoints: profile.designPoints + pendingDp,
       );
-    } catch (_) {
-      // Offline fallback: reconstruct from local cache.
-      final db = ref.read(appDatabaseProvider);
-      final local = await db.getProfile(user.id);
-      if (local == null) return null;
-      if (local.cachedJson != null) {
-        final json = jsonDecode(local.cachedJson!) as Map<String, dynamic>;
-        return Profile.fromJson({
-          ...json,
-          'total_xp': local.totalXp,
-          'design_points': local.designPoints,
-        });
+    } catch (e, st) {
+      debugPrint('SiE Profile: Supabase fetch failed — $e\n$st');
+      // Offline fallback: reconstruct from local cache. Wrap in its own
+      // try-catch so a local DB error (e.g. missing column) never surfaces
+      // as AsyncError and shows a misleading "no internet" message.
+      try {
+        final db = ref.read(appDatabaseProvider);
+        final local = await db.getProfile(user.id);
+        if (local == null) return null;
+        if (local.cachedJson != null) {
+          final json = jsonDecode(local.cachedJson!) as Map<String, dynamic>;
+          return Profile.fromJson({
+            ...json,
+            'total_xp': local.totalXp,
+            'design_points': local.designPoints,
+          });
+        }
+        return Profile(
+          id: user.id,
+          totalXp: local.totalXp,
+          designPoints: local.designPoints,
+          isLabMember: false,
+        );
+      } catch (e2) {
+        debugPrint('SiE Profile: local cache fallback also failed — $e2');
+        // Return a minimal profile stub rather than erroring so the profile
+        // screen never shows the "no internet" message for a logged-in user.
+        return Profile(id: user.id, totalXp: 0, designPoints: 0, isLabMember: false);
       }
-      return Profile(
-        id: user.id,
-        totalXp: local.totalXp,
-        designPoints: local.designPoints,
-        isLabMember: false,
-      );
     }
   }
 

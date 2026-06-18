@@ -10,7 +10,7 @@ final friendsProvider =
 class FriendsNotifier extends AsyncNotifier<FriendsState> {
   @override
   Future<FriendsState> build() async {
-    ref.watch(authStateProvider);
+    ref.watch(authStateProvider).valueOrNull;
     return _load();
   }
 

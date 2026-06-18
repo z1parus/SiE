@@ -68,7 +68,7 @@ class WeeklyReviewNotifier
     extends AutoDisposeAsyncNotifier<WeeklyReviewData> {
   @override
   Future<WeeklyReviewData> build() async {
-    ref.watch(authStateProvider);
+    ref.watch(authStateProvider).valueOrNull;
     final planning = ref.watch(planningProvider).valueOrNull;
     final agenda = ref.watch(agendaProvider);
     final userId = Supabase.instance.client.auth.currentUser?.id;
@@ -217,7 +217,7 @@ final weeklyReviewProvider = AutoDisposeAsyncNotifierProvider<
 /// Read by the War Room to star them.
 final weeklyFocusGoalIdsProvider =
     FutureProvider.autoDispose<Set<String>>((ref) async {
-  ref.watch(authStateProvider);
+  ref.watch(authStateProvider).valueOrNull;
   final userId = Supabase.instance.client.auth.currentUser?.id;
   if (userId == null) return {};
   final db = ref.read(appDatabaseProvider);

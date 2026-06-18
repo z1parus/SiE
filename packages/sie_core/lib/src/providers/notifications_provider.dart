@@ -16,7 +16,7 @@ class NotificationsNotifier extends AsyncNotifier<NotificationsState>
 
   @override
   Future<NotificationsState> build() async {
-    ref.watch(authStateProvider);
+    ref.watch(authStateProvider).valueOrNull;
     WidgetsBinding.instance.addObserver(this);
     ref.onDispose(() {
       WidgetsBinding.instance.removeObserver(this);
