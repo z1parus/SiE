@@ -141,6 +141,15 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
         BackgroundKind.lottie => 'lottie',
       };
 
+  // Supabase Storage reserves the 'image/' path prefix for its Image
+  // Transformation API, so we use 'img' as the upload folder instead.
+  String _kindFolder(BackgroundKind k) => switch (k) {
+        BackgroundKind.gradient => 'gradient',
+        BackgroundKind.image => 'img',
+        BackgroundKind.animatedWebp => 'animated_webp',
+        BackgroundKind.lottie => 'lottie',
+      };
+
   String _rarityDb(CosmeticRarity r) => switch (r) {
         CosmeticRarity.common => 'common',
         CosmeticRarity.rare => 'rare',
@@ -209,7 +218,7 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
       String? thumbUrl;
 
       if (_needsFile) {
-        imageUrl = await _upload(_mainFile!, _kindDb(_kind), slug);
+        imageUrl = await _upload(_mainFile!, _kindFolder(_kind), slug);
       }
       if (_needsThumb) {
         thumbUrl = await _upload(_thumbFile!, 'thumbs', slug);
