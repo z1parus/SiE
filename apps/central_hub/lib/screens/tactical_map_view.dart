@@ -580,7 +580,12 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
         behavior: HitTestBehavior.opaque,
         onTap: (_tool == _MapTool.connector && widget.canEdit)
             ? () => _handleConnectorEndpoint('el:${el.id}', goal)
-            : null,
+            : widget.canEdit
+                ? () {
+                    HapticFeedback.selectionClick();
+                    _showGroupActions(goal, el, c);
+                  }
+                : null,
         onLongPress: widget.canEdit
             ? () {
                 HapticFeedback.mediumImpact();
