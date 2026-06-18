@@ -149,12 +149,15 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
   Future<PlanningState> build() async {
     ref.watch(authStateProvider).valueOrNull;
     ref.watch(connectivityProvider);
-    final s = await _load();
-    // Re-arm local reminders from fresh state (fire-and-forget, never blocks UI).
-    unawaited(_syncReminders(s));
-    // Capture a daily progress snapshot per active goal (fire-and-forget).
-    unawaited(_captureDailySnapshots(s));
-    return s;
+    try {
+      final s = await _load();
+      unawaited(_syncReminders(s));
+      unawaited(_captureDailySnapshots(s));
+      return s;
+    } catch (e) {
+      debugPrint('SiE Planning: build failed — $e');
+      return PlanningState.empty;
+    }
   }
 
   // ── Momentum snapshots ──────────────────────────────────────────────────────

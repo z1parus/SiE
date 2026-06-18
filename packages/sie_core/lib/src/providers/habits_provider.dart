@@ -29,8 +29,13 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
   @override
   Future<HabitsState> build() async {
     ref.watch(authStateProvider).valueOrNull;
-    ref.watch(connectivityProvider); // reload when connectivity changes
-    return _load();
+    ref.watch(connectivityProvider);
+    try {
+      return await _load();
+    } catch (e) {
+      debugPrint('SiE Habits: build failed — $e');
+      return HabitsState.empty;
+    }
   }
 
   Future<HabitsState> _load() async {

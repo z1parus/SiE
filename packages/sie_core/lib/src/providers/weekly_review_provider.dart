@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:drift/drift.dart' show Value;
@@ -73,6 +74,7 @@ class WeeklyReviewNotifier
     final agenda = ref.watch(agendaProvider);
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (planning == null || userId == null) return WeeklyReviewData.empty;
+    try {
 
     final weekStart = isoWeekStart(DateTime.now());
     final weekStartMs = weekStart.millisecondsSinceEpoch;
@@ -121,6 +123,10 @@ class WeeklyReviewNotifier
       alreadyReviewed: existing != null,
       reviewStreak: streak,
     );
+    } catch (e) {
+      debugPrint('SiE WeeklyReview: build failed — $e');
+      return WeeklyReviewData.empty;
+    }
   }
 
   /// Persists a weekly review (idempotent per week — antifarm), awards XP/DP

@@ -2,6 +2,7 @@ import 'dart:convert' show jsonDecode;
 import 'dart:ui' show Offset;
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 part 'app_database.g.dart';
@@ -516,6 +517,7 @@ class AppDatabase extends _$AppDatabase {
       await _createIndexes(m);
     },
     onUpgrade: (m, from, to) async {
+      try {
       if (from < 2) {
         await m.addColumn(localHabits, localHabits.isArchived);
       }
@@ -708,6 +710,15 @@ class AppDatabase extends _$AppDatabase {
             'CREATE INDEX IF NOT EXISTS idx_sub_goal_assignees_goal '
             'ON local_sub_goal_assignees(goal_id)',
             const []);
+      }
+      } catch (e) {
+        // Migration failed (e.g. table/column already exists from a dev build
+        // that didn't bump schemaVersion). The local DB is a pure Supabase cache
+        // — safe to recreate. Data re-syncs on next online load.
+        debugPrint('SiE DB: migration $from→$to failed ($e) — recreating schema');
+        await m.destroyEverything();
+        await m.createAll();
+        await _createIndexes(m);
       }
     },
   );

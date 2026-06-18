@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -148,40 +149,43 @@ class BootcampProgressNotifier
     extends AsyncNotifier<BootcampProgress> {
   @override
   Future<BootcampProgress> build() async {
-    // Re-build whenever auth changes (e.g., different account logs in).
     ref.watch(authStateProvider).valueOrNull;
 
     final userId = SupabaseService.client.auth.currentUser?.id;
     if (userId == null) return BootcampProgress.initial();
 
-    final isOnline =
-        ref.read(connectivityProvider).valueOrNull ?? false;
+    try {
+      final isOnline =
+          ref.read(connectivityProvider).valueOrNull ?? false;
 
-    BootcampProgress? local = await _loadLocal(userId);
-    BootcampProgress? remote;
+      BootcampProgress? local = await _loadLocal(userId);
+      BootcampProgress? remote;
 
-    if (isOnline) {
-      remote = await _loadRemote(userId);
+      if (isOnline) {
+        remote = await _loadRemote(userId);
+      }
+
+      BootcampProgress progress;
+      if (local == null && remote == null) {
+        progress = BootcampProgress.initial();
+      } else if (local == null) {
+        progress = remote!;
+      } else if (remote == null) {
+        progress = local;
+      } else {
+        progress = BootcampProgress.merge(local, remote);
+      }
+
+      if (progress.enrolledDate == null) {
+        progress = progress.copyWith(enrolledDate: _todayStr());
+      }
+
+      await _save(progress, userId);
+      return progress;
+    } catch (e) {
+      debugPrint('SiE Bootcamp: build failed — $e');
+      return BootcampProgress.initial();
     }
-
-    BootcampProgress progress;
-    if (local == null && remote == null) {
-      progress = BootcampProgress.initial();
-    } else if (local == null) {
-      progress = remote!;
-    } else if (remote == null) {
-      progress = local;
-    } else {
-      progress = BootcampProgress.merge(local, remote);
-    }
-
-    // Ensure enrolledDate is always set.
-    if (progress.enrolledDate == null) {
-      progress = progress.copyWith(enrolledDate: _todayStr());
-    }
-
-    await _save(progress, userId);
-    return progress;
   }
 
   // ── Local persistence ──────────────────────────────────────────────────────
