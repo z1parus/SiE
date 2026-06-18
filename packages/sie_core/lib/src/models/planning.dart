@@ -21,6 +21,7 @@ class GoalSettings {
     this.hideCompletedTasks = false,
     this.category,
     this.why,
+    this.mapLocked = false,
   });
 
   final bool isFogOfWarEnabled;
@@ -30,6 +31,8 @@ class GoalSettings {
   final GoalCategory? category;
   // Stage 9: the motivation / "why" behind this goal.
   final String? why;
+  // Tactical Map Stage 7: lock node positions (presentation/review mode).
+  final bool mapLocked;
 
   static const defaults = GoalSettings();
 
@@ -40,6 +43,7 @@ class GoalSettings {
     bool? hideCompletedTasks,
     Object? category = _unset,
     Object? why = _unset,
+    bool? mapLocked,
   }) =>
       GoalSettings(
         isFogOfWarEnabled: isFogOfWarEnabled ?? this.isFogOfWarEnabled,
@@ -49,6 +53,7 @@ class GoalSettings {
         hideCompletedTasks: hideCompletedTasks ?? this.hideCompletedTasks,
         category: category == _unset ? this.category : category as GoalCategory?,
         why: why == _unset ? this.why : why as String?,
+        mapLocked: mapLocked ?? this.mapLocked,
       );
 
   factory GoalSettings.fromJson(Map<String, dynamic> j) {
@@ -65,6 +70,7 @@ class GoalSettings {
       hideCompletedTasks: j['hide_completed_tasks'] as bool? ?? false,
       category: cat,
       why: (whyRaw != null && whyRaw.isNotEmpty) ? whyRaw : null,
+      mapLocked: j['map_locked'] as bool? ?? false,
     );
   }
 
@@ -75,6 +81,7 @@ class GoalSettings {
         'hide_completed_tasks': hideCompletedTasks,
         if (category != null) 'category': category!.name,
         if (why != null) 'why': why,
+        'map_locked': mapLocked,
       };
 }
 

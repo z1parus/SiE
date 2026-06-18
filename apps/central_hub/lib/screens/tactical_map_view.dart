@@ -23,7 +23,7 @@ class TacticalMapView extends ConsumerStatefulWidget {
 // ─── State ────────────────────────────────────────────────────────────────────
 
 class _TacticalMapViewState extends ConsumerState<TacticalMapView>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final Map<String, Offset> _positions = {};
   final _tc = TransformationController();
   String? _draggingId;
@@ -71,6 +71,20 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   Timer? _liveTicker;
   final _liveRepaint = ValueNotifier<int>(0);
 
+  // ── Stage 7: navigation & power tools ─────────────────────────────────────
+  bool _mapLocked = false; // from GoalSettings.mapLocked (drag disabled)
+  bool _searchOpen = false;
+  String _searchQuery = '';
+  final _searchCtrl = TextEditingController();
+  bool _showMiniMap = true;
+  // Smooth camera animation (zoom-to-fit, search jump, minimap tap).
+  late final AnimationController _camAnim;
+  Animation<Matrix4>? _camTween;
+  // Animated re-layout ("Прибраться").
+  late final AnimationController _layoutAnim;
+  Map<String, Offset>? _layoutFrom;
+  Map<String, Offset>? _layoutTo;
+
   // ── Tactical Map Evolution Stage 3: image cards ───────────────────────────
   // Guard against re-entrant image picker / dialog launches.
   bool _pickingImage = false;
@@ -105,6 +119,18 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
+    // Stage 7: camera + layout animations.
+    _camAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    )..addListener(() {
+        final tw = _camTween;
+        if (tw != null) _tc.value = tw.value;
+      });
+    _layoutAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    )..addListener(_onLayoutTick);
     WidgetsBinding.instance.addPostFrameCallback((_) => _centerView());
   }
 
@@ -116,6 +142,9 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     _live?.dispose();
     _liveRepaint.dispose();
     _elementTextCtrl.dispose();
+    _searchCtrl.dispose();
+    _camAnim.dispose();
+    _layoutAnim.dispose();
     _hoverAnim.dispose();
     _tc.dispose();
     _repaint.dispose();
@@ -334,12 +363,17 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     }
   }
 
-  void _ensurePositions(Goal goal) {
+  void _ensurePositions(Goal goal, {bool forceRadial = false}) {
     _positions[goal.id] = Offset.zero;
-    final saved = goal.mapPositions;
+    // Stage 7: "Прибраться" wipes node positions (elements untouched) and
+    // recomputes the radial layout from scratch, ignoring saved positions.
+    if (forceRadial) {
+      _positions.removeWhere((k, _) => k != goal.id);
+    }
+    final saved = forceRadial ? const <String, Offset>{} : goal.mapPositions;
 
     final sgs = goal.subGoals;
-    final useRadialLayout = saved.isEmpty && sgs.isNotEmpty;
+    final useRadialLayout = (forceRadial || saved.isEmpty) && sgs.isNotEmpty;
 
     if (useRadialLayout) {
       // Only compute layout once — don't overwrite positions already set by drag
@@ -553,13 +587,13 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                 _showGroupActions(goal, el, c);
               }
             : null,
-        onPanStart: !widget.canEdit
+        onPanStart: (!widget.canEdit || _mapLocked)
             ? null
             : (_) {
                 HapticFeedback.lightImpact();
                 setState(() => _draggingId = el.id);
               },
-        onPanUpdate: !widget.canEdit
+        onPanUpdate: (!widget.canEdit || _mapLocked)
             ? null
             : (d) {
                 final scale = _tc.value.getMaxScaleOnAxis();
@@ -567,8 +601,9 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                 _elementPositions[el.id] =
                     (_elementPositions[el.id] ?? el.position) + delta;
                 _bumpRepaint();
+                _emitNodeMove('el:${el.id}', _elementPositions[el.id]!);
               },
-        onPanEnd: !widget.canEdit
+        onPanEnd: (!widget.canEdit || _mapLocked)
             ? null
             : (_) {
                 HapticFeedback.lightImpact();
@@ -907,21 +942,22 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                 _showImageCardActions(goal, el, c);
               }
             : null,
-        onPanStart: !widget.canEdit
+        onPanStart: (!widget.canEdit || _mapLocked)
             ? null
             : (_) {
                 HapticFeedback.lightImpact();
                 setState(() => _draggingId = el.id);
               },
-        onPanUpdate: !widget.canEdit
+        onPanUpdate: (!widget.canEdit || _mapLocked)
             ? null
             : (d) {
                 final scale = _tc.value.getMaxScaleOnAxis();
                 _elementPositions[el.id] =
                     (_elementPositions[el.id] ?? el.position) + d.delta / scale;
                 _bumpRepaint();
+                _emitNodeMove('el:${el.id}', _elementPositions[el.id]!);
               },
-        onPanEnd: !widget.canEdit
+        onPanEnd: (!widget.canEdit || _mapLocked)
             ? null
             : (_) {
                 HapticFeedback.lightImpact();
@@ -933,7 +969,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
           quarterTurns: quarterTurns,
           sc: c,
           canEdit: widget.canEdit,
-          onResize: !widget.canEdit
+          onResize: (!widget.canEdit || _mapLocked)
               ? null
               : (delta) {
                   final scale = _tc.value.getMaxScaleOnAxis();
@@ -1067,7 +1103,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
             controller: editing ? _elementTextCtrl : null,
             canEdit: widget.canEdit,
             onSubmit: () => _commitElementText(goal, el.id),
-            onResize: (!widget.canEdit || editing)
+            onResize: (!widget.canEdit || editing || _mapLocked)
                 ? null
                 : (delta) {
                     final scale = _tc.value.getMaxScaleOnAxis();
@@ -1116,13 +1152,13 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               _showElementActions(goal, el, c);
             }
           : null,
-      onPanStart: (!widget.canEdit || editing)
+      onPanStart: (!widget.canEdit || editing || _mapLocked)
           ? null
           : (_) {
               HapticFeedback.lightImpact();
               setState(() => _draggingId = el.id);
             },
-      onPanUpdate: (!widget.canEdit || editing)
+      onPanUpdate: (!widget.canEdit || editing || _mapLocked)
           ? null
           : (d) {
               final scale = _tc.value.getMaxScaleOnAxis();
@@ -1131,7 +1167,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               _bumpRepaint();
               _emitNodeMove('el:${el.id}', _elementPositions[el.id]!);
             },
-      onPanEnd: (!widget.canEdit || editing)
+      onPanEnd: (!widget.canEdit || editing || _mapLocked)
           ? null
           : (_) {
               HapticFeedback.lightImpact();
@@ -1238,6 +1274,191 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       ..scale(ratio, ratio)
       ..translate(-center.dx, -center.dy);
     _tc.value = scaleM * _tc.value;
+  }
+
+  // ── Stage 7: camera helpers, zoom-to-fit, tidy ────────────────────────────
+
+  /// Smoothly drives the camera to [target] (respects reduced-motion).
+  void _animateCameraTo(Matrix4 target) {
+    if (!SieMotion.enabled(context)) {
+      _tc.value = target;
+      return;
+    }
+    _camTween = Matrix4Tween(begin: _tc.value.clone(), end: target).animate(
+      CurvedAnimation(parent: _camAnim, curve: Curves.easeInOutCubic),
+    );
+    _camAnim
+      ..reset()
+      ..forward();
+  }
+
+  /// Centres the viewport on a logical (centre-relative) point at [scale]
+  /// (defaults to the current zoom).
+  void _centerOnLogical(Offset logical, {double? scale}) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final s = box.size;
+    final sc = (scale ?? _tc.value.getMaxScaleOnAxis()).clamp(0.15, 3.0);
+    final canvas = Offset(_cx + logical.dx, _cx + logical.dy);
+    final m = Matrix4.identity()
+      ..translate(s.width / 2 - canvas.dx * sc, s.height / 2 - canvas.dy * sc)
+      ..scale(sc);
+    _animateCameraTo(m);
+  }
+
+  /// Fits all nodes + map elements into the viewport.
+  void _zoomToFit() {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final pts = <Offset>[];
+    _positions.forEach((_, p) => pts.add(Offset(_cx + p.dx, _cx + p.dy)));
+    _elementPositions
+        .forEach((_, p) => pts.add(Offset(_cx + p.dx, _cx + p.dy)));
+    if (pts.isEmpty) return;
+    double minX = pts.first.dx, maxX = pts.first.dx;
+    double minY = pts.first.dy, maxY = pts.first.dy;
+    for (final p in pts) {
+      minX = math.min(minX, p.dx);
+      maxX = math.max(maxX, p.dx);
+      minY = math.min(minY, p.dy);
+      maxY = math.max(maxY, p.dy);
+    }
+    const pad = 160.0; // room for node radius + labels
+    final rect = Rect.fromLTRB(minX - pad, minY - pad, maxX + pad, maxY + pad);
+    final s = box.size;
+    final scale = math
+        .min(s.width / rect.width, s.height / rect.height)
+        .clamp(0.15, 3.0);
+    final m = Matrix4.identity()
+      ..translate(s.width / 2 - rect.center.dx * scale,
+          s.height / 2 - rect.center.dy * scale)
+      ..scale(scale);
+    _animateCameraTo(m);
+  }
+
+  void _onLayoutTick() {
+    final from = _layoutFrom, to = _layoutTo;
+    if (from == null || to == null) return;
+    final t = Curves.easeInOutCubic.transform(_layoutAnim.value);
+    to.forEach((id, dst) {
+      final src = from[id] ?? dst;
+      _positions[id] = Offset.lerp(src, dst, t)!;
+    });
+    _bumpRepaint();
+  }
+
+  /// "Прибраться" — recompute the radial layout (nodes only) with an animated
+  /// transition, persist it, and offer an undo.
+  void _tidyLayout(Goal goal) {
+    final prev = Map.of(_positions);
+    // Compute the target layout without leaving it applied.
+    _ensurePositions(goal, forceRadial: true);
+    final target = Map.of(_positions);
+    // Restore current positions; animate prev → target.
+    _positions
+      ..clear()
+      ..addAll(prev);
+
+    void persist() => ref
+        .read(planningProvider.notifier)
+        .saveMapPositions(goal.id, Map.of(_positions));
+
+    if (SieMotion.enabled(context)) {
+      _layoutFrom = prev;
+      _layoutTo = target;
+      _layoutAnim.reset();
+      _layoutAnim.forward().whenComplete(() {
+        _layoutFrom = null;
+        _layoutTo = null;
+        _positions
+          ..clear()
+          ..addAll(target);
+        persist();
+      });
+    } else {
+      _positions
+        ..clear()
+        ..addAll(target);
+      _bumpRepaint();
+      persist();
+    }
+    HapticFeedback.mediumImpact();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Карта перестроена'),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'Отменить',
+          onPressed: () {
+            _positions
+              ..clear()
+              ..addAll(prev);
+            _bumpRepaint();
+            ref
+                .read(planningProvider.notifier)
+                .saveMapPositions(goal.id, Map.of(prev));
+          },
+        ),
+      ),
+    );
+  }
+
+  void _toggleMapLock(Goal goal) {
+    final locked = !(goal.settings.mapLocked);
+    HapticFeedback.selectionClick();
+    ref
+        .read(planningProvider.notifier)
+        .updateGoalSettings(goal.id, goal.settings.copyWith(mapLocked: locked));
+  }
+
+  /// In-memory search across nodes, milestones and notes/labels.
+  List<({String id, String label, IconData icon, Offset pos})> _searchResults(
+      Goal goal) {
+    final q = _searchQuery.trim().toLowerCase();
+    if (q.isEmpty) return const [];
+    final out = <({String id, String label, IconData icon, Offset pos})>[];
+    void add(String id, String label, IconData icon) {
+      final p = _positions[id] ?? _elementPositions[id];
+      if (p == null) return;
+      out.add((id: id, label: label, icon: icon, pos: p));
+    }
+
+    for (final sg in _flat) {
+      if (sg.name.toLowerCase().contains(q)) {
+        add(sg.id, sg.name, Icons.layers_outlined);
+      }
+      for (final t in sg.tasks) {
+        if (t.name.toLowerCase().contains(q)) {
+          add(t.id, t.name, Icons.task_alt);
+        }
+      }
+    }
+    for (final m in goal.milestones) {
+      if (m.name.toLowerCase().contains(q)) {
+        add(m.id, m.name, Icons.outlined_flag);
+      }
+    }
+    for (final el in goal.mapElements) {
+      final content = el.content;
+      if (content != null && content.toLowerCase().contains(q)) {
+        add(el.id, content, Icons.sticky_note_2_outlined);
+      }
+    }
+    return out.take(20).toList();
+  }
+
+  void _jumpToResult(String id, Offset logical) {
+    setState(() {
+      _searchOpen = false;
+      _searchQuery = '';
+      _searchCtrl.clear();
+    });
+    _centerOnLogical(logical, scale: 1.0);
+    _setHoverTarget(id);
+    // Auto-clear the highlight after a moment.
+    Future.delayed(const Duration(milliseconds: 1600), () {
+      if (mounted && _hoverTargetId == id) _setHoverTarget(null);
+    });
   }
 
   // ── Collision resolution ──────────────────────────────────────────────────
@@ -1593,6 +1814,9 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     _maybeInitLive(goal);
     _memberInfo = _buildMemberInfo(goal, c);
 
+    // Stage 7: lock state for drag gating.
+    _mapLocked = goal.settings.mapLocked;
+
     _ensurePositions(goal);
 
     // Seed live positions/sizes for map elements (only once per id, like nodes).
@@ -1665,6 +1889,13 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       return edges;
     }
 
+    // Stage 7: content presence gates the nav overlays (minimap/search/fit).
+    final hasContent = _flat.isNotEmpty || goal.mapElements.isNotEmpty;
+    final box = context.findRenderObject() as RenderBox?;
+    final viewportSize = (box != null && box.hasSize)
+        ? box.size
+        : MediaQuery.of(context).size;
+
     return Stack(
       children: [
         Listener(
@@ -1672,6 +1903,9 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
           // gesture arena, so it never steals pans/drags from nodes.
           onPointerHover: _live == null ? null : (e) => _emitCursor(e.localPosition),
           onPointerMove: _live == null ? null : (e) => _emitCursor(e.localPosition),
+          child: GestureDetector(
+          // Stage 7: double-tap empty canvas → zoom-to-fit.
+          onDoubleTap: hasContent ? _zoomToFit : null,
           child: InteractiveViewer(
       transformationController: _tc,
       constrained: false,
@@ -1936,6 +2170,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       ),
         ),
         ),
+        ),
         Positioned(
           left: 0,
           top: 0,
@@ -1962,12 +2197,74 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Stage 7: power tools.
+              if (hasContent)
+                _ZoomButton(
+                    icon: Icons.search,
+                    onTap: () => setState(() => _searchOpen = true),
+                    sc: c),
+              if (hasContent) const SizedBox(height: 4),
+              if (hasContent)
+                _ZoomButton(
+                    icon: Icons.fit_screen_outlined,
+                    onTap: _zoomToFit,
+                    sc: c),
+              if (hasContent) const SizedBox(height: 4),
+              if (widget.canEdit && _flat.isNotEmpty)
+                _ZoomButton(
+                    icon: Icons.auto_fix_high_outlined,
+                    onTap: () => _tidyLayout(goal),
+                    sc: c),
+              if (widget.canEdit && _flat.isNotEmpty)
+                const SizedBox(height: 4),
+              if (widget.canEdit)
+                _ZoomButton(
+                    icon: _mapLocked ? Icons.lock_outline : Icons.lock_open_outlined,
+                    onTap: () => _toggleMapLock(goal),
+                    sc: c,
+                    active: _mapLocked),
+              if (widget.canEdit) const SizedBox(height: 10),
               _ZoomButton(icon: Icons.add, onTap: () => _stepZoom(1.25), sc: c),
               const SizedBox(height: 4),
               _ZoomButton(icon: Icons.remove, onTap: () => _stepZoom(0.8), sc: c),
             ],
           ),
         ),
+        // Stage 7: mini-map (top-right). Listens to camera + node moves.
+        if (hasContent && _showMiniMap)
+          Positioned(
+            top: 16,
+            right: 16,
+            child: _MiniMap(
+              positions: _positions,
+              elementPositions: _elementPositions,
+              repaint: _repaint,
+              tc: _tc,
+              viewportSize: viewportSize,
+              cx: _cx,
+              sc: c,
+              onTapCanvas: (logical) => _centerOnLogical(logical),
+            ),
+          ),
+        // Stage 7: search overlay.
+        if (_searchOpen)
+          Positioned(
+            top: 12,
+            left: 16,
+            right: 16,
+            child: _SearchPanel(
+              ctrl: _searchCtrl,
+              sc: c,
+              results: _searchResults(goal),
+              onChanged: (q) => setState(() => _searchQuery = q),
+              onPick: _jumpToResult,
+              onClose: () => setState(() {
+                _searchOpen = false;
+                _searchQuery = '';
+                _searchCtrl.clear();
+              }),
+            ),
+          ),
         // Edit-mode toggle (only owners/editors).
         if (widget.canEdit)
           Positioned(
@@ -2072,13 +2369,13 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
         HapticFeedback.selectionClick();
         _onTap(task.id, goal);
       },
-      onPanStart: (hidden || !widget.canEdit)
+      onPanStart: (hidden || !widget.canEdit || _mapLocked)
           ? null
           : (_) {
               HapticFeedback.lightImpact();
               setState(() => _draggingId = task.id);
             },
-      onPanUpdate: (hidden || !widget.canEdit)
+      onPanUpdate: (hidden || !widget.canEdit || _mapLocked)
           ? null
           : (d) {
               final scale = _tc.value.getMaxScaleOnAxis();
@@ -2088,7 +2385,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               _emitNodeMove('node:${task.id}', _positions[task.id]!);
               _setHoverTarget(_nearestSubGoalFor(task.id, goal, exclude: {task.id}));
             },
-      onPanEnd: (hidden || !widget.canEdit)
+      onPanEnd: (hidden || !widget.canEdit || _mapLocked)
           ? null
           : (_) {
               _tryReparentTask(task.id, currentSgId, goal);
@@ -2156,13 +2453,13 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               HapticFeedback.selectionClick();
               _onTap(sg.id, goal);
             },
-      onPanStart: (hidden || !widget.canEdit)
+      onPanStart: (hidden || !widget.canEdit || _mapLocked)
           ? null
           : (_) {
               HapticFeedback.lightImpact();
               setState(() => _draggingId = sg.id);
             },
-      onPanUpdate: (hidden || !widget.canEdit)
+      onPanUpdate: (hidden || !widget.canEdit || _mapLocked)
           ? null
           : (d) {
               final scale = _tc.value.getMaxScaleOnAxis();
@@ -2186,7 +2483,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               final excluded = {sg.id, ..._descendantIds(sg.id)};
               _setHoverTarget(_nearestSubGoalFor(sg.id, goal, exclude: excluded));
             },
-      onPanEnd: (hidden || !widget.canEdit)
+      onPanEnd: (hidden || !widget.canEdit || _mapLocked)
           ? null
           : (_) {
               _tryReparentSubGoal(sg, goal);
@@ -2245,13 +2542,13 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               HapticFeedback.selectionClick();
               _onTap(id, goal);
             },
-      onPanStart: (hidden || !widget.canEdit)
+      onPanStart: (hidden || !widget.canEdit || _mapLocked)
           ? null
           : (_) {
               HapticFeedback.lightImpact();
               setState(() => _draggingId = id);
             },
-      onPanUpdate: (hidden || !widget.canEdit)
+      onPanUpdate: (hidden || !widget.canEdit || _mapLocked)
           ? null
           : (d) {
               final scale = _tc.value.getMaxScaleOnAxis();
@@ -2259,7 +2556,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               _bumpRepaint();
               _emitNodeMove('node:$id', _positions[id]!);
             },
-      onPanEnd: (hidden || !widget.canEdit)
+      onPanEnd: (hidden || !widget.canEdit || _mapLocked)
           ? null
           : (_) {
               _resolveCollisions(id, goal);
@@ -4158,10 +4455,15 @@ class _Chip extends StatelessWidget {
 // ─── Zoom Button ──────────────────────────────────────────────────────────────
 
 class _ZoomButton extends StatelessWidget {
-  const _ZoomButton({required this.icon, required this.onTap, required this.sc});
+  const _ZoomButton(
+      {required this.icon,
+      required this.onTap,
+      required this.sc,
+      this.active = false});
   final IconData icon;
   final VoidCallback onTap;
   final SieColors sc;
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
@@ -4171,11 +4473,254 @@ class _ZoomButton extends StatelessWidget {
         width: 32,
         height: 32,
         decoration: BoxDecoration(
-          color: sc.surface.withValues(alpha: 0.9),
+          color: active
+              ? sc.accent.withValues(alpha: 0.9)
+              : sc.surface.withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: sc.border),
+          border: Border.all(color: active ? sc.accent : sc.border),
         ),
-        child: Icon(icon, size: 16, color: sc.textSecondary),
+        child: Icon(icon,
+            size: 16, color: active ? sc.background : sc.textSecondary),
+      ),
+    );
+  }
+}
+
+// ─── Stage 7: mini-map ────────────────────────────────────────────────────────
+
+class _MiniMap extends StatelessWidget {
+  const _MiniMap({
+    required this.positions,
+    required this.elementPositions,
+    required this.repaint,
+    required this.tc,
+    required this.viewportSize,
+    required this.cx,
+    required this.sc,
+    required this.onTapCanvas,
+  });
+  final Map<String, Offset> positions;
+  final Map<String, Offset> elementPositions;
+  final Listenable repaint;
+  final TransformationController tc;
+  final Size viewportSize;
+  final double cx;
+  final SieColors sc;
+  final ValueChanged<Offset> onTapCanvas; // logical coords
+
+  static const double _size = 110;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: _size,
+      height: _size,
+      decoration: BoxDecoration(
+        color: sc.surface.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: sc.border),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedBuilder(
+          animation: Listenable.merge([tc, repaint]),
+          builder: (_, __) {
+            final bounds = _contentBounds();
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: (d) => _handleTap(d.localPosition, bounds),
+              onPanUpdate: (d) => _handleTap(d.localPosition, bounds),
+              child: CustomPaint(
+                size: const Size(_size, _size),
+                painter: _MiniMapPainter(
+                  positions: positions,
+                  elementPositions: elementPositions,
+                  bounds: bounds,
+                  tc: tc,
+                  viewportSize: viewportSize,
+                  cx: cx,
+                  dot: sc.textSecondary,
+                  accent: sc.accent,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Square bounding box of all content in CANVAS coords (with padding).
+  Rect _contentBounds() {
+    final pts = <Offset>[];
+    positions.forEach((_, p) => pts.add(Offset(cx + p.dx, cx + p.dy)));
+    elementPositions.forEach((_, p) => pts.add(Offset(cx + p.dx, cx + p.dy)));
+    if (pts.isEmpty) {
+      return Rect.fromLTWH(cx - 400, cx - 400, 800, 800);
+    }
+    double minX = pts.first.dx, maxX = pts.first.dx;
+    double minY = pts.first.dy, maxY = pts.first.dy;
+    for (final p in pts) {
+      minX = math.min(minX, p.dx);
+      maxX = math.max(maxX, p.dx);
+      minY = math.min(minY, p.dy);
+      maxY = math.max(maxY, p.dy);
+    }
+    const pad = 220.0;
+    final r = Rect.fromLTRB(minX - pad, minY - pad, maxX + pad, maxY + pad);
+    final side = math.max(r.width, r.height);
+    return Rect.fromCenter(center: r.center, width: side, height: side);
+  }
+
+  void _handleTap(Offset local, Rect bounds) {
+    final fx = (local.dx / _size).clamp(0.0, 1.0);
+    final fy = (local.dy / _size).clamp(0.0, 1.0);
+    final canvasX = bounds.left + fx * bounds.width;
+    final canvasY = bounds.top + fy * bounds.height;
+    onTapCanvas(Offset(canvasX - cx, canvasY - cx));
+  }
+}
+
+class _MiniMapPainter extends CustomPainter {
+  _MiniMapPainter({
+    required this.positions,
+    required this.elementPositions,
+    required this.bounds,
+    required this.tc,
+    required this.viewportSize,
+    required this.cx,
+    required this.dot,
+    required this.accent,
+  });
+  final Map<String, Offset> positions;
+  final Map<String, Offset> elementPositions;
+  final Rect bounds;
+  final TransformationController tc;
+  final Size viewportSize;
+  final double cx;
+  final Color dot;
+  final Color accent;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    Offset toMini(Offset canvasPt) => Offset(
+          (canvasPt.dx - bounds.left) / bounds.width * size.width,
+          (canvasPt.dy - bounds.top) / bounds.height * size.height,
+        );
+
+    final elPaint = Paint()..color = accent.withValues(alpha: 0.45);
+    elementPositions.forEach((_, p) {
+      canvas.drawCircle(toMini(Offset(cx + p.dx, cx + p.dy)), 1.1, elPaint);
+    });
+
+    final dotPaint = Paint()..color = dot.withValues(alpha: 0.75);
+    positions.forEach((_, p) {
+      canvas.drawCircle(toMini(Offset(cx + p.dx, cx + p.dy)), 1.7, dotPaint);
+    });
+
+    // Viewport frame: visible canvas region derived from the live transform.
+    final tl = tc.toScene(Offset.zero);
+    final br = tc.toScene(Offset(viewportSize.width, viewportSize.height));
+    final frame = Rect.fromPoints(toMini(tl), toMini(br));
+    final framePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..color = accent;
+    canvas.drawRect(frame, framePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _MiniMapPainter old) => true;
+}
+
+// ─── Stage 7: search panel ────────────────────────────────────────────────────
+
+class _SearchPanel extends StatelessWidget {
+  const _SearchPanel({
+    required this.ctrl,
+    required this.sc,
+    required this.results,
+    required this.onChanged,
+    required this.onPick,
+    required this.onClose,
+  });
+  final TextEditingController ctrl;
+  final SieColors sc;
+  final List<({String id, String label, IconData icon, Offset pos})> results;
+  final ValueChanged<String> onChanged;
+  final void Function(String id, Offset pos) onPick;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = sc;
+    return Material(
+      color: Colors.transparent,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: c.border),
+            ),
+            padding: const EdgeInsets.only(left: 12, right: 4),
+            child: Row(
+              children: [
+                Icon(Icons.search, size: 18, color: c.textSecondary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: ctrl,
+                    autofocus: true,
+                    style: TextStyle(color: c.textPrimary, fontSize: 14),
+                    onChanged: onChanged,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      border: InputBorder.none,
+                      hintText: 'Поиск по карте…',
+                      hintStyle: TextStyle(color: c.textSecondary, fontSize: 14),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.close, size: 18, color: c.textSecondary),
+                  onPressed: onClose,
+                ),
+              ],
+            ),
+          ),
+          if (results.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(top: 6),
+              constraints: const BoxConstraints(maxHeight: 260),
+              decoration: BoxDecoration(
+                color: c.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: c.border),
+              ),
+              child: ListView.builder(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                itemCount: results.length,
+                itemBuilder: (_, i) {
+                  final r = results[i];
+                  return ListTile(
+                    dense: true,
+                    leading: Icon(r.icon, size: 18, color: c.accent),
+                    title: Text(
+                      r.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: c.textPrimary, fontSize: 13),
+                    ),
+                    onTap: () => onPick(r.id, r.pos),
+                  );
+                },
+              ),
+            ),
+        ],
       ),
     );
   }
