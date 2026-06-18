@@ -1054,12 +1054,17 @@ class AppDatabase extends _$AppDatabase {
 
   Future<List<PendingSyncOp>> getPendingSyncOps() =>
       (select(pendingSyncOps)
-            ..orderBy(
-                [(t) => OrderingTerm(expression: t.id)]))
+            ..where((t) => t.attempts.isSmallerThanValue(10))
+            ..orderBy([(t) => OrderingTerm(expression: t.id)]))
           .get();
 
   Future<void> deleteSyncOp(int id) =>
       (delete(pendingSyncOps)..where((t) => t.id.equals(id))).go();
+
+  Future<void> purgeDeadSyncOps() =>
+      (delete(pendingSyncOps)
+            ..where((t) => t.attempts.isBiggerOrEqualValue(10)))
+          .go();
 
   Future<void> incrementSyncAttempts(int id, String error) async {
     final op = await (select(pendingSyncOps)

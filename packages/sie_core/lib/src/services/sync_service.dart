@@ -41,6 +41,7 @@ class SyncService {
 
   Future<void> _syncPendingOps(
       SupabaseClient client, String userId) async {
+    await _db.purgeDeadSyncOps();
     final ops = await _db.getPendingSyncOps();
     for (final op in ops) {
       try {
@@ -450,7 +451,15 @@ class SyncService {
         await _db.deleteSyncOp(op.id);
       } catch (e) {
         debugPrint('SiE Sync: op ${op.id} failed — $e');
-        await _db.incrementSyncAttempts(op.id, e.toString());
+        // RLS violations and infinite-recursion errors are unrecoverable;
+        // drop the op so it doesn't block the queue forever.
+        if (e is PostgrestException &&
+            (e.code == '42501' || e.code == '42P17')) {
+          debugPrint('SiE Sync: dropping op ${op.id} (unrecoverable RLS/recursion)');
+          await _db.deleteSyncOp(op.id);
+        } else {
+          await _db.incrementSyncAttempts(op.id, e.toString());
+        }
       }
     }
   }
