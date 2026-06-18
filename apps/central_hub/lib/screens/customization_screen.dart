@@ -170,6 +170,7 @@ class _CustomizationScreenState extends ConsumerState<CustomizationScreen>
                       selectedId: _patternId,
                       equippedId: widget.profile.equippedPatternId,
                       onSelect: (id) => setState(() => _patternId = id),
+                      allowNone: true,
                     ),
                   ],
                 ),
@@ -329,23 +330,6 @@ class _Preview extends ConsumerWidget {
   final EquippedAssets equipped;
   const _Preview({required this.profile, required this.equipped});
 
-  static BoxDecoration _cardDecoration(SieColors c, CosmeticAsset? bg) {
-    if (bg?.backgroundColor != null) {
-      return BoxDecoration(
-        color: bg!.backgroundColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: bg.accentColor.withValues(alpha: 0.25)),
-      );
-    }
-    if (bg?.backgroundGradient != null) {
-      return BoxDecoration(
-        gradient: bg!.backgroundGradient,
-        borderRadius: BorderRadius.circular(20),
-      );
-    }
-    return c.flatCard(radius: 20);
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c         = ref.watch(sieColorsProvider);
@@ -359,16 +343,16 @@ class _Preview extends ConsumerWidget {
         ? profile.username![0].toUpperCase()
         : '?';
 
-    final hasCustomBg = bg != null &&
-        (bg.backgroundColor != null || bg.backgroundGradient != null);
+    final hasCustomBg = bg?.isDecorativeBackground ?? false;
     final textMain   = hasCustomBg ? Colors.white : c.textPrimary;
     final textSub    = hasCustomBg ? Colors.white60 : c.textSecondary;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-      child: Container(
-        clipBehavior: Clip.hardEdge,
-        decoration: _cardDecoration(c, bg),
+      child: ProfileBackgroundView(
+        background: bg,
+        colors: c,
+        radius: 20,
         child: Stack(
           children: [
             if (equipped.pattern != null)
@@ -505,6 +489,7 @@ class _Preview extends ConsumerWidget {
   }
 }
 
+
 class _PreviewChip extends StatelessWidget {
   final String label;
   final Color borderColor;
@@ -595,6 +580,7 @@ class _AssetGrid extends ConsumerWidget {
   final String? selectedId;
   final String? equippedId;
   final ValueChanged<String?> onSelect;
+  final bool allowNone;
 
   const _AssetGrid({
     required this.assets,
@@ -602,17 +588,19 @@ class _AssetGrid extends ConsumerWidget {
     required this.selectedId,
     required this.equippedId,
     required this.onSelect,
+    this.allowNone = false,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
-    if (assets.isEmpty) {
+    if (!allowNone && assets.isEmpty) {
       return Center(
         child: CircularProgressIndicator(
             color: c.accent, strokeWidth: 1.5),
       );
     }
+    final itemCount = assets.length + (allowNone ? 1 : 0);
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -621,9 +609,19 @@ class _AssetGrid extends ConsumerWidget {
         mainAxisSpacing: 10,
         childAspectRatio: 0.85,
       ),
-      itemCount: assets.length,
+      itemCount: itemCount,
       itemBuilder: (_, i) {
-        final asset      = assets[i];
+        if (allowNone && i == 0) {
+          return RepaintBoundary(
+            child: _NonePatternCard(
+              isSelected: selectedId == null,
+              isActive: equippedId == null,
+              onTap: () => onSelect(null),
+            ),
+          );
+        }
+        final idx    = allowNone ? i - 1 : i;
+        final asset      = assets[idx];
         final isSelected = selectedId == asset.id;
         final isActive   = equippedId == asset.id;
         final isOwned    = inventory.owns(asset) || asset.priceDP == 0;
@@ -637,6 +635,143 @@ class _AssetGrid extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// ── None Pattern Card ─────────────────────────────────────────
+
+class _NonePatternCard extends ConsumerStatefulWidget {
+  final bool isSelected;
+  final bool isActive;
+  final VoidCallback onTap;
+  const _NonePatternCard({
+    required this.isSelected,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  ConsumerState<_NonePatternCard> createState() => _NonePatternCardState();
+}
+
+class _NonePatternCardState extends ConsumerState<_NonePatternCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, value: 0.0);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
+    final borderColor = widget.isActive
+        ? c.accentSecondary
+        : widget.isSelected
+            ? c.accent
+            : Colors.transparent;
+
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) => _ctrl.animateTo(1.0,
+          duration: const Duration(milliseconds: 80), curve: Curves.easeIn),
+      onTapUp: (_) => _ctrl.animateTo(0.0,
+          duration: const Duration(milliseconds: 220), curve: Curves.easeOut),
+      onTapCancel: () => _ctrl.animateTo(0.0,
+          duration: const Duration(milliseconds: 220), curve: Curves.easeOut),
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (_, child) => Transform.scale(
+          scale: 1.0 - 0.03 * _ctrl.value,
+          child: Stack(
+            children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(10, 14, 10, 8),
+                decoration: c.flatCard(radius: 14),
+                child: child!,
+              ),
+              if (widget.isSelected || widget.isActive)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: borderColor, width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: borderColor.withValues(alpha: 0.3),
+                            blurRadius: 10,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              if (widget.isActive)
+                Positioned(
+                  top: 5,
+                  left: 5,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: c.accentSecondary.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'АКТИВНО',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 7,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 56,
+              height: 40,
+              child: Center(
+                child: Icon(
+                  Icons.layers_clear_outlined,
+                  color: c.textSecondary.withValues(alpha: 0.5),
+                  size: 24,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'БЕЗ УЗОРА',
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: widget.isSelected ? c.accent : c.textPrimary,
+                fontSize: 10,
+                letterSpacing: 0.5,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

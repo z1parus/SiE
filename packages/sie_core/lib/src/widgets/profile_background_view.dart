@@ -41,23 +41,42 @@ class ProfileBackgroundView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = background;
+    final overlay = bg?.overlayOpacity ?? 0.0;
 
-    // Gradient / solid colour / themed default — no media, no clip needed.
     if (bg == null || !bg.isMediaBackground) {
+      // Gradient/solid/default — wrap in stack only when overlay is needed.
       return Container(
         clipBehavior: Clip.hardEdge,
         decoration: _gradientDecoration(bg),
-        child: child,
+        child: overlay > 0
+            ? Stack(
+                fit: StackFit.passthrough,
+                children: [
+                  Positioned.fill(
+                    child: ColoredBox(
+                      color: Colors.black.withValues(alpha: overlay),
+                    ),
+                  ),
+                  child,
+                ],
+              )
+            : child,
       );
     }
 
-    // Media background: paint the media full-bleed, then the child on top.
+    // Media background: paint full-bleed, optional scrim, then child.
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: Stack(
         fit: StackFit.passthrough,
         children: [
           Positioned.fill(child: _media(bg)),
+          if (overlay > 0)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Colors.black.withValues(alpha: overlay),
+              ),
+            ),
           child,
         ],
       ),

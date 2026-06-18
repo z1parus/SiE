@@ -162,6 +162,11 @@ class CosmeticAsset {
   double get patternOpacity =>
       (styleConfig['opacity'] as num?)?.toDouble() ?? 0.40;
 
+  /// Semi-transparent black scrim applied on top of the background media,
+  /// improving readability on busy images. Range 0.0–0.5.
+  double get overlayOpacity =>
+      (styleConfig['overlay_opacity'] as num?)?.toDouble() ?? 0.0;
+
   // ── Stat style helpers ─────────────────────────────────────
 
   Color get accentColor =>
