@@ -24,6 +24,8 @@ final profileBackgroundsProvider =
     final data = await SupabaseService.client
         .from('profile_backgrounds')
         .select()
+        .eq('is_published', true)
+        .order('sort_order')
         .order('rarity');
     return data
         .map((r) => CosmeticAsset.fromJson(r, AssetType.profileBackground))
@@ -63,6 +65,20 @@ final profilePatternsProvider =
     debugPrint('SiE Customization: profilePatterns fetch failed — $e');
     return [];
   }
+});
+
+/// Admin-only: every background including unpublished drafts, newest first.
+/// Backs the Dev Studio management list. RLS still gates writes to admins.
+final allProfileBackgroundsProvider =
+    FutureProvider.autoDispose<List<CosmeticAsset>>((ref) async {
+  final data = await SupabaseService.client
+      .from('profile_backgrounds')
+      .select()
+      .order('sort_order')
+      .order('rarity');
+  return data
+      .map((r) => CosmeticAsset.fromJson(r, AssetType.profileBackground))
+      .toList();
 });
 
 Future<void> applyCustomization({

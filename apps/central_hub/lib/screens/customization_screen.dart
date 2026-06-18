@@ -871,6 +871,11 @@ class _AssetVisual extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Backgrounds (incl. media kinds) render through _BackgroundPreview so
+    // animated kinds show their static thumbnail, not the raw animation file.
+    if (asset.type == AssetType.profileBackground) {
+      return _BackgroundPreview(asset: asset);
+    }
     if (asset.imageUrl != null) {
       return SizedBox(
         width: 56,
@@ -939,30 +944,51 @@ class _BackgroundPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    BoxDecoration decoration;
-    if (asset.backgroundColor != null) {
-      decoration = BoxDecoration(color: asset.backgroundColor);
-    } else {
-      decoration = BoxDecoration(
-        gradient: asset.backgroundGradient ??
-            const LinearGradient(
-              colors: [Color(0xFF0D2A42), Color(0xFF071520)],
-            ),
+    // Media background (image / animated WebP / Lottie): show the static
+    // preview — thumbnail for animated kinds, the image itself for static.
+    if (asset.isMediaBackground) {
+      final previewUrl = asset.backgroundKind == BackgroundKind.image
+          ? asset.imageUrl
+          : (asset.thumbnailUrl ?? asset.imageUrl);
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: SizedBox(
+          width: 56,
+          height: 40,
+          child: previewUrl == null
+              ? _gradientFallback()
+              : CachedNetworkImage(
+                  imageUrl: previewUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (_, _) => _gradientFallback(),
+                  errorWidget: (_, _, _) => _gradientFallback(),
+                ),
+        ),
       );
     }
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(4),
-      child: Container(
-        width: 56,
-        height: 40,
-        decoration: decoration,
-        child: asset.useNeuralPattern
-            ? NeuralNetworkWidget(
-                color: asset.accentColor.withValues(alpha: 0.35),
-              )
-            : CustomPaint(painter: _GridPainter(color: asset.accentColor)),
-      ),
+      child: SizedBox(width: 56, height: 40, child: _gradientFallback()),
+    );
+  }
+
+  Widget _gradientFallback() {
+    final decoration = asset.backgroundColor != null
+        ? BoxDecoration(color: asset.backgroundColor)
+        : BoxDecoration(
+            gradient: asset.backgroundGradient ??
+                const LinearGradient(
+                  colors: [Color(0xFF0D2A42), Color(0xFF071520)],
+                ),
+          );
+    return Container(
+      decoration: decoration,
+      child: asset.useNeuralPattern
+          ? NeuralNetworkWidget(
+              color: asset.accentColor.withValues(alpha: 0.35),
+            )
+          : CustomPaint(painter: _GridPainter(color: asset.accentColor)),
     );
   }
 }
