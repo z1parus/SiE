@@ -16,22 +16,28 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 -- Authenticated users can upload to the bucket.
-CREATE POLICY IF NOT EXISTS "goal-attachments: authenticated upload"
-  ON storage.objects FOR INSERT
-  TO authenticated
-  WITH CHECK (bucket_id = 'goal-attachments');
+DO $$ BEGIN
+  CREATE POLICY "goal-attachments: authenticated upload"
+    ON storage.objects FOR INSERT
+    TO authenticated
+    WITH CHECK (bucket_id = 'goal-attachments');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Authenticated users can read from the bucket (signed URL is gated by RLS).
-CREATE POLICY IF NOT EXISTS "goal-attachments: authenticated read"
-  ON storage.objects FOR SELECT
-  TO authenticated
-  USING (bucket_id = 'goal-attachments');
+DO $$ BEGIN
+  CREATE POLICY "goal-attachments: authenticated read"
+    ON storage.objects FOR SELECT
+    TO authenticated
+    USING (bucket_id = 'goal-attachments');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Authenticated users can delete their uploads.
-CREATE POLICY IF NOT EXISTS "goal-attachments: authenticated delete"
-  ON storage.objects FOR DELETE
-  TO authenticated
-  USING (bucket_id = 'goal-attachments');
+DO $$ BEGIN
+  CREATE POLICY "goal-attachments: authenticated delete"
+    ON storage.objects FOR DELETE
+    TO authenticated
+    USING (bucket_id = 'goal-attachments');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ── Relational table ──────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.goal_node_attachments (

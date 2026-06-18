@@ -14,24 +14,32 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 -- Public URL read (bucket is public, but explicit policy is belt-and-suspenders).
-CREATE POLICY IF NOT EXISTS "goal-media: public read"
-  ON storage.objects FOR SELECT
-  USING (bucket_id = 'goal-media');
+DO $$ BEGIN
+  CREATE POLICY "goal-media: public read"
+    ON storage.objects FOR SELECT
+    USING (bucket_id = 'goal-media');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Any authenticated user can upload (goal membership verified app-side).
-CREATE POLICY IF NOT EXISTS "goal-media: authenticated upload"
-  ON storage.objects FOR INSERT
-  TO authenticated
-  WITH CHECK (bucket_id = 'goal-media');
+DO $$ BEGIN
+  CREATE POLICY "goal-media: authenticated upload"
+    ON storage.objects FOR INSERT
+    TO authenticated
+    WITH CHECK (bucket_id = 'goal-media');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Any authenticated user can update their uploads.
-CREATE POLICY IF NOT EXISTS "goal-media: authenticated update"
-  ON storage.objects FOR UPDATE
-  TO authenticated
-  USING (bucket_id = 'goal-media');
+DO $$ BEGIN
+  CREATE POLICY "goal-media: authenticated update"
+    ON storage.objects FOR UPDATE
+    TO authenticated
+    USING (bucket_id = 'goal-media');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Any authenticated user can delete uploads.
-CREATE POLICY IF NOT EXISTS "goal-media: authenticated delete"
-  ON storage.objects FOR DELETE
-  TO authenticated
-  USING (bucket_id = 'goal-media');
+DO $$ BEGIN
+  CREATE POLICY "goal-media: authenticated delete"
+    ON storage.objects FOR DELETE
+    TO authenticated
+    USING (bucket_id = 'goal-media');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
