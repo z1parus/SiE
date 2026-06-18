@@ -1,47 +1,68 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/cosmetic_asset.dart';
 import '../supabase_service.dart';
 
 final avatarFramesProvider = FutureProvider<List<CosmeticAsset>>((ref) async {
-  final data = await SupabaseService.client
-      .from('avatar_frames')
-      .select()
-      .order('rarity');
-  return data
-      .map((r) => CosmeticAsset.fromJson(r, AssetType.avatarFrame))
-      .toList();
+  try {
+    final data = await SupabaseService.client
+        .from('avatar_frames')
+        .select()
+        .order('rarity');
+    return data
+        .map((r) => CosmeticAsset.fromJson(r, AssetType.avatarFrame))
+        .toList();
+  } catch (e) {
+    debugPrint('SiE Customization: avatarFrames fetch failed — $e');
+    return [];
+  }
 });
 
 final profileBackgroundsProvider =
     FutureProvider<List<CosmeticAsset>>((ref) async {
-  final data = await SupabaseService.client
-      .from('profile_backgrounds')
-      .select()
-      .order('rarity');
-  return data
-      .map((r) => CosmeticAsset.fromJson(r, AssetType.profileBackground))
-      .toList();
+  try {
+    final data = await SupabaseService.client
+        .from('profile_backgrounds')
+        .select()
+        .order('rarity');
+    return data
+        .map((r) => CosmeticAsset.fromJson(r, AssetType.profileBackground))
+        .toList();
+  } catch (e) {
+    debugPrint('SiE Customization: profileBackgrounds fetch failed — $e');
+    return [];
+  }
 });
 
 final statStylesProvider = FutureProvider<List<CosmeticAsset>>((ref) async {
-  final data = await SupabaseService.client
-      .from('stat_styles')
-      .select()
-      .order('rarity');
-  return data
-      .map((r) => CosmeticAsset.fromJson(r, AssetType.statStyle))
-      .toList();
+  try {
+    final data = await SupabaseService.client
+        .from('stat_styles')
+        .select()
+        .order('rarity');
+    return data
+        .map((r) => CosmeticAsset.fromJson(r, AssetType.statStyle))
+        .toList();
+  } catch (e) {
+    debugPrint('SiE Customization: statStyles fetch failed — $e');
+    return [];
+  }
 });
 
 final profilePatternsProvider =
     FutureProvider<List<CosmeticAsset>>((ref) async {
-  final data = await SupabaseService.client
-      .from('profile_patterns')
-      .select()
-      .order('rarity');
-  return data
-      .map((r) => CosmeticAsset.fromJson(r, AssetType.profilePattern))
-      .toList();
+  try {
+    final data = await SupabaseService.client
+        .from('profile_patterns')
+        .select()
+        .order('rarity');
+    return data
+        .map((r) => CosmeticAsset.fromJson(r, AssetType.profilePattern))
+        .toList();
+  } catch (e) {
+    debugPrint('SiE Customization: profilePatterns fetch failed — $e');
+    return [];
+  }
 });
 
 Future<void> applyCustomization({
