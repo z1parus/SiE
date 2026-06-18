@@ -410,19 +410,18 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             .map((r) => Goal.fromJson(r as Map<String, dynamic>))
             .toList();
 
-        // Batch-load owner profiles for shared goals
-        final sharedOwnerIds = goals
-            .where((g) => g.userId != userId)
-            .map((g) => g.userId)
-            .toSet()
-            .toList();
+        // Batch-load owner profiles for ALL goals (including the current user's
+        // own goals) so the participants legend can always show a name + avatar
+        // for the owner, not just on shared goals.
+        final ownerIds =
+            goals.map((g) => g.userId).toSet().toList();
         final ownerProfileMap = <String, PublicProfile>{};
-        if (sharedOwnerIds.isNotEmpty) {
+        if (ownerIds.isNotEmpty) {
           final profiles = await client
               .from('profiles')
               .select('id, username, avatar_url, equipped_frame_id, '
                   'equipped_background_id, equipped_stat_style_id, equipped_pattern_id, total_xp, design_points')
-              .inFilter('id', sharedOwnerIds);
+              .inFilter('id', ownerIds);
           for (final p in profiles) {
             ownerProfileMap[p['id'] as String] = PublicProfile.fromJson(p);
           }
@@ -447,12 +446,11 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
         // Attach profiles to goals
         final enrichedGoals = goals.map((g) {
-          final isShared = g.userId != userId;
           final enrichedCollabs = g.collaborators.map((c) =>
               c.copyWith(profile: collabProfileMap[c.userId])).toList();
           return g.copyWith(
             collaborators: enrichedCollabs,
-            ownerProfile: isShared ? ownerProfileMap[g.userId] : null,
+            ownerProfile: ownerProfileMap[g.userId],
           );
         }).toList();
 
@@ -461,7 +459,10 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         await db.cleanupRemovedSharedGoals(
             enrichedGoals.map((g) => g.id).toSet());
         return _loadFromLocal(db, userId, enrichedGoals);
-      } catch (_) {
+      } catch (e, st) {
+        // Surface the real cause (e.g. an RLS error after accepting a shared
+        // goal) instead of silently showing a stale/empty local list.
+        debugPrint('SiE Planning: online load failed — $e\n$st');
         // fall through to local
       }
     }
@@ -788,7 +789,11 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         'uploaded_by': userId,
       });
       synced = true;
-    } catch (_) {}
+    } catch (e, st) {
+      // Keep the attachment locally (synced=false) and queue it for retry, but
+      // surface why the upload failed (missing bucket, RLS, network, …).
+      debugPrint('SiE Attachment: upload failed — $e\n$st');
+    }
 
     final attachment = NodeAttachment(
       id: id,
