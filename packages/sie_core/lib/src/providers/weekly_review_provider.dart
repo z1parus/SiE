@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:drift/drift.dart' show Value;
@@ -68,11 +69,12 @@ class WeeklyReviewNotifier
     extends AutoDisposeAsyncNotifier<WeeklyReviewData> {
   @override
   Future<WeeklyReviewData> build() async {
-    ref.watch(authStateProvider);
+    ref.watch(authStateProvider).valueOrNull;
     final planning = ref.watch(planningProvider).valueOrNull;
     final agenda = ref.watch(agendaProvider);
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (planning == null || userId == null) return WeeklyReviewData.empty;
+    try {
 
     final weekStart = isoWeekStart(DateTime.now());
     final weekStartMs = weekStart.millisecondsSinceEpoch;
@@ -121,6 +123,10 @@ class WeeklyReviewNotifier
       alreadyReviewed: existing != null,
       reviewStreak: streak,
     );
+    } catch (e) {
+      debugPrint('SiE WeeklyReview: build failed — $e');
+      return WeeklyReviewData.empty;
+    }
   }
 
   /// Persists a weekly review (idempotent per week — antifarm), awards XP/DP
@@ -217,7 +223,7 @@ final weeklyReviewProvider = AutoDisposeAsyncNotifierProvider<
 /// Read by the War Room to star them.
 final weeklyFocusGoalIdsProvider =
     FutureProvider.autoDispose<Set<String>>((ref) async {
-  ref.watch(authStateProvider);
+  ref.watch(authStateProvider).valueOrNull;
   final userId = Supabase.instance.client.auth.currentUser?.id;
   if (userId == null) return {};
   final db = ref.read(appDatabaseProvider);

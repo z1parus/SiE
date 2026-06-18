@@ -2,6 +2,7 @@ import 'dart:convert' show jsonDecode;
 import 'dart:ui' show Offset;
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 part 'app_database.g.dart';
@@ -383,6 +384,76 @@ class LocalMapPositions extends Table {
   Set<Column> get primaryKey => {goalId, nodeId};
 }
 
+/// Map-native elements (TacticalMapEvolution Stage 1): notes/labels now,
+/// image cards/groups/connectors later. Polymorphic via [kind].
+@DataClassName('LocalMapElement')
+class LocalMapElements extends Table {
+  TextColumn get id             => text()();
+  TextColumn get goalId         => text()();
+  TextColumn get kind           => text()();            // note|label|image|group|connector
+  RealColumn get x              => real()();
+  RealColumn get y              => real()();
+  RealColumn get w              => real().nullable()();
+  RealColumn get h              => real().nullable()();
+  IntColumn  get zIndex         => integer().withDefault(const Constant(0))();
+  TextColumn get content        => text().nullable()();
+  TextColumn get colorHex       => text().nullable()();
+  TextColumn get mediaUrl       => text().nullable()();
+  TextColumn get fromRef        => text().nullable()();
+  TextColumn get toRef          => text().nullable()();
+  TextColumn get styleJsonText  => text().nullable()();   // Stage 4 connector style JSON
+  TextColumn get createdBy      => text()();
+  IntColumn  get createdAtMs    => integer()();
+  IntColumn  get updatedAtMs    => integer().nullable()();
+  BoolColumn get synced         => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
+  @override Set<Column> get primaryKey => {id};
+}
+
+// Stage 5: node assignees (task / sub-goal ↔ user).
+@DataClassName('LocalTaskAssignee')
+class LocalTaskAssignees extends Table {
+  TextColumn get taskId      => text()();
+  TextColumn get userId      => text()();
+  TextColumn get goalId      => text()();
+  TextColumn get assignedBy  => text().nullable()();
+  IntColumn  get createdAtMs => integer()();
+  BoolColumn get synced      => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
+  @override Set<Column> get primaryKey => {taskId, userId};
+}
+
+@DataClassName('LocalSubGoalAssignee')
+class LocalSubGoalAssignees extends Table {
+  TextColumn get subGoalId   => text()();
+  TextColumn get userId      => text()();
+  TextColumn get goalId      => text()();
+  TextColumn get assignedBy  => text().nullable()();
+  IntColumn  get createdAtMs => integer()();
+  BoolColumn get synced      => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
+  @override Set<Column> get primaryKey => {subGoalId, userId};
+}
+
+// Stage 2: node attachments (images/files attached to plan nodes).
+@DataClassName('LocalNodeAttachment')
+class LocalNodeAttachments extends Table {
+  TextColumn get id           => text()();
+  TextColumn get goalId       => text()();
+  TextColumn get nodeType     => text()();      // goal|subgoal|task|milestone
+  TextColumn get nodeId       => text()();
+  TextColumn get storagePath  => text()();      // path in goal-attachments bucket
+  TextColumn get localPath    => text().nullable()(); // offline cache path
+  TextColumn get fileName     => text()();
+  TextColumn get mimeType     => text()();
+  IntColumn  get sizeBytes    => integer().withDefault(const Constant(0))();
+  TextColumn get uploadedBy   => text()();
+  IntColumn  get createdAtMs  => integer()();
+  BoolColumn get synced          => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally  => boolean().withDefault(const Constant(false))();
+  @override Set<Column> get primaryKey => {id};
+}
+
 // ── Database ───────────────────────────────────────────────────────────────
 
 @DriftDatabase(tables: [
@@ -408,12 +479,16 @@ class LocalMapPositions extends Table {
   LocalMissionTemplates,
   LocalTaskDependencies,
   LocalWeeklyReviews,
+  LocalMapElements,
+  LocalNodeAttachments,
+  LocalTaskAssignees,
+  LocalSubGoalAssignees,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 31;
+  int get schemaVersion => 35;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -428,6 +503,7 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS idx_goals_user ON local_goals(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_habit_logs_user ON local_habit_logs(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_snapshots_goal ON local_goal_progress_snapshots(goal_id, captured_at_ms)',
+      'CREATE INDEX IF NOT EXISTS idx_map_elements_goal ON local_map_elements(goal_id)',
     ];
     for (final s in stmts) {
       await m.issueCustomQuery(s, const []);
@@ -441,6 +517,7 @@ class AppDatabase extends _$AppDatabase {
       await _createIndexes(m);
     },
     onUpgrade: (m, from, to) async {
+      try {
       if (from < 2) {
         await m.addColumn(localHabits, localHabits.isArchived);
       }
@@ -608,6 +685,44 @@ class AppDatabase extends _$AppDatabase {
       if (from < 31) {
         await m.addColumn(localRoutines, localRoutines.name);
         await m.addColumn(localRoutines, localRoutines.anchorCue);
+      }
+      if (from < 32) {
+        await m.createTable(localMapElements);
+      }
+      if (from < 33) {
+        await m.addColumn(localMapElements, localMapElements.styleJsonText);
+      }
+      if (from < 34) {
+        await m.createTable(localNodeAttachments);
+        await m.issueCustomQuery(
+            'CREATE INDEX IF NOT EXISTS idx_attach_node_id '
+            'ON local_node_attachments(node_id)',
+            const []);
+      }
+      if (from < 35) {
+        await m.createTable(localTaskAssignees);
+        await m.createTable(localSubGoalAssignees);
+        await m.issueCustomQuery(
+            'CREATE INDEX IF NOT EXISTS idx_task_assignees_goal '
+            'ON local_task_assignees(goal_id)',
+            const []);
+        await m.issueCustomQuery(
+            'CREATE INDEX IF NOT EXISTS idx_sub_goal_assignees_goal '
+            'ON local_sub_goal_assignees(goal_id)',
+            const []);
+      }
+      } catch (e) {
+        // Migration failed (e.g. table/column already exists from a dev build
+        // that didn't bump schemaVersion). The local DB is a pure Supabase cache
+        // — safe to recreate. Data re-syncs on next online load.
+        debugPrint('SiE DB: migration $from→$to failed ($e) — recreating schema');
+        await m.issueCustomQuery('PRAGMA foreign_keys = OFF');
+        for (final table in allTables.toList()) {
+          await m.drop(table);
+        }
+        await m.issueCustomQuery('PRAGMA foreign_keys = ON');
+        await m.createAll();
+        await _createIndexes(m);
       }
     },
   );
@@ -1034,6 +1149,141 @@ class AppDatabase extends _$AppDatabase {
   Future<void> deleteMapPositionsForGoal(String goalId) =>
       (delete(localMapPositions)..where((t) => t.goalId.equals(goalId))).go();
 
+  // ── Map elements (TacticalMapEvolution Stage 1) ────────────────────────────
+
+  Future<void> upsertMapElement(LocalMapElementsCompanion row) =>
+      into(localMapElements).insertOnConflictUpdate(row);
+
+  Future<List<LocalMapElement>> mapElementsForGoals(List<String> goalIds) async {
+    if (goalIds.isEmpty) return const [];
+    return (select(localMapElements)
+          ..where((t) => t.goalId.isIn(goalIds) & t.deletedLocally.equals(false)))
+        .get();
+  }
+
+  Future<void> deleteMapElementLocally(String id) =>
+      (update(localMapElements)..where((t) => t.id.equals(id))).write(
+        const LocalMapElementsCompanion(
+          deletedLocally: Value(true),
+          synced: Value(false),
+        ),
+      );
+
+  Future<void> purgeMapElement(String id) =>
+      (delete(localMapElements)..where((t) => t.id.equals(id))).go();
+
+  Future<List<LocalMapElement>> unsyncedMapElements() =>
+      (select(localMapElements)..where((t) => t.synced.equals(false))).get();
+
+  Future<void> markMapElementSynced(String id) =>
+      (update(localMapElements)..where((t) => t.id.equals(id)))
+          .write(const LocalMapElementsCompanion(synced: Value(true)));
+
+  // ── Node attachments (Stage 2) ────────────────────────────────────────────
+
+  Future<List<LocalNodeAttachment>> attachmentsForGoals(List<String> goalIds) =>
+      (select(localNodeAttachments)
+            ..where((t) =>
+                t.goalId.isIn(goalIds) & t.deletedLocally.equals(false)))
+          .get();
+
+  Future<List<LocalNodeAttachment>> unsyncedAttachments() =>
+      (select(localNodeAttachments)
+            ..where((t) =>
+                t.synced.equals(false) & t.deletedLocally.equals(false)))
+          .get();
+
+  Future<void> upsertNodeAttachment(LocalNodeAttachmentsCompanion row) =>
+      into(localNodeAttachments).insertOnConflictUpdate(row);
+
+  Future<void> deleteAttachmentLocally(String id) =>
+      (update(localNodeAttachments)..where((t) => t.id.equals(id)))
+          .write(const LocalNodeAttachmentsCompanion(
+              deletedLocally: Value(true), synced: Value(false)));
+
+  Future<void> purgeAttachment(String id) =>
+      (delete(localNodeAttachments)..where((t) => t.id.equals(id))).go();
+
+  Future<void> markAttachmentSynced(String id) =>
+      (update(localNodeAttachments)..where((t) => t.id.equals(id)))
+          .write(const LocalNodeAttachmentsCompanion(synced: Value(true)));
+
+  Future<void> updateAttachmentStoragePath(String id, String path) =>
+      (update(localNodeAttachments)..where((t) => t.id.equals(id)))
+          .write(LocalNodeAttachmentsCompanion(
+              storagePath: Value(path), synced: const Value(false)));
+
+  // ── Node assignees (Stage 5) ──────────────────────────────────────────────
+
+  Future<List<LocalTaskAssignee>> taskAssigneesForGoals(List<String> goalIds) =>
+      goalIds.isEmpty
+          ? Future.value(const [])
+          : (select(localTaskAssignees)
+                ..where((t) =>
+                    t.goalId.isIn(goalIds) & t.deletedLocally.equals(false)))
+              .get();
+
+  Future<List<LocalSubGoalAssignee>> subGoalAssigneesForGoals(
+          List<String> goalIds) =>
+      goalIds.isEmpty
+          ? Future.value(const [])
+          : (select(localSubGoalAssignees)
+                ..where((t) =>
+                    t.goalId.isIn(goalIds) & t.deletedLocally.equals(false)))
+              .get();
+
+  Future<void> upsertTaskAssignee(LocalTaskAssigneesCompanion row) =>
+      into(localTaskAssignees).insertOnConflictUpdate(row);
+
+  Future<void> upsertSubGoalAssignee(LocalSubGoalAssigneesCompanion row) =>
+      into(localSubGoalAssignees).insertOnConflictUpdate(row);
+
+  Future<void> deleteTaskAssigneeLocally(String taskId, String userId) =>
+      (update(localTaskAssignees)
+            ..where((t) => t.taskId.equals(taskId) & t.userId.equals(userId)))
+          .write(const LocalTaskAssigneesCompanion(
+              deletedLocally: Value(true), synced: Value(false)));
+
+  Future<void> deleteSubGoalAssigneeLocally(
+          String subGoalId, String userId) =>
+      (update(localSubGoalAssignees)
+            ..where((t) =>
+                t.subGoalId.equals(subGoalId) & t.userId.equals(userId)))
+          .write(const LocalSubGoalAssigneesCompanion(
+              deletedLocally: Value(true), synced: Value(false)));
+
+  Future<void> purgeTaskAssignee(String taskId, String userId) =>
+      (delete(localTaskAssignees)
+            ..where(
+                (t) => t.taskId.equals(taskId) & t.userId.equals(userId)))
+          .go();
+
+  Future<void> purgeSubGoalAssignee(String subGoalId, String userId) =>
+      (delete(localSubGoalAssignees)
+            ..where((t) =>
+                t.subGoalId.equals(subGoalId) & t.userId.equals(userId)))
+          .go();
+
+  Future<List<LocalTaskAssignee>> unsyncedTaskAssignees() =>
+      (select(localTaskAssignees)..where((t) => t.synced.equals(false)))
+          .get();
+
+  Future<List<LocalSubGoalAssignee>> unsyncedSubGoalAssignees() =>
+      (select(localSubGoalAssignees)..where((t) => t.synced.equals(false)))
+          .get();
+
+  Future<void> markTaskAssigneeSynced(String taskId, String userId) =>
+      (update(localTaskAssignees)
+            ..where(
+                (t) => t.taskId.equals(taskId) & t.userId.equals(userId)))
+          .write(const LocalTaskAssigneesCompanion(synced: Value(true)));
+
+  Future<void> markSubGoalAssigneeSynced(String subGoalId, String userId) =>
+      (update(localSubGoalAssignees)
+            ..where((t) =>
+                t.subGoalId.equals(subGoalId) & t.userId.equals(userId)))
+          .write(const LocalSubGoalAssigneesCompanion(synced: Value(true)));
+
   Future<void> updateSubGoalOrderIndex(String id, int idx) =>
       (update(localSubGoals)..where((t) => t.id.equals(id)))
           .write(LocalSubGoalsCompanion(
@@ -1105,6 +1355,21 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> upsertGoalHabitLink(LocalGoalHabitLinksCompanion row) =>
       into(localGoalHabitLinks).insertOnConflictUpdate(row);
+
+  // Partial UPDATE helpers — use these instead of upsert when only updating
+  // a subset of fields (e.g. synced flag, isCompleted). upsert requires all
+  // non-nullable fields for its INSERT portion and throws otherwise.
+  Future<void> patchGoal(String id, LocalGoalsCompanion patch) =>
+      (update(localGoals)..where((t) => t.id.equals(id))).write(patch);
+
+  Future<void> patchSubGoal(String id, LocalSubGoalsCompanion patch) =>
+      (update(localSubGoals)..where((t) => t.id.equals(id))).write(patch);
+
+  Future<void> patchMilestone(String id, LocalMilestonesCompanion patch) =>
+      (update(localMilestones)..where((t) => t.id.equals(id))).write(patch);
+
+  Future<void> patchPlanningTask(String id, LocalPlanningTasksCompanion patch) =>
+      (update(localPlanningTasks)..where((t) => t.id.equals(id))).write(patch);
 
   Future<List<LocalGoal>> goalsForUser(String uid) =>
       (select(localGoals)
@@ -1211,201 +1476,147 @@ class AppDatabase extends _$AppDatabase {
       (update(localGoalHabitLinks)..where((t) => t.id.equals(id)))
           .write(const LocalGoalHabitLinksCompanion(deletedLocally: Value(true)));
 
+  // ── Planning lookups (used by sync_service) ──────────────────────────────
+
   Future<LocalPlanningTask?> getPlanningTask(String id) =>
-      (select(localPlanningTasks)..where((t) => t.id.equals(id))).getSingleOrNull();
+      (select(localPlanningTasks)..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
 
   Future<LocalSubGoal?> getSubGoal(String id) =>
-      (select(localSubGoals)..where((t) => t.id.equals(id))).getSingleOrNull();
+      (select(localSubGoals)..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
 
   Future<LocalMilestone?> getMilestone(String id) =>
-      (select(localMilestones)..where((t) => t.id.equals(id))).getSingleOrNull();
+      (select(localMilestones)..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
 
-  Future<void> updateMilestoneCurrentValue(String milestoneId, double? value) =>
-      (update(localMilestones)..where((t) => t.id.equals(milestoneId)))
-          .write(LocalMilestonesCompanion(
-            currentValue: Value(value),
-            synced: const Value(false),
-          ));
+  // ── Unsynced ID sets (used by _mirrorToLocal) ─────────────────────────────
 
-  // ── Milestone Logs ────────────────────────────────────────────────────────
+  Future<Set<String>> unsyncedSubGoalIds() async =>
+      (await (select(localSubGoals)..where((t) => t.synced.equals(false))).get())
+          .map((e) => e.id)
+          .toSet();
 
-  Future<void> insertMilestoneLog(LocalMilestoneLogsCompanion row) =>
-      into(localMilestoneLogs).insertOnConflictUpdate(row);
+  Future<Set<String>> unsyncedTaskIds() async =>
+      (await (select(localPlanningTasks)
+            ..where((t) => t.synced.equals(false)))
+          .get())
+          .map((e) => e.id)
+          .toSet();
 
-  Future<List<LocalMilestoneLog>> logsForMilestone(String milestoneId) =>
-      (select(localMilestoneLogs)
-            ..where((t) => t.milestoneId.equals(milestoneId))
-            ..orderBy([(t) => OrderingTerm(expression: t.recordedAtMs)]))
-          .get();
+  Future<Set<String>> unsyncedMilestoneIds() async =>
+      (await (select(localMilestones)
+            ..where((t) => t.synced.equals(false)))
+          .get())
+          .map((e) => e.id)
+          .toSet();
 
-  Future<void> deleteMilestoneLogLocally(String id) =>
-      (delete(localMilestoneLogs)..where((t) => t.id.equals(id))).go();
-
-  // ── Goal Progress Snapshots ───────────────────────────────────────────────
-
-  Future<void> upsertGoalSnapshot(LocalGoalProgressSnapshotsCompanion row) =>
-      into(localGoalProgressSnapshots).insertOnConflictUpdate(row);
-
-  /// Whether a snapshot already exists for [goalId] on the local day [dayKeyMs].
-  Future<bool> hasGoalSnapshotForDay(String goalId, int dayKeyMs) async {
-    final row = await (select(localGoalProgressSnapshots)
-          ..where((t) =>
-              t.goalId.equals(goalId) & t.dayKeyMs.equals(dayKeyMs))
-          ..limit(1))
-        .getSingleOrNull();
-    return row != null;
-  }
-
-  Future<List<LocalGoalProgressSnapshot>> snapshotsForGoal(String goalId) =>
-      (select(localGoalProgressSnapshots)
-            ..where((t) => t.goalId.equals(goalId))
-            ..orderBy([(t) => OrderingTerm(expression: t.capturedAtMs)]))
-          .get();
-
-  Future<List<LocalGoalProgressSnapshot>> unsyncedGoalSnapshots(
-          String userId) =>
-      (select(localGoalProgressSnapshots)
-            ..where((t) =>
-                t.userId.equals(userId) & t.synced.equals(false)))
-          .get();
-
-  Future<void> markGoalSnapshotSynced(String id) =>
-      (update(localGoalProgressSnapshots)..where((t) => t.id.equals(id)))
-          .write(const LocalGoalProgressSnapshotsCompanion(
-              synced: Value(true)));
-
-  // ── Mission Templates ─────────────────────────────────────────────────────
-
-  Future<void> upsertMissionTemplate(LocalMissionTemplatesCompanion row) =>
-      into(localMissionTemplates).insertOnConflictUpdate(row);
-
-  Future<List<LocalMissionTemplate>> templatesForUser(String userId) =>
-      (select(localMissionTemplates)
-            ..where((t) =>
-                (t.userId.equals(userId) | t.isSystem.equals(true)) &
-                t.deletedLocally.equals(false))
-            ..orderBy([(t) => OrderingTerm(expression: t.createdAtMs)]))
-          .get();
-
-  Future<void> deleteMissionTemplateLocally(String id) =>
-      (update(localMissionTemplates)..where((t) => t.id.equals(id)))
-          .write(const LocalMissionTemplatesCompanion(
-              deletedLocally: Value(true)));
-
-  Future<void> markMissionTemplateSynced(String id) =>
-      (update(localMissionTemplates)..where((t) => t.id.equals(id)))
-          .write(const LocalMissionTemplatesCompanion(synced: Value(true)));
-
-  // ── Mission Medals ────────────────────────────────────────────────────────
+  // ── Missing Methods Added Back ──────────────────────────────────────────────
 
   Future<void> upsertMedalLocally(LocalMissionMedalsCompanion row) =>
       into(localMissionMedals).insertOnConflictUpdate(row);
-
-  Future<List<LocalMissionMedal>> medalsForUser(String userId) =>
-      (select(localMissionMedals)
-            ..where((t) => t.userId.equals(userId))
-            ..orderBy(
-                [(t) => OrderingTerm(expression: t.earnedAtMs, mode: OrderingMode.desc)]))
-          .get();
 
   Future<void> markMedalSynced(String id) =>
       (update(localMissionMedals)..where((t) => t.id.equals(id)))
           .write(const LocalMissionMedalsCompanion(synced: Value(true)));
 
-  // ── Meditation Sessions ───────────────────────────────────────────────────
+  Future<void> insertMilestoneLog(LocalMilestoneLogsCompanion row) =>
+      into(localMilestoneLogs).insert(row);
 
-  Future<void> insertMeditationSession(LocalMeditationSessionsCompanion row) =>
-      into(localMeditationSessions).insertOnConflictUpdate(row);
+  Future<void> updateMilestoneCurrentValue(String id, double? val) =>
+      (update(localMilestones)..where((t) => t.id.equals(id)))
+          .write(LocalMilestonesCompanion(currentValue: Value(val)));
 
-  Future<List<LocalMeditationSession>> unsyncedMeditationSessions(
-          String userId) =>
-      (select(localMeditationSessions)
-            ..where((t) =>
-                t.userId.equals(userId) & t.synced.equals(false)))
+  Future<List<LocalMilestoneLog>> logsForMilestone(String milestoneId) =>
+      (select(localMilestoneLogs)..where((t) => t.milestoneId.equals(milestoneId)))
           .get();
 
-  Future<void> markMeditationSessionSynced(String id) =>
-      (update(localMeditationSessions)..where((t) => t.id.equals(id)))
-          .write(
-              const LocalMeditationSessionsCompanion(synced: Value(true)));
+  Future<void> deleteMilestoneLogLocally(String id) =>
+      (delete(localMilestoneLogs)..where((t) => t.id.equals(id))).go();
 
-  Future<int> meditationSecondsThisWeek(String userId) async {
-    final now = DateTime.now();
-    final startOfWeek = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: now.weekday - 1));
-    final startMs = startOfWeek.millisecondsSinceEpoch;
-    final rows = await (select(localMeditationSessions)
-          ..where((t) =>
-              t.userId.equals(userId) &
-              t.completedAtMs.isBiggerOrEqualValue(startMs)))
-        .get();
-    return rows.fold<int>(0, (sum, r) => sum + r.durationSeconds);
-  }
+  Future<void> upsertMissionTemplate(LocalMissionTemplatesCompanion row) =>
+      into(localMissionTemplates).insertOnConflictUpdate(row);
 
-  // ── Meditation Presets ────────────────────────────────────────────────────
-
-  Future<void> upsertMeditationPreset(LocalMeditationPresetsCompanion row) =>
-      into(localMeditationPresets).insertOnConflictUpdate(row);
-
-  Future<List<LocalMeditationPreset>> presetsForUser(String userId) =>
-      (select(localMeditationPresets)
-            ..where((t) =>
-                (t.userId.equals(userId) | t.isSystem.equals(true)) &
-                t.deletedLocally.equals(false)))
+  Future<List<LocalMissionTemplate>> templatesForUser(String userId) =>
+      (select(localMissionTemplates)..where((t) => t.userId.equals(userId) | t.isSystem.equals(true)))
           .get();
 
-  Future<void> deletePresetLocally(String id) =>
-      (update(localMeditationPresets)..where((t) => t.id.equals(id)))
-          .write(const LocalMeditationPresetsCompanion(
-              deletedLocally: Value(true)));
+  Future<void> markMissionTemplateSynced(String id) =>
+      (update(localMissionTemplates)..where((t) => t.id.equals(id)))
+          .write(const LocalMissionTemplatesCompanion(synced: Value(true)));
 
-  // ── Weekly Reviews (Stage 9) ───────────────────────────────────────────────
+  Future<void> deleteMissionTemplateLocally(String id) =>
+      (delete(localMissionTemplates)..where((t) => t.id.equals(id))).go();
+
+  Future<LocalWeeklyReview?> weeklyReviewForWeek(String userId, int weekStartMs) =>
+      (select(localWeeklyReviews)..where((t) => t.userId.equals(userId) & t.weekStartMs.equals(weekStartMs)))
+          .getSingleOrNull();
 
   Future<void> upsertWeeklyReview(LocalWeeklyReviewsCompanion row) =>
       into(localWeeklyReviews).insertOnConflictUpdate(row);
-
-  Future<LocalWeeklyReview?> weeklyReviewForWeek(
-          String userId, int weekStartMs) =>
-      (select(localWeeklyReviews)
-            ..where((t) =>
-                t.userId.equals(userId) & t.weekStartMs.equals(weekStartMs))
-            ..limit(1))
-          .getSingleOrNull();
-
-  Future<LocalWeeklyReview?> latestWeeklyReview(String userId) =>
-      (select(localWeeklyReviews)
-            ..where((t) => t.userId.equals(userId))
-            ..orderBy([
-              (t) => OrderingTerm(
-                  expression: t.weekStartMs, mode: OrderingMode.desc)
-            ])
-            ..limit(1))
-          .getSingleOrNull();
-
-  Future<List<LocalWeeklyReview>> unsyncedWeeklyReviews(String userId) =>
-      (select(localWeeklyReviews)
-            ..where((t) =>
-                t.userId.equals(userId) & t.synced.equals(false)))
-          .get();
 
   Future<void> markWeeklyReviewSynced(String id) =>
       (update(localWeeklyReviews)..where((t) => t.id.equals(id)))
           .write(const LocalWeeklyReviewsCompanion(synced: Value(true)));
 
-  Future<Set<String>> unsyncedPlanningIds() async {
-    final goals = await (select(localGoals)..where((t) => t.synced.equals(false))).get();
-    final subs = await (select(localSubGoals)..where((t) => t.synced.equals(false))).get();
-    final tasks = await (select(localPlanningTasks)..where((t) => t.synced.equals(false))).get();
-    final ms = await (select(localMilestones)..where((t) => t.synced.equals(false))).get();
-    final links = await (select(localGoalHabitLinks)..where((t) => t.synced.equals(false))).get();
-    return {
-      for (final g in goals) g.id,
-      for (final s in subs) s.id,
-      for (final t in tasks) t.id,
-      for (final m in ms) m.id,
-      for (final l in links) l.id,
-    };
+  Future<void> upsertMeditationPreset(LocalMeditationPresetsCompanion row) =>
+      into(localMeditationPresets).insertOnConflictUpdate(row);
+
+  Future<List<LocalMeditationPreset>> presetsForUser(String userId) =>
+      (select(localMeditationPresets)..where((t) => t.userId.equals(userId) | t.isSystem.equals(true)))
+          .get();
+
+  Future<void> deletePresetLocally(String id) =>
+      (delete(localMeditationPresets)..where((t) => t.id.equals(id))).go();
+
+  Future<void> insertMeditationSession(LocalMeditationSessionsCompanion row) =>
+      into(localMeditationSessions).insert(row);
+
+  Future<void> markMeditationSessionSynced(String id) =>
+      (update(localMeditationSessions)..where((t) => t.id.equals(id)))
+          .write(const LocalMeditationSessionsCompanion(synced: Value(true)));
+
+  Future<void> upsertGoalSnapshot(LocalGoalProgressSnapshotsCompanion row) =>
+      into(localGoalProgressSnapshots).insertOnConflictUpdate(row);
+
+  Future<List<LocalGoalProgressSnapshot>> snapshotsForGoal(String goalId) =>
+      (select(localGoalProgressSnapshots)..where((t) => t.goalId.equals(goalId))).get();
+
+  Future<List<LocalGoalProgressSnapshot>> unsyncedGoalSnapshots() =>
+      (select(localGoalProgressSnapshots)..where((t) => t.synced.equals(false))).get();
+
+  Future<LocalWeeklyReview?> latestWeeklyReview(String userId) =>
+      (select(localWeeklyReviews)
+            ..where((t) => t.userId.equals(userId))
+            ..orderBy([(t) => OrderingTerm(expression: t.weekStartMs, mode: OrderingMode.desc)])
+            ..limit(1))
+          .getSingleOrNull();
+
+  Future<List<LocalMissionMedal>> medalsForUser(String userId) =>
+      (select(localMissionMedals)..where((t) => t.userId.equals(userId))).get();
+
+  Future<int> meditationSecondsThisWeek(String userId, [int? startOfWeekMs]) async {
+    final startMs = startOfWeekMs ??
+        DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1)).millisecondsSinceEpoch;
+    final sessions = await (select(localMeditationSessions)
+          ..where((t) => t.userId.equals(userId) & t.completedAtMs.isBiggerOrEqualValue(startMs)))
+        .get();
+    return sessions.fold<int>(0, (sum, s) => sum + s.durationSeconds);
   }
+
+  Future<bool> hasGoalSnapshotForDay(String goalId, int dayKeyMs) async {
+    final countExp = localGoalProgressSnapshots.id.count();
+    final query = selectOnly(localGoalProgressSnapshots)
+      ..addColumns([countExp])
+      ..where(localGoalProgressSnapshots.goalId.equals(goalId) &
+          localGoalProgressSnapshots.dayKeyMs.equals(dayKeyMs));
+    final count = await query.map((row) => row.read(countExp)).getSingle();
+    return (count ?? 0) > 0;
+  }
+
+  Future<void> markGoalSnapshotSynced(String id) =>
+      (update(localGoalProgressSnapshots)..where((t) => t.id.equals(id)))
+          .write(const LocalGoalProgressSnapshotsCompanion(synced: Value(true)));
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────

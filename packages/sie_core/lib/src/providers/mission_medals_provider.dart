@@ -9,7 +9,7 @@ import 'package:drift/drift.dart' show Value;
 
 final missionMedalsProvider =
     AutoDisposeFutureProvider<List<MissionMedal>>((ref) async {
-  ref.watch(authStateProvider);
+  ref.watch(authStateProvider).valueOrNull;
 
   final userId = Supabase.instance.client.auth.currentUser?.id;
   if (userId == null) return [];

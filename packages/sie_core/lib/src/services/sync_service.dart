@@ -131,11 +131,11 @@ class SyncService {
                 .eq('id', payload['id'] as String)
                 .eq('user_id', userId);
 
-          // ── Planning ops ────────────────────────────────────────────────
+          // ── Planning ops ──────────────────────────────────────────────────
           case 'insert_goal':
             await client.from('goals').upsert(payload, onConflict: 'id');
-            await _db.updateGoal(payload['id'] as String,
-                const LocalGoalsCompanion(synced: Value(true)));
+            await _db.patchGoal(payload['id'] as String,
+                LocalGoalsCompanion(synced: const Value(true)));
           case 'delete_goal':
             await client
                 .from('goals')
@@ -148,8 +148,8 @@ class SyncService {
                 .update({'status': payload['status'] as String})
                 .eq('id', payload['id'] as String)
                 .eq('user_id', userId);
-            await _db.updateGoal(payload['id'] as String,
-                const LocalGoalsCompanion(synced: Value(true)));
+            await _db.patchGoal(payload['id'] as String,
+                LocalGoalsCompanion(synced: const Value(true)));
           case 'insert_sub_goal':
             final sgId = payload['id'] as String;
             final localSg = await _db.getSubGoal(sgId);
@@ -160,8 +160,8 @@ class SyncService {
               'order_index': payload['order_index'] ?? 0,
               'is_completed': localSg?.isCompleted ?? false,
             }, onConflict: 'id');
-            await _db.updateSubGoal(sgId,
-                const LocalSubGoalsCompanion(synced: Value(true)));
+            await _db.patchSubGoal(sgId,
+                LocalSubGoalsCompanion(synced: const Value(true)));
           case 'delete_sub_goal':
             await client
                 .from('sub_goals')
@@ -172,8 +172,8 @@ class SyncService {
                 .from('sub_goals')
                 .update({'is_completed': true})
                 .eq('id', payload['id'] as String);
-            await _db.updateSubGoal(payload['id'] as String,
-                const LocalSubGoalsCompanion(synced: Value(true)));
+            await _db.patchSubGoal(payload['id'] as String,
+                LocalSubGoalsCompanion(synced: const Value(true)));
           case 'insert_task':
             final taskId = payload['id'] as String;
             final localTask = await _db.getPlanningTask(taskId);
@@ -194,30 +194,19 @@ class SyncService {
               'is_completed': localTask?.isCompleted ?? false,
               if (localTask?.completedAtMs != null)
                 'completed_at': DateTime.fromMillisecondsSinceEpoch(
-                    localTask!.completedAtMs!).toIso8601String(),
+                        localTask!.completedAtMs!)
+                    .toIso8601String(),
             }, onConflict: 'id');
-            await _db.updatePlanningTask(taskId,
-                const LocalPlanningTasksCompanion(synced: Value(true)));
+            await _db.patchPlanningTask(taskId,
+                LocalPlanningTasksCompanion(synced: const Value(true)));
           case 'toggle_task':
             final isCompleted = payload['is_completed'] as bool;
             await client.from('planning_tasks').update({
               'is_completed': isCompleted,
               'completed_at': payload['completed_at'],
             }).eq('id', payload['id'] as String);
-            await _db.updatePlanningTask(payload['id'] as String,
-                const LocalPlanningTasksCompanion(synced: Value(true)));
-          case 'reschedule_task':
-            await client.from('planning_tasks').update({
-              'due_date': payload['due_date'],
-            }).eq('id', payload['id'] as String).eq('user_id', userId);
-            await _db.updatePlanningTask(payload['id'] as String,
-                const LocalPlanningTasksCompanion(synced: Value(true)));
-          case 'end_recurrence':
-            await client.from('planning_tasks').update({
-              'recurrence_rule': null,
-            }).eq('id', payload['id'] as String).eq('user_id', userId);
-            await _db.updatePlanningTask(payload['id'] as String,
-                const LocalPlanningTasksCompanion(synced: Value(true)));
+            await _db.patchPlanningTask(payload['id'] as String,
+                LocalPlanningTasksCompanion(synced: const Value(true)));
           case 'delete_task':
             await client
                 .from('planning_tasks')
@@ -231,7 +220,8 @@ class SyncService {
               'id': msId,
               'goal_id': payload['goal_id'],
               'name': payload['name'],
-              if (payload['target_date'] != null) 'target_date': payload['target_date'],
+              if (payload['target_date'] != null)
+                'target_date': payload['target_date'],
               'is_completed': localMs?.isCompleted ?? false,
               'kind': payload['kind'] ?? 'binary',
               if (payload['unit'] != null) 'unit': payload['unit'],
@@ -240,31 +230,15 @@ class SyncService {
               if (payload['current_value'] != null) 'current_value': payload['current_value'],
               'direction': payload['direction'] ?? 'up',
             }, onConflict: 'id');
-            await _db.upsertMilestone(LocalMilestonesCompanion(
-                id: Value(msId), synced: const Value(true)));
-          case 'insert_milestone_log':
-            await client.from('milestone_logs').upsert({
-              'id': payload['id'],
-              'milestone_id': payload['milestone_id'],
-              'user_id': payload['user_id'],
-              'value': payload['value'],
-              'recorded_at': payload['recorded_at'],
-            }, onConflict: 'id');
-            await _db.insertMilestoneLog(LocalMilestoneLogsCompanion(
-                id: Value(payload['id'] as String),
-                synced: const Value(true)));
-          case 'delete_milestone_log':
-            await client
-                .from('milestone_logs')
-                .delete()
-                .eq('id', payload['id'] as String);
+            await _db.patchMilestone(msId,
+                LocalMilestonesCompanion(synced: const Value(true)));
           case 'complete_milestone':
             await client
                 .from('milestones')
                 .update({'is_completed': true})
                 .eq('id', payload['id'] as String);
-            await _db.upsertMilestone(LocalMilestonesCompanion(
-                id: Value(payload['id'] as String), synced: const Value(true)));
+            await _db.patchMilestone(payload['id'] as String,
+                LocalMilestonesCompanion(synced: const Value(true)));
           case 'delete_milestone':
             await client
                 .from('milestones')
@@ -384,6 +358,90 @@ class SyncService {
                 .eq('user_id', userId);
             await _db.updateGoal(payload['id'] as String,
                 const LocalGoalsCompanion(synced: Value(true)));
+          case 'upload_attachment':
+            // Attachment bytes were already uploaded at creation time if online;
+            // this case handles the case where upload failed offline. For now,
+            // just sync the metadata row — bytes must already be in Storage.
+            await client.from('goal_node_attachments').upsert({
+              'id': payload['id'],
+              'goal_id': payload['goal_id'],
+              'node_type': payload['node_type'],
+              'node_id': payload['node_id'],
+              'storage_path': payload['storage_path'],
+              'file_name': payload['file_name'],
+              'mime_type': payload['mime_type'],
+              'size_bytes': payload['size_bytes'] ?? 0,
+              'uploaded_by': payload['uploaded_by'],
+              'created_at': payload['created_at'],
+            }, onConflict: 'id');
+            await _db.markAttachmentSynced(payload['id'] as String);
+          case 'delete_attachment':
+            try {
+              final rows = await client
+                  .from('goal_node_attachments')
+                  .select('storage_path')
+                  .eq('id', payload['id'] as String)
+                  .maybeSingle();
+              if (rows != null) {
+                await client.storage
+                    .from('goal-attachments')
+                    .remove([rows['storage_path'] as String]);
+              }
+              await client
+                  .from('goal_node_attachments')
+                  .delete()
+                  .eq('id', payload['id'] as String);
+              await _db.purgeAttachment(payload['id'] as String);
+            } catch (_) {}
+          case 'upsert_map_element':
+            await client
+                .from('goal_map_elements')
+                .upsert(payload, onConflict: 'id');
+            await _db.markMapElementSynced(payload['id'] as String);
+          case 'delete_map_element':
+            await client
+                .from('goal_map_elements')
+                .delete()
+                .eq('id', payload['id'] as String);
+            await _db.purgeMapElement(payload['id'] as String);
+
+          case 'assign_node':
+            final nodeType = payload['node_type'] as String;
+            if (nodeType == 'task') {
+              await client.from('planning_task_assignees').upsert({
+                'task_id':     payload['node_id'],
+                'user_id':     payload['user_id'],
+                'goal_id':     payload['goal_id'],
+                'assigned_by': payload['assigned_by'],
+              }, onConflict: 'task_id,user_id');
+              await _db.markTaskAssigneeSynced(
+                  payload['node_id'] as String, payload['user_id'] as String);
+            } else {
+              await client.from('sub_goal_assignees').upsert({
+                'sub_goal_id': payload['node_id'],
+                'user_id':     payload['user_id'],
+                'goal_id':     payload['goal_id'],
+                'assigned_by': payload['assigned_by'],
+              }, onConflict: 'sub_goal_id,user_id');
+              await _db.markSubGoalAssigneeSynced(
+                  payload['node_id'] as String, payload['user_id'] as String);
+            }
+
+          case 'unassign_node':
+            final nodeType2 = payload['node_type'] as String;
+            if (nodeType2 == 'task') {
+              await client.from('planning_task_assignees').delete()
+                  .eq('task_id', payload['node_id'] as String)
+                  .eq('user_id', payload['user_id'] as String);
+              await _db.purgeTaskAssignee(
+                  payload['node_id'] as String, payload['user_id'] as String);
+            } else {
+              await client.from('sub_goal_assignees').delete()
+                  .eq('sub_goal_id', payload['node_id'] as String)
+                  .eq('user_id', payload['user_id'] as String);
+              await _db.purgeSubGoalAssignee(
+                  payload['node_id'] as String, payload['user_id'] as String);
+            }
 
           default:
             debugPrint(

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -113,8 +115,13 @@ class _CustomizationScreenState extends ConsumerState<CustomizationScreen>
     );
 
     final c = ref.watch(sieColorsProvider);
-    return SieBackground(
-      child: Scaffold(
+    return PopScope(
+      canPop: !Platform.isAndroid,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) Navigator.of(context).pop();
+      },
+      child: SieBackground(
+        child: Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(
           child: Column(
@@ -169,6 +176,7 @@ class _CustomizationScreenState extends ConsumerState<CustomizationScreen>
               ),
             ],
           ),
+        ),
         ),
       ),
     );

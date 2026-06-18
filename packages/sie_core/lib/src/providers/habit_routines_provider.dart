@@ -18,9 +18,14 @@ class HabitRoutinesNotifier
     extends AutoDisposeAsyncNotifier<HabitRoutinesState> {
   @override
   Future<HabitRoutinesState> build() async {
-    ref.watch(authStateProvider);
+    ref.watch(authStateProvider).valueOrNull;
     ref.watch(connectivityProvider);
-    return _load();
+    try {
+      return await _load();
+    } catch (e) {
+      debugPrint('SiE HabitRoutines: build failed — $e');
+      return HabitRoutinesState.empty;
+    }
   }
 
   Future<HabitRoutinesState> _load() async {

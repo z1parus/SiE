@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/cosmetic_asset.dart';
 import '../supabase_service.dart';
@@ -27,40 +28,45 @@ class InventoryState {
 }
 
 final inventoryProvider = FutureProvider.autoDispose<InventoryState>((ref) async {
-  ref.watch(authStateProvider);
+  ref.watch(authStateProvider).valueOrNull;
   final userId = SupabaseService.client.auth.currentUser?.id;
   if (userId == null) return InventoryState.empty;
 
-  final rows = await SupabaseService.client
-      .from('user_inventory')
-      .select('asset_type, asset_id')
-      .eq('user_id', userId);
+  try {
+    final rows = await SupabaseService.client
+        .from('user_inventory')
+        .select('asset_type, asset_id')
+        .eq('user_id', userId);
 
-  final frames = <String>{};
-  final backgrounds = <String>{};
-  final styles = <String>{};
-  final patterns = <String>{};
+    final frames = <String>{};
+    final backgrounds = <String>{};
+    final styles = <String>{};
+    final patterns = <String>{};
 
-  for (final row in rows) {
-    final id = row['asset_id'] as String;
-    switch (row['asset_type'] as String) {
-      case 'avatar_frame':
-        frames.add(id);
-      case 'profile_background':
-        backgrounds.add(id);
-      case 'stat_style':
-        styles.add(id);
-      case 'profile_pattern':
-        patterns.add(id);
+    for (final row in rows) {
+      final id = row['asset_id'] as String;
+      switch (row['asset_type'] as String) {
+        case 'avatar_frame':
+          frames.add(id);
+        case 'profile_background':
+          backgrounds.add(id);
+        case 'stat_style':
+          styles.add(id);
+        case 'profile_pattern':
+          patterns.add(id);
+      }
     }
-  }
 
-  return InventoryState(
-    ownedFrameIds: frames,
-    ownedBackgroundIds: backgrounds,
-    ownedStyleIds: styles,
-    ownedPatternIds: patterns,
-  );
+    return InventoryState(
+      ownedFrameIds: frames,
+      ownedBackgroundIds: backgrounds,
+      ownedStyleIds: styles,
+      ownedPatternIds: patterns,
+    );
+  } catch (e) {
+    debugPrint('SiE Inventory: fetch failed — $e');
+    return InventoryState.empty;
+  }
 });
 
 Future<void> purchaseAsset(CosmeticAsset asset) async {

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/friendship.dart';
 import '../models/public_profile.dart';
@@ -10,7 +11,7 @@ final friendsProvider =
 class FriendsNotifier extends AsyncNotifier<FriendsState> {
   @override
   Future<FriendsState> build() async {
-    ref.watch(authStateProvider);
+    ref.watch(authStateProvider).valueOrNull;
     return _load();
   }
 
@@ -18,60 +19,65 @@ class FriendsNotifier extends AsyncNotifier<FriendsState> {
     final userId = SupabaseService.client.auth.currentUser?.id;
     if (userId == null) return const FriendsState();
 
-    final rows = await SupabaseService.client
-        .from('friendships')
-        .select('id, requester_id, addressee_id, status, created_at')
-        .or('requester_id.eq.$userId,addressee_id.eq.$userId')
-        .order('created_at', ascending: false);
+    try {
+      final rows = await SupabaseService.client
+          .from('friendships')
+          .select('id, requester_id, addressee_id, status, created_at')
+          .or('requester_id.eq.$userId,addressee_id.eq.$userId')
+          .order('created_at', ascending: false);
 
-    final otherIds = rows.map<String>((r) {
-      return (r['requester_id'] as String) == userId
-          ? r['addressee_id'] as String
-          : r['requester_id'] as String;
-    }).toSet().toList();
+      final otherIds = rows.map<String>((r) {
+        return (r['requester_id'] as String) == userId
+            ? r['addressee_id'] as String
+            : r['requester_id'] as String;
+      }).toSet().toList();
 
-    final profileMap = <String, PublicProfile>{};
-    if (otherIds.isNotEmpty) {
-      final profiles = await SupabaseService.client
-          .from('profiles')
-          .select('id, username, avatar_url, equipped_frame_id, '
-              'equipped_background_id, equipped_stat_style_id, equipped_pattern_id, total_xp, design_points')
-          .inFilter('id', otherIds);
-      for (final p in profiles) {
-        profileMap[p['id'] as String] = PublicProfile.fromJson(p);
+      final profileMap = <String, PublicProfile>{};
+      if (otherIds.isNotEmpty) {
+        final profiles = await SupabaseService.client
+            .from('profiles')
+            .select('id, username, avatar_url, equipped_frame_id, '
+                'equipped_background_id, equipped_stat_style_id, equipped_pattern_id, total_xp, design_points')
+            .inFilter('id', otherIds);
+        for (final p in profiles) {
+          profileMap[p['id'] as String] = PublicProfile.fromJson(p);
+        }
       }
-    }
 
-    final friends = <FriendRow>[];
-    final sent = <FriendRow>[];
-    final received = <FriendRow>[];
+      final friends = <FriendRow>[];
+      final sent = <FriendRow>[];
+      final received = <FriendRow>[];
 
-    for (final r in rows) {
-      final requesterId = r['requester_id'] as String;
-      final addresseeId = r['addressee_id'] as String;
-      final iAmRequester = requesterId == userId;
-      final otherId = iAmRequester ? addresseeId : requesterId;
-      final otherUser = profileMap[otherId];
-      if (otherUser == null) continue;
+      for (final r in rows) {
+        final requesterId = r['requester_id'] as String;
+        final addresseeId = r['addressee_id'] as String;
+        final iAmRequester = requesterId == userId;
+        final otherId = iAmRequester ? addresseeId : requesterId;
+        final otherUser = profileMap[otherId];
+        if (otherUser == null) continue;
 
-      final row = FriendRow(
-        friendshipId: r['id'] as String,
-        otherUser: otherUser,
-        createdAt: DateTime.parse(r['created_at'] as String),
-      );
+        final row = FriendRow(
+          friendshipId: r['id'] as String,
+          otherUser: otherUser,
+          createdAt: DateTime.parse(r['created_at'] as String),
+        );
 
-      switch (r['status'] as String) {
-        case 'accepted':
-          friends.add(row);
-        case 'pending' when iAmRequester:
-          sent.add(row);
-        case 'pending':
-          received.add(row);
+        switch (r['status'] as String) {
+          case 'accepted':
+            friends.add(row);
+          case 'pending' when iAmRequester:
+            sent.add(row);
+          case 'pending':
+            received.add(row);
+        }
       }
-    }
 
-    return FriendsState(
-        friends: friends, sentRequests: sent, receivedRequests: received);
+      return FriendsState(
+          friends: friends, sentRequests: sent, receivedRequests: received);
+    } catch (e) {
+      debugPrint('SiE Friends: fetch failed — $e');
+      return const FriendsState();
+    }
   }
 
   Future<void> sendRequest(String userId) async {
