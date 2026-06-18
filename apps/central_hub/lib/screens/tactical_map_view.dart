@@ -57,6 +57,20 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   // When non-null, nodes NOT assigned to this userId are dimmed.
   String? _filterMemberId;
 
+  // ── Stage 8: live collaborative canvas ────────────────────────────────────
+  GoalMapLiveService? _live;
+  // userId → interpolated remote cursor (logical coords).
+  final Map<String, _RemoteCursor> _remoteCursors = {};
+  // nodeRef ('node:id'|'el:id') → who is editing + when.
+  final Map<String, ({String userId, int atMs})> _editingByNode = {};
+  // Latest goal snapshot, so live callbacks can walk the tree off-build.
+  Goal? _liveGoal;
+  // Per-user identity for cursors/badges (color + display name).
+  Map<String, ({Color color, String name})> _memberInfo = const {};
+  String? _followUserId;
+  Timer? _liveTicker;
+  final _liveRepaint = ValueNotifier<int>(0);
+
   // ── Tactical Map Evolution Stage 3: image cards ───────────────────────────
   // Guard against re-entrant image picker / dialog launches.
   bool _pickingImage = false;
@@ -98,6 +112,9 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   void dispose() {
     _saveTimer?.cancel();
     _elementSaveTimer?.cancel();
+    _liveTicker?.cancel();
+    _live?.dispose();
+    _liveRepaint.dispose();
     _elementTextCtrl.dispose();
     _hoverAnim.dispose();
     _tc.dispose();
@@ -111,6 +128,176 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     if (box == null) return;
     final s = box.size;
     _tc.value = Matrix4.translationValues(s.width / 2 - _cx, s.height / 2 - _cx, 0);
+  }
+
+  // ── Stage 8: live collaboration ───────────────────────────────────────────
+
+  /// Connects the broadcast channel once, only for goals shared with at least
+  /// one accepted collaborator. Idempotent.
+  void _maybeInitLive(Goal goal) {
+    if (_live != null) return;
+    final hasCollabs =
+        goal.collaborators.any((co) => co.status == 'accepted');
+    if (!hasCollabs) return;
+    final uid = SupabaseService.client.auth.currentUser?.id;
+    if (uid == null) return;
+    final svc = GoalMapLiveService(goalId: goal.id, userId: uid);
+    svc.onCursor = _onRemoteCursor;
+    svc.onNodeMove = _onRemoteNodeMove;
+    svc.onEditing = _onRemoteEditing;
+    svc.connect();
+    _live = svc;
+  }
+
+  void _onRemoteCursor(LiveCursor c) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final existing = _remoteCursors[c.userId];
+    if (existing == null) {
+      _remoteCursors[c.userId] = _RemoteCursor(c.x, c.y)..lastSeenMs = now;
+      // New live participant → refresh the legend (follow button, dot).
+      if (mounted) setState(() {});
+    } else {
+      existing.targetX = c.x;
+      existing.targetY = c.y;
+      existing.lastSeenMs = now;
+    }
+    _ensureLiveTicker();
+  }
+
+  void _onRemoteNodeMove(LiveNodeMove m) {
+    final ref = m.nodeId;
+    final newPos = Offset(m.x, m.y);
+    if (ref.startsWith('el:')) {
+      _elementPositions[ref.substring(3)] = newPos;
+      _bumpRepaint();
+      return;
+    }
+    if (!ref.startsWith('node:')) return;
+    final id = ref.substring(5);
+    if (_draggingId == id) return; // don't fight a local drag
+    final old = _positions[id];
+    _positions[id] = newPos;
+    // If it's a sub-goal, shift its whole family by the same delta so the
+    // hierarchy stays visually attached during the remote drag.
+    if (old != null) {
+      final delta = newPos - old;
+      final sg = _findSubGoalById(_liveGoal?.subGoals ?? const [], id);
+      if (sg != null) _shiftFamily(sg, delta);
+    }
+    _bumpRepaint();
+  }
+
+  void _onRemoteEditing(LiveEditing e) {
+    if (e.active) {
+      _editingByNode[e.nodeId] =
+          (userId: e.userId, atMs: DateTime.now().millisecondsSinceEpoch);
+    } else {
+      _editingByNode.remove(e.nodeId);
+    }
+    _ensureLiveTicker();
+    _liveRepaint.value++;
+  }
+
+  SubGoal? _findSubGoalById(List<SubGoal> roots, String id) {
+    for (final sg in roots) {
+      if (sg.id == id) return sg;
+      final found = _findSubGoalById(sg.children, id);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
+  void _shiftFamily(SubGoal sg, Offset delta) {
+    for (final t in sg.tasks) {
+      final p = _positions[t.id];
+      if (p != null) _positions[t.id] = p + delta;
+    }
+    for (final child in sg.children) {
+      final p = _positions[child.id];
+      if (p != null) _positions[child.id] = p + delta;
+      _shiftFamily(child, delta);
+    }
+  }
+
+  /// Converts a viewport-local pointer position to logical (centre-relative)
+  /// coordinates and broadcasts it as this user's cursor.
+  void _emitCursor(Offset viewportLocal) {
+    final svc = _live;
+    if (svc == null) return;
+    final scene = _tc.toScene(viewportLocal);
+    svc.sendCursor(scene.dx - _cx, scene.dy - _cx);
+  }
+
+  void _emitNodeMove(String ref, Offset logical) {
+    _live?.sendNodeMove(ref, logical.dx, logical.dy);
+  }
+
+  void _emitEditing(String ref, bool active) {
+    _live?.sendEditing(ref, active);
+  }
+
+  /// Single shared ticker (~30 fps) that interpolates remote cursors toward
+  /// their targets, expires stale cursors/edit-flags, and drives follow-mode.
+  /// Stops itself when there is nothing live to animate (saves CPU).
+  void _ensureLiveTicker() {
+    _liveTicker ??= Timer.periodic(const Duration(milliseconds: 33), (_) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      // Expire cursors not seen in 4s.
+      final beforeCount = _remoteCursors.length;
+      _remoteCursors.removeWhere((_, c) => now - c.lastSeenMs > 4000);
+      if (_remoteCursors.length != beforeCount && mounted) {
+        // A participant went idle → refresh the legend (drop their dot/follow).
+        setState(() {});
+        if (_followUserId != null &&
+            !_remoteCursors.containsKey(_followUserId)) {
+          _followUserId = null;
+        }
+      }
+      // Expire editing flags after 15s (covers ungraceful disconnects).
+      _editingByNode.removeWhere((_, e) => now - e.atMs > 15000);
+      // Interpolate toward targets.
+      for (final c in _remoteCursors.values) {
+        c.x += (c.targetX - c.x) * 0.35;
+        c.y += (c.targetY - c.y) * 0.35;
+      }
+      // Follow mode: ease the camera so the followed cursor stays centred.
+      if (_followUserId != null) {
+        final c = _remoteCursors[_followUserId];
+        if (c != null) _followCamera(Offset(_cx + c.x, _cx + c.y));
+      }
+      _liveRepaint.value++;
+      if (_remoteCursors.isEmpty &&
+          _editingByNode.isEmpty &&
+          _followUserId == null) {
+        _liveTicker?.cancel();
+        _liveTicker = null;
+      }
+    });
+  }
+
+  /// Eases the InteractiveViewer so [scenePoint] sits at the viewport centre.
+  void _followCamera(Offset scenePoint) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final s = box.size;
+    final scale = _tc.value.getMaxScaleOnAxis();
+    // Target translation that centres scenePoint.
+    final targetTx = s.width / 2 - scenePoint.dx * scale;
+    final targetTy = s.height / 2 - scenePoint.dy * scale;
+    final m = _tc.value.clone();
+    final curTx = m.getTranslation().x;
+    final curTy = m.getTranslation().y;
+    final nextTx = curTx + (targetTx - curTx) * 0.12;
+    final nextTy = curTy + (targetTy - curTy) * 0.12;
+    m.setTranslationRaw(nextTx, nextTy, 0);
+    _tc.value = m;
+  }
+
+  void _toggleFollow(String userId) {
+    setState(() {
+      _followUserId = _followUserId == userId ? null : userId;
+    });
+    if (_followUserId != null) _ensureLiveTicker();
   }
 
   // ── Layout ────────────────────────────────────────────────────────────────
@@ -804,6 +991,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       _elementTextCtrl.selection =
           TextSelection.collapsed(offset: text.length);
     });
+    _emitEditing('el:$id', true); // Stage 8: soft-lock broadcast
   }
 
   void _commitElementText(Goal goal, String id) {
@@ -811,6 +999,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     final wasEditing = _editingElementId == id;
     if (!wasEditing) return;
     setState(() => _editingElementId = null);
+    _emitEditing('el:$id', false); // Stage 8: release soft-lock
     final el = goal.mapElements.where((e) => e.id == id).firstOrNull;
     if (el == null) return;
     // Empty note/label → discard (no orphan placeholders).
@@ -940,6 +1129,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               _elementPositions[el.id] =
                   (_elementPositions[el.id] ?? el.position) + d.delta / scale;
               _bumpRepaint();
+              _emitNodeMove('el:${el.id}', _elementPositions[el.id]!);
             },
       onPanEnd: (!widget.canEdit || editing)
           ? null
@@ -1122,6 +1312,24 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     _bumpRepaint();
   }
 
+  // Stage 8: per-user color + display name for cursors / editing badges.
+  Map<String, ({Color color, String name})> _buildMemberInfo(
+      Goal goal, SieColors c) {
+    final map = <String, ({Color color, String name})>{};
+    map[goal.userId] = (
+      color: memberColor(goal.userId, c),
+      name: goal.ownerProfile?.username ?? 'Владелец',
+    );
+    for (final co in goal.collaborators.where((co) => co.status == 'accepted')) {
+      map[co.userId] = (
+        color: memberColor(co.userId, c),
+        name: co.profile?.username ??
+            (co.userId.length >= 6 ? co.userId.substring(0, 6) : co.userId),
+      );
+    }
+    return map;
+  }
+
   // Stage 5: look up avatarUrl for a userId from goal owner or collaborators.
   String? _resolveAvatarUrl(Goal goal, String userId) {
     if (goal.userId == userId) return goal.ownerProfile?.avatarUrl;
@@ -1228,6 +1436,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
 
   void _showSubGoalSheet(SubGoal sg, Goal goal, SieColors c) {
     final canEdit = widget.canEdit;
+    if (canEdit) _emitEditing('node:${sg.id}', true); // Stage 8 soft-lock
     showModalBottomSheet(
       context: context,
       backgroundColor: c.surface,
@@ -1276,11 +1485,13 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               }
             : null,
       ),
-    );
+    ).whenComplete(
+        () => canEdit ? _emitEditing('node:${sg.id}', false) : null);
   }
 
   void _showTaskSheet(PlanningTask task, SubGoal sg, Goal goal, SieColors c) {
     final canEdit = widget.canEdit;
+    if (canEdit) _emitEditing('node:${task.id}', true); // Stage 8 soft-lock
     showModalBottomSheet(
       context: context,
       backgroundColor: c.surface,
@@ -1308,7 +1519,8 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               }
             : null,
       ),
-    );
+    ).whenComplete(
+        () => canEdit ? _emitEditing('node:${task.id}', false) : null);
   }
 
   void _showMilestoneSheet(Milestone ms, Goal goal, SieColors c) {
@@ -1375,6 +1587,11 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     // Flatten the tree once per build; reused by drag handlers until next build.
     _flat = _flatSubGoals(goal.subGoals);
     _motionEnabled = SieMotion.enabled(context);
+
+    // Stage 8: connect live channel + refresh participant identity each build.
+    _liveGoal = goal;
+    _maybeInitLive(goal);
+    _memberInfo = _buildMemberInfo(goal, c);
 
     _ensurePositions(goal);
 
@@ -1450,9 +1667,17 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
 
     return Stack(
       children: [
-        InteractiveViewer(
+        Listener(
+          // Stage 8: broadcast this user's cursor. Listener sits outside the
+          // gesture arena, so it never steals pans/drags from nodes.
+          onPointerHover: _live == null ? null : (e) => _emitCursor(e.localPosition),
+          onPointerMove: _live == null ? null : (e) => _emitCursor(e.localPosition),
+          child: InteractiveViewer(
       transformationController: _tc,
       constrained: false,
+      // Stage 8: taking the camera cancels follow-mode (you took control).
+      onInteractionStart:
+          _followUserId == null ? null : (_) => setState(() => _followUserId = null),
       boundaryMargin: const EdgeInsets.all(800),
       minScale: 0.15,
       maxScale: 3.0,
@@ -1630,6 +1855,23 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                           if (el.kind == MapElementKind.note ||
                               el.kind == MapElementKind.label)
                             _elementPosNode(el, goal, c),
+                        // Stage 8: live cursors + editing badges (topmost).
+                        if (_live != null)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: ValueListenableBuilder<int>(
+                                valueListenable: _liveRepaint,
+                                builder: (_, _, _) => _LiveOverlayLayer(
+                                  cursors: _remoteCursors,
+                                  editing: _editingByNode,
+                                  positions: _positions,
+                                  elementPositions: _elementPositions,
+                                  memberInfo: _memberInfo,
+                                  cx: _cx,
+                                ),
+                              ),
+                            ),
+                          ),
                       ],
                     );
                   },
@@ -1692,6 +1934,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
           ],
         ),
       ),
+        ),
         ),
         Positioned(
           left: 0,
@@ -1793,7 +2036,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               ),
             ),
           ),
-        // Stage 5: member legend overlay (only when goal has accepted collabs).
+        // Stage 5/8: member legend overlay (only when goal has accepted collabs).
         if (goal.collaborators.any((co) => co.status == 'accepted'))
           Positioned(
             left: 16,
@@ -1802,10 +2045,13 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               goal: goal,
               sc: c,
               filterMemberId: _filterMemberId,
+              liveUserIds: _remoteCursors.keys.toSet(),
+              followingId: _followUserId,
               onMemberTap: (userId) => setState(() {
                 _filterMemberId =
                     _filterMemberId == userId ? null : userId;
               }),
+              onFollow: _toggleFollow,
             ),
           ),
       ],
@@ -1839,6 +2085,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               // Mutate + bump (no setState) → only the dynamic layer repaints.
               _positions[task.id] = _positions[task.id]! + d.delta / scale;
               _bumpRepaint();
+              _emitNodeMove('node:${task.id}', _positions[task.id]!);
               _setHoverTarget(_nearestSubGoalFor(task.id, goal, exclude: {task.id}));
             },
       onPanEnd: (hidden || !widget.canEdit)
@@ -1935,6 +2182,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               }
               moveFamily(sg);
               _bumpRepaint();
+              _emitNodeMove('node:${sg.id}', _positions[sg.id]!);
               final excluded = {sg.id, ..._descendantIds(sg.id)};
               _setHoverTarget(_nearestSubGoalFor(sg.id, goal, exclude: excluded));
             },
@@ -2009,6 +2257,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               final scale = _tc.value.getMaxScaleOnAxis();
               _positions[id] = _positions[id]! + d.delta / scale;
               _bumpRepaint();
+              _emitNodeMove('node:$id', _positions[id]!);
             },
       onPanEnd: (hidden || !widget.canEdit)
           ? null
@@ -3292,17 +3541,159 @@ class _AttachmentBadge extends StatelessWidget {
 
 // ─── Stage 5: Member Legend Overlay ──────────────────────────────────────────
 
+// ─── Stage 8: live collaboration ─────────────────────────────────────────────
+
+/// Interpolated state for a remote participant's cursor (logical coords).
+class _RemoteCursor {
+  _RemoteCursor(this.targetX, this.targetY)
+      : x = targetX,
+        y = targetY;
+  double x, y; // current (eased) position
+  double targetX, targetY; // latest received position
+  int lastSeenMs = 0;
+}
+
+/// Canvas-space overlay: remote cursors + "editing" soft-lock badges.
+/// Lives inside the canvas SizedBox, so positions map as `cx + logical`.
+class _LiveOverlayLayer extends StatelessWidget {
+  const _LiveOverlayLayer({
+    required this.cursors,
+    required this.editing,
+    required this.positions,
+    required this.elementPositions,
+    required this.memberInfo,
+    required this.cx,
+  });
+  final Map<String, _RemoteCursor> cursors;
+  final Map<String, ({String userId, int atMs})> editing;
+  final Map<String, Offset> positions;
+  final Map<String, Offset> elementPositions;
+  final Map<String, ({Color color, String name})> memberInfo;
+  final double cx;
+
+  @override
+  Widget build(BuildContext context) {
+    const fallback = Color(0xFF888898);
+    final children = <Widget>[];
+
+    editing.forEach((ref, e) {
+      Offset? pos;
+      if (ref.startsWith('node:')) {
+        pos = positions[ref.substring(5)];
+      } else if (ref.startsWith('el:')) {
+        pos = elementPositions[ref.substring(3)];
+      }
+      if (pos == null) return;
+      final info = memberInfo[e.userId];
+      children.add(Positioned(
+        left: cx + pos.dx,
+        top: cx + pos.dy - 30,
+        child: FractionalTranslation(
+          translation: const Offset(-0.5, 0),
+          child: _EditingBadge(
+              color: info?.color ?? fallback, name: info?.name ?? '…'),
+        ),
+      ));
+    });
+
+    cursors.forEach((userId, cur) {
+      final info = memberInfo[userId];
+      children.add(Positioned(
+        left: cx + cur.x,
+        top: cx + cur.y,
+        child: _CursorMarker(
+            color: info?.color ?? fallback, name: info?.name ?? '…'),
+      ));
+    });
+
+    return Stack(clipBehavior: Clip.none, children: children);
+  }
+}
+
+class _CursorMarker extends StatelessWidget {
+  const _CursorMarker({required this.color, required this.name});
+  final Color color;
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Transform.rotate(
+          angle: -math.pi / 5,
+          child: Icon(Icons.navigation, size: 18, color: color, shadows: const [
+            Shadow(color: Color(0x55000000), blurRadius: 3, offset: Offset(0, 1)),
+          ]),
+        ),
+        Container(
+          margin: const EdgeInsets.only(left: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+                color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EditingBadge extends StatelessWidget {
+  const _EditingBadge({required this.color, required this.name});
+  final Color color;
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.lock, size: 9, color: Colors.white),
+          const SizedBox(width: 3),
+          Text(
+            '$name редактирует',
+            style: const TextStyle(
+                color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MemberLegendOverlay extends ConsumerWidget {
   const _MemberLegendOverlay({
     required this.goal,
     required this.sc,
     required this.filterMemberId,
     required this.onMemberTap,
+    this.liveUserIds = const {},
+    this.followingId,
+    this.onFollow,
   });
   final Goal goal;
   final SieColors sc;
   final String? filterMemberId;
   final ValueChanged<String> onMemberTap;
+  // Stage 8: users currently broadcasting a live cursor + follow-mode wiring.
+  final Set<String> liveUserIds;
+  final String? followingId;
+  final ValueChanged<String>? onFollow;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -3375,6 +3766,31 @@ class _MemberLegendOverlay extends ConsumerWidget {
                             : FontWeight.w400,
                       ),
                     ),
+                    // Stage 8: live presence dot + follow toggle.
+                    if (liveUserIds.contains(m.userId)) ...[
+                      const SizedBox(width: 5),
+                      Container(
+                        width: 5,
+                        height: 5,
+                        decoration: const BoxDecoration(
+                            shape: BoxShape.circle, color: Color(0xFF27AE60)),
+                      ),
+                      if (onFollow != null) ...[
+                        const SizedBox(width: 3),
+                        GestureDetector(
+                          onTap: () => onFollow!(m.userId),
+                          child: Icon(
+                            followingId == m.userId
+                                ? Icons.my_location
+                                : Icons.location_searching,
+                            size: 12,
+                            color: followingId == m.userId
+                                ? memberColor(m.userId, c)
+                                : c.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ],
                   ],
                 ),
               ),

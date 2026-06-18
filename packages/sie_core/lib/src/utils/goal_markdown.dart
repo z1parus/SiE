@@ -76,7 +76,10 @@ String goalToMarkdown(Goal goal) {
     buf.writeln();
     buf.writeln('## Заметки с карты');
     for (final n in notes) {
-      if (n.content.isNotEmpty) buf.writeln('- 📌 «${n.content}»');
+      final content = n.content;
+      if (content != null && content.isNotEmpty) {
+        buf.writeln('- 📌 «$content»');
+      }
     }
   }
 
