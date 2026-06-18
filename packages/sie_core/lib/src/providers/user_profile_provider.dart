@@ -21,65 +21,94 @@ class UserProfileNotifier extends AsyncNotifier<Profile?> {
 
   Future<Profile?> _fetchFromServer() async {
     final user = SupabaseService.client.auth.currentUser;
-    if (user == null) return null;
+    if (user == null) {
+      debugPrint('SiE Profile: currentUser is null — skipping fetch');
+      return null;
+    }
 
+    // ── Step 1: Fetch from Supabase ───────────────────────────────────────────
+    // Isolated so a network error never loses already-fetched data.
+    Profile? serverProfile;
     try {
       final data = await SupabaseService.client
           .from('profiles')
           .select()
           .eq('id', user.id)
           .maybeSingle();
-      if (data == null) return null;
-      final profile = Profile.fromJson(data);
-
-      // Preserve any pending XP/DP that hasn't been flushed to the server yet.
-      final db = ref.read(appDatabaseProvider);
-      final existing = await db.getProfile(user.id);
-      final pendingXp = existing?.pendingXp ?? 0;
-      final pendingDp = existing?.pendingDp ?? 0;
-
-      await db.upsertProfile(LocalProfilesCompanion(
-        userId: Value(user.id),
-        totalXp: Value(profile.totalXp + pendingXp),
-        designPoints: Value(profile.designPoints + pendingDp),
-        pendingXp: Value(pendingXp),
-        pendingDp: Value(pendingDp),
-        cachedJson: Value(jsonEncode(data)),
-      ));
-      if (pendingXp == 0 && pendingDp == 0) return profile;
-      return profile.copyWith(
-        totalXp: profile.totalXp + pendingXp,
-        designPoints: profile.designPoints + pendingDp,
-      );
+      if (data != null) {
+        serverProfile = Profile.fromJson(data);
+        debugPrint('SiE Profile: server fetch OK — ${serverProfile.username}');
+      }
     } catch (e, st) {
       debugPrint('SiE Profile: Supabase fetch failed — $e\n$st');
-      // Offline fallback: reconstruct from local cache. Wrap in its own
-      // try-catch so a local DB error (e.g. missing column) never surfaces
-      // as AsyncError and shows a misleading "no internet" message.
+    }
+
+    // ── Step 2: Merge pending XP/DP and write local cache ────────────────────
+    // If DB fails here we still return the live server data — never discard it.
+    if (serverProfile != null) {
       try {
         final db = ref.read(appDatabaseProvider);
-        final local = await db.getProfile(user.id);
-        if (local == null) return null;
-        if (local.cachedJson != null) {
-          final json = jsonDecode(local.cachedJson!) as Map<String, dynamic>;
-          return Profile.fromJson({
-            ...json,
-            'total_xp': local.totalXp,
-            'design_points': local.designPoints,
-          });
-        }
-        return Profile(
-          id: user.id,
-          totalXp: local.totalXp,
-          designPoints: local.designPoints,
-          isLabMember: false,
+        final existing = await db.getProfile(user.id);
+        final pendingXp = existing?.pendingXp ?? 0;
+        final pendingDp = existing?.pendingDp ?? 0;
+
+        await db.upsertProfile(LocalProfilesCompanion(
+          userId: Value(user.id),
+          totalXp: Value(serverProfile.totalXp + pendingXp),
+          designPoints: Value(serverProfile.designPoints + pendingDp),
+          pendingXp: Value(pendingXp),
+          pendingDp: Value(pendingDp),
+          cachedJson: Value(jsonEncode({
+            'id': user.id,
+            'username': serverProfile.username,
+            'full_name': serverProfile.fullName,
+            'avatar_url': serverProfile.avatarUrl,
+            'total_xp': serverProfile.totalXp,
+            'design_points': serverProfile.designPoints,
+            'is_lab_member': serverProfile.isLabMember,
+            'has_seen_welcome': serverProfile.hasSeenWelcome,
+            'has_seen_onboarding_breathing': serverProfile.hasSeenOnboardingBreathing,
+            'has_seen_onboarding_habits': serverProfile.hasSeenOnboardingHabits,
+            'has_seen_onboarding_focus': serverProfile.hasSeenOnboardingFocus,
+            'equipped_frame_id': serverProfile.equippedFrameId,
+            'equipped_background_id': serverProfile.equippedBackgroundId,
+            'equipped_stat_style_id': serverProfile.equippedStatStyleId,
+            'equipped_pattern_id': serverProfile.equippedPatternId,
+          })),
+        ));
+        if (pendingXp == 0 && pendingDp == 0) return serverProfile;
+        return serverProfile.copyWith(
+          totalXp: serverProfile.totalXp + pendingXp,
+          designPoints: serverProfile.designPoints + pendingDp,
         );
-      } catch (e2) {
-        debugPrint('SiE Profile: local cache fallback also failed — $e2');
-        // Return a minimal profile stub rather than erroring so the profile
-        // screen never shows the "no internet" message for a logged-in user.
-        return Profile(id: user.id, totalXp: 0, designPoints: 0, isLabMember: false);
+      } catch (e) {
+        debugPrint('SiE Profile: DB cache write failed (returning server data anyway) — $e');
+        return serverProfile;
       }
+    }
+
+    // ── Step 3: Supabase failed — try local cache ─────────────────────────────
+    try {
+      final db = ref.read(appDatabaseProvider);
+      final local = await db.getProfile(user.id);
+      if (local == null) return null;
+      if (local.cachedJson != null) {
+        final json = jsonDecode(local.cachedJson!) as Map<String, dynamic>;
+        return Profile.fromJson({
+          ...json,
+          'total_xp': local.totalXp,
+          'design_points': local.designPoints,
+        });
+      }
+      return Profile(
+        id: user.id,
+        totalXp: local.totalXp,
+        designPoints: local.designPoints,
+        isLabMember: false,
+      );
+    } catch (e2) {
+      debugPrint('SiE Profile: local cache fallback also failed — $e2');
+      return null;
     }
   }
 
