@@ -16,7 +16,7 @@ class NotificationsNotifier extends AsyncNotifier<NotificationsState>
 
   @override
   Future<NotificationsState> build() async {
-    ref.watch(authStateProvider);
+    ref.watch(authStateProvider).valueOrNull;
     WidgetsBinding.instance.addObserver(this);
     ref.onDispose(() {
       WidgetsBinding.instance.removeObserver(this);
@@ -59,44 +59,49 @@ class NotificationsNotifier extends AsyncNotifier<NotificationsState>
     final userId = SupabaseService.client.auth.currentUser?.id;
     if (userId == null) return const NotificationsState(notifications: []);
 
-    final data = await SupabaseService.client
-        .from('notifications')
-        .select('id, type, from_user_id, is_read, created_at, payload')
-        .eq('user_id', userId)
-        .order('created_at', ascending: false)
-        .limit(50);
+    try {
+      final data = await SupabaseService.client
+          .from('notifications')
+          .select('id, type, from_user_id, is_read, created_at, payload')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(50);
 
-    final fromIds = data
-        .map((r) => r['from_user_id'] as String?)
-        .whereType<String>()
-        .toSet()
-        .toList();
+      final fromIds = data
+          .map((r) => r['from_user_id'] as String?)
+          .whereType<String>()
+          .toSet()
+          .toList();
 
-    final profileMap = <String, PublicProfile>{};
-    if (fromIds.isNotEmpty) {
-      final profiles = await SupabaseService.client
-          .from('profiles')
-          .select('id, username, avatar_url, equipped_frame_id, '
-              'equipped_background_id, equipped_stat_style_id, equipped_pattern_id, total_xp, design_points')
-          .inFilter('id', fromIds);
-      for (final p in profiles) {
-        profileMap[p['id'] as String] = PublicProfile.fromJson(p);
+      final profileMap = <String, PublicProfile>{};
+      if (fromIds.isNotEmpty) {
+        final profiles = await SupabaseService.client
+            .from('profiles')
+            .select('id, username, avatar_url, equipped_frame_id, '
+                'equipped_background_id, equipped_stat_style_id, equipped_pattern_id, total_xp, design_points')
+            .inFilter('id', fromIds);
+        for (final p in profiles) {
+          profileMap[p['id'] as String] = PublicProfile.fromJson(p);
+        }
       }
+
+      final notifications = data.map((r) {
+        final fromId = r['from_user_id'] as String?;
+        return AppNotification(
+          id: r['id'] as String,
+          type: r['type'] as String,
+          fromUser: fromId != null ? profileMap[fromId] : null,
+          isRead: r['is_read'] as bool,
+          createdAt: DateTime.parse(r['created_at'] as String),
+          payload: (r['payload'] as Map<String, dynamic>?) ?? {},
+        );
+      }).toList();
+
+      return NotificationsState(notifications: notifications);
+    } catch (e) {
+      debugPrint('SiE Notifications: fetch failed — $e');
+      return const NotificationsState(notifications: []);
     }
-
-    final notifications = data.map((r) {
-      final fromId = r['from_user_id'] as String?;
-      return AppNotification(
-        id: r['id'] as String,
-        type: r['type'] as String,
-        fromUser: fromId != null ? profileMap[fromId] : null,
-        isRead: r['is_read'] as bool,
-        createdAt: DateTime.parse(r['created_at'] as String),
-        payload: (r['payload'] as Map<String, dynamic>?) ?? {},
-      );
-    }).toList();
-
-    return NotificationsState(notifications: notifications);
   }
 
   Future<void> markAsRead(String id) async {

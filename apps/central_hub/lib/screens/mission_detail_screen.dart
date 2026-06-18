@@ -10,6 +10,8 @@ import 'ai_decomposition_sheet.dart';
 import 'milestone_metric_screen.dart';
 import 'focus_protocol_screen.dart';
 import '../widgets/sparkline.dart';
+import '../widgets/attachment_gallery.dart';
+import 'goal_export_sheet.dart';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -42,6 +44,7 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
   String? _selectedSubGoalId;
   RealtimeChannel? _presenceChannel;
   Set<String> _onlineUserIds = {};
+  final _mapRepaintKey = GlobalKey();
 
   @override
   void initState() {
@@ -73,6 +76,21 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
   void dispose() {
     _presenceChannel?.unsubscribe();
     super.dispose();
+  }
+
+  void _showExportSheet(BuildContext ctx, Goal goal, SieColors sc) {
+    showModalBottomSheet(
+      context: ctx,
+      backgroundColor: sc.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => GoalExportSheet(
+        goal: goal,
+        sc: sc,
+        mapMode: _mapMode,
+        mapRepaintKey: _mapRepaintKey,
+      ),
+    );
   }
 
   @override
@@ -122,10 +140,14 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
                     ? () => showAiDecompositionSheet(context, goal)
                     : null,
                 isShared: !isOwner,
+                onExport: () => _showExportSheet(context, goal, sc),
               ),
               Expanded(
                 child: _mapMode
-                    ? TacticalMapView(goal: goal, canEdit: canEdit)
+                    ? RepaintBoundary(
+                        key: _mapRepaintKey,
+                        child: TacticalMapView(goal: goal, canEdit: canEdit),
+                      )
                     : _DetailListView(
                         goal: goal,
                         sc: sc,
@@ -169,6 +191,7 @@ class _MissionHeader extends StatelessWidget {
     required this.onStats,
     this.onAiDecompose,
     this.isShared = false,
+    this.onExport,
   });
 
   final Goal goal;
@@ -180,6 +203,7 @@ class _MissionHeader extends StatelessWidget {
   final VoidCallback onStats;
   final VoidCallback? onAiDecompose;
   final bool isShared;
+  final VoidCallback? onExport;
 
   @override
   Widget build(BuildContext context) {
@@ -246,6 +270,17 @@ class _MissionHeader extends StatelessWidget {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
               ),
+              if (onExport != null) ...[
+                const SizedBox(width: 2),
+                IconButton(
+                  icon: Icon(Icons.ios_share_outlined,
+                      color: sc.textSecondary, size: 20),
+                  onPressed: onExport,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Экспорт',
+                ),
+              ],
               const SizedBox(width: 4),
               _ViewToggle(
                   mapMode: mapMode, onToggle: onToggle, goalColor: goalColor, sc: sc),
@@ -846,6 +881,14 @@ class _SubGoalTile extends ConsumerWidget {
                       child: Icon(Icons.lock_outline,
                           size: 14, color: sc.textSecondary),
                     ),
+                  if (sg.assigneeIds.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: _AssigneeDot(
+                        userId: sg.assigneeIds.first,
+                        sc: sc,
+                      ),
+                    ),
                   Icon(
                     isExpanded
                         ? Icons.expand_less
@@ -861,6 +904,20 @@ class _SubGoalTile extends ConsumerWidget {
             Divider(height: 1, color: sc.border),
             Column(
               children: [
+                Builder(builder: (ctx) {
+                  final atts = goal.attachmentsFor(sg.id);
+                  if (atts.isEmpty && !canEdit) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                    child: AttachmentGallery(
+                      goalId: goal.id,
+                      nodeType: 'subgoal',
+                      nodeId: sg.id,
+                      attachments: atts,
+                      canEdit: canEdit,
+                    ),
+                  );
+                }),
                 ReorderableListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -1145,6 +1202,21 @@ class _TaskTile extends ConsumerWidget {
                           fontStyle: FontStyle.italic),
                     ),
                   ),
+                Builder(builder: (ctx) {
+                  final atts = goal.attachmentsFor(t.id);
+                  if (atts.isEmpty && !canEdit) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: AttachmentGallery(
+                      goalId: goal.id,
+                      nodeType: 'task',
+                      nodeId: t.id,
+                      attachments: atts,
+                      canEdit: canEdit,
+                      compactMode: true,
+                    ),
+                  );
+                }),
               ],
             ),
           ),
@@ -1184,6 +1256,14 @@ class _TaskTile extends ConsumerWidget {
               ),
             ),
           ],
+          if (t.assigneeIds.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: _AssigneeDot(
+                userId: t.assigneeIds.first,
+                sc: sc,
+              ),
+            ),
           _WeightBadge(weight: t.weight, sc: sc),
           if (canEdit) ...[
             const SizedBox(width: 6),
@@ -1399,6 +1479,41 @@ class _WeightBadge extends StatelessWidget {
   }
 }
 
+// Stage 5: small colored assignee dot for list tiles.
+class _AssigneeDot extends StatelessWidget {
+  const _AssigneeDot({
+    required this.userId,
+    required this.sc,
+  });
+  final String userId;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = memberColor(userId, sc);
+    final letter = userId.isNotEmpty ? userId[0].toUpperCase() : '?';
+    return Container(
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color.withValues(alpha: 0.85),
+        border: Border.all(color: sc.background, width: 1),
+      ),
+      child: Center(
+        child: Text(
+          letter,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AddChildSubGoalRow extends ConsumerWidget {
   const _AddChildSubGoalRow(
       {required this.subGoal, required this.goal, required this.sc, this.canEdit = true});
@@ -1510,50 +1625,68 @@ class _MilestoneTile extends ConsumerWidget {
     final m = milestone;
     if (m.isMetric) return _MetricMilestoneTile(milestone: m, goal: goal, sc: sc, canEdit: canEdit);
 
+    final atts = goal.attachmentsFor(m.id);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
-            onTap: canEdit && !m.isCompleted
-                ? () => ref
-                    .read(planningProvider.notifier)
-                    .completeMilestone(m.id, goal.id)
-                : null,
-            child: Icon(
-              m.isCompleted ? Icons.flag : Icons.outlined_flag,
-              color: m.isCompleted ? goal.color : sc.textSecondary,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  m.name,
-                  style: TextStyle(
-                    color: m.isCompleted ? sc.textSecondary : sc.textPrimary,
-                    fontSize: 14,
-                    decoration:
-                        m.isCompleted ? TextDecoration.lineThrough : null,
-                  ),
+          Row(
+            children: [
+              GestureDetector(
+                onTap: canEdit && !m.isCompleted
+                    ? () => ref
+                        .read(planningProvider.notifier)
+                        .completeMilestone(m.id, goal.id)
+                    : null,
+                child: Icon(
+                  m.isCompleted ? Icons.flag : Icons.outlined_flag,
+                  color: m.isCompleted ? goal.color : sc.textSecondary,
+                  size: 22,
                 ),
-                if (m.targetDate != null)
-                  Text(
-                    _formatDate(m.targetDate!),
-                    style: TextStyle(color: sc.textSecondary, fontSize: 10),
-                  ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      m.name,
+                      style: TextStyle(
+                        color: m.isCompleted ? sc.textSecondary : sc.textPrimary,
+                        fontSize: 14,
+                        decoration:
+                            m.isCompleted ? TextDecoration.lineThrough : null,
+                      ),
+                    ),
+                    if (m.targetDate != null)
+                      Text(
+                        _formatDate(m.targetDate!),
+                        style: TextStyle(color: sc.textSecondary, fontSize: 10),
+                      ),
+                  ],
+                ),
+              ),
+              if (canEdit && !m.isCompleted)
+                GestureDetector(
+                  onTap: () => _confirmDeleteMilestone(
+                      context, ref, m.id, goal.id, sc),
+                  child:
+                      Icon(Icons.close, size: 14, color: sc.textSecondary),
+                ),
+            ],
           ),
-          if (canEdit && !m.isCompleted)
-            GestureDetector(
-              onTap: () => _confirmDeleteMilestone(
-                  context, ref, m.id, goal.id, sc),
-              child:
-                  Icon(Icons.close, size: 14, color: sc.textSecondary),
+          if (atts.isNotEmpty || canEdit)
+            Padding(
+              padding: const EdgeInsets.only(left: 32, top: 4),
+              child: AttachmentGallery(
+                goalId: goal.id,
+                nodeType: 'milestone',
+                nodeId: m.id,
+                attachments: atts,
+                canEdit: canEdit,
+                compactMode: true,
+              ),
             ),
         ],
       ),

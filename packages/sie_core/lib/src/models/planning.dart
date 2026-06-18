@@ -1,6 +1,8 @@
 import 'dart:ui' show Offset;
 import 'package:flutter/material.dart';
 import 'goal_collaborator.dart';
+import 'map_element.dart';
+import 'node_attachment.dart';
 import 'public_profile.dart';
 
 const _unset = Object();
@@ -19,6 +21,7 @@ class GoalSettings {
     this.hideCompletedTasks = false,
     this.category,
     this.why,
+    this.mapLocked = false,
   });
 
   final bool isFogOfWarEnabled;
@@ -28,6 +31,8 @@ class GoalSettings {
   final GoalCategory? category;
   // Stage 9: the motivation / "why" behind this goal.
   final String? why;
+  // Tactical Map Stage 7: lock node positions (presentation/review mode).
+  final bool mapLocked;
 
   static const defaults = GoalSettings();
 
@@ -38,6 +43,7 @@ class GoalSettings {
     bool? hideCompletedTasks,
     Object? category = _unset,
     Object? why = _unset,
+    bool? mapLocked,
   }) =>
       GoalSettings(
         isFogOfWarEnabled: isFogOfWarEnabled ?? this.isFogOfWarEnabled,
@@ -47,6 +53,7 @@ class GoalSettings {
         hideCompletedTasks: hideCompletedTasks ?? this.hideCompletedTasks,
         category: category == _unset ? this.category : category as GoalCategory?,
         why: why == _unset ? this.why : why as String?,
+        mapLocked: mapLocked ?? this.mapLocked,
       );
 
   factory GoalSettings.fromJson(Map<String, dynamic> j) {
@@ -63,6 +70,7 @@ class GoalSettings {
       hideCompletedTasks: j['hide_completed_tasks'] as bool? ?? false,
       category: cat,
       why: (whyRaw != null && whyRaw.isNotEmpty) ? whyRaw : null,
+      mapLocked: j['map_locked'] as bool? ?? false,
     );
   }
 
@@ -73,6 +81,7 @@ class GoalSettings {
         'hide_completed_tasks': hideCompletedTasks,
         if (category != null) 'category': category!.name,
         if (why != null) 'why': why,
+        'map_locked': mapLocked,
       };
 }
 
@@ -94,6 +103,7 @@ class PlanningTask {
     this.recurrenceUntil,
     this.recurrenceParentId,
     this.dependsOn = const [],
+    this.assigneeIds = const [],
   });
 
   final String id;
@@ -112,6 +122,8 @@ class PlanningTask {
   final String? recurrenceParentId;
   // Dependencies (stage 8): ids of tasks that must be completed before this one.
   final List<String> dependsOn;
+  // Stage 5: user IDs assigned to this task.
+  final List<String> assigneeIds;
 
   bool get isRecurring => recurrenceRule != null && recurrenceRule!.isNotEmpty;
   bool get hasDependencies => dependsOn.isNotEmpty;
@@ -127,6 +139,7 @@ class PlanningTask {
     Object? recurrenceUntil = _unset,
     Object? recurrenceParentId = _unset,
     List<String>? dependsOn,
+    List<String>? assigneeIds,
   }) =>
       PlanningTask(
         id: id,
@@ -149,6 +162,7 @@ class PlanningTask {
             ? this.recurrenceParentId
             : recurrenceParentId as String?,
         dependsOn: dependsOn ?? this.dependsOn,
+        assigneeIds: assigneeIds ?? this.assigneeIds,
         createdAt: createdAt,
       );
 
@@ -204,6 +218,7 @@ class SubGoal {
     required this.createdAt,
     this.parentSubGoalId,
     this.children = const [],
+    this.assigneeIds = const [],
   });
 
   final String id;
@@ -215,6 +230,8 @@ class SubGoal {
   final List<PlanningTask> tasks;
   final List<SubGoal> children;
   final DateTime createdAt;
+  // Stage 5: user IDs assigned to this sub-goal.
+  final List<String> assigneeIds;
 
   SubGoal copyWith({
     String? name,
@@ -223,6 +240,7 @@ class SubGoal {
     List<PlanningTask>? tasks,
     List<SubGoal>? children,
     String? parentSubGoalId,
+    List<String>? assigneeIds,
   }) =>
       SubGoal(
         id: id,
@@ -233,6 +251,7 @@ class SubGoal {
         orderIndex: orderIndex ?? this.orderIndex,
         tasks: tasks ?? this.tasks,
         children: children ?? this.children,
+        assigneeIds: assigneeIds ?? this.assigneeIds,
         createdAt: createdAt,
       );
 
@@ -411,6 +430,8 @@ class Goal {
     this.isPinned = false,
     this.collaborators = const [],
     this.ownerProfile,
+    this.mapElements = const [],
+    this.attachments = const {},
   });
 
   final String id;
@@ -432,6 +453,11 @@ class Goal {
   final bool isPinned;
   final List<GoalCollaborator> collaborators;
   final PublicProfile? ownerProfile; // populated for shared goals
+  final List<MapElement> mapElements; // map-native content (Tactical Map only)
+  final Map<String, List<NodeAttachment>> attachments; // nodeId → attachments
+
+  List<NodeAttachment> attachmentsFor(String nodeId) =>
+      attachments[nodeId] ?? const [];
 
   Color get color =>
       Color(int.parse('0xFF${colorHex.replaceAll('#', '')}'));
@@ -467,6 +493,8 @@ class Goal {
     bool? isPinned,
     List<GoalCollaborator>? collaborators,
     PublicProfile? ownerProfile,
+    List<MapElement>? mapElements,
+    Map<String, List<NodeAttachment>>? attachments,
   }) =>
       Goal(
         id: id,
@@ -488,6 +516,8 @@ class Goal {
         isPinned: isPinned ?? this.isPinned,
         collaborators: collaborators ?? this.collaborators,
         ownerProfile: ownerProfile ?? this.ownerProfile,
+        mapElements: mapElements ?? this.mapElements,
+        attachments: attachments ?? this.attachments,
       );
 
   factory Goal.fromJson(Map<String, dynamic> j) {
@@ -519,6 +549,13 @@ class Goal {
             .toList()
         : <GoalCollaborator>[];
 
+    final rawElements = j['goal_map_elements'];
+    final mapElements = rawElements is List
+        ? rawElements
+            .map((e) => MapElement.fromJson(e as Map<String, dynamic>))
+            .toList()
+        : <MapElement>[];
+
     return Goal(
       id: j['id'] as String,
       userId: j['user_id'] as String,
@@ -544,6 +581,7 @@ class Goal {
       mapPositions: positionsFromJson(j['map_positions'] as Map<String, dynamic>?),
       isPinned: j['is_pinned'] as bool? ?? false,
       collaborators: collaborators,
+      mapElements: mapElements,
     );
   }
 

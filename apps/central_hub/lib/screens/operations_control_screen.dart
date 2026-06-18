@@ -690,6 +690,7 @@ class _BranchCarouselCard extends ConsumerWidget {
       'habit_archive'       => const _HabitMatrixPreview(),
       'focus_protocol'      => const _FocusRingPreview(),
       'planning'            => const _PlanningPreview(),
+      'meditation'          => const _MeditationPreview(),
       _                     => const SizedBox.shrink(),
     };
   }
@@ -705,6 +706,8 @@ class _BranchCarouselCard extends ConsumerWidget {
         return '${focus.settings.workMinutes} min';
       case 'breathing_practices':
         return 'PROTOCOL READY';
+      case 'meditation':
+        return 'SESSION READY';
       case 'planning':
         final count = ref.watch(
           planningProvider.select((s) => s.valueOrNull?.activeGoals.length ?? 0),
@@ -1125,6 +1128,146 @@ class _PlanningPreviewPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_PlanningPreviewPainter _) => false;
+}
+
+/// Meditation module preview — a calm teal orb that slowly breathes while
+/// concentric "clarity" ripples radiate outward (the Дефрагментация motif).
+class _MeditationPreview extends StatefulWidget {
+  const _MeditationPreview();
+
+  @override
+  State<_MeditationPreview> createState() => _MeditationPreviewState();
+}
+
+class _MeditationPreviewState extends State<_MeditationPreview>
+    with TickerProviderStateMixin {
+  late final AnimationController _pulseCtrl;
+  late final AnimationController _rippleCtrl;
+  late final Animation<double> _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    )..repeat(reverse: true);
+    _pulse = Tween<double>(begin: 0.94, end: 1.06).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+    );
+    _rippleCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 6),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    _rippleCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SizedBox(
+        width: 150,
+        height: 150,
+        child: AnimatedBuilder(
+          animation: Listenable.merge([_pulse, _rippleCtrl]),
+          builder: (_, _) {
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                // Expanding clarity ripples
+                CustomPaint(
+                  size: const Size(150, 150),
+                  painter: _MeditationRipplePainter(progress: _rippleCtrl.value),
+                ),
+                // Central breathing orb
+                Transform.scale(
+                  scale: _pulse.value,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Glow halo
+                      Container(
+                        width: 78,
+                        height: 78,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: kRimTeal.withValues(alpha: 0.28),
+                              blurRadius: 26,
+                              spreadRadius: 4,
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Core
+                      Container(
+                        width: 70,
+                        height: 70,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [kRimTealLight, kRimTeal, kRimTealDark],
+                            stops: [0.0, 0.55, 1.0],
+                          ),
+                        ),
+                      ),
+                      // Rim highlight
+                      CustomPaint(
+                        size: const Size(74, 74),
+                        painter: SphereRimPainter(
+                          lightAngle: -math.pi / 4,
+                          intensity: 0.6,
+                          isDark: true,
+                          rimGold: kRimTeal,
+                          rimBronze: kRimTealDark,
+                          rimLight: kRimTealLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _MeditationRipplePainter extends CustomPainter {
+  final double progress; // 0..1, repeating
+  const _MeditationRipplePainter({required this.progress});
+
+  static const _count = 3;
+  static const _minRadius = 36.0;
+  static const _maxRadius = 72.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    for (var i = 0; i < _count; i++) {
+      final t = (progress + i / _count) % 1.0;
+      final radius = _minRadius + (_maxRadius - _minRadius) * t;
+      final alpha = (1.0 - t) * 0.32;
+      if (alpha <= 0.01) continue;
+      final paint = Paint()
+        ..color = kRimTeal.withValues(alpha: alpha)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5;
+      canvas.drawCircle(center, radius, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_MeditationRipplePainter old) => old.progress != progress;
 }
 
 class _ArcPainter extends CustomPainter {

@@ -22,7 +22,7 @@ class MeditationStats {
 
 final meditationStatsProvider =
     AutoDisposeFutureProvider<MeditationStats>((ref) async {
-  ref.watch(authStateProvider);
+  ref.watch(authStateProvider).valueOrNull;
   final userId = Supabase.instance.client.auth.currentUser?.id;
   if (userId == null) return const MeditationStats();
 

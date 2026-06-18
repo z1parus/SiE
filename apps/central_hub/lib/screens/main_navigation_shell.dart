@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 
@@ -22,6 +24,7 @@ class MainNavigationShell extends ConsumerStatefulWidget {
 
 class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
   int _currentIndex = 1;
+  DateTime? _lastBackPress;
 
   @override
   void initState() {
@@ -48,43 +51,70 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
     });
   }
 
+  void _handleBackPress() {
+    final now = DateTime.now();
+    if (_lastBackPress != null &&
+        now.difference(_lastBackPress!) < const Duration(seconds: 2)) {
+      SystemNavigator.pop();
+    } else {
+      _lastBackPress = now;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: const Text('Нажмите ещё раз для выхода'),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+          ),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return SieBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Stack(
-          children: [
-            Column(
-              children: [
-                const OfflineBanner(),
-                Expanded(
-                  child: IndexedStack(
-                    index: _currentIndex,
-                    children: [
-                      ProfileScreen(asTab: true),
-                      OperationsControlScreen(asTab: true),
-                      const GarageScreen(asTab: true),
-                      LeaderboardScreen(asTab: true),
-                    ],
+      child: PopScope(
+        canPop: !Platform.isAndroid,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
+          _handleBackPress();
+        },
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Stack(
+            children: [
+              Column(
+                children: [
+                  const OfflineBanner(),
+                  Expanded(
+                    child: IndexedStack(
+                      index: _currentIndex,
+                      children: [
+                        ProfileScreen(asTab: true),
+                        OperationsControlScreen(asTab: true),
+                        const GarageScreen(asTab: true),
+                        LeaderboardScreen(asTab: true),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: _ShellNavBar(
-                activeIndex: _currentIndex,
-                onTabChanged: (i) {
-                  if (i == _currentIndex) return;
-                  SieHaptics.selection();
-                  setState(() => _currentIndex = i);
-                },
+                ],
               ),
-            ),
-          ],
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: _ShellNavBar(
+                  activeIndex: _currentIndex,
+                  onTabChanged: (i) {
+                    if (i == _currentIndex) return;
+                    SieHaptics.selection();
+                    setState(() => _currentIndex = i);
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

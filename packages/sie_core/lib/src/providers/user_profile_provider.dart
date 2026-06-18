@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:drift/drift.dart' show Value;
@@ -11,44 +12,83 @@ import 'auth_state_provider.dart';
 class UserProfileNotifier extends AsyncNotifier<Profile?> {
   @override
   Future<Profile?> build() async {
-    ref.watch(authStateProvider);
+    // Track auth changes so the provider rebuilds on login/logout.
+    // Read the value (not .future) to avoid auto-propagation of AsyncError
+    // from the stream provider — profile loading has its own fallback.
+    ref.watch(authStateProvider).valueOrNull;
     return _fetchFromServer();
   }
 
   Future<Profile?> _fetchFromServer() async {
     final user = SupabaseService.client.auth.currentUser;
-    if (user == null) return null;
+    if (user == null) {
+      debugPrint('SiE Profile: currentUser is null — skipping fetch');
+      return null;
+    }
 
+    // ── Step 1: Fetch from Supabase ───────────────────────────────────────────
+    // Isolated so a network error never loses already-fetched data.
+    Profile? serverProfile;
     try {
       final data = await SupabaseService.client
           .from('profiles')
           .select()
           .eq('id', user.id)
           .maybeSingle();
-      if (data == null) return null;
-      final profile = Profile.fromJson(data);
+      if (data != null) {
+        serverProfile = Profile.fromJson(data);
+        debugPrint('SiE Profile: server fetch OK — ${serverProfile.username}');
+      }
+    } catch (e, st) {
+      debugPrint('SiE Profile: Supabase fetch failed — $e\n$st');
+    }
 
-      // Preserve any pending XP/DP that hasn't been flushed to the server yet.
-      final db = ref.read(appDatabaseProvider);
-      final existing = await db.getProfile(user.id);
-      final pendingXp = existing?.pendingXp ?? 0;
-      final pendingDp = existing?.pendingDp ?? 0;
+    // ── Step 2: Merge pending XP/DP and write local cache ────────────────────
+    // If DB fails here we still return the live server data — never discard it.
+    if (serverProfile != null) {
+      try {
+        final db = ref.read(appDatabaseProvider);
+        final existing = await db.getProfile(user.id);
+        final pendingXp = existing?.pendingXp ?? 0;
+        final pendingDp = existing?.pendingDp ?? 0;
 
-      await db.upsertProfile(LocalProfilesCompanion(
-        userId: Value(user.id),
-        totalXp: Value(profile.totalXp + pendingXp),
-        designPoints: Value(profile.designPoints + pendingDp),
-        pendingXp: Value(pendingXp),
-        pendingDp: Value(pendingDp),
-        cachedJson: Value(jsonEncode(data)),
-      ));
-      if (pendingXp == 0 && pendingDp == 0) return profile;
-      return profile.copyWith(
-        totalXp: profile.totalXp + pendingXp,
-        designPoints: profile.designPoints + pendingDp,
-      );
-    } catch (_) {
-      // Offline fallback: reconstruct from local cache.
+        await db.upsertProfile(LocalProfilesCompanion(
+          userId: Value(user.id),
+          totalXp: Value(serverProfile.totalXp + pendingXp),
+          designPoints: Value(serverProfile.designPoints + pendingDp),
+          pendingXp: Value(pendingXp),
+          pendingDp: Value(pendingDp),
+          cachedJson: Value(jsonEncode({
+            'id': user.id,
+            'username': serverProfile.username,
+            'full_name': serverProfile.fullName,
+            'avatar_url': serverProfile.avatarUrl,
+            'total_xp': serverProfile.totalXp,
+            'design_points': serverProfile.designPoints,
+            'is_lab_member': serverProfile.isLabMember,
+            'has_seen_welcome': serverProfile.hasSeenWelcome,
+            'has_seen_onboarding_breathing': serverProfile.hasSeenOnboardingBreathing,
+            'has_seen_onboarding_habits': serverProfile.hasSeenOnboardingHabits,
+            'has_seen_onboarding_focus': serverProfile.hasSeenOnboardingFocus,
+            'equipped_frame_id': serverProfile.equippedFrameId,
+            'equipped_background_id': serverProfile.equippedBackgroundId,
+            'equipped_stat_style_id': serverProfile.equippedStatStyleId,
+            'equipped_pattern_id': serverProfile.equippedPatternId,
+          })),
+        ));
+        if (pendingXp == 0 && pendingDp == 0) return serverProfile;
+        return serverProfile.copyWith(
+          totalXp: serverProfile.totalXp + pendingXp,
+          designPoints: serverProfile.designPoints + pendingDp,
+        );
+      } catch (e) {
+        debugPrint('SiE Profile: DB cache write failed (returning server data anyway) — $e');
+        return serverProfile;
+      }
+    }
+
+    // ── Step 3: Supabase failed — try local cache ─────────────────────────────
+    try {
       final db = ref.read(appDatabaseProvider);
       final local = await db.getProfile(user.id);
       if (local == null) return null;
@@ -66,6 +106,9 @@ class UserProfileNotifier extends AsyncNotifier<Profile?> {
         designPoints: local.designPoints,
         isLabMember: false,
       );
+    } catch (e2) {
+      debugPrint('SiE Profile: local cache fallback also failed — $e2');
+      return null;
     }
   }
 

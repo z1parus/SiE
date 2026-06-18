@@ -19,7 +19,7 @@ class MissionTemplatesNotifier
 
   @override
   Future<List<MissionTemplate>> build() async {
-    ref.watch(authStateProvider);
+    ref.watch(authStateProvider).valueOrNull;
     return _load();
   }
 

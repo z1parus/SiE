@@ -35,7 +35,7 @@ class MeditationPresetsNotifier
 
   @override
   Future<MeditationPresetsState> build() async {
-    ref.watch(authStateProvider);
+    ref.watch(authStateProvider).valueOrNull;
     return _load();
   }
 
