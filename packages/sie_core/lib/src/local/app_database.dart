@@ -409,6 +409,31 @@ class LocalMapElements extends Table {
   @override Set<Column> get primaryKey => {id};
 }
 
+// Stage 5: node assignees (task / sub-goal ↔ user).
+@DataClassName('LocalTaskAssignee')
+class LocalTaskAssignees extends Table {
+  TextColumn get taskId      => text()();
+  TextColumn get userId      => text()();
+  TextColumn get goalId      => text()();
+  TextColumn get assignedBy  => text().nullable()();
+  IntColumn  get createdAtMs => integer()();
+  BoolColumn get synced      => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
+  @override Set<Column> get primaryKey => {taskId, userId};
+}
+
+@DataClassName('LocalSubGoalAssignee')
+class LocalSubGoalAssignees extends Table {
+  TextColumn get subGoalId   => text()();
+  TextColumn get userId      => text()();
+  TextColumn get goalId      => text()();
+  TextColumn get assignedBy  => text().nullable()();
+  IntColumn  get createdAtMs => integer()();
+  BoolColumn get synced      => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally => boolean().withDefault(const Constant(false))();
+  @override Set<Column> get primaryKey => {subGoalId, userId};
+}
+
 // Stage 2: node attachments (images/files attached to plan nodes).
 @DataClassName('LocalNodeAttachment')
 class LocalNodeAttachments extends Table {
@@ -455,12 +480,14 @@ class LocalNodeAttachments extends Table {
   LocalWeeklyReviews,
   LocalMapElements,
   LocalNodeAttachments,
+  LocalTaskAssignees,
+  LocalSubGoalAssignees,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 34;
+  int get schemaVersion => 35;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -668,6 +695,18 @@ class AppDatabase extends _$AppDatabase {
         await m.issueCustomQuery(
             'CREATE INDEX IF NOT EXISTS idx_attach_node_id '
             'ON local_node_attachments(node_id)',
+            const []);
+      }
+      if (from < 35) {
+        await m.createTable(localTaskAssignees);
+        await m.createTable(localSubGoalAssignees);
+        await m.issueCustomQuery(
+            'CREATE INDEX IF NOT EXISTS idx_task_assignees_goal '
+            'ON local_task_assignees(goal_id)',
+            const []);
+        await m.issueCustomQuery(
+            'CREATE INDEX IF NOT EXISTS idx_sub_goal_assignees_goal '
+            'ON local_sub_goal_assignees(goal_id)',
             const []);
       }
     },
@@ -1158,6 +1197,77 @@ class AppDatabase extends _$AppDatabase {
       (update(localNodeAttachments)..where((t) => t.id.equals(id)))
           .write(LocalNodeAttachmentsCompanion(
               storagePath: Value(path), synced: const Value(false)));
+
+  // ── Node assignees (Stage 5) ──────────────────────────────────────────────
+
+  Future<List<LocalTaskAssignee>> taskAssigneesForGoals(List<String> goalIds) =>
+      goalIds.isEmpty
+          ? Future.value(const [])
+          : (select(localTaskAssignees)
+                ..where((t) =>
+                    t.goalId.isIn(goalIds) & t.deletedLocally.equals(false)))
+              .get();
+
+  Future<List<LocalSubGoalAssignee>> subGoalAssigneesForGoals(
+          List<String> goalIds) =>
+      goalIds.isEmpty
+          ? Future.value(const [])
+          : (select(localSubGoalAssignees)
+                ..where((t) =>
+                    t.goalId.isIn(goalIds) & t.deletedLocally.equals(false)))
+              .get();
+
+  Future<void> upsertTaskAssignee(LocalTaskAssigneesCompanion row) =>
+      into(localTaskAssignees).insertOnConflictUpdate(row);
+
+  Future<void> upsertSubGoalAssignee(LocalSubGoalAssigneesCompanion row) =>
+      into(localSubGoalAssignees).insertOnConflictUpdate(row);
+
+  Future<void> deleteTaskAssigneeLocally(String taskId, String userId) =>
+      (update(localTaskAssignees)
+            ..where((t) => t.taskId.equals(taskId) & t.userId.equals(userId)))
+          .write(const LocalTaskAssigneesCompanion(
+              deletedLocally: Value(true), synced: Value(false)));
+
+  Future<void> deleteSubGoalAssigneeLocally(
+          String subGoalId, String userId) =>
+      (update(localSubGoalAssignees)
+            ..where((t) =>
+                t.subGoalId.equals(subGoalId) & t.userId.equals(userId)))
+          .write(const LocalSubGoalAssigneesCompanion(
+              deletedLocally: Value(true), synced: Value(false)));
+
+  Future<void> purgeTaskAssignee(String taskId, String userId) =>
+      (delete(localTaskAssignees)
+            ..where(
+                (t) => t.taskId.equals(taskId) & t.userId.equals(userId)))
+          .go();
+
+  Future<void> purgeSubGoalAssignee(String subGoalId, String userId) =>
+      (delete(localSubGoalAssignees)
+            ..where((t) =>
+                t.subGoalId.equals(subGoalId) & t.userId.equals(userId)))
+          .go();
+
+  Future<List<LocalTaskAssignee>> unsyncedTaskAssignees() =>
+      (select(localTaskAssignees)..where((t) => t.synced.equals(false)))
+          .get();
+
+  Future<List<LocalSubGoalAssignee>> unsyncedSubGoalAssignees() =>
+      (select(localSubGoalAssignees)..where((t) => t.synced.equals(false)))
+          .get();
+
+  Future<void> markTaskAssigneeSynced(String taskId, String userId) =>
+      (update(localTaskAssignees)
+            ..where(
+                (t) => t.taskId.equals(taskId) & t.userId.equals(userId)))
+          .write(const LocalTaskAssigneesCompanion(synced: Value(true)));
+
+  Future<void> markSubGoalAssigneeSynced(String subGoalId, String userId) =>
+      (update(localSubGoalAssignees)
+            ..where((t) =>
+                t.subGoalId.equals(subGoalId) & t.userId.equals(userId)))
+          .write(const LocalSubGoalAssigneesCompanion(synced: Value(true)));
 
   Future<void> updateSubGoalOrderIndex(String id, int idx) =>
       (update(localSubGoals)..where((t) => t.id.equals(id)))

@@ -96,6 +96,7 @@ class PlanningTask {
     this.recurrenceUntil,
     this.recurrenceParentId,
     this.dependsOn = const [],
+    this.assigneeIds = const [],
   });
 
   final String id;
@@ -114,6 +115,8 @@ class PlanningTask {
   final String? recurrenceParentId;
   // Dependencies (stage 8): ids of tasks that must be completed before this one.
   final List<String> dependsOn;
+  // Stage 5: user IDs assigned to this task.
+  final List<String> assigneeIds;
 
   bool get isRecurring => recurrenceRule != null && recurrenceRule!.isNotEmpty;
   bool get hasDependencies => dependsOn.isNotEmpty;
@@ -129,6 +132,7 @@ class PlanningTask {
     Object? recurrenceUntil = _unset,
     Object? recurrenceParentId = _unset,
     List<String>? dependsOn,
+    List<String>? assigneeIds,
   }) =>
       PlanningTask(
         id: id,
@@ -151,6 +155,7 @@ class PlanningTask {
             ? this.recurrenceParentId
             : recurrenceParentId as String?,
         dependsOn: dependsOn ?? this.dependsOn,
+        assigneeIds: assigneeIds ?? this.assigneeIds,
         createdAt: createdAt,
       );
 
@@ -206,6 +211,7 @@ class SubGoal {
     required this.createdAt,
     this.parentSubGoalId,
     this.children = const [],
+    this.assigneeIds = const [],
   });
 
   final String id;
@@ -217,6 +223,8 @@ class SubGoal {
   final List<PlanningTask> tasks;
   final List<SubGoal> children;
   final DateTime createdAt;
+  // Stage 5: user IDs assigned to this sub-goal.
+  final List<String> assigneeIds;
 
   SubGoal copyWith({
     String? name,
@@ -225,6 +233,7 @@ class SubGoal {
     List<PlanningTask>? tasks,
     List<SubGoal>? children,
     String? parentSubGoalId,
+    List<String>? assigneeIds,
   }) =>
       SubGoal(
         id: id,
@@ -235,6 +244,7 @@ class SubGoal {
         orderIndex: orderIndex ?? this.orderIndex,
         tasks: tasks ?? this.tasks,
         children: children ?? this.children,
+        assigneeIds: assigneeIds ?? this.assigneeIds,
         createdAt: createdAt,
       );
 

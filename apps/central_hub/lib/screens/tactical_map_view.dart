@@ -53,6 +53,10 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
   Offset? _groupDrawCurrent;
   String? _connectorFromRef;
 
+  // ── Stage 5: member filter ────────────────────────────────────────────────
+  // When non-null, nodes NOT assigned to this userId are dimmed.
+  String? _filterMemberId;
+
   // ── Tactical Map Evolution Stage 3: image cards ───────────────────────────
   // Guard against re-entrant image picker / dialog launches.
   bool _pickingImage = false;
@@ -1118,6 +1122,16 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     _bumpRepaint();
   }
 
+  // Stage 5: look up avatarUrl for a userId from goal owner or collaborators.
+  String? _resolveAvatarUrl(Goal goal, String userId) {
+    if (goal.userId == userId) return goal.ownerProfile?.avatarUrl;
+    return goal.collaborators
+        .where((c) => c.userId == userId)
+        .firstOrNull
+        ?.profile
+        ?.avatarUrl;
+  }
+
   String? _nearestSubGoalFor(String draggingId, Goal goal,
       {Set<String> exclude = const {}, double threshold = 75.0}) {
     final pos = _positions[draggingId];
@@ -1779,6 +1793,21 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               ),
             ),
           ),
+        // Stage 5: member legend overlay (only when goal has accepted collabs).
+        if (goal.collaborators.any((co) => co.status == 'accepted'))
+          Positioned(
+            left: 16,
+            top: 16,
+            child: _MemberLegendOverlay(
+              goal: goal,
+              sc: c,
+              filterMemberId: _filterMemberId,
+              onMemberTap: (userId) => setState(() {
+                _filterMemberId =
+                    _filterMemberId == userId ? null : userId;
+              }),
+            ),
+          ),
       ],
     );
   }
@@ -1822,10 +1851,20 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
               _scheduleSave(goal);
               setState(() => _draggingId = null);
             },
-      child: _TaskNode(task: task, sc: c, dragging: _draggingId == task.id,
-          attachmentCount: goal.attachmentsFor(task.id).length),
+      child: _TaskNode(
+          task: task,
+          sc: c,
+          dragging: _draggingId == task.id,
+          attachmentCount: goal.attachmentsFor(task.id).length,
+          assigneeId: task.assigneeIds.firstOrNull,
+          assigneeAvatarUrl: task.assigneeIds.firstOrNull != null
+              ? _resolveAvatarUrl(goal, task.assigneeIds.first)
+              : null),
     );
     if (hidden) node = Opacity(opacity: 0.25, child: node);
+    final filteredOut = _filterMemberId != null &&
+        !task.assigneeIds.contains(_filterMemberId);
+    if (filteredOut) node = Opacity(opacity: 0.2, child: node);
     return Positioned(
       key: ValueKey(task.id),
       left: _cx + pos.dx - w / 2,
@@ -1917,9 +1956,16 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
         hoverAnim: _hoverTargetId == sg.id ? _hoverAnim : null,
         onAdd: widget.canEdit ? () => _showSubGoalSheet(sg, goal, c) : null,
         attachmentCount: goal.attachmentsFor(sg.id).length,
+        assigneeId: sg.assigneeIds.firstOrNull,
+        assigneeAvatarUrl: sg.assigneeIds.firstOrNull != null
+            ? _resolveAvatarUrl(goal, sg.assigneeIds.first)
+            : null,
       ),
     );
     if (hidden) node = Opacity(opacity: 0.25, child: node);
+    final sgFilteredOut = _filterMemberId != null &&
+        !sg.assigneeIds.contains(_filterMemberId);
+    if (sgFilteredOut) node = Opacity(opacity: 0.2, child: node);
     return Positioned(
       key: ValueKey(sg.id),
       left: _cx + pos.dx - w / 2,
@@ -2254,6 +2300,8 @@ class _SubGoalNode extends StatelessWidget {
     this.onAdd,
     this.hoverAnim,
     this.attachmentCount = 0,
+    this.assigneeId,
+    this.assigneeAvatarUrl,
   });
   final SubGoal sg;
   final SieColors sc;
@@ -2262,6 +2310,8 @@ class _SubGoalNode extends StatelessWidget {
   final Animation<double>? hoverAnim;
   final VoidCallback? onAdd;
   final int attachmentCount;
+  final String? assigneeId;
+  final String? assigneeAvatarUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -2278,6 +2328,7 @@ class _SubGoalNode extends StatelessWidget {
     final prog = subGoalProgress(sg);
     final done = sg.isCompleted;
     final c = sc;
+    final assigned = assigneeId != null;
 
     final baseFill = done
         ? c.accent.withValues(alpha: 0.28)
@@ -2288,9 +2339,13 @@ class _SubGoalNode extends StatelessWidget {
         ? Color.lerp(baseFill, c.accent.withValues(alpha: 0.22), t) ?? baseFill
         : baseFill;
 
-    final borderColor =
-        (dragging || isHoverTarget) ? c.accent : (done ? c.accent : prog > 0 ? c.accent.withValues(alpha: 0.5) : c.border);
-    final borderWidth = dragging ? 2.5 : (isHoverTarget ? 1.5 + t * 1.5 : 1.5);
+    final memberC = assigned ? memberColor(assigneeId!, c) : null;
+    final borderColor = (dragging || isHoverTarget)
+        ? c.accent
+        : assigned
+            ? memberC!
+            : (done ? c.accent : prog > 0 ? c.accent.withValues(alpha: 0.5) : c.border);
+    final borderWidth = dragging ? 2.5 : (isHoverTarget ? 1.5 + t * 1.5 : assigned ? 2.0 : 1.5);
 
     final shadow = dragging
         ? [BoxShadow(color: c.accent.withValues(alpha: 0.3), blurRadius: 14, spreadRadius: 2)]
@@ -2389,6 +2444,17 @@ class _SubGoalNode extends StatelessWidget {
             left: 6,
             child: _AttachmentBadge(count: attachmentCount, sc: c),
           ),
+        if (assigned)
+          Positioned(
+            bottom: -8,
+            right: 6,
+            child: _MiniAvatar(
+              userId: assigneeId!,
+              avatarUrl: assigneeAvatarUrl,
+              color: memberC!,
+              sc: c,
+            ),
+          ),
       ],
     );
   }
@@ -2397,24 +2463,37 @@ class _SubGoalNode extends StatelessWidget {
 // ─── Task Node ────────────────────────────────────────────────────────────────
 
 class _TaskNode extends StatelessWidget {
-  const _TaskNode({required this.task, required this.sc, required this.dragging, this.attachmentCount = 0});
+  const _TaskNode({
+    required this.task,
+    required this.sc,
+    required this.dragging,
+    this.attachmentCount = 0,
+    this.assigneeId,
+    this.assigneeAvatarUrl,
+  });
   final PlanningTask task;
   final SieColors sc;
   final bool dragging;
   final int attachmentCount;
+  final String? assigneeId;
+  final String? assigneeAvatarUrl;
 
   @override
   Widget build(BuildContext context) {
     final c = sc;
+    final assigned = assigneeId != null;
+    final memberC = assigned ? memberColor(assigneeId!, c) : null;
     final alpha = switch (task.weight) { 5 => 0.27, 3 => 0.16, _ => 0.08 };
     final fill = c.accent.withValues(alpha: task.isCompleted ? alpha + 0.05 : alpha);
-    final border = task.isCompleted ? c.accent : c.accent.withValues(alpha: 0.3 + task.weight * 0.06);
+    final baseBorder = task.isCompleted ? c.accent : c.accent.withValues(alpha: 0.3 + task.weight * 0.06);
+    final border = dragging ? c.accent : (assigned ? memberC! : baseBorder);
+    final borderWidth = dragging ? 2.5 : (assigned ? 2.0 : 1.5);
 
     return Container(
       decoration: BoxDecoration(
         color: fill,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: dragging ? c.accent : border, width: dragging ? 2.5 : 1.5),
+        border: Border.all(color: border, width: borderWidth),
         boxShadow: dragging
             ? [BoxShadow(color: c.accent.withValues(alpha: 0.3), blurRadius: 14, spreadRadius: 2)]
             : null,
@@ -2458,6 +2537,18 @@ class _TaskNode extends StatelessWidget {
               right: 5,
               top: 2,
               child: _AttachmentBadge(count: attachmentCount, sc: c),
+            ),
+          if (assigned)
+            Positioned(
+              left: 4,
+              top: 2,
+              child: _MiniAvatar(
+                userId: assigneeId!,
+                avatarUrl: assigneeAvatarUrl,
+                color: memberC!,
+                sc: c,
+                size: 14,
+              ),
             ),
         ],
       ),
@@ -2723,6 +2814,29 @@ class _SubGoalSheetState extends ConsumerState<_SubGoalSheet> {
         return const <NodeAttachment>[];
       }),
     );
+    final (assigneeIds, collabs, ownerProfile, ownerId) = ref.watch(
+      planningProvider.select((s) {
+        final g = s.valueOrNull?.goals
+            .where((g) => g.id == widget.goalId)
+            .firstOrNull;
+        if (g == null) {
+          return (widget.sg.assigneeIds, const <GoalCollaborator>[], null as PublicProfile?, '');
+        }
+        SubGoal? find(List<SubGoal> sgs) {
+          for (final sg in sgs) {
+            if (sg.id == widget.sg.id) return sg;
+            final found = find(sg.children);
+            if (found != null) return found;
+          }
+          return null;
+        }
+        final ids = find(g.subGoals)?.assigneeIds ?? widget.sg.assigneeIds;
+        final accepted = g.collaborators
+            .where((co) => co.status == 'accepted')
+            .toList();
+        return (ids, accepted, g.ownerProfile, g.userId);
+      }),
+    );
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
@@ -2743,6 +2857,18 @@ class _SubGoalSheetState extends ConsumerState<_SubGoalSheet> {
             attachments: attachments,
             canEdit: widget.canEdit,
             compactMode: true,
+          ),
+          const SizedBox(height: 8),
+          _AssigneeRow(
+            nodeType: 'subgoal',
+            nodeId: widget.sg.id,
+            goalId: widget.goalId,
+            assigneeIds: assigneeIds,
+            collabs: collabs,
+            ownerProfile: ownerProfile,
+            ownerId: ownerId,
+            canEdit: widget.canEdit,
+            sc: c,
           ),
           const SizedBox(height: 12),
           if (!_adding && !_addingSubGoal) ...[
@@ -2929,6 +3055,31 @@ class _TaskSheet extends ConsumerWidget {
         return const <NodeAttachment>[];
       }),
     );
+    final (assigneeIds, collabs, ownerProfile, ownerId) = ref.watch(
+      planningProvider.select((s) {
+        final g = s.valueOrNull?.goals
+            .where((g) => g.id == goalId)
+            .firstOrNull;
+        if (g == null) {
+          return (task.assigneeIds, const <GoalCollaborator>[], null as PublicProfile?, '');
+        }
+        List<String> findIds(List<SubGoal> sgs) {
+          for (final sg in sgs) {
+            for (final t in sg.tasks) {
+              if (t.id == task.id) return t.assigneeIds;
+            }
+            final found = findIds(sg.children);
+            if (found.isNotEmpty) return found;
+          }
+          return task.assigneeIds;
+        }
+        final ids = findIds(g.subGoals);
+        final accepted = g.collaborators
+            .where((co) => co.status == 'accepted')
+            .toList();
+        return (ids, accepted, g.ownerProfile, g.userId);
+      }),
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
       child: Column(
@@ -2959,6 +3110,18 @@ class _TaskSheet extends ConsumerWidget {
             attachments: attachments,
             canEdit: canEdit,
             compactMode: true,
+          ),
+          const SizedBox(height: 8),
+          _AssigneeRow(
+            nodeType: 'task',
+            nodeId: task.id,
+            goalId: goalId,
+            assigneeIds: assigneeIds,
+            collabs: collabs,
+            ownerProfile: ownerProfile,
+            ownerId: ownerId,
+            canEdit: canEdit,
+            sc: c,
           ),
           const SizedBox(height: 12),
           if (onToggle != null) ...[
@@ -3122,6 +3285,347 @@ class _AttachmentBadge extends StatelessWidget {
             style: TextStyle(color: sc.textSecondary, fontSize: 8, fontWeight: FontWeight.w600),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Stage 5: Member Legend Overlay ──────────────────────────────────────────
+
+class _MemberLegendOverlay extends ConsumerWidget {
+  const _MemberLegendOverlay({
+    required this.goal,
+    required this.sc,
+    required this.filterMemberId,
+    required this.onMemberTap,
+  });
+  final Goal goal;
+  final SieColors sc;
+  final String? filterMemberId;
+  final ValueChanged<String> onMemberTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = sc;
+    final members = <({String userId, String? avatarUrl, String label})>[];
+    members.add((
+      userId: goal.userId,
+      avatarUrl: goal.ownerProfile?.avatarUrl,
+      label: goal.ownerProfile?.username ?? 'Владелец',
+    ));
+    for (final co in goal.collaborators.where((co) => co.status == 'accepted')) {
+      members.add((
+        userId: co.userId,
+        avatarUrl: co.profile?.avatarUrl,
+        label: co.profile?.username ?? co.userId.substring(0, 6),
+      ));
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: c.surface.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Участники',
+              style: TextStyle(
+                  color: c.textSecondary,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5)),
+          const SizedBox(height: 4),
+          for (final m in members)
+            GestureDetector(
+              onTap: () => onMemberTap(m.userId),
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      decoration: filterMemberId == m.userId
+                          ? BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                  color: memberColor(m.userId, c), width: 2))
+                          : null,
+                      child: _MiniAvatar(
+                        userId: m.userId,
+                        avatarUrl: m.avatarUrl,
+                        color: memberColor(m.userId, c),
+                        sc: c,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      m.label,
+                      style: TextStyle(
+                        color: filterMemberId == m.userId
+                            ? memberColor(m.userId, c)
+                            : c.textSecondary,
+                        fontSize: 9,
+                        fontWeight: filterMemberId == m.userId
+                            ? FontWeight.w700
+                            : FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Stage 5: Assignee row in sheets ─────────────────────────────────────────
+
+class _AssigneeRow extends ConsumerWidget {
+  const _AssigneeRow({
+    required this.nodeType,
+    required this.nodeId,
+    required this.goalId,
+    required this.assigneeIds,
+    required this.collabs,
+    required this.ownerProfile,
+    required this.ownerId,
+    required this.canEdit,
+    required this.sc,
+  });
+  final String nodeType;
+  final String nodeId;
+  final String goalId;
+  final List<String> assigneeIds;
+  final List<GoalCollaborator> collabs;
+  final PublicProfile? ownerProfile;
+  final String ownerId;
+  final bool canEdit;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = sc;
+    if (collabs.isEmpty && assigneeIds.isEmpty) return const SizedBox.shrink();
+
+    final allMembers = <({String userId, String? avatarUrl, String label})>[
+      (
+        userId: ownerId,
+        avatarUrl: ownerProfile?.avatarUrl,
+        label: ownerProfile?.username ?? 'Владелец',
+      ),
+      for (final co in collabs)
+        (
+          userId: co.userId,
+          avatarUrl: co.profile?.avatarUrl,
+          label: co.profile?.username ?? co.userId.substring(0, 6),
+        ),
+    ];
+
+    return Row(
+      children: [
+        Icon(Icons.person_outline, size: 14, color: c.textSecondary),
+        const SizedBox(width: 6),
+        Text('Исполнитель',
+            style: TextStyle(color: c.textSecondary, fontSize: 12)),
+        const SizedBox(width: 8),
+        if (assigneeIds.isEmpty)
+          Text('не назначен',
+              style: TextStyle(
+                  color: c.textSecondary.withValues(alpha: 0.6), fontSize: 11))
+        else
+          for (final uid in assigneeIds)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: _MiniAvatar(
+                userId: uid,
+                avatarUrl: allMembers
+                    .where((m) => m.userId == uid)
+                    .firstOrNull
+                    ?.avatarUrl,
+                color: memberColor(uid, c),
+                sc: c,
+                size: 20,
+              ),
+            ),
+        if (canEdit && allMembers.isNotEmpty) ...[
+          const Spacer(),
+          GestureDetector(
+            onTap: () => _showPicker(context, ref, allMembers),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: c.accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text('Изменить',
+                  style: TextStyle(
+                      color: c.accent,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  void _showPicker(
+    BuildContext context,
+    WidgetRef ref,
+    List<({String userId, String? avatarUrl, String label})> members,
+  ) {
+    final c = sc;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: c.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 36),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Назначить исполнителя',
+                style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700)),
+            const SizedBox(height: 16),
+            for (final m in members) ...[
+              Consumer(builder: (_, ref2, __) {
+                final ids = ref2.watch(planningProvider.select((s) {
+                  final g = s.valueOrNull?.goals
+                      .where((g) => g.id == goalId)
+                      .firstOrNull;
+                  if (g == null) return assigneeIds;
+                  if (nodeType == 'task') {
+                    List<String> find(List<SubGoal> sgs) {
+                      for (final sg in sgs) {
+                        for (final t in sg.tasks) {
+                          if (t.id == nodeId) return t.assigneeIds;
+                        }
+                        final f = find(sg.children);
+                        if (f.isNotEmpty) return f;
+                      }
+                      return assigneeIds;
+                    }
+                    return find(g.subGoals);
+                  } else {
+                    SubGoal? find(List<SubGoal> sgs) {
+                      for (final sg in sgs) {
+                        if (sg.id == nodeId) return sg;
+                        final f = find(sg.children);
+                        if (f != null) return f;
+                      }
+                      return null;
+                    }
+                    return find(g.subGoals)?.assigneeIds ?? assigneeIds;
+                  }
+                }));
+                final isAssigned = ids.contains(m.userId);
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: _MiniAvatar(
+                    userId: m.userId,
+                    avatarUrl: m.avatarUrl,
+                    color: memberColor(m.userId, c),
+                    sc: c,
+                    size: 32,
+                  ),
+                  title: Text(m.label,
+                      style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500)),
+                  trailing: isAssigned
+                      ? Icon(Icons.check_circle, color: c.accent, size: 20)
+                      : Icon(Icons.radio_button_unchecked,
+                          color: c.border, size: 20),
+                  onTap: () {
+                    if (isAssigned) {
+                      ref2.read(planningProvider.notifier).unassignNode(
+                            nodeType: nodeType,
+                            nodeId: nodeId,
+                            userId: m.userId,
+                            goalId: goalId,
+                          );
+                    } else {
+                      ref2.read(planningProvider.notifier).assignNode(
+                            nodeType: nodeType,
+                            nodeId: nodeId,
+                            userId: m.userId,
+                            goalId: goalId,
+                          );
+                    }
+                  },
+                );
+              }),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Mini avatar badge for assigned nodes ────────────────────────────────────
+
+class _MiniAvatar extends StatelessWidget {
+  const _MiniAvatar({
+    required this.userId,
+    required this.color,
+    required this.sc,
+    this.avatarUrl,
+    this.size = 18,
+  });
+  final String userId;
+  final String? avatarUrl;
+  final Color color;
+  final SieColors sc;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color.withValues(alpha: 0.85),
+        border: Border.all(color: sc.background, width: 1),
+      ),
+      child: avatarUrl != null
+          ? ClipOval(
+              child: CachedNetworkImage(
+                imageUrl: avatarUrl!,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                errorWidget: (_, __, ___) => _initial(),
+              ),
+            )
+          : _initial(),
+    );
+  }
+
+  Widget _initial() {
+    final letter = userId.isNotEmpty ? userId[0].toUpperCase() : '?';
+    return Center(
+      child: Text(
+        letter,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: size * 0.5,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

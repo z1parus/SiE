@@ -431,6 +431,44 @@ class SyncService {
                 .eq('id', payload['id'] as String);
             await _db.purgeMapElement(payload['id'] as String);
 
+          case 'assign_node':
+            final nodeType = payload['node_type'] as String;
+            if (nodeType == 'task') {
+              await client.from('planning_task_assignees').upsert({
+                'task_id':     payload['node_id'],
+                'user_id':     payload['user_id'],
+                'goal_id':     payload['goal_id'],
+                'assigned_by': payload['assigned_by'],
+              }, onConflict: 'task_id,user_id');
+              await _db.markTaskAssigneeSynced(
+                  payload['node_id'] as String, payload['user_id'] as String);
+            } else {
+              await client.from('sub_goal_assignees').upsert({
+                'sub_goal_id': payload['node_id'],
+                'user_id':     payload['user_id'],
+                'goal_id':     payload['goal_id'],
+                'assigned_by': payload['assigned_by'],
+              }, onConflict: 'sub_goal_id,user_id');
+              await _db.markSubGoalAssigneeSynced(
+                  payload['node_id'] as String, payload['user_id'] as String);
+            }
+
+          case 'unassign_node':
+            final nodeType2 = payload['node_type'] as String;
+            if (nodeType2 == 'task') {
+              await client.from('planning_task_assignees').delete()
+                  .eq('task_id', payload['node_id'] as String)
+                  .eq('user_id', payload['user_id'] as String);
+              await _db.purgeTaskAssignee(
+                  payload['node_id'] as String, payload['user_id'] as String);
+            } else {
+              await client.from('sub_goal_assignees').delete()
+                  .eq('sub_goal_id', payload['node_id'] as String)
+                  .eq('user_id', payload['user_id'] as String);
+              await _db.purgeSubGoalAssignee(
+                  payload['node_id'] as String, payload['user_id'] as String);
+            }
+
           default:
             debugPrint(
                 'SiE Sync: unknown op ${op.operationType}');

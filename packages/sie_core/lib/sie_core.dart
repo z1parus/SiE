@@ -55,6 +55,7 @@ export 'src/providers/habit_templates_provider.dart';
 export 'src/utils/color_utils.dart';
 export 'src/utils/fog_of_war_utils.dart';
 export 'src/utils/goal_markdown.dart';
+export 'src/utils/member_colors.dart';
 export 'src/providers/user_timezone_provider.dart';
 export 'src/models/planning.dart';
 export 'src/models/map_element.dart';

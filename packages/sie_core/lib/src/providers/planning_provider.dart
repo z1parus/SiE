@@ -605,6 +605,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     }
     await _mirrorMapElements(db, goals);
     await _mirrorAttachments(db, goals);
+    await _mirrorAssignees(db, goals);
   }
 
   /// Mirrors server map elements into the local store. Synced rows are replaced
@@ -695,6 +696,82 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         await db.purgeAttachment(row.id);
       }
     }
+  }
+
+  /// Mirrors server node assignees into the local store (Stage 5).
+  Future<void> _mirrorAssignees(AppDatabase db, List<Goal> goals) async {
+    final goalIds = [for (final g in goals) g.id];
+    if (goalIds.isEmpty) return;
+    final localUnsyncedTasks = {
+      for (final a in await db.unsyncedTaskAssignees())
+        '${a.taskId}_${a.userId}': true
+    };
+    final localUnsyncedSubGoals = {
+      for (final a in await db.unsyncedSubGoalAssignees())
+        '${a.subGoalId}_${a.userId}': true
+    };
+
+    try {
+      final taskRows = await Supabase.instance.client
+          .from('planning_task_assignees')
+          .select()
+          .inFilter('goal_id', goalIds);
+      final serverTaskKeys = <String>{};
+      for (final row in taskRows as List<dynamic>) {
+        final m = row as Map<String, dynamic>;
+        final key = '${m['task_id']}_${m['user_id']}';
+        serverTaskKeys.add(key);
+        if (localUnsyncedTasks.containsKey(key)) continue;
+        await db.upsertTaskAssignee(LocalTaskAssigneesCompanion(
+          taskId: Value(m['task_id'] as String),
+          userId: Value(m['user_id'] as String),
+          goalId: Value(m['goal_id'] as String),
+          assignedBy: Value(m['assigned_by'] as String?),
+          createdAtMs: Value(DateTime.parse(m['created_at'] as String)
+              .millisecondsSinceEpoch),
+          synced: const Value(true),
+          deletedLocally: const Value(false),
+        ));
+      }
+      final localTaskAll = await db.taskAssigneesForGoals(goalIds);
+      for (final row in localTaskAll) {
+        if (row.synced &&
+            !serverTaskKeys.contains('${row.taskId}_${row.userId}')) {
+          await db.purgeTaskAssignee(row.taskId, row.userId);
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final sgRows = await Supabase.instance.client
+          .from('sub_goal_assignees')
+          .select()
+          .inFilter('goal_id', goalIds);
+      final serverSgKeys = <String>{};
+      for (final row in sgRows as List<dynamic>) {
+        final m = row as Map<String, dynamic>;
+        final key = '${m['sub_goal_id']}_${m['user_id']}';
+        serverSgKeys.add(key);
+        if (localUnsyncedSubGoals.containsKey(key)) continue;
+        await db.upsertSubGoalAssignee(LocalSubGoalAssigneesCompanion(
+          subGoalId: Value(m['sub_goal_id'] as String),
+          userId: Value(m['user_id'] as String),
+          goalId: Value(m['goal_id'] as String),
+          assignedBy: Value(m['assigned_by'] as String?),
+          createdAtMs: Value(DateTime.parse(m['created_at'] as String)
+              .millisecondsSinceEpoch),
+          synced: const Value(true),
+          deletedLocally: const Value(false),
+        ));
+      }
+      final localSgAll = await db.subGoalAssigneesForGoals(goalIds);
+      for (final row in localSgAll) {
+        if (row.synced &&
+            !serverSgKeys.contains('${row.subGoalId}_${row.userId}')) {
+          await db.purgeSubGoalAssignee(row.subGoalId, row.userId);
+        }
+      }
+    } catch (_) {}
   }
 
   // ── Node Attachments (Stage 2) ────────────────────────────────────────────
@@ -846,6 +923,167 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         'delete_attachment', jsonEncode({'id': attachmentId, 'goal_id': goalId}));
   }
 
+  // ── Node Assignees (Stage 5) ──────────────────────────────────────────────
+
+  Future<void> assignNode({
+    required String nodeType, // 'task' | 'subgoal'
+    required String nodeId,
+    required String userId,
+    required String goalId,
+  }) async {
+    _updateGoalInState(goalId, (g) {
+      if (nodeType == 'task') {
+        return g.copyWith(
+          subGoals: _mapTaskInSubGoals(g.subGoals, nodeId, (t) {
+            if (t.assigneeIds.contains(userId)) return t;
+            return t.copyWith(assigneeIds: [...t.assigneeIds, userId]);
+          }),
+        );
+      } else {
+        return g.copyWith(
+          subGoals: _mapSubGoal(g.subGoals, nodeId, (sg) {
+            if (sg.assigneeIds.contains(userId)) return sg;
+            return sg.copyWith(assigneeIds: [...sg.assigneeIds, userId]);
+          }),
+        );
+      }
+    });
+
+    final db = ref.read(appDatabaseProvider);
+    final session = Supabase.instance.client.auth.currentSession;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    if (nodeType == 'task') {
+      await db.upsertTaskAssignee(LocalTaskAssigneesCompanion(
+        taskId: Value(nodeId),
+        userId: Value(userId),
+        goalId: Value(goalId),
+        assignedBy: Value(session?.user.id),
+        createdAtMs: Value(now),
+        synced: const Value(false),
+        deletedLocally: const Value(false),
+      ));
+    } else {
+      await db.upsertSubGoalAssignee(LocalSubGoalAssigneesCompanion(
+        subGoalId: Value(nodeId),
+        userId: Value(userId),
+        goalId: Value(goalId),
+        assignedBy: Value(session?.user.id),
+        createdAtMs: Value(now),
+        synced: const Value(false),
+        deletedLocally: const Value(false),
+      ));
+    }
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        if (nodeType == 'task') {
+          await Supabase.instance.client.from('planning_task_assignees').upsert({
+            'task_id': nodeId,
+            'user_id': userId,
+            'goal_id': goalId,
+            'assigned_by': session?.user.id,
+          }, onConflict: 'task_id,user_id');
+          await db.markTaskAssigneeSynced(nodeId, userId);
+        } else {
+          await Supabase.instance.client.from('sub_goal_assignees').upsert({
+            'sub_goal_id': nodeId,
+            'user_id': userId,
+            'goal_id': goalId,
+            'assigned_by': session?.user.id,
+          }, onConflict: 'sub_goal_id,user_id');
+          await db.markSubGoalAssigneeSynced(nodeId, userId);
+        }
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('assign_node', jsonEncode({
+      'node_type': nodeType,
+      'node_id': nodeId,
+      'user_id': userId,
+      'goal_id': goalId,
+      'assigned_by': session?.user.id,
+    }));
+  }
+
+  Future<void> unassignNode({
+    required String nodeType,
+    required String nodeId,
+    required String userId,
+    required String goalId,
+  }) async {
+    _updateGoalInState(goalId, (g) {
+      if (nodeType == 'task') {
+        return g.copyWith(
+          subGoals: _mapTaskInSubGoals(g.subGoals, nodeId, (t) =>
+              t.copyWith(assigneeIds: t.assigneeIds.where((id) => id != userId).toList())),
+        );
+      } else {
+        return g.copyWith(
+          subGoals: _mapSubGoal(g.subGoals, nodeId, (sg) =>
+              sg.copyWith(assigneeIds: sg.assigneeIds.where((id) => id != userId).toList())),
+        );
+      }
+    });
+
+    final db = ref.read(appDatabaseProvider);
+    if (nodeType == 'task') {
+      await db.deleteTaskAssigneeLocally(nodeId, userId);
+    } else {
+      await db.deleteSubGoalAssigneeLocally(nodeId, userId);
+    }
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        if (nodeType == 'task') {
+          await Supabase.instance.client
+              .from('planning_task_assignees')
+              .delete()
+              .eq('task_id', nodeId)
+              .eq('user_id', userId);
+          await db.purgeTaskAssignee(nodeId, userId);
+        } else {
+          await Supabase.instance.client
+              .from('sub_goal_assignees')
+              .delete()
+              .eq('sub_goal_id', nodeId)
+              .eq('user_id', userId);
+          await db.purgeSubGoalAssignee(nodeId, userId);
+        }
+        return;
+      } catch (_) {}
+    }
+    await db.enqueueSyncOp('unassign_node', jsonEncode({
+      'node_type': nodeType,
+      'node_id': nodeId,
+      'user_id': userId,
+      'goal_id': goalId,
+    }));
+  }
+
+  // Helper: walk subGoal tree and apply fn to the task matching [taskId].
+  List<SubGoal> _mapTaskInSubGoals(
+      List<SubGoal> sgs, String taskId, PlanningTask Function(PlanningTask) fn) {
+    return sgs.map((sg) {
+      final newTasks = sg.tasks.map((t) => t.id == taskId ? fn(t) : t).toList();
+      return sg.copyWith(
+        tasks: newTasks,
+        children: _mapTaskInSubGoals(sg.children, taskId, fn),
+      );
+    }).toList();
+  }
+
+  // Helper: walk subGoal tree and apply fn to the subGoal matching [sgId].
+  List<SubGoal> _mapSubGoal(
+      List<SubGoal> sgs, String sgId, SubGoal Function(SubGoal) fn) {
+    return sgs.map((sg) {
+      if (sg.id == sgId) return fn(sg);
+      return sg.copyWith(children: _mapSubGoal(sg.children, sgId, fn));
+    }).toList();
+  }
+
   Future<PlanningState> _loadFromLocal(AppDatabase db, String userId,
       [List<Goal>? serverGoals]) async {
     // Build a lookup map from server data for collaborator/owner enrichment
@@ -867,6 +1105,8 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     final rawDeps = await db.dependenciesForGoals(goalIds);
     final rawElements = await db.mapElementsForGoals(goalIds);
     final rawAttachments = await db.attachmentsForGoals(goalIds);
+    final rawTaskAssignees = await db.taskAssigneesForGoals(goalIds);
+    final rawSubGoalAssignees = await db.subGoalAssigneesForGoals(goalIds);
 
     // Group attachments by nodeId (Stage 2).
     final attachmentsByNode = <String, List<NodeAttachment>>{};
@@ -928,6 +1168,16 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       (dependsByTask[d.taskId] ??= []).add(d.dependsOnTaskId);
     }
 
+    // Stage 5: taskId / subGoalId → assignee userIds.
+    final assigneesByTask = <String, List<String>>{};
+    for (final a in rawTaskAssignees) {
+      (assigneesByTask[a.taskId] ??= []).add(a.userId);
+    }
+    final assigneesBySubGoal = <String, List<String>>{};
+    for (final a in rawSubGoalAssignees) {
+      (assigneesBySubGoal[a.subGoalId] ??= []).add(a.userId);
+    }
+
     // Group by foreign key.
     final tasksBySubGoal = <String, List<PlanningTask>>{};
     for (final rt in rawTasksAll) {
@@ -951,6 +1201,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             : null,
         recurrenceParentId: rt.recurrenceParentId,
         dependsOn: dependsByTask[rt.id] ?? const [],
+        assigneeIds: assigneesByTask[rt.id] ?? const [],
         createdAt: DateTime.fromMillisecondsSinceEpoch(rt.createdAtMs),
       ));
     }
@@ -965,6 +1216,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         isCompleted: rs.isCompleted,
         orderIndex: rs.orderIndex,
         tasks: tasksBySubGoal[rs.id] ?? const [],
+        assigneeIds: assigneesBySubGoal[rs.id] ?? const [],
         createdAt: DateTime.fromMillisecondsSinceEpoch(rs.createdAtMs),
       ));
     }

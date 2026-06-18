@@ -881,6 +881,14 @@ class _SubGoalTile extends ConsumerWidget {
                       child: Icon(Icons.lock_outline,
                           size: 14, color: sc.textSecondary),
                     ),
+                  if (sg.assigneeIds.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: _AssigneeDot(
+                        userId: sg.assigneeIds.first,
+                        sc: sc,
+                      ),
+                    ),
                   Icon(
                     isExpanded
                         ? Icons.expand_less
@@ -1248,6 +1256,14 @@ class _TaskTile extends ConsumerWidget {
               ),
             ),
           ],
+          if (t.assigneeIds.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: _AssigneeDot(
+                userId: t.assigneeIds.first,
+                sc: sc,
+              ),
+            ),
           _WeightBadge(weight: t.weight, sc: sc),
           if (canEdit) ...[
             const SizedBox(width: 6),
@@ -1458,6 +1474,41 @@ class _WeightBadge extends StatelessWidget {
         '×$weight',
         style: TextStyle(
             color: color, fontSize: 9, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+// Stage 5: small colored assignee dot for list tiles.
+class _AssigneeDot extends StatelessWidget {
+  const _AssigneeDot({
+    required this.userId,
+    required this.sc,
+  });
+  final String userId;
+  final SieColors sc;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = memberColor(userId, sc);
+    final letter = userId.isNotEmpty ? userId[0].toUpperCase() : '?';
+    return Container(
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color.withValues(alpha: 0.85),
+        border: Border.all(color: sc.background, width: 1),
+      ),
+      child: Center(
+        child: Text(
+          letter,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ),
     );
   }
