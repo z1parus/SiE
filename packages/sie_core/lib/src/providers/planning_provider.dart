@@ -454,7 +454,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
           );
         }).toList();
 
-        await _mirrorToLocal(db, enrichedGoals);
+        await _mirrorToLocal(db, enrichedGoals, userId);
         // await _mirrorDependencies(client, db, enrichedGoals.map((g) => g.id).toList());
         await db.cleanupRemovedSharedGoals(
             enrichedGoals.map((g) => g.id).toSet());
@@ -470,7 +470,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     return _loadFromLocal(db, userId);
   }
 
-  Future<void> _mirrorToLocal(AppDatabase db, List<Goal> goals) async {
+  Future<void> _mirrorToLocal(AppDatabase db, List<Goal> goals, String currentUserId) async {
     // Collect IDs with pending local changes to avoid overwriting them
     // before syncAll() has a chance to push them to Supabase.
     final unsyncedSgIds = await db.unsyncedSubGoalIds();
@@ -491,6 +491,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         progress: Value(g.progress),
         synced: const Value(true),
         createdAtMs: Value(g.createdAt.millisecondsSinceEpoch),
+        isShared: Value(g.userId != currentUserId),
       ));
       for (final sg in g.subGoals) {
         if (!unsyncedSgIds.contains(sg.id)) {
