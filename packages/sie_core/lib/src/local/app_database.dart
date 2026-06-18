@@ -716,7 +716,11 @@ class AppDatabase extends _$AppDatabase {
         // that didn't bump schemaVersion). The local DB is a pure Supabase cache
         // — safe to recreate. Data re-syncs on next online load.
         debugPrint('SiE DB: migration $from→$to failed ($e) — recreating schema');
-        await m.destroyEverything();
+        await m.issueCustomQuery('PRAGMA foreign_keys = OFF');
+        for (final table in allTables.toList()) {
+          await m.drop(table);
+        }
+        await m.issueCustomQuery('PRAGMA foreign_keys = ON');
         await m.createAll();
         await _createIndexes(m);
       }
