@@ -134,6 +134,18 @@ class _WidgetStudioScreenState extends ConsumerState<WidgetStudioScreen> {
                 ),
                 const SizedBox(height: 20),
 
+                // ── Accent ────────────────────────────────────────────────────
+                _SectionHeader(label: 'Акцент', c: c),
+                const SizedBox(height: 8),
+                _AccentPicker(
+                  current: _cfg.accentOverride,
+                  c: c,
+                  onChanged: (color) => _update(color == null
+                      ? _cfg.copyWith(clearAccent: true)
+                      : _cfg.copyWith(accentOverride: color)),
+                ),
+                const SizedBox(height: 20),
+
                 // ── Content options ───────────────────────────────────────────
                 ..._buildContentOptions(provider, c),
               ],
@@ -441,6 +453,95 @@ class _BgStylePicker extends StatelessWidget {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+// ── Accent picker ─────────────────────────────────────────────────────────────
+
+class _AccentPicker extends StatelessWidget {
+  final Color? current;
+  final SieColors c;
+  final ValueChanged<Color?> onChanged;
+
+  const _AccentPicker({
+    required this.current,
+    required this.c,
+    required this.onChanged,
+  });
+
+  static const _palette = <Color>[
+    Color(0xFFC8A84B), // gold sand (default tone)
+    Color(0xFF34C7A8), // teal
+    Color(0xFF4B9BC8), // blue
+    Color(0xFF6BCB4B), // green
+    Color(0xFF8B5CF6), // violet
+    Color(0xFFE0683C), // ember
+    Color(0xFFE03050), // rose
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        // "Theme default" swatch (null override).
+        _Swatch(
+          color: c.accent,
+          selected: current == null,
+          showAuto: true,
+          c: c,
+          onTap: () => onChanged(null),
+        ),
+        ..._palette.map((color) => _Swatch(
+              color: color,
+              selected: current?.value == color.value,
+              showAuto: false,
+              c: c,
+              onTap: () => onChanged(color),
+            )),
+      ],
+    );
+  }
+}
+
+class _Swatch extends StatelessWidget {
+  final Color color;
+  final bool selected;
+  final bool showAuto;
+  final SieColors c;
+  final VoidCallback onTap;
+
+  const _Swatch({
+    required this.color,
+    required this.selected,
+    required this.showAuto,
+    required this.c,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: selected ? c.textPrimary : c.border,
+            width: selected ? 2.5 : 1,
+          ),
+        ),
+        child: showAuto
+            ? Icon(Icons.brightness_auto, size: 16, color: c.background)
+            : selected
+                ? Icon(Icons.check, size: 18, color: c.background)
+                : null,
+      ),
     );
   }
 }

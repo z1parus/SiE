@@ -179,11 +179,7 @@ class _SmallHabitsWidget extends StatelessWidget {
     return Container(
       width: 160,
       height: 160,
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.border),
-      ),
+      decoration: ctx.surfaceDecoration,
       padding: const EdgeInsets.all(16),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -194,7 +190,7 @@ class _SmallHabitsWidget extends StatelessWidget {
             child: CustomPaint(
               painter: _RingPainter(
                 progress: data.dayProgress,
-                ringColor: c.accent,
+                ringColor: ctx.accent,
                 trackColor: c.border,
               ),
               child: Center(
@@ -237,11 +233,7 @@ class _MediumHabitsWidget extends StatelessWidget {
     return Container(
       width: 320,
       height: 160,
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.border),
-      ),
+      decoration: ctx.surfaceDecoration,
       // Vertical structure is fraction-locked so the native tap-zone overlay
       // (top 36 / rows 110 / bottom 14 of 160) aligns 1:1 under fitXY stretch.
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
@@ -281,6 +273,7 @@ class _MediumHabitsWidget extends StatelessWidget {
                                       child: _HabitRow(
                                         tile: t,
                                         c: c,
+                                        accent: ctx.accent,
                                         showStreak: showStreaks,
                                       ),
                                     ),
@@ -301,7 +294,7 @@ class _MediumHabitsWidget extends StatelessWidget {
               painter: _RingPainter(
                 progress: data.dayProgress,
                 ringColor:
-                    data.dayProgress >= 1.0 ? c.success : c.accent,
+                    data.dayProgress >= 1.0 ? c.success : ctx.accent,
                 trackColor: c.border,
               ),
               child: Center(
@@ -339,11 +332,7 @@ class _LargeHabitsWidget extends StatelessWidget {
     return Container(
       width: 320,
       height: 320,
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.border),
-      ),
+      decoration: ctx.surfaceDecoration,
       // Same fraction-locked structure as medium, scaled to 320:
       // top 72 / checklist 220 / bottom 28 — matches the shared overlay.
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
@@ -363,7 +352,7 @@ class _LargeHabitsWidget extends StatelessWidget {
                     Text(
                       '${data.doneToday}/${data.totalDueToday}',
                       style: TextStyle(
-                        color: c.accent,
+                        color: ctx.accent,
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                       ),
@@ -375,7 +364,7 @@ class _LargeHabitsWidget extends StatelessWidget {
                   value: data.dayProgress,
                   backgroundColor: c.border,
                   valueColor: AlwaysStoppedAnimation(
-                      data.dayProgress >= 1.0 ? c.success : c.accent),
+                      data.dayProgress >= 1.0 ? c.success : ctx.accent),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 const SizedBox(height: 10),
@@ -400,6 +389,7 @@ class _LargeHabitsWidget extends StatelessWidget {
                                 child: _HabitRow(
                                   tile: t,
                                   c: c,
+                                  accent: ctx.accent,
                                   showStreak: showStreaks,
                                   large: true,
                                 ),
@@ -438,12 +428,14 @@ class _Header extends StatelessWidget {
 class _HabitRow extends StatelessWidget {
   final HabitTile tile;
   final SieColors c;
+  final Color accent;
   final bool showStreak;
   final bool large;
 
   const _HabitRow({
     required this.tile,
     required this.c,
+    required this.accent,
     required this.showStreak,
     this.large = false,
   });
@@ -459,9 +451,9 @@ class _HabitRow extends StatelessWidget {
             height: large ? 18 : 14,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: tile.done ? c.accent : Colors.transparent,
+              color: tile.done ? accent : Colors.transparent,
               border: Border.all(
-                color: tile.done ? c.accent : c.border,
+                color: tile.done ? accent : c.border,
                 width: 1.5,
               ),
             ),
@@ -490,13 +482,13 @@ class _HabitRow extends StatelessWidget {
               padding:
                   const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
               decoration: BoxDecoration(
-                color: c.accent.withValues(alpha: 0.15),
+                color: accent.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 '\u{1F525}${tile.streak}',
                 style:
-                    TextStyle(fontSize: large ? 10 : 9, color: c.accent),
+                    TextStyle(fontSize: large ? 10 : 9, color: accent),
               ),
             ),
           ],
