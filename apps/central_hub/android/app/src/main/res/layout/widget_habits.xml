@@ -21,16 +21,43 @@
         android:scaleType="fitXY"
         android:contentDescription="Привычки" />
 
-    <!-- Transparent per-row tap zones overlaid on the checklist area. The
-         provider inflates one row per habit at runtime. Padding keeps zones
-         off the header (top) and the right-hand progress ring (medium). -->
+    <!-- Tap-zone overlay. Vertical weights mirror the rendered layout's
+         fraction-locked regions (top 36 / checklist 110 / bottom 14 of 160),
+         so zones align with the rows 1:1 regardless of fitXY stretch. -->
     <LinearLayout
-        android:id="@+id/widget_actions"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:paddingTop="34dp"
-        android:paddingStart="6dp"
-        android:paddingEnd="78dp"
-        android:paddingBottom="10dp" />
+        android:orientation="vertical">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="36" />
+
+        <!-- Checklist band: left ~76% holds the row zones, right ~24% is the
+             ring/empty area (kept tap-free). -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="110"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:id="@+id/widget_actions"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="76"
+                android:orientation="vertical" />
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="24" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="14" />
+    </LinearLayout>
 </FrameLayout>

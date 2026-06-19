@@ -242,16 +242,29 @@ class _MediumHabitsWidget extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: c.border),
       ),
-      padding: const EdgeInsets.all(14),
+      // Vertical structure is fraction-locked so the native tap-zone overlay
+      // (top 36 / rows 110 / bottom 14 of 160) aligns 1:1 under fitXY stretch.
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
       child: Row(
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _Header(c: c, title: 'Привычки'),
-                const SizedBox(height: 8),
-                Expanded(
+                // Top region: 36px (header + breathing room).
+                SizedBox(
+                  height: 36,
+                  child: Align(
+                    alignment: Alignment.bottomLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: _Header(c: c, title: 'Привычки'),
+                    ),
+                  ),
+                ),
+                // Checklist region: 110px, rows evenly distributed.
+                SizedBox(
+                  height: 110,
                   child: data.totalDueToday == 0
                       ? Center(
                           child: Text(
@@ -262,14 +275,21 @@ class _MediumHabitsWidget extends StatelessWidget {
                         )
                       : Column(
                           children: data.dueToday
-                              .map((t) => _HabitRow(
-                                    tile: t,
-                                    c: c,
-                                    showStreak: showStreaks,
+                              .map((t) => Expanded(
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: _HabitRow(
+                                        tile: t,
+                                        c: c,
+                                        showStreak: showStreaks,
+                                      ),
+                                    ),
                                   ))
                               .toList(),
                         ),
                 ),
+                // Bottom region: 14px.
+                const SizedBox(height: 14),
               ],
             ),
           ),
@@ -324,33 +344,47 @@ class _LargeHabitsWidget extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: c.border),
       ),
-      padding: const EdgeInsets.all(16),
+      // Same fraction-locked structure as medium, scaled to 320:
+      // top 72 / checklist 220 / bottom 28 — matches the shared overlay.
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(child: _Header(c: c, title: 'Привычки')),
-              Text(
-                '${data.doneToday}/${data.totalDueToday}',
-                style: TextStyle(
-                  color: c.accent,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
+          // Top region: 72px (padding + header + progress bar).
+          SizedBox(
+            height: 72,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: _Header(c: c, title: 'Привычки')),
+                    Text(
+                      '${data.doneToday}/${data.totalDueToday}',
+                      style: TextStyle(
+                        color: c.accent,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 6),
+                LinearProgressIndicator(
+                  value: data.dayProgress,
+                  backgroundColor: c.border,
+                  valueColor: AlwaysStoppedAnimation(
+                      data.dayProgress >= 1.0 ? c.success : c.accent),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                const SizedBox(height: 10),
+              ],
+            ),
           ),
-          const SizedBox(height: 4),
-          LinearProgressIndicator(
-            value: data.dayProgress,
-            backgroundColor: c.border,
-            valueColor: AlwaysStoppedAnimation(
-                data.dayProgress >= 1.0 ? c.success : c.accent),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
+          // Checklist region: 220px, rows evenly distributed.
+          SizedBox(
+            height: 220,
             child: data.totalDueToday == 0
                 ? Center(
                     child: Text(
@@ -360,15 +394,22 @@ class _LargeHabitsWidget extends StatelessWidget {
                   )
                 : Column(
                     children: data.dueToday
-                        .map((t) => _HabitRow(
-                              tile: t,
-                              c: c,
-                              showStreak: showStreaks,
-                              large: true,
+                        .map((t) => Expanded(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: _HabitRow(
+                                  tile: t,
+                                  c: c,
+                                  showStreak: showStreaks,
+                                  large: true,
+                                ),
+                              ),
                             ))
                         .toList(),
                   ),
           ),
+          // Bottom region: 28px.
+          const SizedBox(height: 28),
         ],
       ),
     );
