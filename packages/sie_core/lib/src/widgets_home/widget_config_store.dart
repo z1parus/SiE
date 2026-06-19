@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:home_widget/home_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'widget_config.dart';
 
@@ -14,6 +15,9 @@ class WidgetConfigStore {
       ids.add(cfg.appWidgetId);
       await prefs.setString(_allIdsKey, jsonEncode(ids));
     }
+    // Invalidate the render signature so the next refresh (including from the
+    // background interactivity isolate) always re-renders with the new config.
+    await HomeWidget.saveWidgetData<String>('widget_sig_${cfg.appWidgetId}', '');
   }
 
   static Future<WidgetConfig?> load(int appWidgetId) async {

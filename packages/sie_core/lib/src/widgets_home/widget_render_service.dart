@@ -49,7 +49,7 @@ class WidgetRenderService {
     }
 
     await HomeWidget.updateWidget(
-      androidName: 'HabitsWidgetProvider',
+      androidName: provider.androidProviderClass,
       iOSName: 'HomeWidget',
     );
   }

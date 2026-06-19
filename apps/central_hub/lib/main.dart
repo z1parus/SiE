@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:sie_core/sie_core.dart';
 import 'screens/auth_screen.dart';
+import 'screens/focus_protocol_screen.dart';
 import 'screens/habit_tracker_screen.dart';
 import 'screens/main_navigation_shell.dart';
 import 'screens/planning_screen.dart';
@@ -39,8 +40,14 @@ void _handleWidgetUri(Uri? uri) {
   if (uri == null || uri.host != 'widget') return;
   final nav = rootNavigatorKey.currentState;
   if (nav == null) return;
-  // Only the Habits widget exists today; all hosts route there for now.
-  nav.push(MaterialPageRoute(builder: (_) => const HabitTrackerScreen()));
+  final module = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
+  switch (module) {
+    case 'focus':
+      nav.push(MaterialPageRoute(builder: (_) => const FocusProtocolScreen()));
+    case 'habits':
+    default:
+      nav.push(MaterialPageRoute(builder: (_) => const HabitTrackerScreen()));
+  }
 }
 
 void _handleNotificationTap(String? payload) {

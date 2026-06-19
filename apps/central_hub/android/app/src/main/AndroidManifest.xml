@@ -63,6 +63,19 @@
                 android:resource="@xml/widget_habits_info" />
         </receiver>
 
+        <!-- home_widget: FocusWidgetProvider -->
+        <receiver
+            android:name=".FocusWidgetProvider"
+            android:exported="true"
+            android:label="Фокус">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_focus_info" />
+        </receiver>
+
         <!-- home_widget: background quick-action receiver + service -->
         <receiver
             android:name="es.antonborri.home_widget.HomeWidgetBackgroundReceiver"

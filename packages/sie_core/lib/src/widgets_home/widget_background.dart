@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:home_widget/home_widget.dart';
 import '../local/app_database.dart';
+import 'modules/focus_widget_provider.dart';
 import 'modules/habits_widget_provider.dart';
 import 'widget_action_router.dart';
 import 'widget_config.dart';
@@ -13,7 +14,8 @@ import 'widget_size_bucket.dart';
 /// inside [widgetInteractivityCallback] (background isolate) before any render.
 void registerHomeWidgets() {
   WidgetRegistry.instance
-    ..register(HabitsWidgetProvider());
+    ..register(HabitsWidgetProvider())
+    ..register(FocusWidgetProvider());
 }
 
 /// Re-render every active widget. Call on app launch so the home screen

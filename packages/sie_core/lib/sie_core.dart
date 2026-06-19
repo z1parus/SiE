@@ -103,4 +103,5 @@ export 'src/widgets_home/widget_registry.dart';
 export 'src/widgets_home/widget_render_service.dart';
 export 'src/widgets_home/widget_action_router.dart';
 export 'src/widgets_home/modules/habits_widget_provider.dart';
+export 'src/widgets_home/modules/focus_widget_provider.dart';
 export 'src/widgets_home/widget_background.dart';
