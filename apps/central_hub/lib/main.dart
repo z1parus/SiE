@@ -25,6 +25,10 @@ void main() async {
     anonKey: 'sb_publishable_x54jsqL5s9ohcOJoyOTklw_5G8lbd9l',
   );
   await NotificationService.instance.init(onTap: _handleNotificationTap);
+  if (!kIsWeb) {
+    registerHomeWidgets();
+    await initWidgetWorkManager();
+  }
   runApp(const ProviderScope(child: SieApp()));
 }
 

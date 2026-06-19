@@ -102,3 +102,4 @@ export 'src/widgets_home/module_widget_provider.dart';
 export 'src/widgets_home/widget_registry.dart';
 export 'src/widgets_home/widget_render_service.dart';
 export 'src/widgets_home/modules/habits_widget_provider.dart';
+export 'src/widgets_home/widget_background.dart';
