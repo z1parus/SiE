@@ -578,18 +578,6 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       height: h,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () {
-          if (_tool == _MapTool.connector && widget.canEdit) {
-            _handleConnectorEndpoint('el:${el.id}', goal);
-            return;
-          }
-          HapticFeedback.selectionClick();
-          _showGroupActions(goal, el, c);
-        },
-        onLongPress: () {
-          HapticFeedback.mediumImpact();
-          _showGroupActions(goal, el, c);
-        },
         onPanStart: (!widget.canEdit || _mapLocked)
             ? null
             : (_) {
@@ -618,6 +606,18 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
           color: color,
           sc: c,
           canEdit: widget.canEdit && !_mapLocked,
+          onTap: () {
+            if (_tool == _MapTool.connector && widget.canEdit) {
+              _handleConnectorEndpoint('el:${el.id}', goal);
+              return;
+            }
+            HapticFeedback.selectionClick();
+            _showGroupActions(goal, el, c);
+          },
+          onLongPress: () {
+            HapticFeedback.mediumImpact();
+            _showGroupActions(goal, el, c);
+          },
           onResize: (!widget.canEdit || _mapLocked)
               ? null
               : (delta) {
@@ -5237,6 +5237,8 @@ class _GroupZoneElement extends StatelessWidget {
     required this.color,
     required this.sc,
     this.canEdit = false,
+    this.onTap,
+    this.onLongPress,
     this.onResize,
     this.onResizeEnd,
   });
@@ -5244,6 +5246,8 @@ class _GroupZoneElement extends StatelessWidget {
   final Color color;
   final SieColors sc;
   final bool canEdit;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final ValueChanged<Offset>? onResize;
   final VoidCallback? onResizeEnd;
 
@@ -5266,25 +5270,27 @@ class _GroupZoneElement extends StatelessWidget {
               alignment: Alignment.topLeft,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
-                // A solid label chip gives a reliable grab/long-press target
-                // even when the zone sits behind the node cluster.
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: sc.surface.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: color.withValues(alpha: 0.5)),
-                  ),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.8,
+                child: GestureDetector(
+                  onTap: onTap,
+                  onLongPress: onLongPress,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: sc.surface.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: color.withValues(alpha: 0.5)),
+                    ),
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                      ),
                     ),
                   ),
                 ),
