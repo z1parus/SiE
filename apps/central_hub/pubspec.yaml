@@ -44,7 +44,6 @@ dependencies:
   share_plus: ^10.1.3
   path_provider: ^2.1.5
   home_widget: ^0.7.0
-  workmanager: ^0.5.2
   sie_core:
     path: ../../packages/sie_core
 

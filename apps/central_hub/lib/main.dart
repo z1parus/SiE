@@ -29,7 +29,6 @@ void main() async {
   await NotificationService.instance.init(onTap: _handleNotificationTap);
   if (!kIsWeb) {
     registerHomeWidgets();
-    await initWidgetWorkManager();
     await HomeWidget.registerInteractivityCallback(widgetInteractivityCallback);
   }
   runApp(const ProviderScope(child: SieApp()));
@@ -83,6 +82,10 @@ class _SieAppState extends ConsumerState<SieApp> {
     }
     // Widget tapped while app already running.
     _widgetClickSub = HomeWidget.widgetClicked.listen(_handleWidgetUri);
+
+    // Re-render active widgets from the local mirror (handles day rollover and
+    // any changes made while the app was closed).
+    await refreshHomeWidgetsOnLaunch(ref.read(appDatabaseProvider));
   }
 
   @override
