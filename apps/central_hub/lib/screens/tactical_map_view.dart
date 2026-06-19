@@ -578,6 +578,18 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
       height: h,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
+        onTap: () {
+          if (_tool == _MapTool.connector && widget.canEdit) {
+            _handleConnectorEndpoint('el:${el.id}', goal);
+            return;
+          }
+          HapticFeedback.selectionClick();
+          _showGroupActions(goal, el, c);
+        },
+        onLongPress: () {
+          HapticFeedback.mediumImpact();
+          _showGroupActions(goal, el, c);
+        },
         onPanStart: (!widget.canEdit || _mapLocked)
             ? null
             : (_) {
@@ -601,48 +613,31 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                 _scheduleSaveElement(goal, el.id);
                 setState(() => _draggingId = null);
               },
-        child: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: (_tool == _MapTool.connector && widget.canEdit)
-              ? () => _handleConnectorEndpoint('el:${el.id}', goal)
-              : widget.canEdit
-                  ? () {
-                      HapticFeedback.selectionClick();
-                      _showGroupActions(goal, el, c);
-                    }
-                  : null,
-          onLongPress: widget.canEdit
-              ? () {
-                  HapticFeedback.mediumImpact();
-                  _showGroupActions(goal, el, c);
-                }
-              : null,
-          child: _GroupZoneElement(
-            element: el,
-            color: color,
-            sc: c,
-            canEdit: widget.canEdit && !_mapLocked,
-            onResize: (!widget.canEdit || _mapLocked)
-                ? null
-                : (delta) {
-                    final scale = _tc.value.getMaxScaleOnAxis();
-                    final cur = _elementSizes[el.id] ??
-                        Offset(el.w ?? 200, el.h ?? 150);
-                    _elementSizes[el.id] = Offset(
-                      (cur.dx + delta.dx / scale).clamp(80.0, 900.0),
-                      (cur.dy + delta.dy / scale).clamp(60.0, 900.0),
-                    );
-                    _bumpRepaint();
-                  },
-            onResizeEnd: () {
-              final s = _elementSizes[el.id];
-              if (s != null) {
-                ref
-                    .read(planningProvider.notifier)
-                    .updateMapElement(goal.id, el.id, w: s.dx, h: s.dy);
-              }
-            },
-          ),
+        child: _GroupZoneElement(
+          element: el,
+          color: color,
+          sc: c,
+          canEdit: widget.canEdit && !_mapLocked,
+          onResize: (!widget.canEdit || _mapLocked)
+              ? null
+              : (delta) {
+                  final scale = _tc.value.getMaxScaleOnAxis();
+                  final cur = _elementSizes[el.id] ??
+                      Offset(el.w ?? 200, el.h ?? 150);
+                  _elementSizes[el.id] = Offset(
+                    (cur.dx + delta.dx / scale).clamp(80.0, 900.0),
+                    (cur.dy + delta.dy / scale).clamp(60.0, 900.0),
+                  );
+                  _bumpRepaint();
+                },
+          onResizeEnd: () {
+            final s = _elementSizes[el.id];
+            if (s != null) {
+              ref
+                  .read(planningProvider.notifier)
+                  .updateMapElement(goal.id, el.id, w: s.dx, h: s.dy);
+            }
+          },
         ),
       ),
     );
