@@ -137,6 +137,19 @@ class HabitsWidgetProvider extends ModuleWidgetProvider<HabitsWidgetData> {
   ];
 
   @override
+  List<WidgetTapZone> tapZones(WidgetConfig cfg, HabitsWidgetData data) {
+    // Small widget is a single ring → no per-row zones (whole-widget tap only).
+    if (cfg.sizeBucket == WidgetSizeBucket.small) return const [];
+    return data.dueToday
+        .map((t) => WidgetTapZone(
+              actionPath: 'habits/toggle',
+              entityId: t.id,
+              active: t.done,
+            ))
+        .toList();
+  }
+
+  @override
   Widget render(
       WidgetRenderContext ctx, WidgetConfig cfg, HabitsWidgetData data) {
     return switch (cfg.sizeBucket) {

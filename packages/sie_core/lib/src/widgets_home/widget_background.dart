@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:workmanager/workmanager.dart';
 import '../local/app_database.dart';
 import 'modules/habits_widget_provider.dart';
+import 'widget_action_router.dart';
 import 'widget_registry.dart';
 import 'widget_render_service.dart';
 
@@ -44,4 +45,19 @@ void widgetCallbackDispatcher() {
     }
     return true;
   });
+}
+
+/// Interactivity entry point — called by `home_widget` when a widget tap-zone
+/// is pressed (registered via `HomeWidget.registerInteractivityCallback`).
+/// Runs the quick-action fully offline and re-renders the widget.
+@pragma('vm:entry-point')
+Future<void> widgetInteractivityCallback(Uri? uri) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  registerHomeWidgets();
+  final db = AppDatabase();
+  try {
+    await WidgetActionRouter.run(uri, db);
+  } finally {
+    await db.close();
+  }
 }

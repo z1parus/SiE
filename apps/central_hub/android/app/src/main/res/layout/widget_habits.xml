@@ -1,13 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:padding="8dp">
+    android:layout_height="match_parent">
 
     <ImageView
         android:id="@+id/widget_image"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:scaleType="fitXY"
-        android:contentDescription="Habits Widget" />
+        android:contentDescription="Привычки" />
+
+    <!-- Transparent per-row tap zones overlaid on the checklist area. The
+         provider inflates one row per habit at runtime. Padding keeps zones
+         off the header (top) and the right-hand progress ring (medium). -->
+    <LinearLayout
+        android:id="@+id/widget_actions"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingTop="34dp"
+        android:paddingStart="6dp"
+        android:paddingEnd="78dp"
+        android:paddingBottom="10dp" />
 </FrameLayout>

@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:sie_core/sie_core.dart';
 import 'screens/auth_screen.dart';
 import 'screens/habit_tracker_screen.dart';
@@ -28,8 +30,18 @@ void main() async {
   if (!kIsWeb) {
     registerHomeWidgets();
     await initWidgetWorkManager();
+    await HomeWidget.registerInteractivityCallback(widgetInteractivityCallback);
   }
   runApp(const ProviderScope(child: SieApp()));
+}
+
+/// Routes a `sie://widget/<host>` deep-link (whole-widget tap) into the app.
+void _handleWidgetUri(Uri? uri) {
+  if (uri == null || uri.host != 'widget') return;
+  final nav = rootNavigatorKey.currentState;
+  if (nav == null) return;
+  // Only the Habits widget exists today; all hosts route there for now.
+  nav.push(MaterialPageRoute(builder: (_) => const HabitTrackerScreen()));
 }
 
 void _handleNotificationTap(String? payload) {
@@ -51,6 +63,33 @@ class SieApp extends ConsumerStatefulWidget {
 
 class _SieAppState extends ConsumerState<SieApp> {
   bool _launchComplete = false;
+  StreamSubscription<Uri?>? _widgetClickSub;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!kIsWeb) _initWidgetDeepLinks();
+  }
+
+  Future<void> _initWidgetDeepLinks() async {
+    // App launched by tapping a widget (cold start).
+    final launchUri = await HomeWidget.initiallyLaunchedFromHomeWidget();
+    if (launchUri != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // Defer until the auth gate has settled so the route lands on top.
+        Future.delayed(const Duration(milliseconds: 600),
+            () => _handleWidgetUri(launchUri));
+      });
+    }
+    // Widget tapped while app already running.
+    _widgetClickSub = HomeWidget.widgetClicked.listen(_handleWidgetUri);
+  }
+
+  @override
+  void dispose() {
+    _widgetClickSub?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
