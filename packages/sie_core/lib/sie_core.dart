@@ -92,3 +92,13 @@ export 'src/models/affirmation_pack.dart';
 export 'src/providers/meditation_presets_provider.dart';
 export 'src/providers/meditation_session_provider.dart';
 export 'src/providers/meditation_stats_provider.dart';
+// ── Home widgets ───────────────────────────────────────────────────────────
+export 'src/widgets_home/widget_size_bucket.dart';
+export 'src/widgets_home/widget_config.dart';
+export 'src/widgets_home/widget_config_store.dart';
+export 'src/widgets_home/widget_theme_bridge.dart';
+export 'src/widgets_home/widget_option_spec.dart';
+export 'src/widgets_home/module_widget_provider.dart';
+export 'src/widgets_home/widget_registry.dart';
+export 'src/widgets_home/widget_render_service.dart';
+export 'src/widgets_home/modules/habits_widget_provider.dart';

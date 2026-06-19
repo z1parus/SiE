@@ -1622,6 +1622,19 @@ class AppDatabase extends _$AppDatabase {
   Future<void> markGoalSnapshotSynced(String id) =>
       (update(localGoalProgressSnapshots)..where((t) => t.id.equals(id)))
           .write(const LocalGoalProgressSnapshotsCompanion(synced: Value(true)));
+
+  // ── Widget helpers ─────────────────────────────────────────────────────────
+
+  Future<List<LocalHabit>> habitsForWidget() => (select(localHabits)
+        ..where((t) => t.deletedLocally.not() & t.isArchived.not())
+        ..orderBy([(t) => OrderingTerm(
+            expression: t.isPinned, mode: OrderingMode.desc)]))
+      .get();
+
+  Future<List<LocalHabitLog>> habitLogsForDate(String dateKey) =>
+      (select(localHabitLogs)
+            ..where((t) => t.completedAt.equals(dateKey)))
+          .get();
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────
