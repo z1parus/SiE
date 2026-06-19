@@ -58,6 +58,8 @@ class HabitsWidgetProvider extends ModuleWidgetProvider<HabitsWidgetData> {
   @override
   IconData get glyph => Icons.check_circle_outline;
   @override
+  String get androidProviderClass => 'HabitsWidgetProvider';
+  @override
   List<WidgetSizeBucket> get supportedSizes =>
       const [WidgetSizeBucket.small, WidgetSizeBucket.medium, WidgetSizeBucket.large];
 

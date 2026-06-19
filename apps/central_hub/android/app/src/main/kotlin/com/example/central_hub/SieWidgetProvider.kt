@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetBackgroundIntent
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
@@ -19,6 +20,7 @@ import org.json.JSONArray
 abstract class SieWidgetProvider : HomeWidgetProvider() {
     abstract val layoutId: Int
     abstract val imageViewId: Int
+    abstract val placeholderViewId: Int
     abstract val actionsContainerId: Int
     abstract val deepLinkHost: String
 
@@ -33,9 +35,15 @@ abstract class SieWidgetProvider : HomeWidgetProvider() {
 
             // ── PNG ──────────────────────────────────────────────────────────
             val imagePath = widgetData.getString("widget_img_$appWidgetId", null)
-            if (imagePath != null) {
-                val bitmap = BitmapFactory.decodeFile(imagePath)
-                if (bitmap != null) views.setImageViewBitmap(imageViewId, bitmap)
+            val bitmap = if (imagePath != null) BitmapFactory.decodeFile(imagePath) else null
+            if (bitmap != null) {
+                views.setImageViewBitmap(imageViewId, bitmap)
+                views.setViewVisibility(imageViewId, View.VISIBLE)
+                views.setViewVisibility(placeholderViewId, View.GONE)
+            } else {
+                // No render yet — keep the branded placeholder card visible.
+                views.setViewVisibility(imageViewId, View.GONE)
+                views.setViewVisibility(placeholderViewId, View.VISIBLE)
             }
 
             // ── Whole-widget deep-link ───────────────────────────────────────
@@ -46,6 +54,7 @@ abstract class SieWidgetProvider : HomeWidgetProvider() {
                 Uri.parse("sie://widget/$host?widgetId=$appWidgetId")
             )
             views.setOnClickPendingIntent(imageViewId, launchIntent)
+            views.setOnClickPendingIntent(placeholderViewId, launchIntent)
 
             // ── Per-row quick-action tap zones ───────────────────────────────
             views.removeAllViews(actionsContainerId)

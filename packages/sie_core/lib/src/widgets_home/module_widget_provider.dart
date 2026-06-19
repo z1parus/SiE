@@ -52,6 +52,11 @@ abstract class ModuleWidgetProvider<T extends WidgetData> {
   IconData get glyph;
   List<WidgetSizeBucket> get supportedSizes;
 
+  /// Android `AppWidgetProvider` subclass simple name (e.g.
+  /// `'HabitsWidgetProvider'`). Used to map a launcher-placed widget instance
+  /// back to its module when auto-provisioning a default config.
+  String get androidProviderClass;
+
   /// Deep-link host used when the whole widget is tapped:
   /// `sie://widget/<deepLinkHost>`.
   String get deepLinkHost => moduleId;
