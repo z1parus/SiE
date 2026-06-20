@@ -1,9 +1,10 @@
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
+
+import '../widgets/focus_orbit_timer.dart';
 
 // mirrors provider constant — used only for HUD display
 const _kFocusXp = 100;
@@ -252,10 +253,9 @@ class _FocusRing extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c          = ref.watch(sieColorsProvider);
-    final trackColor = c.isLightMode
-        ? c.border
-        : Colors.white.withValues(alpha: 0.07);
+    final c = ref.watch(sieColorsProvider);
+    final glass =
+        c.isLightMode ? const Color(0xFF5B6480) : Colors.white;
 
     return SizedBox(
       width: 284,
@@ -264,78 +264,51 @@ class _FocusRing extends ConsumerWidget {
         alignment: Alignment.center,
         children: [
           RepaintBoundary(
-            child: CustomPaint(
-              size: const Size(284, 284),
-              painter: _FocusRingPainter(
-                progress: progress,
-                phaseColor: phaseColor,
-                glowOpacity: glowOpacity,
-                trackColor: trackColor,
-                isLightMode: c.isLightMode,
-              ),
+            child: FocusOrbitTimer(
+              size: 284,
+              timeText: formattedTime,
+              progress: progress,
+              demo: phase == FocusPhase.idle,
+              motion: SieMotion.enabled(context),
+              gold: phaseColor,
+              gold2: Color.lerp(phaseColor, Colors.white, 0.4)!,
+              glass: glass,
+              centerFontSize: 58,
+              glow: !c.isLightMode,
             ),
           ),
 
-          // Timer core — countdown + phase label
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                formattedTime,
+          // Phase label, floating just below the countdown.
+          Align(
+            alignment: const Alignment(0, 0.42),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: phaseColor.withValues(alpha: 0.35),
+                  width: 0.8,
+                ),
+                borderRadius: BorderRadius.circular(4),
+                color: phaseColor.withValues(alpha: 0.06),
+              ),
+              child: Text(
+                phase == FocusPhase.breakTime ? 'BREAK' : 'FOCUS',
                 style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 58,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 4,
-                  height: 1.0,
-                  fontFeatures: const [FontFeature.tabularFigures()],
+                  color: phaseColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 4.5,
                   shadows: c.isLightMode
                       ? null
                       : [
                           Shadow(
-                            color: phaseColor.withValues(alpha: 0.90),
-                            blurRadius: 18,
-                          ),
-                          Shadow(
-                            color: phaseColor.withValues(alpha: 0.45),
-                            blurRadius: 44,
+                            color: phaseColor.withValues(alpha: 0.65),
+                            blurRadius: 8,
                           ),
                         ],
                 ),
               ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: phaseColor.withValues(alpha: 0.35),
-                    width: 0.8,
-                  ),
-                  borderRadius: BorderRadius.circular(4),
-                  color: phaseColor.withValues(alpha: 0.06),
-                ),
-                child: Text(
-                  phase == FocusPhase.breakTime ? 'BREAK' : 'FOCUS',
-                  style: TextStyle(
-                    color: phaseColor,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 4.5,
-                    shadows: c.isLightMode
-                        ? null
-                        : [
-                            Shadow(
-                              color: phaseColor.withValues(alpha: 0.65),
-                              blurRadius: 8,
-                            ),
-                          ],
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),
@@ -344,172 +317,6 @@ class _FocusRing extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Chrono-Ring Painter — track + specular + neon arc + glow
-// ─────────────────────────────────────────────────────────────────────────────
-class _FocusRingPainter extends CustomPainter {
-  final double progress;
-  final Color  phaseColor;
-  final double glowOpacity;
-  final Color  trackColor;
-  final bool   isLightMode;
-
-  const _FocusRingPainter({
-    required this.progress,
-    required this.phaseColor,
-    required this.glowOpacity,
-    required this.trackColor,
-    required this.isLightMode,
-  });
-
-  static const double _trackW = 10.0;
-  static const double _arcW   = 8.0;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 20.0;
-    const startAngle = -math.pi / 2; // 12 o'clock
-
-    final trackRect = Rect.fromCircle(center: center, radius: radius);
-
-    // ── Layer 1: Ring substrate ───────────────────────────────────
-    // Ghost bloom corona
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..color = phaseColor.withValues(alpha: isLightMode ? 0.03 : 0.05)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = _trackW + 8,
-    );
-    // Main track
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..color = trackColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = _trackW,
-    );
-    // Inner edge — sharp rim of the glass ring
-    canvas.drawCircle(
-      center,
-      radius - _trackW / 2 + 1,
-      Paint()
-        ..color = isLightMode
-            ? trackColor.withValues(alpha: 0.50)
-            : Colors.white.withValues(alpha: 0.035)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2,
-    );
-
-    // ── Layer 2: Glass specular — skip in light mode (no glass shader) ──
-    if (!isLightMode) {
-      canvas.drawArc(
-        trackRect,
-        -2.80, // ≈ 10 o'clock
-        0.65,  // ≈ 37° arc span
-        false,
-        Paint()
-          ..color = Colors.white.withValues(alpha: 0.16)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = _trackW
-          ..strokeCap = StrokeCap.round,
-      );
-    }
-
-    if (progress <= 0) return;
-
-    final sweepAngle = 2 * math.pi * progress.clamp(0.0, 1.0);
-
-    // ── Layer 3: Pulsed glow halo — skip in light mode ──────────
-    if (!isLightMode && glowOpacity > 0.01) {
-      canvas.drawArc(
-        trackRect,
-        startAngle,
-        sweepAngle,
-        false,
-        Paint()
-          ..color = phaseColor.withValues(alpha: glowOpacity * 0.65)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = _arcW + 20
-          ..strokeCap = StrokeCap.round
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14),
-      );
-    }
-
-    // Ambient glow — softer in light mode
-    canvas.drawArc(
-      trackRect,
-      startAngle,
-      sweepAngle,
-      false,
-      Paint()
-        ..color = phaseColor.withValues(alpha: isLightMode ? 0.10 : 0.18)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = isLightMode ? _arcW + 4 : _arcW + 10
-        ..strokeCap = StrokeCap.round
-        ..maskFilter =
-            MaskFilter.blur(BlurStyle.normal, isLightMode ? 5.0 : 9.0),
-    );
-
-    // ── Layer 4: Neon arc — SweepGradient for glass-edge shimmer ─
-    final arcGradient = SweepGradient(
-      startAngle: startAngle,
-      endAngle: startAngle + sweepAngle,
-      colors: [
-        phaseColor.withValues(alpha: 0.60),
-        phaseColor,
-      ],
-    );
-    canvas.drawArc(
-      trackRect,
-      startAngle,
-      sweepAngle,
-      false,
-      Paint()
-        ..shader = arcGradient.createShader(trackRect)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = _arcW
-        ..strokeCap = StrokeCap.round,
-    );
-
-    // ── Layer 5: Tip glow + tip dot ───────────────────────────────
-    final tipAngle = startAngle + sweepAngle;
-    final tip = Offset(
-      center.dx + radius * math.cos(tipAngle),
-      center.dy + radius * math.sin(tipAngle),
-    );
-
-    if (!isLightMode) {
-      canvas.drawCircle(
-        tip,
-        11,
-        Paint()
-          ..color = phaseColor.withValues(alpha: 0.50)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9),
-      );
-    }
-    canvas.drawCircle(
-      tip,
-      5.5,
-      Paint()..color = isLightMode ? phaseColor : Colors.white,
-    );
-    canvas.drawCircle(
-      Offset(tip.dx - 1.4, tip.dy - 1.4),
-      1.8,
-      Paint()..color = Colors.white.withValues(alpha: isLightMode ? 0.9 : 0.75),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_FocusRingPainter old) =>
-      old.progress != progress ||
-      old.phaseColor != phaseColor ||
-      old.glowOpacity != glowOpacity ||
-      old.trackColor != trackColor ||
-      old.isLightMode != isLightMode;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Top Bar — circle buttons + session counter

@@ -17,6 +17,7 @@ import 'session_orb_painters.dart';
 import 'profile_screen.dart';
 import 'public_profile_screen.dart';
 import 'user_search_screen.dart';
+import '../widgets/focus_orbit_timer.dart';
 
 const _kOrange = Color(0xFFFF8C42);
 const _kBranchOrderKey = 'branch_order';
@@ -1323,284 +1324,38 @@ class _HabitCrystalPainter extends CustomPainter {
 /// active session shows live MM:SS, a progress arc with a glowing leading tip,
 /// a phase colour (gold = work, cool = break) and a minute ripple. A row of
 /// dots underneath tracks today's completed pomodoros (target 4).
-class _FocusRingPreview extends ConsumerStatefulWidget {
+class _FocusRingPreview extends ConsumerWidget {
   const _FocusRingPreview();
 
   @override
-  ConsumerState<_FocusRingPreview> createState() => _FocusRingPreviewState();
-}
-
-class _FocusRingPreviewState extends ConsumerState<_FocusRingPreview>
-    with SingleTickerProviderStateMixin {
-  static const _ring = 150.0;
-  static const _sessionTarget = 4;
-
-  late final AnimationController _loop;
-
-  @override
-  void initState() {
-    super.initState();
-    _loop = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 4500),
-    );
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (SieMotion.enabled(context)) {
-      if (!_loop.isAnimating) _loop.repeat();
-    } else {
-      _loop.stop();
-    }
-  }
-
-  @override
-  void dispose() {
-    _loop.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
     final s = ref.watch(focusTimerProvider);
-    final doneToday = ref
-            .watch(bootcampDailyActivityProvider)
-            .valueOrNull
-            ?.focusSessionsToday ??
-        0;
     final motion = SieMotion.enabled(context);
 
     final idle = s.phase == FocusPhase.idle;
     final isBreak = s.phase == FocusPhase.breakTime;
-    final timeText = idle ? '${s.settings.workMinutes}:00' : s.formattedTime;
-    final label = idle ? 'READY' : (isBreak ? 'BREAK' : 'WORK');
+    final timeText = idle ? '${s.settings.workMinutes}' : s.formattedTime;
     final progress = idle ? 0.0 : s.progress;
-    final phase = isBreak ? c.focusBreak : c.accent;
-    final phase2 = isBreak ? c.focusBreak : c.accentSecondary;
+    final gold = isBreak ? c.focusBreak : c.accent;
+    final gold2 = isBreak ? c.focusBreak : c.accentSecondary;
+    final glass = c.isLightMode ? const Color(0xFF5B6480) : Colors.white;
 
     return Center(
-      child: SizedBox(
-        width: _ring,
-        height: _ring,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            AnimatedBuilder(
-              animation: _loop,
-              builder: (_, _) {
-                final breathe = motion
-                    ? 0.97 + 0.03 * (0.5 + 0.5 * math.sin(_loop.value * 2 * math.pi))
-                    : 1.0;
-                return Transform.scale(
-                  scale: breathe,
-                  child: CustomPaint(
-                    size: const Size(_ring, _ring),
-                    painter: _FocusRingPainter(
-                      progress: progress,
-                      loop: _loop.value,
-                      idle: idle,
-                      motion: motion,
-                      track: c.border,
-                      phase: phase,
-                      phase2: phase2,
-                      glow: !c.isLightMode,
-                    ),
-                  ),
-                );
-              },
-            ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  timeText,
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 2,
-                    height: 1,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: idle ? c.iconMuted : phase,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 2.5,
-                  ),
-                ),
-                const SizedBox(height: 9),
-                _SessionDots(
-                  done: doneToday,
-                  target: _sessionTarget,
-                  color: phase,
-                  track: c.border,
-                  loop: _loop,
-                  motion: motion,
-                ),
-              ],
-            ),
-          ],
-        ),
+      child: FocusOrbitTimer(
+        size: 150,
+        timeText: timeText,
+        progress: progress,
+        demo: idle, // idle → arrow loops to advertise the motion
+        motion: motion,
+        gold: gold,
+        gold2: gold2,
+        glass: glass,
+        centerFontSize: 30,
+        glow: !c.isLightMode,
       ),
     );
   }
-}
-
-class _SessionDots extends StatelessWidget {
-  const _SessionDots({
-    required this.done,
-    required this.target,
-    required this.color,
-    required this.track,
-    required this.loop,
-    required this.motion,
-  });
-
-  final int done;
-  final int target;
-  final Color color;
-  final Color track;
-  final Animation<double> loop;
-  final bool motion;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: loop,
-      builder: (_, _) {
-        final pulse = motion ? 0.4 + 0.6 * (0.5 + 0.5 * math.sin(loop.value * 2 * math.pi)) : 1.0;
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(target, (i) {
-            final filled = i < done;
-            final isNext = i == done && done < target;
-            final dotColor = filled
-                ? color
-                : isNext
-                    ? color.withValues(alpha: 0.25 + 0.45 * pulse)
-                    : track;
-            return Container(
-              width: 6,
-              height: 6,
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              decoration: BoxDecoration(shape: BoxShape.circle, color: dotColor),
-            );
-          }),
-        );
-      },
-    );
-  }
-}
-
-class _FocusRingPainter extends CustomPainter {
-  final double progress;
-  final double loop;
-  final bool idle;
-  final bool motion;
-  final Color track;
-  final Color phase;
-  final Color phase2;
-  final bool glow;
-
-  const _FocusRingPainter({
-    required this.progress,
-    required this.loop,
-    required this.idle,
-    required this.motion,
-    required this.track,
-    required this.phase,
-    required this.phase2,
-    required this.glow,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final radius = size.width / 2 - 4;
-    final bounds = Rect.fromCircle(center: center, radius: radius);
-
-    // Track.
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..color = track.withValues(alpha: idle ? 0.5 : 0.35)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 7,
-    );
-
-    // Running minute ripple — expanding ring fading out.
-    if (!idle && motion) {
-      final rr = radius * (0.62 + 0.5 * loop);
-      canvas.drawCircle(
-        center,
-        rr,
-        Paint()
-          ..color = phase.withValues(alpha: (1 - loop) * 0.22)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.4,
-      );
-    }
-
-    // Progress arc + glowing leading tip.
-    if (progress > 0) {
-      final sweep = 2 * math.pi * progress.clamp(0.0, 1.0);
-      canvas.drawArc(
-        bounds,
-        -math.pi / 2,
-        sweep,
-        false,
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [phase2, phase],
-          ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 7
-          ..strokeCap = StrokeCap.round,
-      );
-
-      final tipAngle = -math.pi / 2 + sweep;
-      final tip = center +
-          Offset(math.cos(tipAngle), math.sin(tipAngle)) * radius;
-      final pulseR = 4 + (motion ? 1.6 * (0.5 + 0.5 * math.sin(loop * 2 * math.pi)) : 0.0);
-      final tipPaint = Paint()..color = phase;
-      if (glow) {
-        tipPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-      }
-      canvas.drawCircle(tip, pulseR, tipPaint);
-    }
-
-    // Idle standby — a single glowing tick sweeping the track like radar.
-    if (idle && motion) {
-      final ang = -math.pi / 2 + loop * 2 * math.pi;
-      final p = center + Offset(math.cos(ang), math.sin(ang)) * radius;
-      final tickPaint = Paint()..color = phase.withValues(alpha: 0.9);
-      if (glow) {
-        tickPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-      }
-      canvas.drawCircle(p, 3.5, tickPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_FocusRingPainter old) =>
-      old.progress != progress ||
-      old.loop != loop ||
-      old.idle != idle ||
-      old.motion != motion ||
-      old.track != track ||
-      old.phase != phase ||
-      old.phase2 != phase2 ||
-      old.glow != glow;
 }
 
 /// Mission-progress preview: one rotating ring per active goal. Each ring's
