@@ -1,20 +1,26 @@
 PODS:
   - Flutter (1.0.0)
+  - home_widget (0.0.1):
+    - Flutter
   - soundpool (0.0.1):
     - Flutter
 
 DEPENDENCIES:
   - Flutter (from `Flutter`)
+  - home_widget (from `.symlinks/plugins/home_widget/ios`)
   - soundpool (from `.symlinks/plugins/soundpool/ios`)
 
 EXTERNAL SOURCES:
   Flutter:
     :path: Flutter
+  home_widget:
+    :path: ".symlinks/plugins/home_widget/ios"
   soundpool:
     :path: ".symlinks/plugins/soundpool/ios"
 
 SPEC CHECKSUMS:
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  home_widget: f169fc41fd807b4d46ab6615dc44d62adbf9f64f
   soundpool: cbfc34dbc42a1bb19426aaccf20e9cdd250b45e5
 
 PODFILE CHECKSUM: 3c63482e143d1b91d2d2560aee9fb04ecc74ac7e
