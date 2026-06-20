@@ -43,12 +43,6 @@ class FocusWidgetData extends WidgetData {
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
-  /// While a session is actively running the numeric time is rendered by a live
-  /// native `Chronometer` overlaid on the PNG, so the PNG itself leaves the time
-  /// slot blank (otherwise a frozen number would show beneath the ticking one).
-  bool get hideStaticTime =>
-      isRunning && phase != FocusWidgetPhase.idle && secondsRemaining > 0;
-
   @override
   String get signature =>
       '${phase.name}:$secondsRemaining:$totalSecs:$completedToday:$isRunning';
@@ -122,7 +116,7 @@ class FocusWidgetProvider extends ModuleWidgetProvider<FocusWidgetData> {
         secondsRemaining: 18 * 60 + 42,
         totalSecs: 25 * 60,
         completedToday: 2,
-        isRunning: true,
+        isRunning: false,
         workMinutes: 25,
         breakMinutes: 5,
       );
@@ -134,13 +128,23 @@ class FocusWidgetProvider extends ModuleWidgetProvider<FocusWidgetData> {
   @override
   Map<String, String> nativeExtras(
       WidgetRenderContext ctx, WidgetConfig cfg, FocusWidgetData data) {
-    if (!data.hideStaticTime) return const {'chrono': ''};
-    // Wall-clock instant the current phase ends; the native side converts this
-    // to the Chronometer's elapsed-realtime base and counts down to it.
+    final active = data.isRunning &&
+        data.phase != FocusWidgetPhase.idle &&
+        data.secondsRemaining > 0;
+    if (!active) return const {'chrono': ''};
+    // Wall-clock instant the current phase ends; the native side converts to
+    // Chronometer's elapsedRealtime base. Color passed as #AARRGGBB hex to
+    // avoid signed/unsigned overflow when parsing on the Android side.
     final endMs =
         DateTime.now().millisecondsSinceEpoch + data.secondsRemaining * 1000;
-    final color = ctx.colors.textPrimary.toARGB32();
-    return {'chrono': '$endMs|$color'};
+    final ringColor = switch (data.phase) {
+      FocusWidgetPhase.work => ctx.accent,
+      FocusWidgetPhase.breakTime => ctx.colors.accentSecondary,
+      _ => ctx.colors.textPrimary,
+    };
+    final hex =
+        '#${ringColor.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}';
+    return {'chrono': '$endMs|$hex'};
   }
 
   @override
@@ -201,19 +205,15 @@ class _SmallFocusWidget extends StatelessWidget {
               child: Center(
                 child: data.phase == FocusWidgetPhase.idle
                     ? Icon(Icons.timer_outlined, color: c.iconMuted, size: 28)
-                    : data.hideStaticTime
-                        ? const SizedBox(height: 20)
-                        : Text(
-                            data.formattedTime,
-                            style: TextStyle(
-                              color: c.textPrimary,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures()
-                              ],
-                            ),
-                          ),
+                    : Text(
+                        data.formattedTime,
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
               ),
             ),
           ),
@@ -265,24 +265,15 @@ class _MediumFocusWidget extends StatelessWidget {
               child: Center(
                 child: data.phase == FocusWidgetPhase.idle
                     ? Icon(Icons.timer_outlined, color: c.iconMuted, size: 32)
-                    : data.hideStaticTime
-                        ? const SizedBox(height: 22)
-                        : Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                data.formattedTime,
-                                style: TextStyle(
-                                  color: c.textPrimary,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  fontFeatures: const [
-                                    FontFeature.tabularFigures()
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
+                    : Text(
+                        data.formattedTime,
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
               ),
             ),
           ),
@@ -431,20 +422,17 @@ class _LargeFocusWidget extends StatelessWidget {
                       : Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (data.hideStaticTime)
-                              const SizedBox(height: 34)
-                            else
-                              Text(
-                                data.formattedTime,
-                                style: TextStyle(
-                                  color: c.textPrimary,
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                  fontFeatures: const [
-                                    FontFeature.tabularFigures()
-                                  ],
-                                ),
+                            Text(
+                              data.formattedTime,
+                              style: TextStyle(
+                                color: c.textPrimary,
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures()
+                                ],
                               ),
+                            ),
                             Text(
                               _phaseLabel(data.phase),
                               style: TextStyle(

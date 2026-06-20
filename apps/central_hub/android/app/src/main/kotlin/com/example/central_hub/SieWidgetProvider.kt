@@ -93,22 +93,24 @@ abstract class SieWidgetProvider : HomeWidgetProvider() {
             }
 
             // ── Live countdown overlay (Focus timer) ─────────────────────────
-            // Payload `endWallMs|argbColor`; empty = hide. We re-derive the
-            // remaining time against the wall clock each update so the native
-            // Chronometer stays in sync, then let the OS tick it down on its own.
+            // Payload `endWallMs|#AARRGGBB`; empty = hide. The Chronometer
+            // overlays on top of the static PNG time so a stale snapshot is still
+            // visible if the overlay ever fails to appear.
             val chronoId = chronometerViewId
             if (chronoId != null) {
                 val raw = widgetData.getString("widget_chrono_$appWidgetId", "") ?: ""
-                val parts = if (raw.isNotEmpty()) raw.split("|") else emptyList()
+                val parts = raw.split("|")
                 val endMs = parts.getOrNull(0)?.toLongOrNull() ?: 0L
                 val remainingMs = endMs - System.currentTimeMillis()
                 if (raw.isNotEmpty() && remainingMs > 0 && bitmap != null) {
                     val base = SystemClock.elapsedRealtime() + remainingMs
                     views.setChronometerCountDown(chronoId, true)
                     views.setChronometer(chronoId, base, null, true)
-                    parts.getOrNull(1)?.toIntOrNull()?.let {
-                        views.setTextColor(chronoId, it)
-                    }
+                    try {
+                        parts.getOrNull(1)?.let { hex ->
+                            views.setTextColor(chronoId, android.graphics.Color.parseColor(hex))
+                        }
+                    } catch (_: Exception) { /* keep XML default colour */ }
                     views.setViewVisibility(chronoId, View.VISIBLE)
                 } else {
                     views.setViewVisibility(chronoId, View.GONE)
