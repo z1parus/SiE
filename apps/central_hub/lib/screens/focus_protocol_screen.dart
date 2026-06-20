@@ -157,7 +157,6 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
                             builder: (_, _) => Transform.scale(
                               scale: 1.0 + 0.025 * _pulseAnim.value,
                               child: _FocusRing(
-                                progress: timerState.progress,
                                 formattedTime: timerState.formattedTime,
                                 phaseColor: phaseColor,
                                 phase: timerState.phase,
@@ -238,14 +237,12 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
 // ─────────────────────────────────────────────────────────────────────────────
 class _FocusRing extends ConsumerWidget {
   const _FocusRing({
-    required this.progress,
     required this.formattedTime,
     required this.phaseColor,
     required this.phase,
     required this.glowOpacity,
   });
 
-  final double     progress;
   final String     formattedTime;
   final Color      phaseColor;
   final FocusPhase phase;
@@ -267,8 +264,6 @@ class _FocusRing extends ConsumerWidget {
             child: FocusOrbitTimer(
               size: 284,
               timeText: formattedTime,
-              progress: progress,
-              demo: phase == FocusPhase.idle,
               motion: SieMotion.enabled(context),
               gold: phaseColor,
               gold2: Color.lerp(phaseColor, Colors.white, 0.4)!,

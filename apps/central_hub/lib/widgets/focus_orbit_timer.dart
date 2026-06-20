@@ -5,11 +5,12 @@ import 'package:flutter/material.dart';
 /// Tangled-orbit countdown visual shared by the focus preview card and the full
 /// focus timer screen.
 ///
-/// The form is a SINGLE continuous interwoven line (one ribbon wound a few times
-/// at slowly rotating angles, so it reads as several interlocking rings). A
-/// leading arrow travels that line clockwise once over the whole session (a
-/// 1-minute timer completes the route in a minute, an hour timer in an hour),
-/// trailing a comet of glowing dots. The remaining time floats in the centre.
+/// The form is a SINGLE continuous interwoven line — one ribbon wound several
+/// times at slowly rotating angles so it reads as four interlocking rings of
+/// semi-transparent tube (no loose ends, the path closes seamlessly). A leading
+/// arrow travels that line clockwise and completes the whole route every
+/// 60 seconds — regardless of how long the running session is set for — trailing
+/// a comet of glowing dots. The remaining time floats in the centre.
 class FocusOrbitTimer extends StatefulWidget {
   const FocusOrbitTimer({
     super.key,
@@ -19,8 +20,6 @@ class FocusOrbitTimer extends StatefulWidget {
     required this.gold2,
     required this.glass,
     this.subLabel,
-    this.progress = 0.0,
-    this.demo = false,
     this.motion = true,
     this.centerFontSize = 26,
     this.glow = true,
@@ -41,13 +40,6 @@ class FocusOrbitTimer extends StatefulWidget {
   /// Glass/highlight tint (white on dark, cool slate on light).
   final Color glass;
 
-  /// Route completion 0..1 (elapsed fraction) for the leading arrow. Ignored
-  /// when [demo] is true.
-  final double progress;
-
-  /// Preview mode — the arrow loops continuously to advertise the motion.
-  final bool demo;
-
   final bool motion;
   final double centerFontSize;
   final bool glow;
@@ -58,20 +50,22 @@ class FocusOrbitTimer extends StatefulWidget {
 
 class _FocusOrbitTimerState extends State<FocusOrbitTimer>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _demo; // preview arrow loop
+  // The arrow traverses the full route once every 60s, independent of the
+  // running session length — it's a decorative heartbeat, not a progress dial.
+  late final AnimationController _loop;
 
   @override
   void initState() {
     super.initState();
-    _demo =
-        AnimationController(vsync: this, duration: const Duration(seconds: 12));
+    _loop =
+        AnimationController(vsync: this, duration: const Duration(seconds: 60));
   }
 
   void _sync() {
-    if (widget.motion && widget.demo) {
-      if (!_demo.isAnimating) _demo.repeat();
+    if (widget.motion) {
+      if (!_loop.isAnimating) _loop.repeat();
     } else {
-      _demo.stop();
+      _loop.stop();
     }
   }
 
@@ -84,12 +78,12 @@ class _FocusOrbitTimerState extends State<FocusOrbitTimer>
   @override
   void didUpdateWidget(covariant FocusOrbitTimer old) {
     super.didUpdateWidget(old);
-    if (widget.demo != old.demo || widget.motion != old.motion) _sync();
+    if (widget.motion != old.motion) _sync();
   }
 
   @override
   void dispose() {
-    _demo.dispose();
+    _loop.dispose();
     super.dispose();
   }
 
@@ -101,31 +95,19 @@ class _FocusOrbitTimerState extends State<FocusOrbitTimer>
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Smoothly interpolate the live progress between per-second updates.
-          TweenAnimationBuilder<double>(
-            tween: Tween(end: widget.demo ? 0.0 : widget.progress.clamp(0.0, 1.0)),
-            duration: widget.motion
-                ? const Duration(milliseconds: 700)
-                : Duration.zero,
-            curve: Curves.linear,
-            builder: (_, liveP, _) {
-              return AnimatedBuilder(
-                animation: _demo,
-                builder: (_, _) {
-                  final arrowP = widget.demo ? _demo.value : liveP;
-                  return CustomPaint(
-                    size: Size(widget.size, widget.size),
-                    painter: _OrbitPainter(
-                      arrowP: arrowP,
-                      gold: widget.gold,
-                      gold2: widget.gold2,
-                      glass: widget.glass,
-                      glow: widget.glow,
-                    ),
-                  );
-                },
-              );
-            },
+          // The arrow rides a steady 60s loop — always, idle or running.
+          AnimatedBuilder(
+            animation: _loop,
+            builder: (_, _) => CustomPaint(
+              size: Size(widget.size, widget.size),
+              painter: _OrbitPainter(
+                arrowP: _loop.value,
+                gold: widget.gold,
+                gold2: widget.gold2,
+                glass: widget.glass,
+                glow: widget.glow,
+              ),
+            ),
           ),
           // Floating centre readout + caption.
           Column(

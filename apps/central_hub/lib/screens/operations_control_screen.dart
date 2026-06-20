@@ -1336,7 +1336,6 @@ class _FocusRingPreview extends ConsumerWidget {
     final idle = s.phase == FocusPhase.idle;
     final isBreak = s.phase == FocusPhase.breakTime;
     final timeText = idle ? '${s.settings.workMinutes}' : s.formattedTime;
-    final progress = idle ? 0.0 : s.progress;
     final gold = isBreak ? c.focusBreak : c.accent;
     final gold2 = isBreak ? c.focusBreak : c.accentSecondary;
     final glass = c.isLightMode ? const Color(0xFF5B6480) : Colors.white;
@@ -1346,8 +1345,6 @@ class _FocusRingPreview extends ConsumerWidget {
         size: 150,
         timeText: timeText,
         subLabel: 'Min',
-        progress: progress,
-        demo: idle, // idle → arrow loops to advertise the motion
         motion: motion,
         gold: gold,
         gold2: gold2,
@@ -1460,30 +1457,16 @@ class _PlanningPreviewState extends ConsumerState<_PlanningPreview>
                 ),
               ),
             ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  avg == null ? '—' : '$avg%',
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1,
-                    height: 1,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  'PROGRESS',
-                  style: TextStyle(
-                    color: c.iconMuted,
-                    fontSize: 8,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 2.5,
-                  ),
-                ),
-              ],
+            // Centre readout — the average progress across displayed missions.
+            Text(
+              avg == null ? '—' : '$avg%',
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1,
+                height: 1,
+              ),
             ),
           ],
         ),
