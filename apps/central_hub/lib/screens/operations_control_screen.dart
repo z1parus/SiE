@@ -1378,10 +1378,10 @@ class _PlanningPreviewState extends ConsumerState<_PlanningPreview>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 
-  // Per-slot orbit geometry. Radii are spread wide so nodes never overlap the
-  // central readout; base angles stagger the nodes so they don't cluster.
+  // Per-slot orbit geometry. Radii are spread wide so the central readout sits
+  // in a clear "target" core; base angles stagger the nodes so they don't cluster.
   static const _box        = 150.0;
-  static const _radii      = [34.0, 48.0, 62.0];
+  static const _radii      = [42.0, 54.0, 66.0];
   static const _baseAngle  = [-math.pi / 2, -math.pi / 2 + 2.1, -math.pi / 2 + 4.0];
 
   @override
@@ -1536,9 +1536,9 @@ class _PlanningPreviewPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
-    // Slow decorative drift of the whole constellation (frozen when motion is
-    // off). Progress position is real; only the drift is cosmetic.
-    final drift = motion ? t * 2 * math.pi * 0.15 : 0.0;
+    // Slow seamless rotation of the whole constellation — exactly one full turn
+    // per loop so it never snaps back. Frozen when motion is off.
+    final drift = motion ? t * 2 * math.pi : 0.0;
 
     // ── 1. Frosted glass discs (depth) ───────────────────────────────────────
     void disc(double rad, double fill, double stroke) {
@@ -1554,14 +1554,14 @@ class _PlanningPreviewPainter extends CustomPainter {
       );
     }
 
-    disc(68, isLight ? 0.08 : 0.04, isLight ? 0.20 : 0.08);
-    disc(44, isLight ? 0.10 : 0.05, isLight ? 0.24 : 0.10);
+    disc(72, isLight ? 0.08 : 0.04, isLight ? 0.20 : 0.08);
+    disc(52, isLight ? 0.10 : 0.05, isLight ? 0.24 : 0.10);
 
     // ── 2. Outer radar tick ring ─────────────────────────────────────────────
     const ticks = 36;
-    const tickR = 70.0;
+    const tickR = 72.0;
     for (var i = 0; i < ticks; i++) {
-      final a = i * 2 * math.pi / ticks + drift * 0.5;
+      final a = i * 2 * math.pi / ticks + drift;
       final cardinal = i % 9 == 0;
       final p1 = center + _dir(a) * (tickR - (cardinal ? 5 : 2.5));
       final p2 = center + _dir(a) * tickR;
@@ -1657,7 +1657,7 @@ class _PlanningPreviewPainter extends CustomPainter {
     }
 
     // ── 4. Command core — faint glow + stroked ring framing the readout ──────
-    const coreR = 20.0;
+    const coreR = 30.0;
     canvas.drawCircle(
       center,
       coreR,

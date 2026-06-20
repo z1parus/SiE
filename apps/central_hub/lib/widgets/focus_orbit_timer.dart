@@ -190,14 +190,15 @@ class _OrbitPainter extends CustomPainter {
     required this.glow,
   });
 
-  // One ribbon wound [_windings] times; its orientation sweeps 0..π across the
-  // route, so the single line overlaps itself into interlocking rings.
-  static const _windings = 4;
+  // One ribbon wound [_windings] times while its orientation makes a FULL turn,
+  // so the line closes seamlessly (no loose ends) and overlaps into four
+  // interlocking rings (ellipse symmetry folds 8 windings into 4 orientations).
+  static const _windings = 8;
 
   /// Point on the woven ribbon at route fraction [u] (0..1).
   Offset _at(Offset c, double rx, double ry, double u) {
     final theta = 2 * math.pi * _windings * u;
-    final phi = math.pi * u;
+    final phi = 2 * math.pi * u; // full orientation turn → closed loop
     final x = rx * math.cos(theta);
     final y = ry * math.sin(theta);
     return Offset(
@@ -216,11 +217,12 @@ class _OrbitPainter extends CustomPainter {
 
     // Build the single continuous ribbon path.
     final path = Path();
-    const steps = 440;
+    const steps = 600;
     for (var i = 0; i <= steps; i++) {
       final p = _at(c, rx, ry, i / steps);
       i == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
     }
+    path.close(); // seamless closed ribbon — no start/end
 
     // Tube body (gold gradient) + soft glow.
     final bounds = Rect.fromCircle(center: c, radius: r);
@@ -258,12 +260,12 @@ class _OrbitPainter extends CustomPainter {
   void _drawArrow(Canvas canvas, Offset c, double rx, double ry, double r) {
     final color = Color.lerp(gold2, Colors.white, 0.4)!;
 
-    // Comet trail of brightening dots following the head along the ribbon.
+    // Comet trail of brightening dots following the head along the closed
+    // ribbon (wraps past the seam so there's never a gap).
     const trail = 20;
     for (var k = trail; k >= 1; k--) {
-      final u = arrowP - k * 0.006;
-      if (u < 0) continue;
-      final p = _at(c, rx, ry, u);
+      final u = (arrowP - k * 0.006) % 1.0;
+      final p = _at(c, rx, ry, u < 0 ? u + 1 : u);
       final a = (1 - k / trail) * 0.9;
       final paint = Paint()..color = color.withValues(alpha: a);
       if (glow) paint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2);
@@ -271,7 +273,7 @@ class _OrbitPainter extends CustomPainter {
     }
 
     final head = _at(c, rx, ry, arrowP);
-    final ahead = _at(c, rx, ry, (arrowP + 0.004).clamp(0.0, 1.0));
+    final ahead = _at(c, rx, ry, (arrowP + 0.004) % 1.0);
     var dir = ahead - head;
     final d = dir.distance;
     dir = d == 0 ? const Offset(1, 0) : dir / d;
