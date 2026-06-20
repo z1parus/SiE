@@ -82,10 +82,21 @@ class FocusWidgetProvider extends ModuleWidgetProvider<FocusWidgetData> {
         ? breakMinutes * 60
         : workMinutes * 60;
     final totalSecs = prefs.getInt('focus_total_duration_secs') ?? defaultSecs;
-    final secsRemaining = prefs.getInt('focus_secs_remaining') ?? defaultSecs;
     final completedToday = prefs.getInt('focus_completed_sessions') ?? 0;
     final isRunning = prefs.getBool('focus_is_running') ?? false;
     final taskTitle = prefs.getString('focus_task_title');
+
+    // Compute the live remaining time from the wall clock when the session is
+    // running (the persisted `focus_secs_remaining` is only a snapshot taken at
+    // the last save). Mirrors FocusTimerNotifier's restore logic so each widget
+    // refresh shows the correct time rather than a stale value.
+    var secsRemaining = prefs.getInt('focus_secs_remaining') ?? defaultSecs;
+    final phaseStartMs = prefs.getInt('focus_phase_start_ms');
+    if (isRunning && phaseStartMs != null) {
+      final elapsed = (DateTime.now().millisecondsSinceEpoch - phaseStartMs) ~/
+          1000;
+      secsRemaining = (totalSecs - elapsed).clamp(0, totalSecs);
+    }
 
     return FocusWidgetData(
       phase: phase,

@@ -43,10 +43,35 @@ void _handleWidgetUri(Uri? uri) {
   final module = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
   switch (module) {
     case 'focus':
-      nav.push(MaterialPageRoute(builder: (_) => const FocusProtocolScreen()));
+      _openModuleScreen(nav, 'widget/focus',
+          () => const FocusProtocolScreen());
     case 'habits':
     default:
-      nav.push(MaterialPageRoute(builder: (_) => const HabitTrackerScreen()));
+      _openModuleScreen(nav, 'widget/habits',
+          () => const HabitTrackerScreen());
+  }
+}
+
+/// Opens a module screen from a widget tap, de-duplicating against repeated
+/// taps. If a screen with [routeName] is already in the stack we surface it
+/// (pop back to it) instead of pushing another copy — otherwise repeated widget
+/// taps would stack identical screens the user must dismiss one by one.
+void _openModuleScreen(
+    NavigatorState nav, String routeName, Widget Function() builder) {
+  var alreadyOpen = false;
+  // popUntil with an always-true predicate is a no-op walk of the stack,
+  // letting us inspect route names without actually popping anything.
+  nav.popUntil((route) {
+    if (route.settings.name == routeName) alreadyOpen = true;
+    return true;
+  });
+  if (alreadyOpen) {
+    nav.popUntil((route) => route.settings.name == routeName);
+  } else {
+    nav.push(MaterialPageRoute(
+      builder: (_) => builder(),
+      settings: RouteSettings(name: routeName),
+    ));
   }
 }
 

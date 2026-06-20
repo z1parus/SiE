@@ -22,6 +22,11 @@ class WidgetConfigStore {
 
   static Future<WidgetConfig?> load(int appWidgetId) async {
     final prefs = await SharedPreferences.getInstance();
+    // Force a disk re-read: the home_widget background isolate keeps a
+    // long-lived SharedPreferences instance whose in-memory cache does NOT see
+    // writes made by the main (Studio) isolate. Without this, a tap-driven
+    // refresh would render the previously-cached config (e.g. revert size).
+    await prefs.reload();
     final raw = prefs.getString(_key(appWidgetId));
     if (raw == null) return null;
     try {
@@ -33,6 +38,7 @@ class WidgetConfigStore {
 
   static Future<List<int>> allIds() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
     final raw = prefs.getString(_allIdsKey);
     if (raw == null) return [];
     try {
