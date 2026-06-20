@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:sie_core/sie_core.dart';
 import 'screens/auth_screen.dart';
+import 'screens/breathing_exercise_screen.dart';
 import 'screens/focus_protocol_screen.dart';
 import 'screens/habit_tracker_screen.dart';
 import 'screens/main_navigation_shell.dart';
@@ -78,6 +79,9 @@ void _handleWidgetUri(Uri? uri) {
     case 'planning':
       _openModuleScreen(nav, 'widget/planning',
           () => const PlanningScreen());
+    case 'breathing':
+      _openModuleScreen(nav, 'widget/breathing',
+          () => const BreathingExerciseScreen());
     case 'habits':
     default:
       _openModuleScreen(nav, 'widget/habits',

@@ -89,6 +89,19 @@
                 android:resource="@xml/widget_planning_info" />
         </receiver>
 
+        <!-- home_widget: BreathingWidgetProvider -->
+        <receiver
+            android:name=".BreathingWidgetProvider"
+            android:exported="true"
+            android:label="Дыхание">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_breathing_info" />
+        </receiver>
+
         <!-- home_widget: background quick-action receiver + service -->
         <receiver
             android:name="es.antonborri.home_widget.HomeWidgetBackgroundReceiver"

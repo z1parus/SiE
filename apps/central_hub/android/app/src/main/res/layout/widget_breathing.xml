@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:padding="0dp">
+
+    <!-- Placeholder shown before the first Flutter render -->
+    <TextView
+        android:id="@+id/widget_breathing_placeholder"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:text="SiE · Дыхание"
+        android:textColor="#88FFFFFF"
+        android:textSize="14sp"
+        android:fontFamily="sans-serif-medium"
+        android:visibility="visible" />
+
+    <!-- Flutter-rendered PNG -->
+    <ImageView
+        android:id="@+id/widget_breathing_image"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:visibility="gone" />
+
+    <!-- Tap-zone overlay (no per-row actions for breathing widget yet) -->
+    <LinearLayout
+        android:id="@+id/widget_breathing_actions"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:visibility="gone" />
+
+</FrameLayout>

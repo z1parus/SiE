@@ -105,4 +105,5 @@ export 'src/widgets_home/widget_action_router.dart';
 export 'src/widgets_home/modules/habits_widget_provider.dart';
 export 'src/widgets_home/modules/focus_widget_provider.dart';
 export 'src/widgets_home/modules/planning_widget_provider.dart';
+export 'src/widgets_home/modules/breathing_widget_provider.dart';
 export 'src/widgets_home/widget_background.dart';

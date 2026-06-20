@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:home_widget/home_widget.dart';
 import '../local/app_database.dart';
+import 'modules/breathing_widget_provider.dart';
 import 'modules/focus_widget_provider.dart';
 import 'modules/habits_widget_provider.dart';
 import 'modules/planning_widget_provider.dart';
@@ -17,7 +18,8 @@ void registerHomeWidgets() {
   WidgetRegistry.instance
     ..register(HabitsWidgetProvider())
     ..register(FocusWidgetProvider())
-    ..register(PlanningWidgetProvider());
+    ..register(PlanningWidgetProvider())
+    ..register(BreathingWidgetProvider());
 }
 
 /// Re-render every active widget. Call on app launch so the home screen

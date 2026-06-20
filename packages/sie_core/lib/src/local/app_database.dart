@@ -1636,6 +1636,25 @@ class AppDatabase extends _$AppDatabase {
             ..where((t) => t.completedAt.equals(dateKey)))
           .get();
 
+  /// All breathing sessions for the Breathing home widget, newest first.
+  /// Single-user device assumption (mirrors [habitsForWidget]).
+  Future<List<LocalBreathingSession>> breathingSessionsForWidget() =>
+      (select(localBreathingSessions)
+            ..orderBy([
+              (t) => OrderingTerm(
+                  expression: t.completedAtMs, mode: OrderingMode.desc)
+            ]))
+          .get();
+
+  /// All meditation sessions for the Breathing home widget, newest first.
+  Future<List<LocalMeditationSession>> meditationSessionsForWidget() =>
+      (select(localMeditationSessions)
+            ..orderBy([
+              (t) => OrderingTerm(
+                  expression: t.completedAtMs, mode: OrderingMode.desc)
+            ]))
+          .get();
+
   /// Active (non-deleted) goals for the Planning home widget. Single-user
   /// device assumption (mirrors [habitsForWidget]); pinned first, then by
   /// priority, then by creation order.
