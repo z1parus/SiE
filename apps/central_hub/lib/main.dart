@@ -61,8 +61,15 @@ void main() async {
   );
   await NotificationService.instance.init(onTap: _handleNotificationTap);
   if (!kIsWeb) {
-    registerHomeWidgets();
-    await HomeWidget.registerInteractivityCallback(widgetInteractivityCallback);
+    try {
+      registerHomeWidgets();
+      await HomeWidget.registerInteractivityCallback(widgetInteractivityCallback);
+    } catch (e) {
+      // home_widget requires an App Group / WidgetKit extension on iOS.
+      // If neither is configured yet we swallow the error so the app
+      // continues to launch normally without widget support.
+      debugPrint('SiE Widgets: init skipped — $e');
+    }
   }
   runApp(const ProviderScope(child: SieApp()));
 }
@@ -138,17 +145,21 @@ class _SieAppState extends ConsumerState<SieApp> {
   }
 
   Future<void> _initWidgetDeepLinks() async {
-    // App launched by tapping a widget (cold start).
-    final launchUri = await HomeWidget.initiallyLaunchedFromHomeWidget();
-    if (launchUri != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Defer until the auth gate has settled so the route lands on top.
-        Future.delayed(const Duration(milliseconds: 600),
-            () => _handleWidgetUri(launchUri));
-      });
+    try {
+      // App launched by tapping a widget (cold start).
+      final launchUri = await HomeWidget.initiallyLaunchedFromHomeWidget();
+      if (launchUri != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          // Defer until the auth gate has settled so the route lands on top.
+          Future.delayed(const Duration(milliseconds: 600),
+              () => _handleWidgetUri(launchUri));
+        });
+      }
+      // Widget tapped while app already running.
+      _widgetClickSub = HomeWidget.widgetClicked.listen(_handleWidgetUri);
+    } catch (e) {
+      debugPrint('SiE Widgets: deep-link init skipped — $e');
     }
-    // Widget tapped while app already running.
-    _widgetClickSub = HomeWidget.widgetClicked.listen(_handleWidgetUri);
 
     // Re-render active widgets from the local mirror (handles day rollover and
     // any changes made while the app was closed).
