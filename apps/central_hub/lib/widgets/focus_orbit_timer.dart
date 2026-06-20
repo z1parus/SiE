@@ -19,7 +19,10 @@ class FocusOrbitTimer extends StatefulWidget {
     required this.gold,
     required this.gold2,
     required this.glass,
+    required this.textColor,
     this.subLabel,
+    this.subLabelColor,
+    this.isLight = false,
     this.motion = true,
     this.centerFontSize = 26,
     this.glow = true,
@@ -39,6 +42,17 @@ class FocusOrbitTimer extends StatefulWidget {
 
   /// Glass/highlight tint (white on dark, cool slate on light).
   final Color glass;
+
+  /// Centre readout colour — theme token (textPrimary), so the time stays
+  /// readable on a light card instead of a hardcoded white.
+  final Color textColor;
+
+  /// Caption colour (defaults to [textColor] at reduced opacity).
+  final Color? subLabelColor;
+
+  /// Light-mode flag — raises tube opacity and darkens the arrow so the rings
+  /// and the travelling head read against a light surface.
+  final bool isLight;
 
   final bool motion;
   final double centerFontSize;
@@ -106,6 +120,7 @@ class _FocusOrbitTimerState extends State<FocusOrbitTimer>
                 gold2: widget.gold2,
                 glass: widget.glass,
                 glow: widget.glow,
+                isLight: widget.isLight,
               ),
             ),
           ),
@@ -116,18 +131,21 @@ class _FocusOrbitTimerState extends State<FocusOrbitTimer>
               Text(
                 widget.timeText,
                 style: TextStyle(
-                  color: Colors.white,
+                  color: widget.textColor,
                   fontSize: widget.centerFontSize,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 1.5,
                   height: 1.0,
                   fontFeatures: const [FontFeature.tabularFigures()],
                   shadows: [
-                    const Shadow(
-                      color: Color(0x73000000),
-                      blurRadius: 14,
-                      offset: Offset(0, 3),
-                    ),
+                    // Dark drop-shadow only reads on the dark theme; on a light
+                    // card it would smear, so it's skipped there.
+                    if (!widget.isLight)
+                      const Shadow(
+                        color: Color(0x73000000),
+                        blurRadius: 14,
+                        offset: Offset(0, 3),
+                      ),
                     if (widget.glow)
                       Shadow(
                         color: widget.gold.withValues(alpha: 0.45),
@@ -141,7 +159,8 @@ class _FocusOrbitTimerState extends State<FocusOrbitTimer>
                 Text(
                   widget.subLabel!,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.72),
+                    color: (widget.subLabelColor ?? widget.textColor)
+                        .withValues(alpha: 0.72),
                     fontSize: widget.centerFontSize * 0.32,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 1.5,
@@ -163,6 +182,7 @@ class _OrbitPainter extends CustomPainter {
   final Color gold2;
   final Color glass;
   final bool glow;
+  final bool isLight;
 
   const _OrbitPainter({
     required this.arrowP,
@@ -170,6 +190,7 @@ class _OrbitPainter extends CustomPainter {
     required this.gold2,
     required this.glass,
     required this.glow,
+    required this.isLight,
   });
 
   // One ribbon wound [_windings] times while its orientation makes a FULL turn,
@@ -217,8 +238,8 @@ class _OrbitPainter extends CustomPainter {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          gold2.withValues(alpha: 0.32),
-          gold.withValues(alpha: 0.16),
+          gold2.withValues(alpha: isLight ? 0.55 : 0.32),
+          gold.withValues(alpha: isLight ? 0.30 : 0.16),
         ],
       ).createShader(bounds);
     if (glow) body.maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.4);
@@ -240,7 +261,10 @@ class _OrbitPainter extends CustomPainter {
   }
 
   void _drawArrow(Canvas canvas, Offset c, double rx, double ry, double r) {
-    final color = Color.lerp(gold2, Colors.white, 0.4)!;
+    // Deep gold on light (white would vanish on a light card); warm white on dark.
+    final color =
+        isLight ? Color.lerp(gold, gold2, 0.3)! : Color.lerp(gold2, Colors.white, 0.4)!;
+    final headColor = isLight ? gold : Colors.white;
 
     // Comet trail of brightening dots following the head along the closed
     // ribbon (wraps past the seam so there's never a gap).
@@ -261,7 +285,7 @@ class _OrbitPainter extends CustomPainter {
     dir = d == 0 ? const Offset(1, 0) : dir / d;
 
     // Bright head.
-    final hp = Paint()..color = Colors.white;
+    final hp = Paint()..color = headColor;
     if (glow) hp.maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5);
     canvas.drawCircle(head, 3.0, hp);
 
@@ -280,7 +304,7 @@ class _OrbitPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.4
       ..strokeCap = StrokeCap.round
-      ..color = Colors.white;
+      ..color = headColor;
     canvas.drawLine(head, head + wing(0.5) * s, wp);
     canvas.drawLine(head, head + wing(-0.5) * s, wp);
   }
@@ -291,5 +315,6 @@ class _OrbitPainter extends CustomPainter {
       old.gold != gold ||
       old.gold2 != gold2 ||
       old.glass != glass ||
-      old.glow != glow;
+      old.glow != glow ||
+      old.isLight != isLight;
 }

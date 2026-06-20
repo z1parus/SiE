@@ -251,8 +251,7 @@ class _FocusRing extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
-    final glass =
-        c.isLightMode ? const Color(0xFF5B6480) : Colors.white;
+    final glass = c.glass;
 
     return SizedBox(
       width: 284,
@@ -268,6 +267,9 @@ class _FocusRing extends ConsumerWidget {
               gold: phaseColor,
               gold2: Color.lerp(phaseColor, Colors.white, 0.4)!,
               glass: glass,
+              textColor: c.textPrimary,
+              subLabelColor: c.textSecondary,
+              isLight: c.isLightMode,
               centerFontSize: 58,
               glow: !c.isLightMode,
             ),

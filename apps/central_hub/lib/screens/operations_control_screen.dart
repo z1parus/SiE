@@ -1023,6 +1023,7 @@ class _HabitMatrixPreviewState extends ConsumerState<_HabitMatrixPreview>
               isLight: c.isLightMode,
               gold: c.accent,
               gold2: c.accentSecondary,
+              glass: c.glass,
             ),
           ),
         ),
@@ -1037,6 +1038,7 @@ class _HabitCrystalPainter extends CustomPainter {
   final bool isLight;
   final Color gold;
   final Color gold2;
+  final Color glass;
 
   const _HabitCrystalPainter({
     required this.t,
@@ -1044,6 +1046,7 @@ class _HabitCrystalPainter extends CustomPainter {
     required this.isLight,
     required this.gold,
     required this.gold2,
+    required this.glass,
   });
 
   static Offset _dir(double a) => Offset(math.cos(a), math.sin(a));
@@ -1067,9 +1070,8 @@ class _HabitCrystalPainter extends CustomPainter {
     final a = motion ? t * 2 * math.pi : 0.0;
     final dy = motion ? math.sin(t * 2 * math.pi) * 2.0 : 0.0;
 
-    // Theme-aware glass: white highlights on dark; a cool slate on light so the
-    // crystal stays visible against a light card.
-    final glass = isLight ? const Color(0xFF5B6480) : Colors.white;
+    // Theme-aware glass (token): white highlights on dark; a cool slate on light
+    // so the crystal stays visible against a light card.
     final coreLight = Color.lerp(gold2, Colors.white, 0.55)!;
     final coreDeep = Color.lerp(gold, Colors.black, 0.32)!;
 
@@ -1338,7 +1340,7 @@ class _FocusRingPreview extends ConsumerWidget {
     final timeText = idle ? '${s.settings.workMinutes}' : s.formattedTime;
     final gold = isBreak ? c.focusBreak : c.accent;
     final gold2 = isBreak ? c.focusBreak : c.accentSecondary;
-    final glass = c.isLightMode ? const Color(0xFF5B6480) : Colors.white;
+    final glass = c.glass;
 
     return Center(
       child: FocusOrbitTimer(
@@ -1349,6 +1351,9 @@ class _FocusRingPreview extends ConsumerWidget {
         gold: gold,
         gold2: gold2,
         glass: glass,
+        textColor: c.textPrimary,
+        subLabelColor: c.textSecondary,
+        isLight: c.isLightMode,
         centerFontSize: 30,
         glow: !c.isLightMode,
       ),
@@ -1686,14 +1691,14 @@ class _PlanningPreviewPainter extends CustomPainter {
 
 /// Meditation module preview — a calm teal orb that slowly breathes while
 /// concentric "clarity" ripples radiate outward (the Дефрагментация motif).
-class _MeditationPreview extends StatefulWidget {
+class _MeditationPreview extends ConsumerStatefulWidget {
   const _MeditationPreview();
 
   @override
-  State<_MeditationPreview> createState() => _MeditationPreviewState();
+  ConsumerState<_MeditationPreview> createState() => _MeditationPreviewState();
 }
 
-class _MeditationPreviewState extends State<_MeditationPreview>
+class _MeditationPreviewState extends ConsumerState<_MeditationPreview>
     with TickerProviderStateMixin {
   late final AnimationController _pulseCtrl;
   late final AnimationController _rippleCtrl;
@@ -1724,6 +1729,8 @@ class _MeditationPreviewState extends State<_MeditationPreview>
 
   @override
   Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
+    final isLight = c.isLightMode;
     return Center(
       child: SizedBox(
         width: 150,
@@ -1737,7 +1744,10 @@ class _MeditationPreviewState extends State<_MeditationPreview>
                 // Expanding clarity ripples
                 CustomPaint(
                   size: const Size(150, 150),
-                  painter: _MeditationRipplePainter(progress: _rippleCtrl.value),
+                  painter: _MeditationRipplePainter(
+                    progress: _rippleCtrl.value,
+                    isLight: isLight,
+                  ),
                 ),
                 // Central breathing orb
                 Transform.scale(
@@ -1745,7 +1755,7 @@ class _MeditationPreviewState extends State<_MeditationPreview>
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      // Glow halo
+                      // Glow halo — softer on a light card so it doesn't smear.
                       Container(
                         width: 78,
                         height: 78,
@@ -1753,9 +1763,10 @@ class _MeditationPreviewState extends State<_MeditationPreview>
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: kRimTeal.withValues(alpha: 0.28),
-                              blurRadius: 26,
-                              spreadRadius: 4,
+                              color: kRimTeal.withValues(
+                                  alpha: isLight ? 0.16 : 0.28),
+                              blurRadius: isLight ? 18 : 26,
+                              spreadRadius: isLight ? 2 : 4,
                             ),
                           ],
                         ),
@@ -1772,13 +1783,13 @@ class _MeditationPreviewState extends State<_MeditationPreview>
                           ),
                         ),
                       ),
-                      // Rim highlight
+                      // Rim highlight — adapt shadow side to the theme.
                       CustomPaint(
                         size: const Size(74, 74),
                         painter: SphereRimPainter(
                           lightAngle: -math.pi / 4,
                           intensity: 0.6,
-                          isDark: true,
+                          isDark: !isLight,
                           rimGold: kRimTeal,
                           rimBronze: kRimTealDark,
                           rimLight: kRimTealLight,
@@ -1798,7 +1809,8 @@ class _MeditationPreviewState extends State<_MeditationPreview>
 
 class _MeditationRipplePainter extends CustomPainter {
   final double progress; // 0..1, repeating
-  const _MeditationRipplePainter({required this.progress});
+  final bool isLight;
+  const _MeditationRipplePainter({required this.progress, this.isLight = false});
 
   static const _count = 3;
   static const _minRadius = 36.0;
@@ -1810,7 +1822,7 @@ class _MeditationRipplePainter extends CustomPainter {
     for (var i = 0; i < _count; i++) {
       final t = (progress + i / _count) % 1.0;
       final radius = _minRadius + (_maxRadius - _minRadius) * t;
-      final alpha = (1.0 - t) * 0.32;
+      final alpha = (1.0 - t) * (isLight ? 0.22 : 0.32);
       if (alpha <= 0.01) continue;
       final paint = Paint()
         ..color = kRimTeal.withValues(alpha: alpha)
@@ -1821,7 +1833,8 @@ class _MeditationRipplePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_MeditationRipplePainter old) => old.progress != progress;
+  bool shouldRepaint(_MeditationRipplePainter old) =>
+      old.progress != progress || old.isLight != isLight;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
