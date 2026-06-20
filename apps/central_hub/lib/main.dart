@@ -15,6 +15,36 @@ import 'screens/splash_screen.dart';
 /// Root navigator used to route notification taps into the planning module.
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
+/// Mirrors the root navigator's stack so widget deep-links can de-duplicate
+/// module screens. `Navigator` exposes no way to inspect its stack, so we track
+/// it by route identity here (registered as a `navigatorObserver`).
+final _RouteTracker _routeTracker = _RouteTracker();
+
+class _RouteTracker extends NavigatorObserver {
+  final List<Route<dynamic>> _stack = [];
+
+  bool containsName(String name) =>
+      _stack.any((r) => r.settings.name == name);
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _stack.add(route);
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _stack.remove(route);
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _stack.remove(route);
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    final i = oldRoute == null ? -1 : _stack.indexOf(oldRoute);
+    if (i >= 0 && newRoute != null) _stack[i] = newRoute;
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (!kIsWeb) {
@@ -56,19 +86,13 @@ void _handleWidgetUri(Uri? uri) {
 }
 
 /// Opens a module screen from a widget tap, de-duplicating against repeated
-/// taps. If a screen with [routeName] is already in the stack we surface it
-/// (pop back to it) instead of pushing another copy — otherwise repeated widget
-/// taps would stack identical screens the user must dismiss one by one.
+/// taps. If a screen with [routeName] is already anywhere in the stack we
+/// surface it (pop back to it, discarding any deeper screens the user pushed on
+/// top) instead of pushing another copy — otherwise repeated widget taps would
+/// stack identical screens the user must dismiss one by one.
 void _openModuleScreen(
     NavigatorState nav, String routeName, Widget Function() builder) {
-  var alreadyOpen = false;
-  // popUntil with an always-true predicate is a no-op walk of the stack,
-  // letting us inspect route names without actually popping anything.
-  nav.popUntil((route) {
-    if (route.settings.name == routeName) alreadyOpen = true;
-    return true;
-  });
-  if (alreadyOpen) {
+  if (_routeTracker.containsName(routeName)) {
     nav.popUntil((route) => route.settings.name == routeName);
   } else {
     nav.push(MaterialPageRoute(
@@ -138,6 +162,7 @@ class _SieAppState extends ConsumerState<SieApp> {
       title: 'SiE',
       debugShowCheckedModeBanner: false,
       navigatorKey: rootNavigatorKey,
+      navigatorObservers: [_routeTracker],
       theme: SieTheme.themeDataFor(sieMode),
       builder: kIsWeb ? _webConstraint : null,
       home: !_launchComplete

@@ -27,6 +27,10 @@ class _WidgetStudioScreenState extends ConsumerState<WidgetStudioScreen> {
   late WidgetConfig _cfg;
   bool _saving = false;
 
+  /// Content-option specs resolved from the provider (may include live choices
+  /// like a goal picker). Null until the first async load completes.
+  List<WidgetOptionSpec>? _specs;
+
   ModuleWidgetProvider? get _provider =>
       WidgetRegistry.instance.get(_cfg.moduleId);
 
@@ -34,6 +38,16 @@ class _WidgetStudioScreenState extends ConsumerState<WidgetStudioScreen> {
   void initState() {
     super.initState();
     _cfg = widget.initialConfig;
+    _loadSpecs();
+  }
+
+  Future<void> _loadSpecs() async {
+    final provider = _provider;
+    if (provider == null) return;
+    final db = ref.read(appDatabaseProvider);
+    final specs = await provider.resolveOptionSchema(db, _cfg.sizeBucket);
+    if (!mounted) return;
+    setState(() => _specs = specs);
   }
 
   void _update(WidgetConfig cfg) => setState(() => _cfg = cfg);
@@ -110,7 +124,11 @@ class _WidgetStudioScreenState extends ConsumerState<WidgetStudioScreen> {
                   current: _cfg.sizeBucket,
                   supported: provider.supportedSizes,
                   c: c,
-                  onChanged: (size) => _update(_cfg.copyWith(sizeBucket: size)),
+                  onChanged: (size) {
+                    _update(_cfg.copyWith(sizeBucket: size));
+                    // Some option schemas vary by size — refresh them.
+                    _loadSpecs();
+                  },
                 ),
                 const SizedBox(height: 20),
 
@@ -155,7 +173,7 @@ class _WidgetStudioScreenState extends ConsumerState<WidgetStudioScreen> {
 
   List<Widget> _buildContentOptions(
       ModuleWidgetProvider provider, SieColors c) {
-    final specs = provider.optionSchema(_cfg.sizeBucket);
+    final specs = _specs ?? provider.optionSchema(_cfg.sizeBucket);
     if (specs.isEmpty) return const [];
 
     return [
@@ -639,19 +657,26 @@ class _EnumOption extends StatelessWidget {
             child: Text(spec.label,
                 style: TextStyle(color: c.textPrimary, fontSize: 14)),
           ),
-          DropdownButton<String>(
-            value: value ?? spec.defaultValue as String?,
-            dropdownColor: c.surface,
-            style: TextStyle(color: c.textPrimary, fontSize: 13),
-            underline: const SizedBox.shrink(),
-            items: choices.entries
-                .map((e) => DropdownMenuItem(
-                    value: e.key,
-                    child: Text(e.value)))
-                .toList(),
-            onChanged: (v) {
-              if (v != null) onChanged(v);
-            },
+          const SizedBox(width: 8),
+          // Flexible + isExpanded keeps long choice labels (e.g. goal names)
+          // from overflowing the row — the selected value ellipsizes instead.
+          Flexible(
+            child: DropdownButton<String>(
+              value: value ?? spec.defaultValue as String?,
+              dropdownColor: c.surface,
+              style: TextStyle(color: c.textPrimary, fontSize: 13),
+              underline: const SizedBox.shrink(),
+              isExpanded: true,
+              items: choices.entries
+                  .map((e) => DropdownMenuItem(
+                      value: e.key,
+                      child: Text(e.value,
+                          overflow: TextOverflow.ellipsis, maxLines: 1)))
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) onChanged(v);
+              },
+            ),
           ),
         ],
       ),

@@ -87,7 +87,7 @@ class PlanningWidgetProvider extends ModuleWidgetProvider<PlanningWidgetData> {
 
   @override
   Future<PlanningWidgetData> loadData(AppDatabase db, WidgetConfig cfg) async {
-    final goals = await db.goalsForWidget();
+    var goals = await db.goalsForWidget();
     if (goals.isEmpty) {
       return const PlanningWidgetData(
         activeGoals: 0,
@@ -99,6 +99,17 @@ class PlanningWidgetProvider extends ModuleWidgetProvider<PlanningWidgetData> {
         topGoals: [],
         nextMilestone: null,
       );
+    }
+
+    // Studio may pin a specific goal to the "top" slot (small/medium focus);
+    // 'auto' or a stale id falls back to the query's natural ordering.
+    final pinnedGoalId = cfg.contentOptions['topGoal'] as String?;
+    if (pinnedGoalId != null && pinnedGoalId != 'auto') {
+      final idx = goals.indexWhere((g) => g.id == pinnedGoalId);
+      if (idx > 0) {
+        final picked = goals.removeAt(idx);
+        goals = [picked, ...goals];
+      }
     }
 
     final goalIds = goals.map((g) => g.id).toList();
@@ -193,6 +204,21 @@ class PlanningWidgetProvider extends ModuleWidgetProvider<PlanningWidgetData> {
         WidgetOptionSpec.toggle('showOverdue', 'Показывать просрочку'),
         WidgetOptionSpec.toggle('showMilestone', 'Показывать веху'),
       ];
+
+  @override
+  Future<List<WidgetOptionSpec>> resolveOptionSchema(
+      AppDatabase db, WidgetSizeBucket size) async {
+    final goals = await db.goalsForWidget();
+    final choices = <String, String>{'auto': 'Авто (по приоритету)'};
+    for (final g in goals) {
+      choices[g.id] = g.name;
+    }
+    return [
+      WidgetOptionSpec.enumChoice('topGoal', 'Цель для показа', choices,
+          defaultValue: 'auto'),
+      ...optionSchema(size),
+    ];
+  }
 
   @override
   PlanningWidgetData sampleData(WidgetSizeBucket size) => PlanningWidgetData(

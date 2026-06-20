@@ -64,6 +64,14 @@ abstract class ModuleWidgetProvider<T extends WidgetData> {
   Future<T> loadData(AppDatabase db, WidgetConfig cfg);
   Widget render(WidgetRenderContext ctx, WidgetConfig cfg, T data);
   List<WidgetOptionSpec> optionSchema(WidgetSizeBucket size) => const [];
+
+  /// Async option schema for modules whose choices depend on live data (e.g. a
+  /// goal picker populated from the database). The Studio prefers this over
+  /// [optionSchema]; the default just forwards the static schema.
+  Future<List<WidgetOptionSpec>> resolveOptionSchema(
+          AppDatabase db, WidgetSizeBucket size) async =>
+      optionSchema(size);
+
   List<WidgetQuickAction> quickActions(WidgetConfig cfg) => const [];
 
   /// Per-row tap zones overlaid on the PNG for quick-actions. Order matches
