@@ -34,13 +34,14 @@
         android:visibility="gone" />
 
     <!-- Live countdown overlay, positioned over the ring centre (fraction
-         ~0.43 down, horizontally centred) via weighted spacers so it tracks
-         the stretched PNG. Shown only while a session is running. -->
+         ~0.43 down, horizontally centred) via weighted empty spacers so it
+         tracks the stretched PNG. App-widget layouts disallow <Space>, so we
+         use empty FrameLayouts as spacers. Shown only while running. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical">
-        <Space
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="370" />
@@ -63,7 +64,7 @@
                 android:gravity="center"
                 android:visibility="gone" />
         </LinearLayout>
-        <Space
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="500" />

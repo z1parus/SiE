@@ -30,12 +30,13 @@
         android:orientation="vertical"
         android:visibility="gone" />
 
-    <!-- Large: ring is horizontally centred, ~0.35 down (below the header). -->
+    <!-- Large: ring is horizontally centred, ~0.35 down (below the header).
+         Empty FrameLayouts act as spacers (<Space> is not allowed in widgets). -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical">
-        <Space
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="300" />
@@ -58,7 +59,7 @@
                 android:gravity="center"
                 android:visibility="gone" />
         </LinearLayout>
-        <Space
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="580" />
