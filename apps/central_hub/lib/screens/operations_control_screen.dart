@@ -820,11 +820,10 @@ class _BreathSpherePreviewState extends ConsumerState<_BreathSpherePreview>
     with TickerProviderStateMixin {
   late final AnimationController _pulseCtrl;
   late final AnimationController _shaderCtrl;
-  late final AnimationController _orbitCtrl;
   late final Animation<double> _pulse;
   FragmentShader? _shader;
 
-  static const _size = 92.0; // hero sphere inside the glass scene
+  static const _size = 144.0;
   static const _lightAngle = -math.pi / 4;
 
   @override
@@ -840,10 +839,6 @@ class _BreathSpherePreviewState extends ConsumerState<_BreathSpherePreview>
     _shaderCtrl = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 60),
-    )..repeat();
-    _orbitCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 8),
     )..repeat();
     _loadShader();
   }
@@ -861,7 +856,6 @@ class _BreathSpherePreviewState extends ConsumerState<_BreathSpherePreview>
   void dispose() {
     _pulseCtrl.dispose();
     _shaderCtrl.dispose();
-    _orbitCtrl.dispose();
     super.dispose();
   }
 
@@ -872,37 +866,17 @@ class _BreathSpherePreviewState extends ConsumerState<_BreathSpherePreview>
         ? <Color>[const Color(0xFFF1F1F5), const Color(0xFFD0D2DC)]
         : <Color>[const Color(0xFF1C2035), const Color(0xFF2A3048)];
 
-    final motion = SieMotion.enabled(context);
-
     return Center(
-      child: SizedBox(
-        width: 150,
-        height: 150,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // Shared glass scaffold behind the sphere.
-            AnimatedBuilder(
-              animation: _orbitCtrl,
-              builder: (_, _) => CustomPaint(
-                size: const Size(150, 150),
-                painter: _GlassScenePainter(
-                  t: _orbitCtrl.value,
-                  motion: motion,
-                  isLight: c.isLightMode,
-                ),
-              ),
-            ),
-            AnimatedBuilder(
-              animation: Listenable.merge([_pulse, _shaderCtrl]),
-              builder: (_, _) {
-                final shaderTime = _shaderCtrl.value * 60.0;
-                return Transform.scale(
-                  scale: _pulse.value,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Layer 1 — outer golden corona
+      child: AnimatedBuilder(
+        animation: Listenable.merge([_pulse, _shaderCtrl]),
+        builder: (_, _) {
+          final shaderTime = _shaderCtrl.value * 60.0;
+          return Transform.scale(
+            scale: _pulse.value,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Layer 1 — outer golden corona
                 Container(
                   width: _size + 60,
                   height: _size + 60,
@@ -942,22 +916,19 @@ class _BreathSpherePreviewState extends ConsumerState<_BreathSpherePreview>
                           ),
                   ),
                 ),
-                      // Layer 3 — golden rim
-                      CustomPaint(
-                        size: const Size(_size, _size),
-                        painter: SphereRimPainter(
-                          lightAngle: _lightAngle,
-                          intensity: 0.6,
-                          isDark: !c.isLightMode,
-                        ),
-                      ),
-                    ],
+                // Layer 3 — golden rim
+                CustomPaint(
+                  size: const Size(_size, _size),
+                  painter: SphereRimPainter(
+                    lightAngle: _lightAngle,
+                    intensity: 0.6,
+                    isDark: !c.isLightMode,
                   ),
-                );
-              },
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -1059,202 +1030,6 @@ class _HabitMatrixPreviewState extends ConsumerState<_HabitMatrixPreview>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared "Glass Scene" scaffold for module previews
-// ─────────────────────────────────────────────────────────────────────────────
-// Frosted glass discs + soft plate glow + a rotating orbital arrow (sync motif).
-// Every module preview paints this as a background, then draws its own hero
-// symbol on top. Theme-aware so it stays visible on both light and dark cards.
-
-Color _glassColor(bool isLight) =>
-    isLight ? const Color(0xFF5B6480) : Colors.white;
-
-Offset _gdir(double a) => Offset(math.cos(a), math.sin(a));
-
-void _paintGlassScene(
-  Canvas canvas,
-  Size size, {
-  required double t,
-  required bool motion,
-  required bool isLight,
-}) {
-  final center = size.center(Offset.zero);
-  final r = math.min(size.width, size.height) / 2;
-  final a = motion ? t * 2 * math.pi : 0.0;
-  final glass = _glassColor(isLight);
-
-  void disc(double rad, double fill, double stroke) {
-    canvas.drawCircle(
-        center, rad, Paint()..color = glass.withValues(alpha: fill));
-    canvas.drawCircle(
-      center,
-      rad,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2
-        ..color = glass.withValues(alpha: stroke),
-    );
-  }
-
-  disc(r * 0.96, isLight ? 0.10 : 0.05, isLight ? 0.22 : 0.10);
-  disc(r * 0.80, isLight ? 0.13 : 0.07, isLight ? 0.26 : 0.13);
-  // Soft plate glow behind the hero.
-  canvas.drawCircle(
-    center,
-    r * 0.60,
-    Paint()
-      ..color = glass.withValues(alpha: isLight ? 0.12 : 0.09)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-  );
-
-  _paintOrbital(canvas, center, r * 0.92, -0.6 + a, 2.2,
-      glass.withValues(alpha: isLight ? 0.55 : 0.65), r);
-  _paintDottedArc(canvas, center, r * 0.92, math.pi - 0.2 + a, 1.9,
-      glass.withValues(alpha: isLight ? 0.45 : 0.5));
-}
-
-void _paintOrbital(Canvas canvas, Offset c, double rad, double start,
-    double sweep, Color color, double r) {
-  final rect = Rect.fromCircle(center: c, radius: rad);
-  canvas.drawArc(
-    rect,
-    start,
-    sweep,
-    false,
-    Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2
-      ..strokeCap = StrokeCap.round
-      ..color = color,
-  );
-  // Arrowhead at the end, pointing along travel.
-  final endA = start + sweep;
-  final tip = c + _gdir(endA) * rad;
-  final travel = Offset(-math.sin(endA), math.cos(endA)); // tangent (CW)
-  final s = r * 0.07;
-  Offset wing(double da) => Offset(
-        -travel.dx * math.cos(da) + travel.dy * math.sin(da),
-        -travel.dx * math.sin(da) - travel.dy * math.cos(da),
-      );
-  final p = Paint()
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 2.2
-    ..strokeCap = StrokeCap.round
-    ..color = color;
-  canvas.drawLine(tip, tip + wing(0.5) * s, p);
-  canvas.drawLine(tip, tip + wing(-0.5) * s, p);
-}
-
-void _paintDottedArc(Canvas canvas, Offset c, double rad, double start,
-    double sweep, Color color) {
-  const n = 16;
-  final p = Paint()..color = color;
-  for (var i = 0; i <= n; i++) {
-    final ang = start + sweep * i / n;
-    canvas.drawCircle(c + _gdir(ang) * rad, 1.4, p);
-  }
-}
-
-/// Shared faceted-crystal hero. [sides] controls the silhouette so modules read
-/// differently (HABIT uses 8, PLANNING uses 6).
-void _paintCrystal(Canvas canvas, Offset cc, double r, Color glass,
-    {int sides = 8}) {
-  const rot = -math.pi / 2;
-  List<Offset> verts(double rr) =>
-      [for (var k = 0; k < sides; k++) cc + _gdir(rot + k * 2 * math.pi / sides) * rr];
-  Path poly(double rr) {
-    final v = verts(rr);
-    final p = Path()..moveTo(v[0].dx, v[0].dy);
-    for (var k = 1; k < sides; k++) {
-      p.lineTo(v[k].dx, v[k].dy);
-    }
-    return p..close();
-  }
-
-  final outer = verts(r);
-  final inner = verts(r * 0.46);
-  final bounds = Rect.fromCircle(center: cc, radius: r);
-  final lightDir = _gdir(-math.pi / 2 - 0.5);
-
-  // Base body fill.
-  canvas.drawPath(
-    poly(r),
-    Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [glass.withValues(alpha: 0.22), glass.withValues(alpha: 0.06)],
-      ).createShader(bounds),
-  );
-
-  // Side facets with directional shading.
-  for (var k = 0; k < sides; k++) {
-    final k2 = (k + 1) % sides;
-    final mid = (outer[k] + outer[k2]) / 2;
-    final normal = mid - cc;
-    final nl = normal.distance;
-    final nrm = nl == 0 ? Offset.zero : normal / nl;
-    final lf = ((nrm.dx * lightDir.dx + nrm.dy * lightDir.dy) + 1) / 2;
-    final facet = Path()
-      ..moveTo(outer[k].dx, outer[k].dy)
-      ..lineTo(outer[k2].dx, outer[k2].dy)
-      ..lineTo(inner[k2].dx, inner[k2].dy)
-      ..lineTo(inner[k].dx, inner[k].dy)
-      ..close();
-    canvas.drawPath(
-      facet,
-      Paint()..color = glass.withValues(alpha: 0.05 + 0.17 * lf),
-    );
-  }
-
-  // Ridges + bright edges.
-  final ridge = Paint()
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 1
-    ..color = glass.withValues(alpha: 0.18);
-  for (var k = 0; k < sides; k++) {
-    canvas.drawLine(inner[k], outer[k], ridge);
-  }
-  canvas.drawPath(
-    poly(r),
-    Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4
-      ..strokeJoin = StrokeJoin.round
-      ..color = glass.withValues(alpha: 0.55),
-  );
-  // Highlight the top-left edges.
-  final hl = Paint()
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 1.8
-    ..strokeCap = StrokeCap.round
-    ..color = glass.withValues(alpha: 0.85);
-  canvas.drawLine(outer[sides - 3], outer[sides - 2], hl);
-  canvas.drawLine(outer[sides - 2], outer[sides - 1], hl);
-}
-
-/// Standalone background painter wrapping [_paintGlassScene], for widget-based
-/// previews (meditation/breathing) that compose with a [Stack].
-class _GlassScenePainter extends CustomPainter {
-  final double t;
-  final bool motion;
-  final bool isLight;
-
-  const _GlassScenePainter({
-    required this.t,
-    required this.motion,
-    required this.isLight,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) =>
-      _paintGlassScene(canvas, size, t: t, motion: motion, isLight: isLight);
-
-  @override
-  bool shouldRepaint(_GlassScenePainter old) =>
-      old.t != t || old.motion != motion || old.isLight != isLight;
-}
-
 class _HabitCrystalPainter extends CustomPainter {
   final double t;
   final bool motion;
@@ -1281,24 +1056,58 @@ class _HabitCrystalPainter extends CustomPainter {
     return p..close();
   }
 
+  List<Offset> _verts(Offset c, double r, int n, double rot) =>
+      [for (var k = 0; k < n; k++) c + _dir(rot + k * 2 * math.pi / n) * r];
+
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
     final r = math.min(size.width, size.height) / 2;
+    final a = motion ? t * 2 * math.pi : 0.0;
     final dy = motion ? math.sin(t * 2 * math.pi) * 2.0 : 0.0;
 
-    final glass = _glassColor(isLight);
+    // Theme-aware glass: white highlights on dark; a cool slate on light so the
+    // crystal stays visible against a light card.
+    final glass = isLight ? const Color(0xFF5B6480) : Colors.white;
     final coreLight = Color.lerp(gold2, Colors.white, 0.55)!;
     final coreDeep = Color.lerp(gold, Colors.black, 0.32)!;
 
-    // ── Shared glass scaffold (discs + plate glow + orbital arrows) ──────────
-    _paintGlassScene(canvas, size, t: t, motion: motion, isLight: isLight);
+    // ── 1. Frosted glass discs (depth) ──────────────────────────────────────
+    void disc(double rad, double fill, double stroke) {
+      canvas.drawCircle(
+          center, rad, Paint()..color = glass.withValues(alpha: fill));
+      canvas.drawCircle(
+        center,
+        rad,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2
+          ..color = glass.withValues(alpha: stroke),
+      );
+    }
+
+    disc(r * 0.96, isLight ? 0.10 : 0.05, isLight ? 0.22 : 0.10);
+    disc(r * 0.80, isLight ? 0.13 : 0.07, isLight ? 0.26 : 0.13);
+    // Soft plate glow behind the crystal.
+    canvas.drawCircle(
+      center,
+      r * 0.60,
+      Paint()
+        ..color = glass.withValues(alpha: isLight ? 0.12 : 0.09)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+    );
+
+    // ── 2. Orbital arrows (sync motif), rotating ────────────────────────────
+    _orbital(canvas, center, r * 0.92, -0.6 + a, 2.2,
+        glass.withValues(alpha: isLight ? 0.55 : 0.65), r);
+    _dottedArc(canvas, center, r * 0.92, math.pi - 0.2 + a, 1.9,
+        glass.withValues(alpha: isLight ? 0.45 : 0.5));
 
     // ── group with gentle float ─────────────────────────────────────────────
     final cc = center.translate(0, dy);
 
-    // ── 3. Faceted crystal (8 sides — HABIT silhouette) ─────────────────────
-    _paintCrystal(canvas, cc, r * 0.52, glass, sides: 8);
+    // ── 3. Faceted crystal ──────────────────────────────────────────────────
+    _crystal(canvas, cc, r * 0.52, glass);
 
     // ── 4. Gold core (glow + body) ──────────────────────────────────────────
     final rc = r * 0.30;
@@ -1389,6 +1198,117 @@ class _HabitCrystalPainter extends CustomPainter {
     }
   }
 
+  void _orbital(Canvas canvas, Offset c, double rad, double start, double sweep,
+      Color color, double r) {
+    final rect = Rect.fromCircle(center: c, radius: rad);
+    canvas.drawArc(
+      rect,
+      start,
+      sweep,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.2
+        ..strokeCap = StrokeCap.round
+        ..color = color,
+    );
+    // Arrowhead at the end, pointing along travel.
+    final endA = start + sweep;
+    final tip = c + _dir(endA) * rad;
+    final travel = Offset(-math.sin(endA), math.cos(endA)); // tangent (CW)
+    final s = r * 0.07;
+    Offset wing(double da) => Offset(
+          -travel.dx * math.cos(da) + travel.dy * math.sin(da),
+          -travel.dx * math.sin(da) - travel.dy * math.cos(da),
+        );
+    final p = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round
+      ..color = color;
+    canvas.drawLine(tip, tip + wing(0.5) * s, p);
+    canvas.drawLine(tip, tip + wing(-0.5) * s, p);
+  }
+
+  void _dottedArc(
+      Canvas canvas, Offset c, double rad, double start, double sweep, Color color) {
+    const n = 16;
+    final p = Paint()..color = color;
+    for (var i = 0; i <= n; i++) {
+      final ang = start + sweep * i / n;
+      canvas.drawCircle(c + _dir(ang) * rad, 1.4, p);
+    }
+  }
+
+  void _crystal(Canvas canvas, Offset cc, double r, Color glass) {
+    const rot = -math.pi / 2;
+    final outer = _verts(cc, r, 8, rot);
+    final inner = _verts(cc, r * 0.46, 8, rot);
+    final bounds = Rect.fromCircle(center: cc, radius: r);
+    final lightDir = _dir(-math.pi / 2 - 0.5);
+
+    // Base body fill.
+    canvas.drawPath(
+      _poly(cc, r, 8, rot),
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            glass.withValues(alpha: 0.22),
+            glass.withValues(alpha: 0.06),
+          ],
+        ).createShader(bounds),
+    );
+
+    // Side facets with directional shading.
+    for (var k = 0; k < 8; k++) {
+      final k2 = (k + 1) % 8;
+      final mid = (outer[k] + outer[k2]) / 2;
+      final normal = (mid - cc);
+      final nl = normal.distance;
+      final nrm = nl == 0 ? Offset.zero : normal / nl;
+      final lf = ((nrm.dx * lightDir.dx + nrm.dy * lightDir.dy) + 1) / 2;
+      final facet = Path()
+        ..moveTo(outer[k].dx, outer[k].dy)
+        ..lineTo(outer[k2].dx, outer[k2].dy)
+        ..lineTo(inner[k2].dx, inner[k2].dy)
+        ..lineTo(inner[k].dx, inner[k].dy)
+        ..close();
+      canvas.drawPath(
+        facet,
+        Paint()..color = glass.withValues(alpha: 0.05 + 0.17 * lf),
+      );
+    }
+
+    // Ridges from inner table to outer vertices.
+    final ridge = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = glass.withValues(alpha: 0.18);
+    for (var k = 0; k < 8; k++) {
+      canvas.drawLine(inner[k], outer[k], ridge);
+    }
+
+    // Bright outer edges.
+    canvas.drawPath(
+      _poly(cc, r, 8, rot),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4
+        ..strokeJoin = StrokeJoin.round
+        ..color = glass.withValues(alpha: 0.55),
+    );
+    // Extra highlight on the top-left edges.
+    final hl = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round
+      ..color = glass.withValues(alpha: 0.85);
+    canvas.drawLine(outer[5], outer[6], hl);
+    canvas.drawLine(outer[6], outer[7], hl);
+  }
+
   @override
   bool shouldRepaint(_HabitCrystalPainter old) =>
       old.t != t ||
@@ -1468,18 +1388,6 @@ class _FocusRingPreviewState extends ConsumerState<_FocusRingPreview>
         child: Stack(
           alignment: Alignment.center,
           children: [
-            // Shared glass scaffold (does not breathe).
-            AnimatedBuilder(
-              animation: _loop,
-              builder: (_, _) => CustomPaint(
-                size: const Size(_ring, _ring),
-                painter: _GlassScenePainter(
-                  t: _loop.value,
-                  motion: motion,
-                  isLight: c.isLightMode,
-                ),
-              ),
-            ),
             AnimatedBuilder(
               animation: _loop,
               builder: (_, _) {
@@ -1615,7 +1523,7 @@ class _FocusRingPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
-    final radius = size.width / 2 * 0.56; // hero ring inside the glass scene
+    final radius = size.width / 2 - 4;
     final bounds = Rect.fromCircle(center: center, radius: radius);
 
     // Track.
@@ -1715,9 +1623,8 @@ class _PlanningPreviewState extends ConsumerState<_PlanningPreview>
   // coprime so the composite motion looks chaotic yet loops seamlessly.
   // Radii are spread wide so the centre stays clear for the progress readout.
   static const _box    = 150.0;
-  // Rings sit inside the hexagon crystal as its glowing mission core.
-  static const _radii  = [22.0, 33.0, 44.0];
-  static const _stroke = [4.5, 4.0, 3.5];
+  static const _radii  = [42.0, 58.0, 72.0];
+  static const _stroke = [6.0, 5.5, 5.0];
   static const _revs   = [2.0, 3.0, 5.0];
   static const _phase  = [0.0, 2.1, 4.0];
 
@@ -1792,8 +1699,6 @@ class _PlanningPreviewState extends ConsumerState<_PlanningPreview>
                   trackColor: c.border,
                   tickColor: c.accent.withValues(alpha: 0.30),
                   glow: !c.isLightMode,
-                  isLight: c.isLightMode,
-                  motion: SieMotion.enabled(context),
                 ),
               ),
             ),
@@ -1804,20 +1709,20 @@ class _PlanningPreviewState extends ConsumerState<_PlanningPreview>
                   avg == null ? '—' : '$avg%',
                   style: TextStyle(
                     color: c.textPrimary,
-                    fontSize: 18,
+                    fontSize: 22,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1,
                     height: 1,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   'PROGRESS',
                   style: TextStyle(
                     color: c.iconMuted,
-                    fontSize: 7,
+                    fontSize: 8,
                     fontWeight: FontWeight.w600,
-                    letterSpacing: 2,
+                    letterSpacing: 2.5,
                   ),
                 ),
               ],
@@ -1855,8 +1760,6 @@ class _PlanningPreviewPainter extends CustomPainter {
   final Color trackColor;
   final Color tickColor;
   final bool glow;
-  final bool isLight;
-  final bool motion;
 
   const _PlanningPreviewPainter({
     required this.rings,
@@ -1864,19 +1767,11 @@ class _PlanningPreviewPainter extends CustomPainter {
     required this.trackColor,
     required this.tickColor,
     required this.glow,
-    required this.isLight,
-    required this.motion,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
-    final r = math.min(size.width, size.height) / 2;
-
-    // Shared glass scaffold + a 6-sided crystal (distinct from HABIT's 8) that
-    // holds the mission rings as its glowing core.
-    _paintGlassScene(canvas, size, t: t, motion: motion, isLight: isLight);
-    _paintCrystal(canvas, center, r * 0.73, _glassColor(isLight), sides: 6);
 
     for (final ring in rings) {
       final rect = Rect.fromCircle(center: center, radius: ring.radius);
@@ -1931,26 +1826,20 @@ class _PlanningPreviewPainter extends CustomPainter {
       old.rings != rings ||
       old.trackColor != trackColor ||
       old.tickColor != tickColor ||
-      old.glow != glow ||
-      old.isLight != isLight ||
-      old.motion != motion;
+      old.glow != glow;
 }
 
 /// Meditation module preview — a calm teal orb that slowly breathes while
 /// concentric "clarity" ripples radiate outward (the Дефрагментация motif).
-/// "Дефрагментация" preview: a glass scene with a glossy gold "sphere of calm"
-/// whose interior radiates slow concentric waves (the defrag / clearing motif).
-class _MeditationPreview extends ConsumerStatefulWidget {
+class _MeditationPreview extends StatefulWidget {
   const _MeditationPreview();
 
   @override
-  ConsumerState<_MeditationPreview> createState() => _MeditationPreviewState();
+  State<_MeditationPreview> createState() => _MeditationPreviewState();
 }
 
-class _MeditationPreviewState extends ConsumerState<_MeditationPreview>
+class _MeditationPreviewState extends State<_MeditationPreview>
     with TickerProviderStateMixin {
-  static const _sphere = 86.0;
-
   late final AnimationController _pulseCtrl;
   late final AnimationController _rippleCtrl;
   late final Animation<double> _pulse;
@@ -1958,25 +1847,17 @@ class _MeditationPreviewState extends ConsumerState<_MeditationPreview>
   @override
   void initState() {
     super.initState();
-    _pulseCtrl =
-        AnimationController(vsync: this, duration: const Duration(seconds: 5));
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    )..repeat(reverse: true);
     _pulse = Tween<double>(begin: 0.94, end: 1.06).animate(
       CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
     );
-    _rippleCtrl =
-        AnimationController(vsync: this, duration: const Duration(seconds: 6));
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (SieMotion.enabled(context)) {
-      if (!_pulseCtrl.isAnimating) _pulseCtrl.repeat(reverse: true);
-      if (!_rippleCtrl.isAnimating) _rippleCtrl.repeat();
-    } else {
-      _pulseCtrl.stop();
-      _rippleCtrl.stop();
-    }
+    _rippleCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 6),
+    )..repeat();
   }
 
   @override
@@ -1988,9 +1869,6 @@ class _MeditationPreviewState extends ConsumerState<_MeditationPreview>
 
   @override
   Widget build(BuildContext context) {
-    final c = ref.watch(sieColorsProvider);
-    final motion = SieMotion.enabled(context);
-
     return Center(
       child: SizedBox(
         width: 150,
@@ -1998,80 +1876,60 @@ class _MeditationPreviewState extends ConsumerState<_MeditationPreview>
         child: AnimatedBuilder(
           animation: Listenable.merge([_pulse, _rippleCtrl]),
           builder: (_, _) {
-            final pulse = motion ? _pulse.value : 1.0;
             return Stack(
               alignment: Alignment.center,
               children: [
-                // Shared glass scaffold.
+                // Expanding clarity ripples
                 CustomPaint(
                   size: const Size(150, 150),
-                  painter: _GlassScenePainter(
-                    t: _rippleCtrl.value,
-                    motion: motion,
-                    isLight: c.isLightMode,
-                  ),
+                  painter: _MeditationRipplePainter(progress: _rippleCtrl.value),
                 ),
-                // Breathing gold sphere of calm.
+                // Central breathing orb
                 Transform.scale(
-                  scale: pulse,
-                  child: SizedBox(
-                    width: _sphere,
-                    height: _sphere,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        // Glow halo.
-                        Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: kRimGold.withValues(
-                                    alpha: c.isLightMode ? 0.18 : 0.30),
-                                blurRadius: 24,
-                                spreadRadius: 3,
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Sphere body.
-                        Container(
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: RadialGradient(
-                              center: Alignment(-0.2, -0.4),
-                              colors: [kRimLight, kRimGold, kRimBronze],
-                              stops: [0.0, 0.55, 1.0],
+                  scale: _pulse.value,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Glow halo
+                      Container(
+                        width: 78,
+                        height: 78,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: kRimTeal.withValues(alpha: 0.28),
+                              blurRadius: 26,
+                              spreadRadius: 4,
                             ),
+                          ],
+                        ),
+                      ),
+                      // Core
+                      Container(
+                        width: 70,
+                        height: 70,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [kRimTealLight, kRimTeal, kRimTealDark],
+                            stops: [0.0, 0.55, 1.0],
                           ),
                         ),
-                        // Internal clarity waves, clipped to the sphere.
-                        ClipOval(
-                          child: SizedBox(
-                            width: _sphere,
-                            height: _sphere,
-                            child: CustomPaint(
-                              painter: _MeditationWavePainter(
-                                progress: _rippleCtrl.value,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
+                      ),
+                      // Rim highlight
+                      CustomPaint(
+                        size: const Size(74, 74),
+                        painter: SphereRimPainter(
+                          lightAngle: -math.pi / 4,
+                          intensity: 0.6,
+                          isDark: true,
+                          rimGold: kRimTeal,
+                          rimBronze: kRimTealDark,
+                          rimLight: kRimTealLight,
                         ),
-                        // Rim highlight.
-                        CustomPaint(
-                          size: const Size(_sphere, _sphere),
-                          painter: SphereRimPainter(
-                            lightAngle: -math.pi / 4,
-                            intensity: 0.6,
-                            isDark: !c.isLightMode,
-                            rimGold: kRimGold,
-                            rimBronze: kRimBronze,
-                            rimLight: kRimLight,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -2083,36 +1941,32 @@ class _MeditationPreviewState extends ConsumerState<_MeditationPreview>
   }
 }
 
-class _MeditationWavePainter extends CustomPainter {
+class _MeditationRipplePainter extends CustomPainter {
   final double progress; // 0..1, repeating
-  final Color color;
-  const _MeditationWavePainter({required this.progress, required this.color});
+  const _MeditationRipplePainter({required this.progress});
 
   static const _count = 3;
+  static const _minRadius = 36.0;
+  static const _maxRadius = 72.0;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final maxR = size.width / 2;
+    final center = Offset(size.width / 2, size.height / 2);
     for (var i = 0; i < _count; i++) {
       final t = (progress + i / _count) % 1.0;
-      final radius = maxR * 0.15 + maxR * 0.85 * t;
-      final alpha = (1.0 - t) * 0.45;
+      final radius = _minRadius + (_maxRadius - _minRadius) * t;
+      final alpha = (1.0 - t) * 0.32;
       if (alpha <= 0.01) continue;
-      canvas.drawCircle(
-        center,
-        radius,
-        Paint()
-          ..color = color.withValues(alpha: alpha)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.4,
-      );
+      final paint = Paint()
+        ..color = kRimTeal.withValues(alpha: alpha)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5;
+      canvas.drawCircle(center, radius, paint);
     }
   }
 
   @override
-  bool shouldRepaint(_MeditationWavePainter old) =>
-      old.progress != progress || old.color != color;
+  bool shouldRepaint(_MeditationRipplePainter old) => old.progress != progress;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
