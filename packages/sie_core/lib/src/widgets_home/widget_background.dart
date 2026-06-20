@@ -80,7 +80,8 @@ String? _moduleForAndroidClass(String? className) {
 }
 
 /// Interactivity entry point — called by `home_widget` when a widget tap-zone
-/// is pressed (registered via `HomeWidget.registerInteractivityCallback`).
+/// is pressed or a resize event fires (registered via
+/// `HomeWidget.registerInteractivityCallback`).
 /// Runs the quick-action fully offline and re-renders the widget.
 @pragma('vm:entry-point')
 Future<void> widgetInteractivityCallback(Uri? uri) async {
@@ -88,6 +89,12 @@ Future<void> widgetInteractivityCallback(Uri? uri) async {
   registerHomeWidgets();
   final db = AppDatabase();
   try {
+    // Resize event: native saved new dimensions → re-render at actual size.
+    if (uri != null && uri.scheme == 'sie' && uri.host == 'resize') {
+      final id = int.tryParse(uri.queryParameters['widgetId'] ?? '');
+      if (id != null) await WidgetRenderService.refresh(id, db);
+      return;
+    }
     await WidgetActionRouter.run(uri, db);
   } finally {
     await db.close();

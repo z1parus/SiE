@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Bundle
 import android.os.SystemClock
 import android.view.View
 import android.widget.RemoteViews
@@ -35,6 +36,31 @@ abstract class SieWidgetProvider : HomeWidgetProvider() {
     open fun resolveLayout(widgetData: SharedPreferences, appWidgetId: Int): Int =
         layoutId
 
+    /// Persists the actual widget bounds (dp) to SharedPreferences and fires a
+    /// background intent so the Dart side re-renders at the new size.
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle
+    ) {
+        val maxW = newOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0)
+        val maxH = newOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0)
+        if (maxW > 0 && maxH > 0) {
+            context.getSharedPreferences(
+                "${context.packageName}.homeWidgetPreferences", Context.MODE_PRIVATE
+            ).edit()
+                .putInt("widget_px_w_$appWidgetId", maxW)
+                .putInt("widget_px_h_$appWidgetId", maxH)
+                .apply()
+            try {
+                val uri = Uri.parse("sie://resize?widgetId=$appWidgetId")
+                HomeWidgetBackgroundIntent.getBroadcast(context, uri).send()
+            } catch (_: Exception) { /* ignore */ }
+        }
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+    }
+
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -42,6 +68,17 @@ abstract class SieWidgetProvider : HomeWidgetProvider() {
         widgetData: SharedPreferences
     ) {
         for (appWidgetId in appWidgetIds) {
+            // Persist actual widget bounds (dp) so Dart can render at exact size.
+            val opts = appWidgetManager.getAppWidgetOptions(appWidgetId)
+            val maxW = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0)
+            val maxH = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0)
+            if (maxW > 0 && maxH > 0) {
+                widgetData.edit()
+                    .putInt("widget_px_w_$appWidgetId", maxW)
+                    .putInt("widget_px_h_$appWidgetId", maxH)
+                    .apply()
+            }
+
             val views = RemoteViews(
                 context.packageName, resolveLayout(widgetData, appWidgetId))
 

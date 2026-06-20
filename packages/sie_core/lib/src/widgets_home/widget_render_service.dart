@@ -49,7 +49,7 @@ class WidgetRenderService {
     final unchanged = sig == prevSig;
 
     if (!unchanged) {
-      final size = _sizeForBucket(cfg.sizeBucket);
+      final size = await _resolveRenderSize(appWidgetId, cfg.sizeBucket);
       final widget = provider.render(ctx, cfg, data);
 
       await HomeWidget.renderFlutterWidget(
@@ -65,6 +65,19 @@ class WidgetRenderService {
       androidName: provider.androidProviderClass,
       iOSName: 'HomeWidget',
     );
+  }
+
+  /// Returns the actual widget size in logical pixels (dp) if the native side
+  /// has saved it, otherwise falls back to the bucket default. The native layer
+  /// writes `widget_px_w/h_<id>` from [OPTION_APPWIDGET_MAX_WIDTH/HEIGHT] in
+  /// `onUpdate` and `onAppWidgetOptionsChanged`, so this reflects any user resize.
+  static Future<Size> _resolveRenderSize(int id, WidgetSizeBucket bucket) async {
+    final w = await HomeWidget.getWidgetData<int>('widget_px_w_$id');
+    final h = await HomeWidget.getWidgetData<int>('widget_px_h_$id');
+    if (w != null && h != null && w > 0 && h > 0) {
+      return Size(w.toDouble(), h.toDouble());
+    }
+    return _sizeForBucket(bucket);
   }
 
   static Size _sizeForBucket(WidgetSizeBucket bucket) => switch (bucket) {
