@@ -17,6 +17,7 @@ import 'session_orb_painters.dart';
 import 'profile_screen.dart';
 import 'public_profile_screen.dart';
 import 'user_search_screen.dart';
+import '../widgets/defrag_preview.dart';
 import '../widgets/focus_orbit_timer.dart';
 
 const _kOrange = Color(0xFFFF8C42);
@@ -691,7 +692,7 @@ class _BranchCarouselCard extends ConsumerWidget {
       'habit_archive'       => const _HabitMatrixPreview(),
       'focus_protocol'      => const _FocusRingPreview(),
       'planning'            => const _PlanningPreview(),
-      'meditation'          => const _MeditationPreview(),
+      'meditation'          => const _DefragPreview(),
       _                     => const SizedBox.shrink(),
     };
   }
@@ -1689,152 +1690,24 @@ class _PlanningPreviewPainter extends CustomPainter {
       old.nodes != nodes;
 }
 
-/// Meditation module preview — a calm teal orb that slowly breathes while
-/// concentric "clarity" ripples radiate outward (the Дефрагментация motif).
-class _MeditationPreview extends ConsumerStatefulWidget {
-  const _MeditationPreview();
+/// Дефрагментация module preview — binds the shared-gold [DefragPreview] to
+/// the runtime theme tokens (the gold-on-anthracite language of the carousel).
+class _DefragPreview extends ConsumerWidget {
+  const _DefragPreview();
 
   @override
-  ConsumerState<_MeditationPreview> createState() => _MeditationPreviewState();
-}
-
-class _MeditationPreviewState extends ConsumerState<_MeditationPreview>
-    with TickerProviderStateMixin {
-  late final AnimationController _pulseCtrl;
-  late final AnimationController _rippleCtrl;
-  late final Animation<double> _pulse;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 5),
-    )..repeat(reverse: true);
-    _pulse = Tween<double>(begin: 0.94, end: 1.06).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
-    );
-    _rippleCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 6),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _pulseCtrl.dispose();
-    _rippleCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
-    final isLight = c.isLightMode;
-    return Center(
-      child: SizedBox(
-        width: 150,
-        height: 150,
-        child: AnimatedBuilder(
-          animation: Listenable.merge([_pulse, _rippleCtrl]),
-          builder: (_, _) {
-            return Stack(
-              alignment: Alignment.center,
-              children: [
-                // Expanding clarity ripples
-                CustomPaint(
-                  size: const Size(150, 150),
-                  painter: _MeditationRipplePainter(
-                    progress: _rippleCtrl.value,
-                    isLight: isLight,
-                  ),
-                ),
-                // Central breathing orb
-                Transform.scale(
-                  scale: _pulse.value,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Glow halo — softer on a light card so it doesn't smear.
-                      Container(
-                        width: 78,
-                        height: 78,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: kRimTeal.withValues(
-                                  alpha: isLight ? 0.16 : 0.28),
-                              blurRadius: isLight ? 18 : 26,
-                              spreadRadius: isLight ? 2 : 4,
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Core
-                      Container(
-                        width: 70,
-                        height: 70,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [kRimTealLight, kRimTeal, kRimTealDark],
-                            stops: [0.0, 0.55, 1.0],
-                          ),
-                        ),
-                      ),
-                      // Rim highlight — adapt shadow side to the theme.
-                      CustomPaint(
-                        size: const Size(74, 74),
-                        painter: SphereRimPainter(
-                          lightAngle: -math.pi / 4,
-                          intensity: 0.6,
-                          isDark: !isLight,
-                          rimGold: kRimTeal,
-                          rimBronze: kRimTealDark,
-                          rimLight: kRimTealLight,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
+    return DefragPreview(
+      gold: c.accent,
+      gold2: c.accentSecondary,
+      goldLight: kRimLight,
+      glass: c.glass,
+      trackColor: c.border,
+      isLight: c.isLightMode,
+      motion: SieMotion.enabled(context),
     );
   }
-}
-
-class _MeditationRipplePainter extends CustomPainter {
-  final double progress; // 0..1, repeating
-  final bool isLight;
-  const _MeditationRipplePainter({required this.progress, this.isLight = false});
-
-  static const _count = 3;
-  static const _minRadius = 36.0;
-  static const _maxRadius = 72.0;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    for (var i = 0; i < _count; i++) {
-      final t = (progress + i / _count) % 1.0;
-      final radius = _minRadius + (_maxRadius - _minRadius) * t;
-      final alpha = (1.0 - t) * (isLight ? 0.22 : 0.32);
-      if (alpha <= 0.01) continue;
-      final paint = Paint()
-        ..color = kRimTeal.withValues(alpha: alpha)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5;
-      canvas.drawCircle(center, radius, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_MeditationRipplePainter old) =>
-      old.progress != progress || old.isLight != isLight;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
