@@ -16,13 +16,16 @@ const _kRimTealLight = Color(0xFF80E8E0);
 // ── Data ──────────────────────────────────────────────────────────────────────
 
 class BreathingWidgetData extends WidgetData {
-  final int zenStreakDays;
+  /// 'breathing' = Breathing exercise module; 'meditation' = Meditation module.
+  final String module;
+  final int zenStreakDays;    // meaningful only for meditation mode
   final int minutesThisWeek;
   final int totalSessions;
   final DateTime? lastSessionAt;
   final String quickPatternId;
 
   const BreathingWidgetData({
+    required this.module,
     required this.zenStreakDays,
     required this.minutesThisWeek,
     required this.totalSessions,
@@ -32,19 +35,22 @@ class BreathingWidgetData extends WidgetData {
 
   bool get neverPractised => totalSessions == 0;
 
-  /// Streak is at risk when there was a session yesterday but none today.
+  bool get isBreathingModule => module == 'breathing';
+
+  /// Streak at-risk: relevant only in meditation mode.
   bool get streakAtRisk {
+    if (isBreathingModule) return false;
     if (lastSessionAt == null || zenStreakDays == 0) return false;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final last = DateTime(
         lastSessionAt!.year, lastSessionAt!.month, lastSessionAt!.day);
-    return last.isBefore(today); // last session was before today
+    return last.isBefore(today);
   }
 
   @override
   String get signature =>
-      '$zenStreakDays:$minutesThisWeek:$totalSessions:'
+      '$module:$zenStreakDays:$minutesThisWeek:$totalSessions:'
       '${lastSessionAt?.millisecondsSinceEpoch ?? 0}:$quickPatternId';
 }
 
@@ -67,64 +73,98 @@ class BreathingWidgetProvider extends ModuleWidgetProvider<BreathingWidgetData> 
       ];
 
   @override
-  Future<BreathingWidgetData> loadData(AppDatabase db, WidgetConfig cfg) async {
-    final breathing = await db.breathingSessionsForWidget();
-    final meditation = await db.meditationSessionsForWidget();
+  String resolveDeepLinkHost(WidgetConfig cfg) {
+    final mod = cfg.contentOptions['module'] as String? ?? 'breathing';
+    return mod == 'meditation' ? 'meditation' : 'breathing';
+  }
 
-    // Combine completed-at timestamps + durations from both calm practices.
-    final stamps = <int>[
-      ...breathing.map((s) => s.completedAtMs),
-      ...meditation.map((s) => s.completedAtMs),
-    ];
+  @override
+  Future<BreathingWidgetData> loadData(AppDatabase db, WidgetConfig cfg) async {
+    final module = cfg.contentOptions['module'] as String? ?? 'breathing';
+    final quickPattern =
+        cfg.contentOptions['quickPattern'] as String? ?? 'box';
+
+    if (module == 'meditation') {
+      return _loadMeditationData(db, quickPattern);
+    } else {
+      return _loadBreathingData(db, quickPattern);
+    }
+  }
+
+  Future<BreathingWidgetData> _loadBreathingData(
+      AppDatabase db, String quickPattern) async {
+    final sessions = await db.breathingSessionsForWidget();
+
     var weekSecs = 0;
     final now = DateTime.now();
-    final weekStart =
-        DateTime(now.year, now.month, now.day).subtract(const Duration(days: 7));
-    final weekStartMs = weekStart.millisecondsSinceEpoch;
-    for (final s in breathing) {
-      if (s.completedAtMs >= weekStartMs) weekSecs += s.durationSeconds;
-    }
-    for (final s in meditation) {
+    final weekStartMs = DateTime(now.year, now.month, now.day)
+        .subtract(const Duration(days: 7))
+        .millisecondsSinceEpoch;
+    for (final s in sessions) {
       if (s.completedAtMs >= weekStartMs) weekSecs += s.durationSeconds;
     }
 
     DateTime? lastAt;
-    if (stamps.isNotEmpty) {
-      stamps.sort();
+    if (sessions.isNotEmpty) {
+      final stamps = sessions.map((s) => s.completedAtMs).toList()..sort();
       lastAt = DateTime.fromMillisecondsSinceEpoch(stamps.last);
     }
 
-    // Zen streak: prefer the cached profile value (written online by the stats
-    // provider); fall back to a streak derived from the local session history.
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.reload();
-    final streak =
-        prefs.getInt(kWidgetZenStreakKey) ?? _streakFromStamps(stamps);
-
-    final quickPattern =
-        cfg.contentOptions['quickPattern'] as String? ?? 'box';
-
     return BreathingWidgetData(
-      zenStreakDays: streak,
+      module: 'breathing',
+      zenStreakDays: 0,
       minutesThisWeek: weekSecs ~/ 60,
-      totalSessions: breathing.length + meditation.length,
+      totalSessions: sessions.length,
       lastSessionAt: lastAt,
       quickPatternId: quickPattern,
     );
   }
 
-  /// Consecutive-day streak ending today or yesterday, derived from session
-  /// timestamps (millis). Used only when no cached profile streak exists.
+  Future<BreathingWidgetData> _loadMeditationData(
+      AppDatabase db, String quickPattern) async {
+    final sessions = await db.meditationSessionsForWidget();
+
+    var weekSecs = 0;
+    final now = DateTime.now();
+    final weekStartMs = DateTime(now.year, now.month, now.day)
+        .subtract(const Duration(days: 7))
+        .millisecondsSinceEpoch;
+    final stamps = <int>[];
+    for (final s in sessions) {
+      stamps.add(s.completedAtMs);
+      if (s.completedAtMs >= weekStartMs) weekSecs += s.durationSeconds;
+    }
+
+    DateTime? lastAt;
+    if (stamps.isNotEmpty) {
+      final sorted = List<int>.from(stamps)..sort();
+      lastAt = DateTime.fromMillisecondsSinceEpoch(sorted.last);
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final streak =
+        prefs.getInt(kWidgetZenStreakKey) ?? _streakFromStamps(stamps);
+
+    return BreathingWidgetData(
+      module: 'meditation',
+      zenStreakDays: streak,
+      minutesThisWeek: weekSecs ~/ 60,
+      totalSessions: sessions.length,
+      lastSessionAt: lastAt,
+      quickPatternId: quickPattern,
+    );
+  }
+
   int _streakFromStamps(List<int> stampsMs) {
     if (stampsMs.isEmpty) return 0;
-    final days = <int>{}; // day-floor millis
+    final days = <int>{};
     for (final ms in stampsMs) {
       final d = DateTime.fromMillisecondsSinceEpoch(ms);
       days.add(DateTime(d.year, d.month, d.day).millisecondsSinceEpoch);
     }
     final now = DateTime.now();
     var cursor = DateTime(now.year, now.month, now.day);
-    // Allow the streak to "hold" if today has no session yet but yesterday did.
     if (!days.contains(cursor.millisecondsSinceEpoch)) {
       cursor = cursor.subtract(const Duration(days: 1));
       if (!days.contains(cursor.millisecondsSinceEpoch)) return 0;
@@ -139,6 +179,10 @@ class BreathingWidgetProvider extends ModuleWidgetProvider<BreathingWidgetData> 
 
   @override
   List<WidgetOptionSpec> optionSchema(WidgetSizeBucket size) => [
+        const WidgetOptionSpec.enumChoice('module', 'Открывать модуль', {
+          'breathing': 'Дыхание',
+          'meditation': 'Медитация с дыханием',
+        }, defaultValue: 'breathing'),
         const WidgetOptionSpec.enumChoice('quickPattern', 'Паттерн', {
           'box': 'Бокс (4-4-4-4)',
           '4-7-8': '4-7-8',
@@ -146,14 +190,16 @@ class BreathingWidgetProvider extends ModuleWidgetProvider<BreathingWidgetData> 
         }, defaultValue: 'box'),
         if (size == WidgetSizeBucket.small)
           const WidgetOptionSpec.enumChoice('metric', 'Показатель', {
-            'streak': 'Дзен-стрик',
+            'sessions': 'Сессий всего',
             'minutes': 'Минуты недели',
-          }, defaultValue: 'streak'),
+            'streak': 'Дзен-стрик (медитация)',
+          }, defaultValue: 'sessions'),
       ];
 
   @override
   BreathingWidgetData sampleData(WidgetSizeBucket size) => BreathingWidgetData(
-        zenStreakDays: 12,
+        module: 'breathing',
+        zenStreakDays: 0,
         minutesThisWeek: 47,
         totalSessions: 38,
         lastSessionAt: DateTime.now().subtract(const Duration(hours: 20)),
@@ -182,8 +228,6 @@ String _patternLabel(String id) => switch (id) {
       _ => 'Бокс',
     };
 
-/// Orb glow colour — branded teal, optionally tinted toward [warning] when the
-/// streak is at risk, or the theme accent if the user picked "inherit accent".
 Color _orbColor(BreathingWidgetData data, WidgetRenderContext ctx) {
   if (data.streakAtRisk) return ctx.colors.warning;
   final style = ctx.config.contentOptions['orbStyle'] as String?;
@@ -203,11 +247,29 @@ class _SmallBreathingWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = ctx.colors;
-    final metric = cfg.contentOptions['metric'] as String? ?? 'streak';
     final orbColor = _orbColor(data, ctx);
-    final showMinutes = metric == 'minutes';
-    final value = showMinutes ? '${data.minutesThisWeek}' : '${data.zenStreakDays}';
-    final label = showMinutes ? 'мин/нед' : 'дней';
+    final metric = cfg.contentOptions['metric'] as String? ?? 'sessions';
+
+    String value;
+    String label;
+    if (data.isBreathingModule) {
+      // streak option is meaningless in breathing mode — fall back to sessions
+      if (metric == 'minutes') {
+        value = '${data.minutesThisWeek}';
+        label = 'мин/нед';
+      } else {
+        value = '${data.totalSessions}';
+        label = 'сессий';
+      }
+    } else {
+      if (metric == 'minutes') {
+        value = '${data.minutesThisWeek}';
+        label = 'мин/нед';
+      } else {
+        value = '${data.zenStreakDays}';
+        label = 'дней';
+      }
+    }
 
     return Container(
       width: 160,
@@ -278,42 +340,104 @@ class _MediumBreathingWidget extends StatelessWidget {
           ),
           const SizedBox(width: 18),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (data.neverPractised)
-                  Text(
-                    'Начни первую\nсессию',
-                    style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      height: 1.2,
-                    ),
-                  )
-                else ...[
-                  _StatLine(
-                    c: c,
-                    value: '${data.zenStreakDays}',
-                    label: 'дзен-стрик',
-                    color: data.streakAtRisk ? c.warning : orbColor,
-                  ),
-                  const SizedBox(height: 8),
-                  _StatLine(
-                    c: c,
-                    value: '${data.minutesThisWeek}',
-                    label: 'мин на неделе',
-                    color: c.textPrimary,
-                  ),
-                ],
-                const SizedBox(height: 10),
-                _PatternChip(c: c, patternId: data.quickPatternId),
-              ],
-            ),
+            child: data.isBreathingModule
+                ? _BreathingModeColumn(c: c, data: data, orbColor: orbColor)
+                : _MeditationModeColumn(c: c, data: data, orbColor: orbColor),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _BreathingModeColumn extends StatelessWidget {
+  final SieColors c;
+  final BreathingWidgetData data;
+  final Color orbColor;
+
+  const _BreathingModeColumn(
+      {required this.c, required this.data, required this.orbColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (data.neverPractised)
+          Text(
+            'Начни первую\nсессию',
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              height: 1.2,
+            ),
+          )
+        else ...[
+          _StatLine(
+            c: c,
+            value: '${data.totalSessions}',
+            label: 'сессий',
+            color: orbColor,
+          ),
+          const SizedBox(height: 6),
+          _StatLine(
+            c: c,
+            value: '${data.minutesThisWeek}',
+            label: 'мин на неделе',
+            color: c.textPrimary,
+          ),
+        ],
+        const SizedBox(height: 10),
+        _PatternChip(c: c, patternId: data.quickPatternId),
+      ],
+    );
+  }
+}
+
+class _MeditationModeColumn extends StatelessWidget {
+  final SieColors c;
+  final BreathingWidgetData data;
+  final Color orbColor;
+
+  const _MeditationModeColumn(
+      {required this.c, required this.data, required this.orbColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (data.neverPractised)
+          Text(
+            'Начни первую\nсессию',
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              height: 1.2,
+            ),
+          )
+        else ...[
+          _StatLine(
+            c: c,
+            value: '${data.zenStreakDays}',
+            label: 'дзен-стрик',
+            color: data.streakAtRisk ? c.warning : orbColor,
+          ),
+          const SizedBox(height: 8),
+          _StatLine(
+            c: c,
+            value: '${data.minutesThisWeek}',
+            label: 'мин на неделе',
+            color: c.textPrimary,
+          ),
+        ],
+        const SizedBox(height: 10),
+        _PatternChip(c: c, patternId: data.quickPatternId),
+      ],
     );
   }
 }
@@ -337,7 +461,7 @@ class _LargeBreathingWidget extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
       child: Column(
         children: [
-          // Hero orb
+          // Hero orb — content depends on module mode
           SizedBox(
             width: 120,
             height: 120,
@@ -346,24 +470,9 @@ class _LargeBreathingWidget extends StatelessWidget {
               child: Center(
                 child: data.neverPractised
                     ? Icon(Icons.air, color: orbColor, size: 38)
-                    : Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${data.zenStreakDays}',
-                            style: TextStyle(
-                              color: c.textPrimary,
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            'дзен-стрик',
-                            style: TextStyle(
-                                color: c.textSecondary, fontSize: 11),
-                          ),
-                        ],
-                      ),
+                    : data.isBreathingModule
+                        ? _BreathingOrbContent(c: c, data: data)
+                        : _MeditationOrbContent(c: c, data: data),
               ),
             ),
           ),
@@ -382,8 +491,6 @@ class _LargeBreathingWidget extends StatelessWidget {
               style: TextStyle(color: c.textSecondary, fontSize: 13),
             ),
           const Spacer(),
-          // Quick pattern row (visual; tap-to-start lands on the breathing
-          // screen — per-pattern deep-link is a future enhancement).
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
@@ -397,18 +504,104 @@ class _LargeBreathingWidget extends StatelessWidget {
           const SizedBox(height: 14),
           Container(height: 1, color: c.border),
           const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _MiniStat(c: c, value: '${data.zenStreakDays}', label: 'стрик'),
-              _MiniStat(
-                  c: c, value: '${data.minutesThisWeek}', label: 'мин/нед'),
-              _MiniStat(
-                  c: c, value: '${data.totalSessions}', label: 'всего'),
-            ],
-          ),
+          data.isBreathingModule
+              ? _BreathingMiniStats(c: c, data: data)
+              : _MeditationMiniStats(c: c, data: data),
         ],
       ),
+    );
+  }
+}
+
+class _BreathingOrbContent extends StatelessWidget {
+  final SieColors c;
+  final BreathingWidgetData data;
+  const _BreathingOrbContent({required this.c, required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '${data.totalSessions}',
+          style: TextStyle(
+            color: c.textPrimary,
+            fontSize: 30,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          'сессий',
+          style: TextStyle(color: c.textSecondary, fontSize: 11),
+        ),
+      ],
+    );
+  }
+}
+
+class _MeditationOrbContent extends StatelessWidget {
+  final SieColors c;
+  final BreathingWidgetData data;
+  const _MeditationOrbContent({required this.c, required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '${data.zenStreakDays}',
+          style: TextStyle(
+            color: c.textPrimary,
+            fontSize: 32,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          'дзен-стрик',
+          style: TextStyle(color: c.textSecondary, fontSize: 11),
+        ),
+      ],
+    );
+  }
+}
+
+class _BreathingMiniStats extends StatelessWidget {
+  final SieColors c;
+  final BreathingWidgetData data;
+  const _BreathingMiniStats({required this.c, required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: [
+        _MiniStat(c: c, value: '${data.totalSessions}', label: 'сессий'),
+        _MiniStat(c: c, value: '${data.minutesThisWeek}', label: 'мин/нед'),
+        _MiniStat(
+            c: c,
+            value: _patternLabel(data.quickPatternId),
+            label: 'паттерн'),
+      ],
+    );
+  }
+}
+
+class _MeditationMiniStats extends StatelessWidget {
+  final SieColors c;
+  final BreathingWidgetData data;
+  const _MeditationMiniStats({required this.c, required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: [
+        _MiniStat(c: c, value: '${data.zenStreakDays}', label: 'стрик'),
+        _MiniStat(c: c, value: '${data.minutesThisWeek}', label: 'мин/нед'),
+        _MiniStat(c: c, value: '${data.totalSessions}', label: 'всего'),
+      ],
     );
   }
 }
@@ -542,7 +735,6 @@ class _OrbPainter extends CustomPainter {
     final radius = size.shortestSide / 2 - strokeWidth;
     final rect = Rect.fromCircle(center: center, radius: radius);
 
-    // Soft inner glow.
     final glow = Paint()
       ..shader = RadialGradient(
         colors: [
@@ -554,7 +746,6 @@ class _OrbPainter extends CustomPainter {
       ).createShader(rect);
     canvas.drawCircle(center, radius, glow);
 
-    // Bright rim sweep.
     final rim = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth

@@ -25,7 +25,7 @@ class WidgetRenderService {
     // native side always has the latest entity ids even if the PNG is cached.
     final zones = provider.tapZones(cfg, data);
     await HomeWidget.saveWidgetData(
-        'widget_host_$appWidgetId', provider.deepLinkHost);
+        'widget_host_$appWidgetId', provider.resolveDeepLinkHost(cfg));
     await HomeWidget.saveWidgetData(
         'widget_zones_$appWidgetId',
         jsonEncode(zones.map((z) => z.toMap()).toList()));

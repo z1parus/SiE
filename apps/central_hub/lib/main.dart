@@ -10,6 +10,7 @@ import 'screens/breathing_exercise_screen.dart';
 import 'screens/focus_protocol_screen.dart';
 import 'screens/habit_tracker_screen.dart';
 import 'screens/main_navigation_shell.dart';
+import 'screens/meditation_hub_screen.dart';
 import 'screens/planning_screen.dart';
 import 'screens/splash_screen.dart';
 
@@ -82,6 +83,9 @@ void _handleWidgetUri(Uri? uri) {
     case 'breathing':
       _openModuleScreen(nav, 'widget/breathing',
           () => const BreathingExerciseScreen());
+    case 'meditation':
+      _openModuleScreen(nav, 'widget/meditation',
+          () => const MeditationHubScreen());
     case 'habits':
     default:
       _openModuleScreen(nav, 'widget/habits',

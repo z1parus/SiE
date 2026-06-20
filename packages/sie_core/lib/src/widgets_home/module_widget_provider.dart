@@ -61,6 +61,11 @@ abstract class ModuleWidgetProvider<T extends WidgetData> {
   /// `sie://widget/<deepLinkHost>`.
   String get deepLinkHost => moduleId;
 
+  /// Config-aware deep-link host. Modules whose target screen can change based
+  /// on widget settings (e.g. the Breathing widget can open either the Breathing
+  /// or the Meditation module) override this. Default forwards to [deepLinkHost].
+  String resolveDeepLinkHost(WidgetConfig cfg) => deepLinkHost;
+
   Future<T> loadData(AppDatabase db, WidgetConfig cfg);
   Widget render(WidgetRenderContext ctx, WidgetConfig cfg, T data);
   List<WidgetOptionSpec> optionSchema(WidgetSizeBucket size) => const [];
