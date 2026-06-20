@@ -26,6 +26,7 @@ class SieColors {
     this.success = const Color(0xFF34C759),
     this.danger = const Color(0xFFE03050),
     this.info = const Color(0xFF00C8FF),
+    this.focusBreak = const Color(0xFF4FB0C6),
   });
 
   final SieThemeMode mode;
@@ -51,6 +52,9 @@ class SieColors {
   final Color success;
   final Color danger;
   final Color info;
+
+  /// Cool tone for the focus timer's break phase (vs the gold work phase).
+  final Color focusBreak;
 
   bool get isLightMode => mode == SieThemeMode.classicLight;
 
