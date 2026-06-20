@@ -728,9 +728,6 @@ class _BranchCarouselCard extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: SieGlassCard(
-        glass: true,
-        radius: 20,
-        blurSigma: 12,
         padding: EdgeInsets.zero,
         onTap: onTap,
         child: Column(
