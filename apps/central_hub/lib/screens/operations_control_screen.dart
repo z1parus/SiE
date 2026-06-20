@@ -823,7 +823,7 @@ class _BreathSpherePreviewState extends ConsumerState<_BreathSpherePreview>
   late final Animation<double> _pulse;
   FragmentShader? _shader;
 
-  static const _size = 130.0;
+  static const _size = 144.0;
   static const _lightAngle = -math.pi / 4;
 
   @override
@@ -1009,18 +1009,19 @@ class _HabitMatrixPreviewState extends ConsumerState<_HabitMatrixPreview>
     final c = ref.watch(sieColorsProvider);
     final motion = SieMotion.enabled(context);
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(6),
-        child: AspectRatio(
-          aspectRatio: 1,
-          child: AnimatedBuilder(
-            animation: _ctrl,
-            builder: (_, _) => CustomPaint(
-              painter: _HabitCrystalPainter(
-                t: _ctrl.value,
-                motion: motion,
-                isLight: c.isLightMode,
-              ),
+      child: SizedBox(
+        width: 150,
+        height: 150,
+        child: AnimatedBuilder(
+          animation: _ctrl,
+          builder: (_, _) => CustomPaint(
+            size: const Size(150, 150),
+            painter: _HabitCrystalPainter(
+              t: _ctrl.value,
+              motion: motion,
+              isLight: c.isLightMode,
+              gold: c.accent,
+              gold2: c.accentSecondary,
             ),
           ),
         ),
@@ -1033,16 +1034,16 @@ class _HabitCrystalPainter extends CustomPainter {
   final double t;
   final bool motion;
   final bool isLight;
+  final Color gold;
+  final Color gold2;
 
   const _HabitCrystalPainter({
     required this.t,
     required this.motion,
     required this.isLight,
+    required this.gold,
+    required this.gold2,
   });
-
-  static const _coreLight = Color(0xFFCDF3D6);
-  static const _coreMid   = Color(0xFF86D9A0);
-  static const _coreDeep  = Color(0xFF4FB07A);
 
   static Offset _dir(double a) => Offset(math.cos(a), math.sin(a));
 
@@ -1064,50 +1065,57 @@ class _HabitCrystalPainter extends CustomPainter {
     final r = math.min(size.width, size.height) / 2;
     final a = motion ? t * 2 * math.pi : 0.0;
     final dy = motion ? math.sin(t * 2 * math.pi) * 2.0 : 0.0;
-    const white = Colors.white;
+
+    // Theme-aware glass: white highlights on dark; a cool slate on light so the
+    // crystal stays visible against a light card.
+    final glass = isLight ? const Color(0xFF5B6480) : Colors.white;
+    final coreLight = Color.lerp(gold2, Colors.white, 0.55)!;
+    final coreDeep = Color.lerp(gold, Colors.black, 0.32)!;
 
     // ── 1. Frosted glass discs (depth) ──────────────────────────────────────
     void disc(double rad, double fill, double stroke) {
-      canvas.drawCircle(center, rad, Paint()..color = white.withValues(alpha: fill));
+      canvas.drawCircle(
+          center, rad, Paint()..color = glass.withValues(alpha: fill));
       canvas.drawCircle(
         center,
         rad,
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.2
-          ..color = white.withValues(alpha: stroke),
+          ..color = glass.withValues(alpha: stroke),
       );
     }
 
-    disc(r * 0.97, isLight ? 0.18 : 0.05, 0.10);
-    disc(r * 0.80, isLight ? 0.22 : 0.07, 0.13);
+    disc(r * 0.96, isLight ? 0.10 : 0.05, isLight ? 0.22 : 0.10);
+    disc(r * 0.80, isLight ? 0.13 : 0.07, isLight ? 0.26 : 0.13);
     // Soft plate glow behind the crystal.
     canvas.drawCircle(
       center,
       r * 0.60,
       Paint()
-        ..color = white.withValues(alpha: isLight ? 0.30 : 0.09)
+        ..color = glass.withValues(alpha: isLight ? 0.12 : 0.09)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
     );
 
     // ── 2. Orbital arrows (sync motif), rotating ────────────────────────────
-    _orbital(canvas, center, r * 0.92, -0.6 + a, 2.2, white.withValues(alpha: 0.65), r);
+    _orbital(canvas, center, r * 0.92, -0.6 + a, 2.2,
+        glass.withValues(alpha: isLight ? 0.55 : 0.65), r);
     _dottedArc(canvas, center, r * 0.92, math.pi - 0.2 + a, 1.9,
-        white.withValues(alpha: 0.5), r);
+        glass.withValues(alpha: isLight ? 0.45 : 0.5));
 
     // ── group with gentle float ─────────────────────────────────────────────
     final cc = center.translate(0, dy);
 
     // ── 3. Faceted crystal ──────────────────────────────────────────────────
-    _crystal(canvas, cc, r * 0.52, white);
+    _crystal(canvas, cc, r * 0.52, glass);
 
-    // ── 4. Green core (glow + body) ─────────────────────────────────────────
+    // ── 4. Gold core (glow + body) ──────────────────────────────────────────
     final rc = r * 0.30;
     final corePath = _poly(cc, rc, 6, -math.pi / 2);
     canvas.drawPath(
       corePath,
       Paint()
-        ..color = _coreMid.withValues(alpha: 0.55)
+        ..color = gold.withValues(alpha: 0.55)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
     );
     canvas.drawPath(
@@ -1116,7 +1124,7 @@ class _HabitCrystalPainter extends CustomPainter {
         ..shader = RadialGradient(
           center: const Alignment(-0.2, -0.4),
           radius: 0.95,
-          colors: const [_coreLight, _coreMid, _coreDeep],
+          colors: [coreLight, gold, coreDeep],
           stops: const [0.0, 0.55, 1.0],
         ).createShader(Rect.fromCircle(center: cc, radius: rc)),
     );
@@ -1126,7 +1134,7 @@ class _HabitCrystalPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.2
-        ..color = white.withValues(alpha: 0.45),
+        ..color = Colors.white.withValues(alpha: 0.45),
     );
 
     // ── 5. Checkmark ────────────────────────────────────────────────────────
@@ -1141,7 +1149,7 @@ class _HabitCrystalPainter extends CustomPainter {
         ..strokeWidth = rc * 0.22
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round
-        ..color = _coreDeep.withValues(alpha: 0.45),
+        ..color = coreDeep.withValues(alpha: 0.5),
     );
     canvas.drawPath(
       check,
@@ -1150,16 +1158,29 @@ class _HabitCrystalPainter extends CustomPainter {
         ..strokeWidth = rc * 0.20
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round
-        ..color = white,
+        ..color = Colors.white,
     );
 
-    // ── 6. Floating progress pills (lower-right) ────────────────────────────
+    // ── 6. Floating progress pills (gold "COMMANDER" gradient), appearing one
+    //       after another from top to bottom in a loop. ──────────────────────
+    final pillPhase = motion ? (t * 2) % 1.0 : 1.0;
     for (var i = 0; i < 3; i++) {
-      final bob = motion ? math.sin(t * 2 * math.pi + i * 0.9) * 1.5 : 0.0;
-      final pw = r * 0.20;
+      double vis, pop;
+      if (!motion) {
+        vis = 1;
+        pop = 1;
+      } else {
+        final start = 0.06 + i * 0.20;
+        pop = ((pillPhase - start) / 0.14).clamp(0.0, 1.0);
+        final out = 1 - ((pillPhase - 0.84) / 0.12).clamp(0.0, 1.0);
+        vis = pop * out;
+      }
+      if (vis <= 0.02) continue;
+
       final ph = r * 0.05;
+      final pw = r * 0.20 * (0.55 + 0.45 * pop);
       final px = cc.dx + r * 0.14 + i * r * 0.04;
-      final py = cc.dy + r * 0.30 + i * (ph + r * 0.03) + bob;
+      final py = cc.dy + r * 0.30 + i * (ph + r * 0.035);
       final rect = RRect.fromRectAndRadius(
         Rect.fromLTWH(px, py, pw, ph),
         Radius.circular(ph),
@@ -1167,8 +1188,11 @@ class _HabitCrystalPainter extends CustomPainter {
       canvas.drawRRect(
         rect,
         Paint()
-          ..shader = const LinearGradient(
-            colors: [white, _coreMid],
+          ..shader = LinearGradient(
+            colors: [
+              gold.withValues(alpha: vis),
+              gold2.withValues(alpha: vis),
+            ],
           ).createShader(rect.outerRect),
       );
     }
@@ -1206,8 +1230,8 @@ class _HabitCrystalPainter extends CustomPainter {
     canvas.drawLine(tip, tip + wing(-0.5) * s, p);
   }
 
-  void _dottedArc(Canvas canvas, Offset c, double rad, double start,
-      double sweep, Color color, double r) {
+  void _dottedArc(
+      Canvas canvas, Offset c, double rad, double start, double sweep, Color color) {
     const n = 16;
     final p = Paint()..color = color;
     for (var i = 0; i <= n; i++) {
@@ -1216,7 +1240,7 @@ class _HabitCrystalPainter extends CustomPainter {
     }
   }
 
-  void _crystal(Canvas canvas, Offset cc, double r, Color white) {
+  void _crystal(Canvas canvas, Offset cc, double r, Color glass) {
     const rot = -math.pi / 2;
     final outer = _verts(cc, r, 8, rot);
     final inner = _verts(cc, r * 0.46, 8, rot);
@@ -1231,8 +1255,8 @@ class _HabitCrystalPainter extends CustomPainter {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            white.withValues(alpha: 0.20),
-            white.withValues(alpha: 0.05),
+            glass.withValues(alpha: 0.22),
+            glass.withValues(alpha: 0.06),
           ],
         ).createShader(bounds),
     );
@@ -1242,7 +1266,7 @@ class _HabitCrystalPainter extends CustomPainter {
       final k2 = (k + 1) % 8;
       final mid = (outer[k] + outer[k2]) / 2;
       final normal = (mid - cc);
-      final nl = normal.distance == 0 ? 0.0 : normal.distance;
+      final nl = normal.distance;
       final nrm = nl == 0 ? Offset.zero : normal / nl;
       final lf = ((nrm.dx * lightDir.dx + nrm.dy * lightDir.dy) + 1) / 2;
       final facet = Path()
@@ -1253,7 +1277,7 @@ class _HabitCrystalPainter extends CustomPainter {
         ..close();
       canvas.drawPath(
         facet,
-        Paint()..color = white.withValues(alpha: 0.04 + 0.16 * lf),
+        Paint()..color = glass.withValues(alpha: 0.05 + 0.17 * lf),
       );
     }
 
@@ -1261,7 +1285,7 @@ class _HabitCrystalPainter extends CustomPainter {
     final ridge = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
-      ..color = white.withValues(alpha: 0.16);
+      ..color = glass.withValues(alpha: 0.18);
     for (var k = 0; k < 8; k++) {
       canvas.drawLine(inner[k], outer[k], ridge);
     }
@@ -1273,21 +1297,25 @@ class _HabitCrystalPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.4
         ..strokeJoin = StrokeJoin.round
-        ..color = white.withValues(alpha: 0.55),
+        ..color = glass.withValues(alpha: 0.55),
     );
     // Extra highlight on the top-left edges.
     final hl = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round
-      ..color = white.withValues(alpha: 0.85);
+      ..color = glass.withValues(alpha: 0.85);
     canvas.drawLine(outer[5], outer[6], hl);
     canvas.drawLine(outer[6], outer[7], hl);
   }
 
   @override
   bool shouldRepaint(_HabitCrystalPainter old) =>
-      old.t != t || old.motion != motion || old.isLight != isLight;
+      old.t != t ||
+      old.motion != motion ||
+      old.isLight != isLight ||
+      old.gold != gold ||
+      old.gold2 != gold2;
 }
 
 /// Live focus-timer preview. Reflects the real [focusTimerProvider] state:
@@ -1304,7 +1332,7 @@ class _FocusRingPreview extends ConsumerStatefulWidget {
 
 class _FocusRingPreviewState extends ConsumerState<_FocusRingPreview>
     with SingleTickerProviderStateMixin {
-  static const _ring = 116.0;
+  static const _ring = 150.0;
   static const _sessionTarget = 4;
 
   late final AnimationController _loop;
@@ -1354,77 +1382,72 @@ class _FocusRingPreviewState extends ConsumerState<_FocusRingPreview>
     final phase2 = isBreak ? c.focusBreak : c.accentSecondary;
 
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: _ring,
-            height: _ring,
-            child: Stack(
-              alignment: Alignment.center,
+      child: SizedBox(
+        width: _ring,
+        height: _ring,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            AnimatedBuilder(
+              animation: _loop,
+              builder: (_, _) {
+                final breathe = motion
+                    ? 0.97 + 0.03 * (0.5 + 0.5 * math.sin(_loop.value * 2 * math.pi))
+                    : 1.0;
+                return Transform.scale(
+                  scale: breathe,
+                  child: CustomPaint(
+                    size: const Size(_ring, _ring),
+                    painter: _FocusRingPainter(
+                      progress: progress,
+                      loop: _loop.value,
+                      idle: idle,
+                      motion: motion,
+                      track: c.border,
+                      phase: phase,
+                      phase2: phase2,
+                      glow: !c.isLightMode,
+                    ),
+                  ),
+                );
+              },
+            ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                AnimatedBuilder(
-                  animation: _loop,
-                  builder: (_, _) {
-                    final breathe = motion
-                        ? 0.97 + 0.03 * (0.5 + 0.5 * math.sin(_loop.value * 2 * math.pi))
-                        : 1.0;
-                    return Transform.scale(
-                      scale: breathe,
-                      child: CustomPaint(
-                        size: const Size(_ring, _ring),
-                        painter: _FocusRingPainter(
-                          progress: progress,
-                          loop: _loop.value,
-                          idle: idle,
-                          motion: motion,
-                          track: c.border,
-                          phase: phase,
-                          phase2: phase2,
-                          glow: !c.isLightMode,
-                        ),
-                      ),
-                    );
-                  },
+                Text(
+                  timeText,
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 2,
+                    height: 1,
+                  ),
                 ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      timeText,
-                      style: TextStyle(
-                        color: c.textPrimary,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 2,
-                        height: 1,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      label,
-                      style: TextStyle(
-                        color: idle ? c.iconMuted : phase,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 2.5,
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: idle ? c.iconMuted : phase,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 2.5,
+                  ),
+                ),
+                const SizedBox(height: 9),
+                _SessionDots(
+                  done: doneToday,
+                  target: _sessionTarget,
+                  color: phase,
+                  track: c.border,
+                  loop: _loop,
+                  motion: motion,
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 10),
-          _SessionDots(
-            done: doneToday,
-            target: _sessionTarget,
-            color: phase,
-            track: c.border,
-            loop: _loop,
-            motion: motion,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1500,7 +1523,7 @@ class _FocusRingPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
-    final radius = size.width / 2 - 9;
+    final radius = size.width / 2 - 4;
     final bounds = Rect.fromCircle(center: center, radius: radius);
 
     // Track.
