@@ -123,6 +123,53 @@ class SieColors {
     );
   }
 
+  /// Frosted-glass panel for carousel plaques: a translucent tinted fill painted
+  /// over a [BackdropFilter] (`fill`), plus a thin neutral-glass "frame" with a
+  /// soft outer glow (`frame`). The frame is drawn outside the blur clip so the
+  /// glow survives. Tint and glow derive from [glass] — white on dark, cool
+  /// slate on light — so the rim reads as neutral glass, not a gold accent.
+  ({BoxDecoration fill, BoxDecoration frame}) glassPanel({
+    double radius = 20,
+  }) {
+    final r = BorderRadius.circular(radius);
+    if (isLightMode) {
+      return (
+        fill: BoxDecoration(
+          color: glass.withValues(alpha: 0.10),
+          borderRadius: r,
+        ),
+        frame: BoxDecoration(
+          borderRadius: r,
+          border: Border.all(color: glass.withValues(alpha: 0.55), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: glass.withValues(alpha: 0.18),
+              blurRadius: 14,
+              spreadRadius: 0,
+            ),
+          ],
+        ),
+      );
+    }
+    return (
+      fill: BoxDecoration(
+        color: glass.withValues(alpha: 0.06),
+        borderRadius: r,
+      ),
+      frame: BoxDecoration(
+        borderRadius: r,
+        border: Border.all(color: glass.withValues(alpha: 0.30), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: glass.withValues(alpha: 0.22),
+            blurRadius: 16,
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+    );
+  }
+
   static SieColors forMode(SieThemeMode mode) => switch (mode) {
     SieThemeMode.classicDark  => _dark,
     SieThemeMode.classicLight => _light,

@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../screens/session_orb_painters.dart' show kRimTealDark, kRimTealLight;
+
 /// Дефрагментация module preview — scattered glass shards drift inward and
 /// settle into an ordered concentric orbit around a glowing gold-sand core
 /// (the defragmentation motif), in the shared gold-on-anthracite language.
@@ -11,9 +13,10 @@ import 'package:flutter/material.dart';
 /// the calm "defragmented" state for a deterministic frame.
 class DefragPreview extends StatefulWidget {
   final double size;
-  final Color gold; // c.accent
-  final Color gold2; // c.accentSecondary
-  final Color goldLight; // kRimLight
+  final Color gold; // c.accent — warm (right half)
+  final Color gold2; // c.accentSecondary — warm deep
+  final Color goldLight; // kRimLight — warm rim
+  final Color cold; // c.focusBreak — cold (left half)
   final Color glass; // c.glass
   final Color trackColor; // c.border
   final bool isLight;
@@ -25,6 +28,7 @@ class DefragPreview extends StatefulWidget {
     required this.gold,
     required this.gold2,
     required this.goldLight,
+    required this.cold,
     required this.glass,
     required this.trackColor,
     this.isLight = false,
@@ -105,6 +109,7 @@ class _DefragPreviewState extends State<DefragPreview>
                   gold: widget.gold,
                   gold2: widget.gold2,
                   goldLight: widget.goldLight,
+                  cold: widget.cold,
                   trackColor: widget.trackColor,
                 ),
               ),
@@ -144,6 +149,7 @@ class _DefragPreviewPainter extends CustomPainter {
   final Color gold;
   final Color gold2;
   final Color goldLight;
+  final Color cold;
   final Color trackColor;
 
   const _DefragPreviewPainter({
@@ -154,6 +160,7 @@ class _DefragPreviewPainter extends CustomPainter {
     required this.gold,
     required this.gold2,
     required this.goldLight,
+    required this.cold,
     required this.trackColor,
   });
 
@@ -195,8 +202,16 @@ class _DefragPreviewPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
+    const coreR = 15.0;
 
-    // ── 1. Frosted glass discs (depth) ───────────────────────────────────────
+    // Cold-side shard gradient stops — derived from the `cold` token
+    // (c.focusBreak) pulled toward the shared teal-rim constants, so the left
+    // half stays in the design-system palette while reading as a distinct cool
+    // hue against the warm gold right half.
+    final coldLight = Color.lerp(cold, kRimTealLight, 0.5)!;
+    final coldDark = Color.lerp(cold, kRimTealDark, 0.5)!;
+
+    // ── 1. Frosted glass discs (concentric depth) ───────────────────────────
     void disc(double rad, double fill, double stroke) {
       canvas.drawCircle(
           center, rad, Paint()..color = glass.withValues(alpha: fill));
@@ -210,8 +225,9 @@ class _DefragPreviewPainter extends CustomPainter {
       );
     }
 
-    disc(72, isLight ? 0.08 : 0.04, isLight ? 0.20 : 0.08);
-    disc(52, isLight ? 0.10 : 0.05, isLight ? 0.24 : 0.10);
+    disc(72, isLight ? 0.09 : 0.05, isLight ? 0.22 : 0.10);
+    disc(52, isLight ? 0.11 : 0.06, isLight ? 0.26 : 0.12);
+    disc(34, isLight ? 0.12 : 0.07, isLight ? 0.30 : 0.15);
 
     // ── 2. Outer radar tick ring — longer cardinal ticks ─────────────────────
     const ticks = 36;
@@ -232,13 +248,13 @@ class _DefragPreviewPainter extends CustomPainter {
       );
     }
 
-    // ── 3. Faint dotted orbital arcs (the ordered orbit + an outer guide) ────
+    // ── 3. Faint dotted orbital arcs (ordered orbit + inner + outer guide) ──
     _dottedCircle(
       canvas,
       center,
       _orbitR,
       Paint()
-        ..color = gold.withValues(alpha: isLight ? 0.30 : 0.22)
+        ..color = gold.withValues(alpha: isLight ? 0.32 : 0.24)
         ..strokeWidth = 1.4,
     );
     _dottedCircle(
@@ -246,20 +262,47 @@ class _DefragPreviewPainter extends CustomPainter {
       center,
       66,
       Paint()
-        ..color = trackColor.withValues(alpha: isLight ? 0.30 : 0.22)
+        ..color = trackColor.withValues(alpha: isLight ? 0.32 : 0.24)
         ..strokeWidth = 1.2,
       dots: 60,
     );
+    _dottedCircle(
+      canvas,
+      center,
+      38,
+      Paint()
+        ..color = gold.withValues(alpha: isLight ? 0.28 : 0.20)
+        ..strokeWidth = 1.1,
+      dots: 44,
+    );
 
-    // ── 4. Shards: scattered (dim frosted gold) → settled (bright warm gold) ─
+    // ── 3b. Quadrant axes — thin crosshair dividing the circle in four ──────
+    for (final a in [0.0, math.pi / 2, math.pi, -math.pi / 2]) {
+      final p1 = center + _dir(a) * (coreR + 4);
+      final p2 = center + _dir(a) * tickR;
+      canvas.drawLine(
+        p1,
+        p2,
+        Paint()
+          ..color = gold.withValues(alpha: isLight ? 0.20 : 0.15)
+          ..strokeWidth = 0.8,
+      );
+    }
+
+    // ── 4. Shards: scattered (dim frosted) → settled (bright) ───────────────
     // `ease` sharpens the settle so shards read as "snapping into order".
+    // Color split: warm gold on the right half (cos ≥ 0), cool teal on the left.
     final ep = p * p * (3 - 2 * p); // smoothstep
     for (final s in _shards) {
       final angle = s.scatterAngle * (1 - ep) + s.slotAngle + drift * 0.4;
       final radius = s.scatterRadius * (1 - ep) + s.slotRadius * ep;
       final pos = center + _dir(angle) * radius;
       final rotation = s.spin * (1 - ep);
-      // Brightness: dim frosted at scatter → rich warm gold at settle.
+      final warm = math.cos(s.slotAngle) >= 0;
+      final baseLight = warm ? goldLight : coldLight;
+      final baseMain = warm ? gold : cold;
+      final baseDeep = warm ? gold2 : coldDark;
+      // Brightness: dim frosted at scatter → rich at settle.
       final fillA = (isLight ? 0.22 : 0.18) + ep * (isLight ? 0.50 : 0.55);
       final strokeA = (isLight ? 0.40 : 0.34) + ep * (isLight ? 0.45 : 0.50);
 
@@ -278,15 +321,15 @@ class _DefragPreviewPainter extends CustomPainter {
       canvas.translate(pos.dx, pos.dy);
       canvas.rotate(rotation);
       final path = _shardPath(s.size);
-      // Frosted glass fill, warming with the gradient toward gold.
+      // Frosted fill — warm gold (right) or cool teal (left) gradient.
       final fillPaint = Paint()
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            goldLight.withValues(alpha: fillA * 0.7),
-            gold.withValues(alpha: fillA),
-            gold2.withValues(alpha: fillA),
+            baseLight.withValues(alpha: fillA * 0.7),
+            baseMain.withValues(alpha: fillA),
+            baseDeep.withValues(alpha: fillA),
           ],
         ).createShader(Rect.fromCircle(center: Offset.zero, radius: s.size * 1.6));
       canvas.drawPath(path, fillPaint);
@@ -295,7 +338,7 @@ class _DefragPreviewPainter extends CustomPainter {
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1
-          ..color = gold.withValues(alpha: strokeA),
+          ..color = baseMain.withValues(alpha: strokeA),
       );
       // Settled shards get a soft halo for the "ignited" look.
       if (ep > 0.6 && !isLight) {
@@ -303,7 +346,7 @@ class _DefragPreviewPainter extends CustomPainter {
           Offset.zero,
           s.size * 0.9,
           Paint()
-            ..color = gold.withValues(alpha: (ep - 0.6) * 0.6)
+            ..color = baseMain.withValues(alpha: (ep - 0.6) * 0.6)
             ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5),
         );
       }
@@ -320,7 +363,6 @@ class _DefragPreviewPainter extends CustomPainter {
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
     );
     // Core sphere — warm radial gradient (light centre → bronze edge).
-    const coreR = 15.0;
     canvas.drawCircle(
       center,
       coreR,
@@ -363,5 +405,6 @@ class _DefragPreviewPainter extends CustomPainter {
       old.gold != gold ||
       old.gold2 != gold2 ||
       old.goldLight != goldLight ||
+      old.cold != cold ||
       old.trackColor != trackColor;
 }

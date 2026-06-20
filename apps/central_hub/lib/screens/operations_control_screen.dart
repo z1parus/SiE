@@ -728,6 +728,9 @@ class _BranchCarouselCard extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: SieGlassCard(
+        glass: true,
+        radius: 20,
+        blurSigma: 12,
         padding: EdgeInsets.zero,
         onTap: onTap,
         child: Column(
@@ -1702,6 +1705,7 @@ class _DefragPreview extends ConsumerWidget {
       gold: c.accent,
       gold2: c.accentSecondary,
       goldLight: kRimLight,
+      cold: c.focusBreak,
       glass: c.glass,
       trackColor: c.border,
       isLight: c.isLightMode,

@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,6 +10,11 @@ import '../theme/sie_colors.dart';
 /// Interactive press feedback when [onTap] is non-null:
 ///   • Scale squeezes to 0.97 on tap-down.
 ///   • Returns to 1.0 with ease-out on release.
+///
+/// Set [glass] to true for the carousel-plaque look: a frosted-glass
+/// [BackdropFilter] blur over the background plus a thin neutral-glass rim with
+/// a soft outer glow (see [SieColors.glassPanel]). The flat default keeps the
+/// original surface+border card so existing callers are unchanged.
 class SieGlassCard extends ConsumerStatefulWidget {
   const SieGlassCard({
     super.key,
@@ -18,6 +25,8 @@ class SieGlassCard extends ConsumerStatefulWidget {
     this.height,
     this.onTap,
     this.blurSigma = 30.0,
+    this.glass = false,
+    this.radius = 16,
   });
 
   final Widget child;
@@ -27,6 +36,13 @@ class SieGlassCard extends ConsumerStatefulWidget {
   final double? height;
   final double blurSigma;
   final VoidCallback? onTap;
+
+  /// Frosted-glass plaque: translucent tinted fill over a backdrop blur, with a
+  /// thin glowing neutral-glass rim. Off by default to preserve the flat card.
+  final bool glass;
+
+  /// Corner radius of the card / glass plaque (16 flat, 20 glass recommended).
+  final double radius;
 
   @override
   ConsumerState<SieGlassCard> createState() => _SieGlassCardState();
@@ -64,18 +80,11 @@ class _SieGlassCardState extends ConsumerState<SieGlassCard>
   @override
   Widget build(BuildContext context) {
     final c = ref.watch(sieColorsProvider);
-    final decoration = c.flatCard();
+    final card = widget.glass
+        ? _buildGlass(c)
+        : _buildFlat(c, c.flatCard(radius: widget.radius));
 
-    if (widget.onTap == null) {
-      return Container(
-        width: widget.width,
-        height: widget.height,
-        margin: widget.margin,
-        padding: widget.padding ?? const EdgeInsets.all(16),
-        decoration: decoration,
-        child: widget.child,
-      );
-    }
+    if (widget.onTap == null) return card;
 
     return GestureDetector(
       onTap: widget.onTap,
@@ -86,16 +95,47 @@ class _SieGlassCardState extends ConsumerState<SieGlassCard>
         animation: _pressAnim,
         builder: (_, child) => Transform.scale(
           scale: 1.0 - 0.03 * _pressAnim.value,
+          child: child,
+        ),
+        child: card,
+      ),
+    );
+  }
+
+  Widget _buildFlat(SieColors c, BoxDecoration decoration) {
+    return Container(
+      width: widget.width,
+      height: widget.height,
+      margin: widget.margin,
+      padding: widget.padding ?? const EdgeInsets.all(16),
+      decoration: decoration,
+      child: widget.child,
+    );
+  }
+
+  /// Frosted-glass plaque: outer frame (thin glowing rim, drawn outside the
+  /// blur clip so the glow survives) wraps a clipped [BackdropFilter] with a
+  /// translucent tinted fill; the content sits sharp on top of the blur.
+  Widget _buildGlass(SieColors c) {
+    final palette = c.glassPanel(radius: widget.radius);
+    return Container(
+      width: widget.width,
+      height: widget.height,
+      margin: widget.margin,
+      decoration: palette.frame,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(widget.radius),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(
+            sigmaX: widget.blurSigma,
+            sigmaY: widget.blurSigma,
+          ),
           child: Container(
-            width: widget.width,
-            height: widget.height,
-            margin: widget.margin,
             padding: widget.padding ?? const EdgeInsets.all(16),
-            decoration: decoration,
-            child: child,
+            decoration: palette.fill,
+            child: widget.child,
           ),
         ),
-        child: widget.child,
       ),
     );
   }

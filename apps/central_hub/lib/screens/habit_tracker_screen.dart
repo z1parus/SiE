@@ -4055,6 +4055,9 @@ class _RoutineBlockState extends ConsumerState<_RoutineBlock> {
       onLongPress: _showLongPressMenu,
       child: SieGlassCard(
         height: 110,
+        glass: true,
+        radius: 20,
+        blurSigma: 12,
         padding: EdgeInsets.zero,
         child: Column(
           children: [
