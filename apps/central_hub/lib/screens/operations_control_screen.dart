@@ -699,10 +699,6 @@ class _BranchCarouselCard extends ConsumerWidget {
     switch (branch.slug) {
       case 'habit_archive':
         final habitsState = ref.watch(habitsProvider).valueOrNull;
-        final streak = habitsState == null || habitsState.streaks.isEmpty
-            ? 0
-            : habitsState.streaks.values.reduce(math.max);
-        if (streak > 0) return '🔥 $streak DAY STREAK';
         final count = habitsState?.habits.length ?? 0;
         return '$count Active';
       case 'focus_protocol':
@@ -968,11 +964,11 @@ class _PreviewShaderPainter extends CustomPainter {
       time != old.time || sphereSize != old.sphereSize || isDark != old.isDark;
 }
 
-/// Consistency heatmap preview: a GitHub-style contribution grid (7 weekday rows
-/// × 6 week columns, bottom-right = today) where each cell's gold intensity is
-/// that day's habit-completion ratio (done / scheduled), with a flame badge for
-/// the current best streak. Cells cascade in on appear, a faint shimmer sweeps
-/// the grid, and today's cell gently pulses.
+/// Glassmorphic "task complete" crystal preview for the habit module: layered
+/// frosted glass discs, a rotating orbital arrow (sync motif), a faceted
+/// translucent crystal with a glowing mint-green core, a bold white checkmark
+/// and three floating progress pills. Purely decorative; orbit + gentle float
+/// animate, and freeze under reduce-motion.
 class _HabitMatrixPreview extends ConsumerStatefulWidget {
   const _HabitMatrixPreview();
 
@@ -982,287 +978,316 @@ class _HabitMatrixPreview extends ConsumerStatefulWidget {
 }
 
 class _HabitMatrixPreviewState extends ConsumerState<_HabitMatrixPreview>
-    with TickerProviderStateMixin {
-  static const _rows = 7; // weekdays Mon..Sun
-  static const _cols = 6; // 6 weeks
-
-  late final AnimationController _intro; // one-shot cascade
-  late final AnimationController _loop;  // shimmer + today pulse
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
 
   @override
   void initState() {
     super.initState();
-    _intro = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1100),
-    );
-    _loop = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 6),
-    );
+    _ctrl =
+        AnimationController(vsync: this, duration: const Duration(seconds: 8));
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (SieMotion.enabled(context)) {
-      if (_intro.status == AnimationStatus.dismissed) _intro.forward();
-      if (!_loop.isAnimating) _loop.repeat();
+      if (!_ctrl.isAnimating) _ctrl.repeat();
     } else {
-      _intro.value = 1;
-      _loop.stop();
+      _ctrl.stop();
     }
   }
 
   @override
   void dispose() {
-    _intro.dispose();
-    _loop.dispose();
+    _ctrl.dispose();
     super.dispose();
-  }
-
-  /// Builds the [_rows]×[_cols] intensity grid (0..1), the today cell position
-  /// and the best current streak from live habit data.
-  ({List<double> cells, int todayRow, int todayCol, int streak}) _model(
-    HabitsState? s,
-  ) {
-    final cells = List<double>.filled(_rows * _cols, -1); // -1 = future/none
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final todayRow = today.weekday - 1; // Mon=0 .. Sun=6
-
-    String fmt(DateTime d) =>
-        '${d.year}-${d.month.toString().padLeft(2, '0')}-'
-        '${d.day.toString().padLeft(2, '0')}';
-
-    if (s != null && s.habits.isNotEmpty) {
-      for (var col = 0; col < _cols; col++) {
-        for (var row = 0; row < _rows; row++) {
-          final offset = (_cols - 1 - col) * 7 + (todayRow - row);
-          if (offset < 0) continue; // future cell — leave as -1
-          final d = today.subtract(Duration(days: offset));
-          final key = fmt(d);
-          var done = 0;
-          for (final h in s.habits) {
-            if (s.logDates[h.id]?.contains(key) ?? false) done++;
-          }
-          final scheduled = s.dueOn(d).length;
-          final intensity = scheduled > 0
-              ? (done / scheduled).clamp(0.0, 1.0)
-              : (done > 0 ? 1.0 : 0.0);
-          cells[row * _cols + col] = intensity;
-        }
-      }
-    } else {
-      // No habits — render an empty (but valid) past grid.
-      for (var col = 0; col < _cols; col++) {
-        for (var row = 0; row < _rows; row++) {
-          final offset = (_cols - 1 - col) * 7 + (todayRow - row);
-          if (offset >= 0) cells[row * _cols + col] = 0.0;
-        }
-      }
-    }
-
-    final streak = (s == null || s.streaks.isEmpty)
-        ? 0
-        : s.streaks.values.reduce(math.max);
-    return (cells: cells, todayRow: todayRow, todayCol: _cols - 1, streak: streak);
   }
 
   @override
   Widget build(BuildContext context) {
     final c = ref.watch(sieColorsProvider);
-    final s = ref.watch(habitsProvider).valueOrNull;
-    final m = _model(s);
-
+    final motion = SieMotion.enabled(context);
     return Center(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: AnimatedBuilder(
-                animation: Listenable.merge([_intro, _loop]),
-                builder: (_, _) => CustomPaint(
-                  painter: _HabitHeatmapPainter(
-                    cells: m.cells,
-                    rows: _rows,
-                    cols: _cols,
-                    todayRow: m.todayRow,
-                    todayCol: m.todayCol,
-                    intro: _intro.value,
-                    loop: _loop.value,
-                    accent: c.accent,
-                    track: c.border,
-                  ),
-                ),
+        padding: const EdgeInsets.all(6),
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: AnimatedBuilder(
+            animation: _ctrl,
+            builder: (_, _) => CustomPaint(
+              painter: _HabitCrystalPainter(
+                t: _ctrl.value,
+                motion: motion,
+                isLight: c.isLightMode,
               ),
             ),
-            if (m.streak > 0)
-              Positioned(
-                top: -6,
-                right: -8,
-                child: _FlameBadge(streak: m.streak, loop: _loop, c: c),
-              ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _FlameBadge extends StatelessWidget {
-  const _FlameBadge({required this.streak, required this.loop, required this.c});
+class _HabitCrystalPainter extends CustomPainter {
+  final double t;
+  final bool motion;
+  final bool isLight;
 
-  final int streak;
-  final Animation<double> loop;
-  final SieColors c;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: loop,
-      builder: (_, _) {
-        // Subtle flicker on the flame glyph.
-        final flick = 0.85 + 0.15 * math.sin(loop.value * 2 * math.pi * 3);
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-          decoration: BoxDecoration(
-            color: c.accent.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: c.accent.withValues(alpha: 0.40)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Opacity(
-                opacity: flick.clamp(0.0, 1.0),
-                child: Text('🔥', style: const TextStyle(fontSize: 11)),
-              ),
-              const SizedBox(width: 3),
-              Text(
-                '$streak',
-                style: TextStyle(
-                  color: c.accent,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _HabitHeatmapPainter extends CustomPainter {
-  final List<double> cells;
-  final int rows;
-  final int cols;
-  final int todayRow;
-  final int todayCol;
-  final double intro;
-  final double loop;
-  final Color accent;
-  final Color track;
-
-  const _HabitHeatmapPainter({
-    required this.cells,
-    required this.rows,
-    required this.cols,
-    required this.todayRow,
-    required this.todayCol,
-    required this.intro,
-    required this.loop,
-    required this.accent,
-    required this.track,
+  const _HabitCrystalPainter({
+    required this.t,
+    required this.motion,
+    required this.isLight,
   });
 
-  // Discrete heatmap levels → alpha.
-  static double _alphaFor(double intensity) {
-    if (intensity <= 0) return 0.0;
-    if (intensity < 0.34) return 0.35;
-    if (intensity < 0.67) return 0.55;
-    if (intensity < 1.0) return 0.78;
-    return 1.0;
+  static const _coreLight = Color(0xFFCDF3D6);
+  static const _coreMid   = Color(0xFF86D9A0);
+  static const _coreDeep  = Color(0xFF4FB07A);
+
+  static Offset _dir(double a) => Offset(math.cos(a), math.sin(a));
+
+  Path _poly(Offset c, double r, int n, double rot) {
+    final p = Path();
+    for (var k = 0; k < n; k++) {
+      final o = c + _dir(rot + k * 2 * math.pi / n) * r;
+      k == 0 ? p.moveTo(o.dx, o.dy) : p.lineTo(o.dx, o.dy);
+    }
+    return p..close();
   }
+
+  List<Offset> _verts(Offset c, double r, int n, double rot) =>
+      [for (var k = 0; k < n; k++) c + _dir(rot + k * 2 * math.pi / n) * r];
 
   @override
   void paint(Canvas canvas, Size size) {
-    const gap = 4.0;
-    final cellW = (size.width - gap * (cols - 1)) / cols;
-    final cellH = (size.height - gap * (rows - 1)) / rows;
-    final cell = math.min(cellW, cellH);
-    // Centre the grid within the available box.
-    final gridW = cell * cols + gap * (cols - 1);
-    final gridH = cell * rows + gap * (rows - 1);
-    final ox = (size.width - gridW) / 2;
-    final oy = (size.height - gridH) / 2;
-    final radius = Radius.circular(cell * 0.28);
-    final maxDiag = (rows - 1) + (cols - 1);
+    final center = size.center(Offset.zero);
+    final r = math.min(size.width, size.height) / 2;
+    final a = motion ? t * 2 * math.pi : 0.0;
+    final dy = motion ? math.sin(t * 2 * math.pi) * 2.0 : 0.0;
+    const white = Colors.white;
 
-    for (var row = 0; row < rows; row++) {
-      for (var col = 0; col < cols; col++) {
-        final v = cells[row * cols + col];
-        if (v < 0) continue; // future cell
+    // ── 1. Frosted glass discs (depth) ──────────────────────────────────────
+    void disc(double rad, double fill, double stroke) {
+      canvas.drawCircle(center, rad, Paint()..color = white.withValues(alpha: fill));
+      canvas.drawCircle(
+        center,
+        rad,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2
+          ..color = white.withValues(alpha: stroke),
+      );
+    }
 
-        // Cascade appearance: diagonal wave past → today.
-        final delay = ((row + col) / maxDiag) * 0.65;
-        final appear = ((intro - delay) / 0.35).clamp(0.0, 1.0);
-        if (appear <= 0) continue;
+    disc(r * 0.97, isLight ? 0.18 : 0.05, 0.10);
+    disc(r * 0.80, isLight ? 0.22 : 0.07, 0.13);
+    // Soft plate glow behind the crystal.
+    canvas.drawCircle(
+      center,
+      r * 0.60,
+      Paint()
+        ..color = white.withValues(alpha: isLight ? 0.30 : 0.09)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+    );
 
-        final left = ox + col * (cell + gap);
-        final top = oy + row * (cell + gap);
-        final scale = 0.6 + 0.4 * appear;
-        final inset = cell * (1 - scale) / 2;
-        final rect = RRect.fromRectAndRadius(
-          Rect.fromLTWH(left + inset, top + inset, cell * scale, cell * scale),
-          radius,
-        );
+    // ── 2. Orbital arrows (sync motif), rotating ────────────────────────────
+    _orbital(canvas, center, r * 0.92, -0.6 + a, 2.2, white.withValues(alpha: 0.65), r);
+    _dottedArc(canvas, center, r * 0.92, math.pi - 0.2 + a, 1.9,
+        white.withValues(alpha: 0.5), r);
 
-        var alpha = _alphaFor(v);
+    // ── group with gentle float ─────────────────────────────────────────────
+    final cc = center.translate(0, dy);
 
-        // Faint diagonal shimmer sweeping across the grid.
-        final diag = (row + col) / maxDiag;
-        final band = 1 - (((diag - loop) % 1.0).abs() * 3).clamp(0.0, 1.0);
-        final shimmer = band * 0.12;
+    // ── 3. Faceted crystal ──────────────────────────────────────────────────
+    _crystal(canvas, cc, r * 0.52, white);
 
-        // Today cell breathes.
-        final isToday = row == todayRow && col == todayCol;
-        final pulse =
-            isToday ? 0.18 * (0.5 + 0.5 * math.sin(loop * 2 * math.pi)) : 0.0;
+    // ── 4. Green core (glow + body) ─────────────────────────────────────────
+    final rc = r * 0.30;
+    final corePath = _poly(cc, rc, 6, -math.pi / 2);
+    canvas.drawPath(
+      corePath,
+      Paint()
+        ..color = _coreMid.withValues(alpha: 0.55)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+    );
+    canvas.drawPath(
+      corePath,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(-0.2, -0.4),
+          radius: 0.95,
+          colors: const [_coreLight, _coreMid, _coreDeep],
+          stops: const [0.0, 0.55, 1.0],
+        ).createShader(Rect.fromCircle(center: cc, radius: rc)),
+    );
+    // Glossy top highlight on the core.
+    canvas.drawPath(
+      corePath,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2
+        ..color = white.withValues(alpha: 0.45),
+    );
 
-        final paint = Paint();
-        if (alpha <= 0) {
-          paint.color = track.withValues(alpha: (0.45 + shimmer) * appear);
-        } else {
-          alpha = (alpha + shimmer + pulse).clamp(0.0, 1.0);
-          paint.color = accent.withValues(alpha: alpha * appear);
-        }
-        canvas.drawRRect(rect, paint);
+    // ── 5. Checkmark ────────────────────────────────────────────────────────
+    final check = Path()
+      ..moveTo(cc.dx - rc * 0.42, cc.dy + rc * 0.02)
+      ..lineTo(cc.dx - rc * 0.08, cc.dy + rc * 0.34)
+      ..lineTo(cc.dx + rc * 0.46, cc.dy - rc * 0.32);
+    canvas.drawPath(
+      check.shift(Offset(0, rc * 0.06)),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = rc * 0.22
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..color = _coreDeep.withValues(alpha: 0.45),
+    );
+    canvas.drawPath(
+      check,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = rc * 0.20
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..color = white,
+    );
 
-        if (isToday) {
-          canvas.drawRRect(
-            rect,
-            Paint()
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 1.2
-              ..color = accent.withValues(alpha: 0.85 * appear),
-          );
-        }
-      }
+    // ── 6. Floating progress pills (lower-right) ────────────────────────────
+    for (var i = 0; i < 3; i++) {
+      final bob = motion ? math.sin(t * 2 * math.pi + i * 0.9) * 1.5 : 0.0;
+      final pw = r * 0.20;
+      final ph = r * 0.05;
+      final px = cc.dx + r * 0.14 + i * r * 0.04;
+      final py = cc.dy + r * 0.30 + i * (ph + r * 0.03) + bob;
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(px, py, pw, ph),
+        Radius.circular(ph),
+      );
+      canvas.drawRRect(
+        rect,
+        Paint()
+          ..shader = const LinearGradient(
+            colors: [white, _coreMid],
+          ).createShader(rect.outerRect),
+      );
     }
   }
 
+  void _orbital(Canvas canvas, Offset c, double rad, double start, double sweep,
+      Color color, double r) {
+    final rect = Rect.fromCircle(center: c, radius: rad);
+    canvas.drawArc(
+      rect,
+      start,
+      sweep,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.2
+        ..strokeCap = StrokeCap.round
+        ..color = color,
+    );
+    // Arrowhead at the end, pointing along travel.
+    final endA = start + sweep;
+    final tip = c + _dir(endA) * rad;
+    final travel = Offset(-math.sin(endA), math.cos(endA)); // tangent (CW)
+    final s = r * 0.07;
+    Offset wing(double da) => Offset(
+          -travel.dx * math.cos(da) + travel.dy * math.sin(da),
+          -travel.dx * math.sin(da) - travel.dy * math.cos(da),
+        );
+    final p = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round
+      ..color = color;
+    canvas.drawLine(tip, tip + wing(0.5) * s, p);
+    canvas.drawLine(tip, tip + wing(-0.5) * s, p);
+  }
+
+  void _dottedArc(Canvas canvas, Offset c, double rad, double start,
+      double sweep, Color color, double r) {
+    const n = 16;
+    final p = Paint()..color = color;
+    for (var i = 0; i <= n; i++) {
+      final ang = start + sweep * i / n;
+      canvas.drawCircle(c + _dir(ang) * rad, 1.4, p);
+    }
+  }
+
+  void _crystal(Canvas canvas, Offset cc, double r, Color white) {
+    const rot = -math.pi / 2;
+    final outer = _verts(cc, r, 8, rot);
+    final inner = _verts(cc, r * 0.46, 8, rot);
+    final bounds = Rect.fromCircle(center: cc, radius: r);
+    final lightDir = _dir(-math.pi / 2 - 0.5);
+
+    // Base body fill.
+    canvas.drawPath(
+      _poly(cc, r, 8, rot),
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            white.withValues(alpha: 0.20),
+            white.withValues(alpha: 0.05),
+          ],
+        ).createShader(bounds),
+    );
+
+    // Side facets with directional shading.
+    for (var k = 0; k < 8; k++) {
+      final k2 = (k + 1) % 8;
+      final mid = (outer[k] + outer[k2]) / 2;
+      final normal = (mid - cc);
+      final nl = normal.distance == 0 ? 0.0 : normal.distance;
+      final nrm = nl == 0 ? Offset.zero : normal / nl;
+      final lf = ((nrm.dx * lightDir.dx + nrm.dy * lightDir.dy) + 1) / 2;
+      final facet = Path()
+        ..moveTo(outer[k].dx, outer[k].dy)
+        ..lineTo(outer[k2].dx, outer[k2].dy)
+        ..lineTo(inner[k2].dx, inner[k2].dy)
+        ..lineTo(inner[k].dx, inner[k].dy)
+        ..close();
+      canvas.drawPath(
+        facet,
+        Paint()..color = white.withValues(alpha: 0.04 + 0.16 * lf),
+      );
+    }
+
+    // Ridges from inner table to outer vertices.
+    final ridge = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = white.withValues(alpha: 0.16);
+    for (var k = 0; k < 8; k++) {
+      canvas.drawLine(inner[k], outer[k], ridge);
+    }
+
+    // Bright outer edges.
+    canvas.drawPath(
+      _poly(cc, r, 8, rot),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4
+        ..strokeJoin = StrokeJoin.round
+        ..color = white.withValues(alpha: 0.55),
+    );
+    // Extra highlight on the top-left edges.
+    final hl = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round
+      ..color = white.withValues(alpha: 0.85);
+    canvas.drawLine(outer[5], outer[6], hl);
+    canvas.drawLine(outer[6], outer[7], hl);
+  }
+
   @override
-  bool shouldRepaint(_HabitHeatmapPainter old) =>
-      old.intro != intro ||
-      old.loop != loop ||
-      old.cells != cells ||
-      old.accent != accent ||
-      old.track != track;
+  bool shouldRepaint(_HabitCrystalPainter old) =>
+      old.t != t || old.motion != motion || old.isLight != isLight;
 }
 
 /// Live focus-timer preview. Reflects the real [focusTimerProvider] state:
