@@ -43,6 +43,12 @@ class FocusWidgetData extends WidgetData {
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
+  /// While a session is actively running the numeric time is rendered by a live
+  /// native `Chronometer` overlaid on the PNG, so the PNG itself leaves the time
+  /// slot blank (otherwise a frozen number would show beneath the ticking one).
+  bool get hideStaticTime =>
+      isRunning && phase != FocusWidgetPhase.idle && secondsRemaining > 0;
+
   @override
   String get signature =>
       '${phase.name}:$secondsRemaining:$totalSecs:$completedToday:$isRunning';
@@ -126,6 +132,18 @@ class FocusWidgetProvider extends ModuleWidgetProvider<FocusWidgetData> {
       const [];
 
   @override
+  Map<String, String> nativeExtras(
+      WidgetRenderContext ctx, WidgetConfig cfg, FocusWidgetData data) {
+    if (!data.hideStaticTime) return const {'chrono': ''};
+    // Wall-clock instant the current phase ends; the native side converts this
+    // to the Chronometer's elapsed-realtime base and counts down to it.
+    final endMs =
+        DateTime.now().millisecondsSinceEpoch + data.secondsRemaining * 1000;
+    final color = ctx.colors.textPrimary.toARGB32();
+    return {'chrono': '$endMs|$color'};
+  }
+
+  @override
   Widget render(
       WidgetRenderContext ctx, WidgetConfig cfg, FocusWidgetData data) {
     return switch (cfg.sizeBucket) {
@@ -183,15 +201,19 @@ class _SmallFocusWidget extends StatelessWidget {
               child: Center(
                 child: data.phase == FocusWidgetPhase.idle
                     ? Icon(Icons.timer_outlined, color: c.iconMuted, size: 28)
-                    : Text(
-                        data.formattedTime,
-                        style: TextStyle(
-                          color: c.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                      ),
+                    : data.hideStaticTime
+                        ? const SizedBox(height: 20)
+                        : Text(
+                            data.formattedTime,
+                            style: TextStyle(
+                              color: c.textPrimary,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures()
+                              ],
+                            ),
+                          ),
               ),
             ),
           ),
@@ -243,20 +265,24 @@ class _MediumFocusWidget extends StatelessWidget {
               child: Center(
                 child: data.phase == FocusWidgetPhase.idle
                     ? Icon(Icons.timer_outlined, color: c.iconMuted, size: 32)
-                    : Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            data.formattedTime,
-                            style: TextStyle(
-                              color: c.textPrimary,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              fontFeatures: const [FontFeature.tabularFigures()],
-                            ),
+                    : data.hideStaticTime
+                        ? const SizedBox(height: 22)
+                        : Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                data.formattedTime,
+                                style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures()
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
               ),
             ),
           ),
@@ -405,17 +431,20 @@ class _LargeFocusWidget extends StatelessWidget {
                       : Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              data.formattedTime,
-                              style: TextStyle(
-                                color: c.textPrimary,
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                fontFeatures: const [
-                                  FontFeature.tabularFigures()
-                                ],
+                            if (data.hideStaticTime)
+                              const SizedBox(height: 34)
+                            else
+                              Text(
+                                data.formattedTime,
+                                style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures()
+                                  ],
+                                ),
                               ),
-                            ),
                             Text(
                               _phaseLabel(data.phase),
                               style: TextStyle(

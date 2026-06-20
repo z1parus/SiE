@@ -83,5 +83,13 @@ abstract class ModuleWidgetProvider<T extends WidgetData> {
   /// the visual top-to-bottom row order. Empty = whole-widget deep-link only.
   List<WidgetTapZone> tapZones(WidgetConfig cfg, T data) => const [];
 
+  /// Extra per-instance values persisted to home-widget storage for the native
+  /// layer to consume (keyed `widget_<k>_<appWidgetId>`). Used for live native
+  /// overlays that the static PNG cannot express — e.g. the Focus widget's
+  /// ticking `Chronometer`. Default: nothing.
+  Map<String, String> nativeExtras(
+          WidgetRenderContext ctx, WidgetConfig cfg, T data) =>
+      const {};
+
   T sampleData(WidgetSizeBucket size);
 }

@@ -30,6 +30,19 @@ class WidgetRenderService {
         'widget_zones_$appWidgetId',
         jsonEncode(zones.map((z) => z.toMap()).toList()));
 
+    // Size bucket lets the native layer pick the matching layout (and so the
+    // correct position for live overlays like the Focus chronometer).
+    await HomeWidget.saveWidgetData(
+        'widget_size_$appWidgetId', cfg.sizeBucket.name);
+
+    // Live native overlays (e.g. ticking Focus timer). Always written — an
+    // empty value tells the native side to hide the overlay.
+    final extras = provider.nativeExtras(ctx, cfg, data);
+    for (final entry in extras.entries) {
+      await HomeWidget.saveWidgetData(
+          'widget_${entry.key}_$appWidgetId', entry.value);
+    }
+
     final sig = '${cfg.signature}:${data.signature}:${ctx.colors.mode.name}';
     final prevSig =
         await HomeWidget.getWidgetData<String>('$_sigKey$appWidgetId');
