@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Placeholder shown until the first PNG render lands. -->
+    <TextView
+        android:id="@+id/widget_placeholder"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/widget_bg"
+        android:gravity="center"
+        android:text="SiE · Привычки"
+        android:textColor="#888898"
+        android:textSize="13sp" />
+
+    <ImageView
+        android:id="@+id/widget_image"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:contentDescription="Привычки" />
+
+    <!-- Small size is a single ring → no per-row zones. The container must still
+         exist (the provider clears it on every update); kept empty so taps fall
+         through to the whole-widget deep-link on the image. -->
+    <LinearLayout
+        android:id="@+id/widget_actions"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical" />
+</FrameLayout>

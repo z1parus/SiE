@@ -52,36 +52,36 @@ Future<void> provisionInstalledWidgets() async {
     if (id == null) continue;
     if (await WidgetConfigStore.load(id) != null) continue;
 
-    final moduleId = _moduleForAndroidClass(info.androidClassName);
-    if (moduleId == null) continue;
-
-    final provider = WidgetRegistry.instance.get(moduleId);
-    final defaultSize = provider != null &&
-            provider.supportedSizes.contains(WidgetSizeBucket.medium)
-        ? WidgetSizeBucket.medium
-        : (provider?.supportedSizes.first ?? WidgetSizeBucket.medium);
+    // The placed widget's class tells us both module and size — each size is a
+    // distinct system widget — so we seed the config with the exact size.
+    final match = _moduleAndSizeForClass(info.androidClassName);
+    if (match == null) continue;
 
     await WidgetConfigStore.save(WidgetConfig(
       appWidgetId: id,
-      moduleId: moduleId,
-      sizeBucket: defaultSize,
+      moduleId: match.moduleId,
+      sizeBucket: match.size,
     ));
   }
 }
 
-String? _moduleForAndroidClass(String? className) {
+/// Resolves a launcher-placed widget's Android class name to its module id and
+/// size bucket. Returns null for classes that aren't SiE widgets.
+({String moduleId, WidgetSizeBucket size})? _moduleAndSizeForClass(
+    String? className) {
   if (className == null) return null;
   for (final provider in WidgetRegistry.instance.all) {
-    if (className.endsWith(provider.androidProviderClass)) {
-      return provider.moduleId;
+    for (final entry in provider.androidProviderClasses.entries) {
+      if (className.endsWith(entry.value)) {
+        return (moduleId: provider.moduleId, size: entry.key);
+      }
     }
   }
   return null;
 }
 
 /// Interactivity entry point — called by `home_widget` when a widget tap-zone
-/// is pressed or a resize event fires (registered via
-/// `HomeWidget.registerInteractivityCallback`).
+/// is pressed (registered via `HomeWidget.registerInteractivityCallback`).
 /// Runs the quick-action fully offline and re-renders the widget.
 @pragma('vm:entry-point')
 Future<void> widgetInteractivityCallback(Uri? uri) async {
@@ -89,12 +89,6 @@ Future<void> widgetInteractivityCallback(Uri? uri) async {
   registerHomeWidgets();
   final db = AppDatabase();
   try {
-    // Resize event: native saved new dimensions → re-render at actual size.
-    if (uri != null && uri.scheme == 'sie' && uri.host == 'resize') {
-      final id = int.tryParse(uri.queryParameters['widgetId'] ?? '');
-      if (id != null) await WidgetRenderService.refresh(id, db);
-      return;
-    }
     await WidgetActionRouter.run(uri, db);
   } finally {
     await db.close();

@@ -63,7 +63,11 @@ class FocusWidgetProvider extends ModuleWidgetProvider<FocusWidgetData> {
   @override
   IconData get glyph => Icons.timer_outlined;
   @override
-  String get androidProviderClass => 'FocusWidgetProvider';
+  Map<WidgetSizeBucket, String> get androidProviderClasses => const {
+        WidgetSizeBucket.small: 'FocusSmallWidgetProvider',
+        WidgetSizeBucket.medium: 'FocusMediumWidgetProvider',
+        WidgetSizeBucket.large: 'FocusLargeWidgetProvider',
+      };
   @override
   List<WidgetSizeBucket> get supportedSizes =>
       const [WidgetSizeBucket.small, WidgetSizeBucket.medium, WidgetSizeBucket.large];

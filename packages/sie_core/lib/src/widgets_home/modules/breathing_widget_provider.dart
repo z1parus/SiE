@@ -64,7 +64,11 @@ class BreathingWidgetProvider extends ModuleWidgetProvider<BreathingWidgetData> 
   @override
   IconData get glyph => Icons.air;
   @override
-  String get androidProviderClass => 'BreathingWidgetProvider';
+  Map<WidgetSizeBucket, String> get androidProviderClasses => const {
+        WidgetSizeBucket.small: 'BreathingSmallWidgetProvider',
+        WidgetSizeBucket.medium: 'BreathingMediumWidgetProvider',
+        WidgetSizeBucket.large: 'BreathingLargeWidgetProvider',
+      };
   @override
   List<WidgetSizeBucket> get supportedSizes => const [
         WidgetSizeBucket.small,

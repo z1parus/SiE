@@ -117,19 +117,10 @@ class _WidgetStudioScreenState extends ConsumerState<WidgetStudioScreen> {
                 _PreviewSection(cfg: _cfg, provider: provider, c: c),
                 const SizedBox(height: 24),
 
-                // ── Size picker ───────────────────────────────────────────────
+                // ── Size (fixed by the placed widget) ─────────────────────────
                 _SectionHeader(label: 'Размер', c: c),
                 const SizedBox(height: 8),
-                _SizePicker(
-                  current: _cfg.sizeBucket,
-                  supported: provider.supportedSizes,
-                  c: c,
-                  onChanged: (size) {
-                    _update(_cfg.copyWith(sizeBucket: size));
-                    // Some option schemas vary by size — refresh them.
-                    _loadSpecs();
-                  },
-                ),
+                _SizeInfo(current: _cfg.sizeBucket, c: c),
                 const SizedBox(height: 20),
 
                 // ── Theme picker ──────────────────────────────────────────────
@@ -290,71 +281,51 @@ class _PreviewSection extends StatelessWidget {
   }
 }
 
-// ── Size picker ───────────────────────────────────────────────────────────────
+// ── Size info (read-only) ───────────────────────────────────────────────────
+//
+// Each size is its own system widget, so the size is fixed when the widget is
+// placed from the launcher — it can't be changed in-app. We show it for context
+// and explain how to switch sizes.
 
-class _SizePicker extends StatelessWidget {
+class _SizeInfo extends StatelessWidget {
   final WidgetSizeBucket current;
-  final List<WidgetSizeBucket> supported;
   final SieColors c;
-  final ValueChanged<WidgetSizeBucket> onChanged;
 
-  const _SizePicker({
-    required this.current,
-    required this.supported,
-    required this.c,
-    required this.onChanged,
-  });
+  const _SizeInfo({required this.current, required this.c});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: WidgetSizeBucket.values
-          .where((s) => supported.contains(s))
-          .map((s) {
-        final selected = s == current;
-        return Expanded(
-          child: GestureDetector(
-            onTap: () => onChanged(s),
-            child: Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                color: selected ? c.accent.withValues(alpha: 0.15) : c.surface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: selected ? c.accent : c.border,
-                  width: selected ? 1.5 : 1,
-                ),
-              ),
-              child: Column(
-                children: [
-                  Icon(
-                    s == WidgetSizeBucket.small
-                        ? Icons.crop_square
-                        : s == WidgetSizeBucket.medium
-                            ? Icons.crop_landscape
-                            : Icons.crop_din,
-                    color: selected ? c.accent : c.textSecondary,
-                    size: 18,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    s == WidgetSizeBucket.small
-                        ? 'Малый'
-                        : s == WidgetSizeBucket.medium
-                            ? 'Средний'
-                            : 'Большой',
-                    style: TextStyle(
-                      color: selected ? c.accent : c.textSecondary,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
+    final (icon, label) = switch (current) {
+      WidgetSizeBucket.small => (Icons.crop_square, 'Малый'),
+      WidgetSizeBucket.medium => (Icons.crop_landscape, 'Средний'),
+      WidgetSizeBucket.large => (Icons.crop_din, 'Большой'),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.border),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: c.accent, size: 20),
+          const SizedBox(width: 10),
+          Text(label,
+              style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Чтобы сменить размер — удалите виджет и добавьте нужный',
+              style: TextStyle(color: c.textSecondary, fontSize: 11, height: 1.3),
+              textAlign: TextAlign.right,
             ),
           ),
-        );
-      }).toList(),
+        ],
+      ),
     );
   }
 }

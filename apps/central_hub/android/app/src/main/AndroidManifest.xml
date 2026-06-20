@@ -50,56 +50,63 @@
             </intent-filter>
         </receiver>
 
-        <!-- home_widget: HabitsWidgetProvider -->
-        <receiver
-            android:name=".HabitsWidgetProvider"
-            android:exported="true"
-            android:label="Привычки">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/widget_habits_info" />
+        <!-- home_widget: per-size receivers. Each size is its own system widget
+             so the launcher locks the cell and the PNG never has to stretch. -->
+
+        <!-- Привычки -->
+        <receiver android:name=".HabitsSmallWidgetProvider" android:exported="true" android:label="Привычки · Малый">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_habits_small_info" />
+        </receiver>
+        <receiver android:name=".HabitsMediumWidgetProvider" android:exported="true" android:label="Привычки · Средний">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_habits_medium_info" />
+        </receiver>
+        <receiver android:name=".HabitsLargeWidgetProvider" android:exported="true" android:label="Привычки · Большой">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_habits_large_info" />
         </receiver>
 
-        <!-- home_widget: FocusWidgetProvider -->
-        <receiver
-            android:name=".FocusWidgetProvider"
-            android:exported="true"
-            android:label="Фокус">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/widget_focus_info" />
+        <!-- Фокус -->
+        <receiver android:name=".FocusSmallWidgetProvider" android:exported="true" android:label="Фокус · Малый">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_focus_small_info" />
+        </receiver>
+        <receiver android:name=".FocusMediumWidgetProvider" android:exported="true" android:label="Фокус · Средний">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_focus_medium_info" />
+        </receiver>
+        <receiver android:name=".FocusLargeWidgetProvider" android:exported="true" android:label="Фокус · Большой">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_focus_large_info" />
         </receiver>
 
-        <!-- home_widget: PlanningWidgetProvider -->
-        <receiver
-            android:name=".PlanningWidgetProvider"
-            android:exported="true"
-            android:label="Планирование">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/widget_planning_info" />
+        <!-- Планирование -->
+        <receiver android:name=".PlanningSmallWidgetProvider" android:exported="true" android:label="Планирование · Малый">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_planning_small_info" />
+        </receiver>
+        <receiver android:name=".PlanningMediumWidgetProvider" android:exported="true" android:label="Планирование · Средний">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_planning_medium_info" />
+        </receiver>
+        <receiver android:name=".PlanningLargeWidgetProvider" android:exported="true" android:label="Планирование · Большой">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_planning_large_info" />
         </receiver>
 
-        <!-- home_widget: BreathingWidgetProvider -->
-        <receiver
-            android:name=".BreathingWidgetProvider"
-            android:exported="true"
-            android:label="Дыхание">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/widget_breathing_info" />
+        <!-- Дыхание -->
+        <receiver android:name=".BreathingSmallWidgetProvider" android:exported="true" android:label="Дыхание · Малый">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_breathing_small_info" />
+        </receiver>
+        <receiver android:name=".BreathingMediumWidgetProvider" android:exported="true" android:label="Дыхание · Средний">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_breathing_medium_info" />
+        </receiver>
+        <receiver android:name=".BreathingLargeWidgetProvider" android:exported="true" android:label="Дыхание · Большой">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_breathing_large_info" />
         </receiver>
 
         <!-- home_widget: background quick-action receiver + service -->

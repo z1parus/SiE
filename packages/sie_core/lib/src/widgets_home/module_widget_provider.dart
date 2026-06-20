@@ -52,10 +52,17 @@ abstract class ModuleWidgetProvider<T extends WidgetData> {
   IconData get glyph;
   List<WidgetSizeBucket> get supportedSizes;
 
-  /// Android `AppWidgetProvider` subclass simple name (e.g.
-  /// `'HabitsWidgetProvider'`). Used to map a launcher-placed widget instance
-  /// back to its module when auto-provisioning a default config.
-  String get androidProviderClass;
+  /// Android `AppWidgetProvider` subclass simple names, one per supported size
+  /// (e.g. `{small: 'HabitsSmallWidgetProvider', ...}`). Each size is a distinct
+  /// system widget so the launcher locks its cell and the rendered PNG never has
+  /// to stretch across aspect ratios. Used to (a) target the right receiver when
+  /// refreshing and (b) map a launcher-placed instance back to its module+size.
+  Map<WidgetSizeBucket, String> get androidProviderClasses;
+
+  /// The Android provider class for a given size, falling back to the first
+  /// declared class if a size somehow has no dedicated provider.
+  String androidProviderClassFor(WidgetSizeBucket size) =>
+      androidProviderClasses[size] ?? androidProviderClasses.values.first;
 
   /// Deep-link host used when the whole widget is tapped:
   /// `sie://widget/<deepLinkHost>`.

@@ -44,17 +44,15 @@ class _MyWidgetsScreenState extends ConsumerState<MyWidgetsScreen> {
       for (final info in installed) {
         final id = info.androidWidgetId;
         if (id == null) continue;
-        final provider = _providerForClass(info.androidClassName);
-        if (provider == null) continue;
+        final match = _providerAndSizeForClass(info.androidClassName);
+        if (match == null) continue;
         final cfg = await WidgetConfigStore.load(id) ??
             WidgetConfig(
               appWidgetId: id,
-              moduleId: provider.moduleId,
-              sizeBucket: provider.supportedSizes.contains(WidgetSizeBucket.medium)
-                  ? WidgetSizeBucket.medium
-                  : provider.supportedSizes.first,
+              moduleId: match.provider.moduleId,
+              sizeBucket: match.size,
             );
-        entries.add(_WidgetEntry(id, provider, cfg));
+        entries.add(_WidgetEntry(id, match.provider, cfg));
       }
     } catch (_) {
       // Leave the list empty on failure; the empty state explains next steps.
@@ -66,10 +64,15 @@ class _MyWidgetsScreenState extends ConsumerState<MyWidgetsScreen> {
     });
   }
 
-  ModuleWidgetProvider? _providerForClass(String? className) {
+  ({ModuleWidgetProvider provider, WidgetSizeBucket size})?
+      _providerAndSizeForClass(String? className) {
     if (className == null) return null;
     for (final p in WidgetRegistry.instance.all) {
-      if (className.endsWith(p.androidProviderClass)) return p;
+      for (final entry in p.androidProviderClasses.entries) {
+        if (className.endsWith(entry.value)) {
+          return (provider: p, size: entry.key);
+        }
+      }
     }
     return null;
   }

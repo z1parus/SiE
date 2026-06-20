@@ -77,7 +77,11 @@ class PlanningWidgetProvider extends ModuleWidgetProvider<PlanningWidgetData> {
   @override
   IconData get glyph => Icons.flag_outlined;
   @override
-  String get androidProviderClass => 'PlanningWidgetProvider';
+  Map<WidgetSizeBucket, String> get androidProviderClasses => const {
+        WidgetSizeBucket.small: 'PlanningSmallWidgetProvider',
+        WidgetSizeBucket.medium: 'PlanningMediumWidgetProvider',
+        WidgetSizeBucket.large: 'PlanningLargeWidgetProvider',
+      };
   @override
   List<WidgetSizeBucket> get supportedSizes => const [
         WidgetSizeBucket.small,

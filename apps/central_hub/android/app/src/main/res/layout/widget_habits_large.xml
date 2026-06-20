@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Placeholder shown until the first PNG render lands. -->
+    <TextView
+        android:id="@+id/widget_placeholder"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/widget_bg"
+        android:gravity="center"
+        android:text="SiE · Привычки"
+        android:textColor="#888898"
+        android:textSize="13sp" />
+
+    <ImageView
+        android:id="@+id/widget_image"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:contentDescription="Привычки" />
+
+    <!-- Tap-zone overlay. Vertical weights mirror the large render's
+         fraction-locked regions (top 72 / checklist 220 / bottom 28 of 320),
+         so zones align with the rows 1:1 regardless of fitXY stretch. The
+         checklist band is full-width (no side ring in the large layout). -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="72" />
+
+        <LinearLayout
+            android:id="@+id/widget_actions"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="220"
+            android:orientation="vertical" />
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="28" />
+    </LinearLayout>
+</FrameLayout>
