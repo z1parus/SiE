@@ -1061,73 +1061,228 @@ class _FocusRingPreview extends ConsumerWidget {
   }
 }
 
-class _PlanningPreview extends StatelessWidget {
+/// Mission-progress preview: one rotating ring per active goal. Each ring's
+/// arc length encodes that goal's real progress and its colour is the goal's
+/// own colour. The rings spin clockwise "like clock hands" but at staggered
+/// speeds (2 / 3 / 5 turns per loop) so they never move in sync. The centre
+/// shows the average progress across the displayed missions.
+class _PlanningPreview extends ConsumerStatefulWidget {
   const _PlanningPreview();
 
   @override
+  ConsumerState<_PlanningPreview> createState() => _PlanningPreviewState();
+}
+
+class _PlanningPreviewState extends ConsumerState<_PlanningPreview>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  // Per-ring geometry and motion. Revolutions per loop are distinct and
+  // coprime so the composite motion looks chaotic yet loops seamlessly.
+  static const _radii  = [26.0, 42.0, 58.0];
+  static const _stroke = [5.0, 4.5, 4.0];
+  static const _revs   = [2.0, 3.0, 5.0];
+  static const _phase  = [0.0, 2.1, 4.0];
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 20),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (SieMotion.enabled(context)) {
+      if (!_ctrl.isAnimating) _ctrl.repeat();
+    } else {
+      _ctrl.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _PlanningPreviewPainter(),
+    final c = ref.watch(sieColorsProvider);
+    final goals = ref.watch(
+      planningProvider.select(
+        (s) => s.valueOrNull?.activeGoals ?? const <Goal>[],
+      ),
+    );
+
+    final shown = goals.take(3).toList();
+    final rings = List.generate(3, (i) {
+      final goal = i < shown.length ? shown[i] : null;
+      return _PlanRing(
+        radius: _radii[i],
+        stroke: _stroke[i],
+        revs: _revs[i],
+        phase: _phase[i],
+        color: goal?.color ?? c.accent,
+        progress: goal == null
+            ? null
+            : (goalProgress(goal) / 100.0).clamp(0.0, 1.0),
+      );
+    });
+
+    final avg = shown.isEmpty
+        ? null
+        : (shown.map(goalProgress).reduce((a, b) => a + b) / shown.length)
+            .round();
+
+    return Center(
+      child: SizedBox(
+        width: 140,
+        height: 140,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            AnimatedBuilder(
+              animation: _ctrl,
+              builder: (_, _) => CustomPaint(
+                size: const Size(140, 140),
+                painter: _PlanningPreviewPainter(
+                  rings: rings,
+                  t: _ctrl.value,
+                  trackColor: c.border,
+                  tickColor: c.accent.withValues(alpha: 0.30),
+                  glow: !c.isLightMode,
+                ),
+              ),
+            ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  avg == null ? '—' : '$avg%',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1,
+                    height: 1,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'PROGRESS',
+                  style: TextStyle(
+                    color: c.iconMuted,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 2.5,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
+class _PlanRing {
+  final double radius;
+  final double stroke;
+  final double revs;
+  final double phase;
+  final Color color;
+
+  /// Real goal progress 0..1, or null when no goal occupies this ring.
+  final double? progress;
+
+  const _PlanRing({
+    required this.radius,
+    required this.stroke,
+    required this.revs,
+    required this.phase,
+    required this.color,
+    required this.progress,
+  });
+}
+
 class _PlanningPreviewPainter extends CustomPainter {
-  static const _teal = Color(0xFF5AADA0);
+  final List<_PlanRing> rings;
+  final double t;
+  final Color trackColor;
+  final Color tickColor;
+  final bool glow;
+
+  const _PlanningPreviewPainter({
+    required this.rings,
+    required this.t,
+    required this.trackColor,
+    required this.tickColor,
+    required this.glow,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    final center = Offset(cx, cy);
+    final center = size.center(Offset.zero);
 
-    // Concentric arc rings
-    final rings = [
-      (28.0, 0.75, 0.9),
-      (44.0, 0.45, 0.6),
-      (60.0, 0.25, 0.35),
-    ];
+    for (final ring in rings) {
+      final rect = Rect.fromCircle(center: center, radius: ring.radius);
 
-    for (final (r, fill, alpha) in rings) {
-      final trackPaint = Paint()
-        ..color = _teal.withValues(alpha: 0.12)
-        ..strokeWidth = 5
-        ..style = PaintingStyle.stroke;
+      // Faint full-circle track.
+      canvas.drawArc(
+        rect,
+        0,
+        math.pi * 2,
+        false,
+        Paint()
+          ..color = trackColor.withValues(alpha: 0.45)
+          ..strokeWidth = ring.stroke
+          ..style = PaintingStyle.stroke,
+      );
+
+      // Clockwise rotation, staggered per ring → "clock hands" out of sync.
+      final start = -math.pi / 2 + ring.phase + 2 * math.pi * ring.revs * t;
+
+      if (ring.progress == null) {
+        // Empty ring — a small accent tick keeps it alive.
+        canvas.drawArc(
+          rect,
+          start,
+          0.05 * 2 * math.pi,
+          false,
+          Paint()
+            ..color = tickColor
+            ..strokeWidth = ring.stroke
+            ..style = PaintingStyle.stroke
+            ..strokeCap = StrokeCap.round,
+        );
+        continue;
+      }
+
+      final sweep = math.max(ring.progress!, 0.05) * 2 * math.pi;
       final arcPaint = Paint()
-        ..color = _teal.withValues(alpha: alpha)
-        ..strokeWidth = 5
+        ..color = ring.color
+        ..strokeWidth = ring.stroke
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round;
-
-      final rect = Rect.fromCircle(center: center, radius: r);
-      canvas.drawArc(rect, 0, math.pi * 2, false, trackPaint);
-      canvas.drawArc(
-          rect, -math.pi / 2, math.pi * 2 * fill, false, arcPaint);
-    }
-
-    // Node dots at corners
-    final dotPaint = Paint()
-      ..color = _teal.withValues(alpha: 0.5)
-      ..style = PaintingStyle.fill;
-    final linePaint = Paint()
-      ..color = _teal.withValues(alpha: 0.2)
-      ..strokeWidth = 1;
-
-    final nodes = [
-      Offset(cx - 68, cy - 40),
-      Offset(cx + 68, cy - 40),
-      Offset(cx - 60, cy + 50),
-      Offset(cx + 60, cy + 50),
-    ];
-
-    for (final n in nodes) {
-      canvas.drawLine(center, n, linePaint);
-      canvas.drawCircle(n, 3.5, dotPaint);
+      if (glow) {
+        arcPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+      }
+      canvas.drawArc(rect, start, sweep, false, arcPaint);
     }
   }
 
   @override
-  bool shouldRepaint(_PlanningPreviewPainter _) => false;
+  bool shouldRepaint(_PlanningPreviewPainter old) =>
+      old.t != t ||
+      old.rings != rings ||
+      old.trackColor != trackColor ||
+      old.tickColor != tickColor ||
+      old.glow != glow;
 }
 
 /// Meditation module preview — a calm teal orb that slowly breathes while
