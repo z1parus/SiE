@@ -5,10 +5,11 @@ import 'package:flutter/material.dart';
 /// Tangled-orbit countdown visual shared by the focus preview card and the full
 /// focus timer screen.
 ///
-/// A knot of translucent gold orbit rings with glowing dotted tracks. A leading
-/// arrow travels clockwise along the route once over the whole session (so a
-/// 1-minute timer completes the loop in a minute, an hour timer in an hour),
-/// and the remaining time floats in the centre with a soft drop shadow.
+/// The form is a SINGLE continuous interwoven line (one ribbon wound a few times
+/// at slowly rotating angles, so it reads as several interlocking rings). A
+/// leading arrow travels that line clockwise once over the whole session (a
+/// 1-minute timer completes the route in a minute, an hour timer in an hour),
+/// trailing a comet of glowing dots. The remaining time floats in the centre.
 class FocusOrbitTimer extends StatefulWidget {
   const FocusOrbitTimer({
     super.key,
@@ -17,6 +18,7 @@ class FocusOrbitTimer extends StatefulWidget {
     required this.gold,
     required this.gold2,
     required this.glass,
+    this.subLabel,
     this.progress = 0.0,
     this.demo = false,
     this.motion = true,
@@ -28,6 +30,9 @@ class FocusOrbitTimer extends StatefulWidget {
 
   /// Centre readout (remaining time / configured minutes).
   final String timeText;
+
+  /// Small caption under the readout (e.g. "Min").
+  final String? subLabel;
 
   /// Primary tube colour and its lighter companion (app gold gradient).
   final Color gold;
@@ -52,29 +57,20 @@ class FocusOrbitTimer extends StatefulWidget {
 }
 
 class _FocusOrbitTimerState extends State<FocusOrbitTimer>
-    with TickerProviderStateMixin {
-  late final AnimationController _flow; // dotted-track shimmer
+    with SingleTickerProviderStateMixin {
   late final AnimationController _demo; // preview arrow loop
 
   @override
   void initState() {
     super.initState();
-    _flow =
-        AnimationController(vsync: this, duration: const Duration(seconds: 5));
     _demo =
         AnimationController(vsync: this, duration: const Duration(seconds: 12));
   }
 
   void _sync() {
-    if (widget.motion) {
-      if (!_flow.isAnimating) _flow.repeat();
-      if (widget.demo) {
-        if (!_demo.isAnimating) _demo.repeat();
-      } else {
-        _demo.stop();
-      }
+    if (widget.motion && widget.demo) {
+      if (!_demo.isAnimating) _demo.repeat();
     } else {
-      _flow.stop();
       _demo.stop();
     }
   }
@@ -93,7 +89,6 @@ class _FocusOrbitTimerState extends State<FocusOrbitTimer>
 
   @override
   void dispose() {
-    _flow.dispose();
     _demo.dispose();
     super.dispose();
   }
@@ -115,13 +110,12 @@ class _FocusOrbitTimerState extends State<FocusOrbitTimer>
             curve: Curves.linear,
             builder: (_, liveP, _) {
               return AnimatedBuilder(
-                animation: Listenable.merge([_flow, _demo]),
+                animation: _demo,
                 builder: (_, _) {
                   final arrowP = widget.demo ? _demo.value : liveP;
                   return CustomPaint(
                     size: Size(widget.size, widget.size),
                     painter: _OrbitPainter(
-                      flow: _flow.value,
                       arrowP: arrowP,
                       gold: widget.gold,
                       gold2: widget.gold2,
@@ -133,29 +127,47 @@ class _FocusOrbitTimerState extends State<FocusOrbitTimer>
               );
             },
           ),
-          // Floating centre readout.
-          Text(
-            widget.timeText,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: widget.centerFontSize,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.5,
-              height: 1.0,
-              fontFeatures: const [FontFeature.tabularFigures()],
-              shadows: [
-                const Shadow(
-                  color: Color(0x73000000),
-                  blurRadius: 14,
-                  offset: Offset(0, 3),
+          // Floating centre readout + caption.
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.timeText,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: widget.centerFontSize,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.5,
+                  height: 1.0,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                  shadows: [
+                    const Shadow(
+                      color: Color(0x73000000),
+                      blurRadius: 14,
+                      offset: Offset(0, 3),
+                    ),
+                    if (widget.glow)
+                      Shadow(
+                        color: widget.gold.withValues(alpha: 0.45),
+                        blurRadius: 24,
+                      ),
+                  ],
                 ),
-                if (widget.glow)
-                  Shadow(
-                    color: widget.gold.withValues(alpha: 0.45),
-                    blurRadius: 24,
+              ),
+              if (widget.subLabel != null) ...[
+                SizedBox(height: widget.centerFontSize * 0.12),
+                Text(
+                  widget.subLabel!,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.72),
+                    fontSize: widget.centerFontSize * 0.32,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.5,
+                    height: 1.0,
                   ),
+                ),
               ],
-            ),
+            ],
           ),
         ],
       ),
@@ -163,15 +175,7 @@ class _FocusOrbitTimerState extends State<FocusOrbitTimer>
   }
 }
 
-class _Orbit {
-  final double rx;
-  final double ry;
-  final double rot;
-  const _Orbit(this.rx, this.ry, this.rot);
-}
-
 class _OrbitPainter extends CustomPainter {
-  final double flow; // 0..1 dotted shimmer
   final double arrowP; // 0..1 arrow route position
   final Color gold;
   final Color gold2;
@@ -179,7 +183,6 @@ class _OrbitPainter extends CustomPainter {
   final bool glow;
 
   const _OrbitPainter({
-    required this.flow,
     required this.arrowP,
     required this.gold,
     required this.gold2,
@@ -187,113 +190,91 @@ class _OrbitPainter extends CustomPainter {
     required this.glow,
   });
 
-  static const _n = 5; // interlocking rings
+  // One ribbon wound [_windings] times; its orientation sweeps 0..π across the
+  // route, so the single line overlaps itself into interlocking rings.
+  static const _windings = 4;
 
-  List<_Orbit> _orbits(double r) =>
-      [for (var i = 0; i < _n; i++) _Orbit(r * 0.95, r * 0.58, i * math.pi / _n)];
-
-  /// Point on a rotated ellipse at angle [theta].
-  Offset _pointOn(Offset c, _Orbit o, double theta) {
-    final x = o.rx * math.cos(theta);
-    final y = o.ry * math.sin(theta);
+  /// Point on the woven ribbon at route fraction [u] (0..1).
+  Offset _at(Offset c, double rx, double ry, double u) {
+    final theta = 2 * math.pi * _windings * u;
+    final phi = math.pi * u;
+    final x = rx * math.cos(theta);
+    final y = ry * math.sin(theta);
     return Offset(
-      c.dx + x * math.cos(o.rot) - y * math.sin(o.rot),
-      c.dy + x * math.sin(o.rot) + y * math.cos(o.rot),
+      c.dx + x * math.cos(phi) - y * math.sin(phi),
+      c.dy + x * math.sin(phi) + y * math.cos(phi),
     );
-  }
-
-  /// Unit tangent (direction of increasing theta) on a rotated ellipse.
-  Offset _tangent(_Orbit o, double theta) {
-    final tx = -o.rx * math.sin(theta);
-    final ty = o.ry * math.cos(theta);
-    final rx = tx * math.cos(o.rot) - ty * math.sin(o.rot);
-    final ry = tx * math.sin(o.rot) + ty * math.cos(o.rot);
-    final d = math.sqrt(rx * rx + ry * ry);
-    return d == 0 ? Offset.zero : Offset(rx / d, ry / d);
   }
 
   @override
   void paint(Canvas canvas, Size size) {
     final c = size.center(Offset.zero);
     final r = size.shortestSide / 2;
-    final orbits = _orbits(r);
-    final tube = r * 0.055;
+    final rx = r * 0.92;
+    final ry = r * 0.50;
+    final tube = r * 0.058;
 
-    // 1. Translucent gold tubes (interlocking rings).
-    for (final o in orbits) {
-      final rect = Rect.fromCenter(
-          center: Offset.zero, width: o.rx * 2, height: o.ry * 2);
-      canvas.save();
-      canvas.translate(c.dx, c.dy);
-      canvas.rotate(o.rot);
+    // Build the single continuous ribbon path.
+    final path = Path();
+    const steps = 440;
+    for (var i = 0; i <= steps; i++) {
+      final p = _at(c, rx, ry, i / steps);
+      i == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
+    }
 
-      final body = Paint()
+    // Tube body (gold gradient) + soft glow.
+    final bounds = Rect.fromCircle(center: c, radius: r);
+    final body = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = tube
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          gold2.withValues(alpha: 0.32),
+          gold.withValues(alpha: 0.16),
+        ],
+      ).createShader(bounds);
+    if (glow) body.maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.4);
+    canvas.drawPath(path, body);
+
+    // Glossy white sheen running along the ribbon.
+    canvas.drawPath(
+      path,
+      Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = tube
+        ..strokeWidth = tube * 0.22
         ..strokeCap = StrokeCap.round
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            gold2.withValues(alpha: 0.30),
-            gold.withValues(alpha: 0.16),
-          ],
-        ).createShader(rect);
-      if (glow) body.maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2);
-      canvas.drawOval(rect, body);
+        ..strokeJoin = StrokeJoin.round
+        ..color = glass.withValues(alpha: 0.42),
+    );
 
-      // Glossy white highlight running along the tube.
-      canvas.drawOval(
-        rect.deflate(tube * 0.26),
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = tube * 0.22
-          ..strokeCap = StrokeCap.round
-          ..color = glass.withValues(alpha: 0.45),
-      );
-      canvas.restore();
-    }
-
-    // 2. Glowing dotted tracks marching along three of the rings.
-    final dotColor = Color.lerp(gold2, Colors.white, 0.55)!;
-    for (var i = 0; i < _n; i += 2) {
-      _drawDots(canvas, c, orbits[i], dotColor, phase: flow + i / _n);
-    }
-
-    // 3. Leading arrow travelling the route (one full loop per session).
-    _drawArrow(canvas, c, orbits[0], r);
+    // Leading arrow + comet trail, travelling the same ribbon.
+    _drawArrow(canvas, c, rx, ry, r);
   }
 
-  void _drawDots(Canvas canvas, Offset c, _Orbit o, Color color,
-      {required double phase}) {
-    const count = 30;
-    final base = phase * 2 * math.pi / count;
-    for (var k = 0; k < count; k++) {
-      final theta = base + k * 2 * math.pi / count;
-      final p = _pointOn(c, o, theta);
-      final paint = Paint()..color = color.withValues(alpha: 0.55);
-      if (glow) paint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.0);
-      canvas.drawCircle(p, 1.5, paint);
-    }
-  }
+  void _drawArrow(Canvas canvas, Offset c, double rx, double ry, double r) {
+    final color = Color.lerp(gold2, Colors.white, 0.4)!;
 
-  void _drawArrow(Canvas canvas, Offset c, _Orbit o, double r) {
-    final headTheta = -math.pi / 2 + arrowP * 2 * math.pi;
-    final arrowColor = Color.lerp(gold2, Colors.white, 0.4)!;
-
-    // Comet trail of brightening dots leading to the head.
-    const trail = 14;
+    // Comet trail of brightening dots following the head along the ribbon.
+    const trail = 20;
     for (var k = trail; k >= 1; k--) {
-      final th = headTheta - k * 0.05;
-      final p = _pointOn(c, o, th);
-      final a = (1 - k / trail) * 0.85;
-      final paint = Paint()..color = arrowColor.withValues(alpha: a);
+      final u = arrowP - k * 0.006;
+      if (u < 0) continue;
+      final p = _at(c, rx, ry, u);
+      final a = (1 - k / trail) * 0.9;
+      final paint = Paint()..color = color.withValues(alpha: a);
       if (glow) paint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2);
-      canvas.drawCircle(p, 1.8, paint);
+      canvas.drawCircle(p, 1.9, paint);
     }
 
-    final head = _pointOn(c, o, headTheta);
-    final dir = _tangent(o, headTheta);
+    final head = _at(c, rx, ry, arrowP);
+    final ahead = _at(c, rx, ry, (arrowP + 0.004).clamp(0.0, 1.0));
+    var dir = ahead - head;
+    final d = dir.distance;
+    dir = d == 0 ? const Offset(1, 0) : dir / d;
 
     // Bright head.
     final hp = Paint()..color = Colors.white;
@@ -322,7 +303,6 @@ class _OrbitPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_OrbitPainter old) =>
-      old.flow != flow ||
       old.arrowP != arrowP ||
       old.gold != gold ||
       old.gold2 != gold2 ||

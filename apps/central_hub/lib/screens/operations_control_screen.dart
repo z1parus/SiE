@@ -1345,6 +1345,7 @@ class _FocusRingPreview extends ConsumerWidget {
       child: FocusOrbitTimer(
         size: 150,
         timeText: timeText,
+        subLabel: 'Min',
         progress: progress,
         demo: idle, // idle → arrow loops to advertise the motion
         motion: motion,
