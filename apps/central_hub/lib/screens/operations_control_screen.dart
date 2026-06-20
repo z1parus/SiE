@@ -885,7 +885,7 @@ class _BreathSpherePreviewState extends ConsumerState<_BreathSpherePreview>
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFC8A84B).withValues(
+                        color: c.accent.withValues(
                             alpha: c.isLightMode ? 0.07 : 0.13),
                         blurRadius: c.isLightMode ? 18 : 22,
                       ),
@@ -1359,11 +1359,14 @@ class _FocusRingPreview extends ConsumerWidget {
   }
 }
 
-/// Mission-progress preview: one rotating ring per active goal. Each ring's
-/// arc length encodes that goal's real progress and its colour is the goal's
-/// own colour. The rings spin clockwise "like clock hands" but at staggered
-/// speeds (2 / 3 / 5 turns per loop) so they never move in sync. The centre
-/// shows the average progress across the displayed missions.
+/// Mission constellation preview for the planning module: a tactical orbit
+/// map. Each active goal is a glowing node on its own orbit ring, positioned
+/// around the ring by that goal's real progress; a bright arc traces the
+/// progress from the start to the node, and a faint spoke links the gold
+/// command core to every node. An outer dotted radar ring frames the field,
+/// frosted-glass discs add depth, and the whole constellation drifts slowly
+/// (decorative only — frozen under reduce-motion). The centre reads the
+/// average progress across the displayed missions.
 class _PlanningPreview extends ConsumerStatefulWidget {
   const _PlanningPreview();
 
@@ -1375,21 +1378,18 @@ class _PlanningPreviewState extends ConsumerState<_PlanningPreview>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 
-  // Per-ring geometry and motion. Revolutions per loop are distinct and
-  // coprime so the composite motion looks chaotic yet loops seamlessly.
-  // Radii are spread wide so the centre stays clear for the progress readout.
-  static const _box    = 150.0;
-  static const _radii  = [42.0, 58.0, 72.0];
-  static const _stroke = [6.0, 5.5, 5.0];
-  static const _revs   = [2.0, 3.0, 5.0];
-  static const _phase  = [0.0, 2.1, 4.0];
+  // Per-slot orbit geometry. Radii are spread wide so nodes never overlap the
+  // central readout; base angles stagger the nodes so they don't cluster.
+  static const _box        = 150.0;
+  static const _radii      = [34.0, 48.0, 62.0];
+  static const _baseAngle  = [-math.pi / 2, -math.pi / 2 + 2.1, -math.pi / 2 + 4.0];
 
   @override
   void initState() {
     super.initState();
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 20),
+      duration: const Duration(seconds: 24),
     );
   }
 
@@ -1419,13 +1419,11 @@ class _PlanningPreviewState extends ConsumerState<_PlanningPreview>
     );
 
     final shown = goals.take(3).toList();
-    final rings = List.generate(3, (i) {
+    final nodes = List.generate(3, (i) {
       final goal = i < shown.length ? shown[i] : null;
-      return _PlanRing(
+      return _PlanNode(
         radius: _radii[i],
-        stroke: _stroke[i],
-        revs: _revs[i],
-        phase: _phase[i],
+        baseAngle: _baseAngle[i],
         color: goal?.color ?? c.accent,
         progress: goal == null
             ? null
@@ -1450,11 +1448,15 @@ class _PlanningPreviewState extends ConsumerState<_PlanningPreview>
               builder: (_, _) => CustomPaint(
                 size: const Size(_box, _box),
                 painter: _PlanningPreviewPainter(
-                  rings: rings,
+                  nodes: nodes,
                   t: _ctrl.value,
+                  motion: SieMotion.enabled(context),
+                  isLight: c.isLightMode,
                   trackColor: c.border,
-                  tickColor: c.accent.withValues(alpha: 0.30),
-                  glow: !c.isLightMode,
+                  tickColor: c.accent,
+                  glass: c.isLightMode ? c.textSecondary : c.textPrimary,
+                  gold: c.accent,
+                  gold2: c.accentSecondary,
                 ),
               ),
             ),
@@ -1490,47 +1492,93 @@ class _PlanningPreviewState extends ConsumerState<_PlanningPreview>
   }
 }
 
-class _PlanRing {
+class _PlanNode {
   final double radius;
-  final double stroke;
-  final double revs;
-  final double phase;
+  final double baseAngle;
   final Color color;
 
-  /// Real goal progress 0..1, or null when no goal occupies this ring.
+  /// Real goal progress 0..1, or null when no goal occupies this orbit slot.
   final double? progress;
 
-  const _PlanRing({
+  const _PlanNode({
     required this.radius,
-    required this.stroke,
-    required this.revs,
-    required this.phase,
+    required this.baseAngle,
     required this.color,
     required this.progress,
   });
 }
 
 class _PlanningPreviewPainter extends CustomPainter {
-  final List<_PlanRing> rings;
+  final List<_PlanNode> nodes;
   final double t;
+  final bool motion;
+  final bool isLight;
   final Color trackColor;
   final Color tickColor;
-  final bool glow;
+  final Color glass;
+  final Color gold;
+  final Color gold2;
 
   const _PlanningPreviewPainter({
-    required this.rings,
+    required this.nodes,
     required this.t,
+    required this.motion,
+    required this.isLight,
     required this.trackColor,
     required this.tickColor,
-    required this.glow,
+    required this.glass,
+    required this.gold,
+    required this.gold2,
   });
+
+  static Offset _dir(double a) => Offset(math.cos(a), math.sin(a));
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
+    // Slow decorative drift of the whole constellation (frozen when motion is
+    // off). Progress position is real; only the drift is cosmetic.
+    final drift = motion ? t * 2 * math.pi * 0.15 : 0.0;
 
-    for (final ring in rings) {
-      final rect = Rect.fromCircle(center: center, radius: ring.radius);
+    // ── 1. Frosted glass discs (depth) ───────────────────────────────────────
+    void disc(double rad, double fill, double stroke) {
+      canvas.drawCircle(
+          center, rad, Paint()..color = glass.withValues(alpha: fill));
+      canvas.drawCircle(
+        center,
+        rad,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.1
+          ..color = glass.withValues(alpha: stroke),
+      );
+    }
+
+    disc(68, isLight ? 0.08 : 0.04, isLight ? 0.20 : 0.08);
+    disc(44, isLight ? 0.10 : 0.05, isLight ? 0.24 : 0.10);
+
+    // ── 2. Outer radar tick ring ─────────────────────────────────────────────
+    const ticks = 36;
+    const tickR = 70.0;
+    for (var i = 0; i < ticks; i++) {
+      final a = i * 2 * math.pi / ticks + drift * 0.5;
+      final cardinal = i % 9 == 0;
+      final p1 = center + _dir(a) * (tickR - (cardinal ? 5 : 2.5));
+      final p2 = center + _dir(a) * tickR;
+      canvas.drawLine(
+        p1,
+        p2,
+        Paint()
+          ..color = tickColor
+              .withValues(alpha: (isLight ? 0.45 : 0.40) * (cardinal ? 1 : 0.55))
+          ..strokeWidth = cardinal ? 1.4 : 1
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    // ── 3. Orbits: track + progress arc + spoke + node ───────────────────────
+    for (final n in nodes) {
+      final rect = Rect.fromCircle(center: center, radius: n.radius);
 
       // Faint full-circle track.
       canvas.drawArc(
@@ -1539,50 +1587,118 @@ class _PlanningPreviewPainter extends CustomPainter {
         math.pi * 2,
         false,
         Paint()
-          ..color = trackColor.withValues(alpha: 0.45)
-          ..strokeWidth = ring.stroke
+          ..color = trackColor.withValues(alpha: 0.55)
+          ..strokeWidth = 1.4
           ..style = PaintingStyle.stroke,
       );
 
-      // Clockwise rotation, staggered per ring → "clock hands" out of sync.
-      final start = -math.pi / 2 + ring.phase + 2 * math.pi * ring.revs * t;
+      final start = n.baseAngle + drift;
+      final nodeAngle = start + (n.progress == null ? 0 : n.progress! * 2 * math.pi);
+      final node = center + _dir(nodeAngle) * n.radius;
 
-      if (ring.progress == null) {
-        // Empty ring — a small accent tick keeps it alive.
+      // Progress arc along the orbit up to the node (encodes real progress).
+      if (n.progress != null) {
+        final sweep = math.max(n.progress!, 0.04) * 2 * math.pi;
         canvas.drawArc(
           rect,
           start,
-          0.05 * 2 * math.pi,
+          sweep,
           false,
           Paint()
-            ..color = tickColor
-            ..strokeWidth = ring.stroke
+            ..color = n.color.withValues(alpha: isLight ? 0.75 : 0.9)
+            ..strokeWidth = 2.4
             ..style = PaintingStyle.stroke
             ..strokeCap = StrokeCap.round,
         );
-        continue;
+      } else {
+        // Empty slot — a small accent tick at the orbit start keeps it alive.
+        canvas.drawArc(
+          rect,
+          start,
+          0.04 * 2 * math.pi,
+          false,
+          Paint()
+            ..color = tickColor.withValues(alpha: 0.4)
+            ..strokeWidth = 2.4
+            ..style = PaintingStyle.stroke
+            ..strokeCap = StrokeCap.round,
+        );
       }
 
-      final sweep = math.max(ring.progress!, 0.05) * 2 * math.pi;
-      final arcPaint = Paint()
-        ..color = ring.color
-        ..strokeWidth = ring.stroke
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round;
-      if (glow) {
-        arcPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+      // Spoke core → node (mission link).
+      canvas.drawLine(
+        center,
+        node,
+        Paint()
+          ..color = glass.withValues(alpha: isLight ? 0.30 : 0.22)
+          ..strokeWidth = 1,
+      );
+
+      // Node dot with glow.
+      final nodeR = n.progress == null ? 3.0 : 4.5;
+      if (!isLight) {
+        canvas.drawCircle(
+          node,
+          nodeR + 2,
+          Paint()
+            ..color = n.color.withValues(alpha: 0.30)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+        );
       }
-      canvas.drawArc(rect, start, sweep, false, arcPaint);
+      canvas.drawCircle(node, nodeR, Paint()..color = n.color);
+      canvas.drawCircle(
+        node,
+        nodeR,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.1
+          ..color = Colors.white.withValues(alpha: 0.45),
+      );
+    }
+
+    // ── 4. Command core — faint glow + stroked ring framing the readout ──────
+    const coreR = 20.0;
+    canvas.drawCircle(
+      center,
+      coreR,
+      Paint()
+        ..color = gold.withValues(alpha: isLight ? 0.10 : 0.15)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+    );
+    canvas.drawCircle(
+      center,
+      coreR,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4
+        ..color = gold.withValues(alpha: isLight ? 0.55 : 0.7),
+    );
+    // Cardinal tick marks on the core ring — tactical-instrument feel.
+    for (final a in [0.0, math.pi / 2, math.pi, -math.pi / 2]) {
+      final p1 = center + _dir(a) * (coreR - 3);
+      final p2 = center + _dir(a) * (coreR + 3);
+      canvas.drawLine(
+        p1,
+        p2,
+        Paint()
+          ..color = gold.withValues(alpha: 0.8)
+          ..strokeWidth = 1.4
+          ..strokeCap = StrokeCap.round,
+      );
     }
   }
 
   @override
   bool shouldRepaint(_PlanningPreviewPainter old) =>
       old.t != t ||
-      old.rings != rings ||
+      old.motion != motion ||
+      old.isLight != isLight ||
       old.trackColor != trackColor ||
       old.tickColor != tickColor ||
-      old.glow != glow;
+      old.glass != glass ||
+      old.gold != gold ||
+      old.gold2 != gold2 ||
+      old.nodes != nodes;
 }
 
 /// Meditation module preview — a calm teal orb that slowly breathes while
