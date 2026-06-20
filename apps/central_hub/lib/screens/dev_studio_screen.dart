@@ -10,7 +10,7 @@ import 'package:sie_core/sie_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DevStudioScreen — admin panel with tabs: Backgrounds | DP Management
+// DevStudioScreen — admin panel with tabs: Backgrounds | DP | Tips
 // ─────────────────────────────────────────────────────────────────────────────
 class DevStudioScreen extends ConsumerStatefulWidget {
   const DevStudioScreen({super.key});
@@ -51,12 +51,18 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
   bool _settingDp = false;
   String? _dpStatusMsg;
 
+  // ── Tips tab state ────────────────────────────────────────────
+  final _tipTitleCtrl = TextEditingController();
+  final _tipDescCtrl = TextEditingController();
+  Tip? _editingTip;
+  bool _savingTip = false;
+
   static const _bucket = 'profile-backgrounds';
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
     _nameCtrl.addListener(_syncSlug);
   }
 
@@ -71,6 +77,8 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
     _styleCtrl.dispose();
     _usernameCtrl.dispose();
     _dpValueCtrl.dispose();
+    _tipTitleCtrl.dispose();
+    _tipDescCtrl.dispose();
     super.dispose();
   }
 
@@ -362,6 +370,101 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
     }
   }
 
+  // ── Tips CRUD ────────────────────────────────────────────────
+  Future<void> _saveTip() async {
+    final title = _tipTitleCtrl.text.trim();
+    final desc = _tipDescCtrl.text.trim();
+    if (title.isEmpty || desc.isEmpty) {
+      _toast('Заполните заголовок и описание');
+      return;
+    }
+    setState(() => _savingTip = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      if (_editingTip != null) {
+        await SupabaseService.client.from('tips').update({
+          'title': title,
+          'description': desc,
+        }).eq('id', _editingTip!.id);
+        messenger.showSnackBar(const SnackBar(content: Text('Подсказка обновлена')));
+      } else {
+        await SupabaseService.client.from('tips').insert({
+          'title': title,
+          'description': desc,
+          'is_active': true,
+        });
+        messenger.showSnackBar(const SnackBar(content: Text('Подсказка создана')));
+      }
+      _resetTipForm();
+      ref.invalidate(allTipsProvider);
+      ref.invalidate(tipsProvider);
+    } on PostgrestException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Ошибка: ${e.message}')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+    } finally {
+      if (mounted) setState(() => _savingTip = false);
+    }
+  }
+
+  void _editTip(Tip tip) {
+    setState(() {
+      _editingTip = tip;
+      _tipTitleCtrl.text = tip.title;
+      _tipDescCtrl.text = tip.description;
+    });
+  }
+
+  void _resetTipForm() {
+    setState(() {
+      _tipTitleCtrl.clear();
+      _tipDescCtrl.clear();
+      _editingTip = null;
+    });
+  }
+
+  Future<void> _toggleTipActive(Tip tip, bool value) async {
+    try {
+      await SupabaseService.client
+          .from('tips')
+          .update({'is_active': value})
+          .eq('id', tip.id);
+      ref.invalidate(allTipsProvider);
+      ref.invalidate(tipsProvider);
+    } on PostgrestException catch (e) {
+      _toast('Ошибка: ${e.message}');
+    }
+  }
+
+  Future<void> _deleteTip(Tip tip) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Удалить подсказку?'),
+        content: Text('«${tip.title}» будет удалена безвозвратно.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Удалить')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await SupabaseService.client.from('tips').delete().eq('id', tip.id);
+      ref.invalidate(allTipsProvider);
+      ref.invalidate(tipsProvider);
+      messenger.showSnackBar(const SnackBar(content: Text('Подсказка удалена')));
+      if (_editingTip?.id == tip.id) _resetTipForm();
+    } on PostgrestException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Ошибка: ${e.message}')));
+    }
+  }
+
   void _toast(String msg) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
@@ -394,7 +497,11 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
               letterSpacing: 1.5,
               fontWeight: FontWeight.w600,
             ),
-            tabs: const [Tab(text: 'ФОНЫ'), Tab(text: 'DP')],
+            tabs: const [
+              Tab(text: 'ФОНЫ'),
+              Tab(text: 'DP'),
+              Tab(text: 'ПОДСКАЗКИ'),
+            ],
           ),
         ),
         body: TabBarView(
@@ -402,6 +509,7 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
           children: [
             _backgroundsTab(c),
             _dpTab(c),
+            _tipsTab(c),
           ],
         ),
       ),
@@ -654,6 +762,126 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
                 ],
               ),
             ],
+          ],
+        ),
+      );
+
+  // ── Tips management tab ──────────────────────────────────────
+  Widget _tipsTab(SieColors c) => ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        children: [
+          _section(c, _editingTip != null ? 'РЕДАКТИРОВАТЬ ПОДСКАЗКУ' : 'НОВАЯ ПОДСКАЗКА'),
+          _field(c, 'Заголовок', _tipTitleCtrl),
+          _field(c, 'Описание', _tipDescCtrl, maxLines: 3),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: c.accent,
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  onPressed: _savingTip ? null : _saveTip,
+                  child: _savingTip
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : Text(_editingTip != null ? 'СОХРАНИТЬ' : 'ОПУБЛИКОВАТЬ'),
+                ),
+              ),
+              if (_editingTip != null) ...[
+                const SizedBox(width: 10),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: c.textSecondary,
+                    side: BorderSide(color: c.border),
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  onPressed: _resetTipForm,
+                  child: const Text('ОТМЕНА'),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 32),
+          _section(c, 'СУЩЕСТВУЮЩИЕ ПОДСКАЗКИ'),
+          _tipsList(c),
+        ],
+      );
+
+  Widget _tipsList(SieColors c) {
+    final async = ref.watch(allTipsProvider);
+    return async.when(
+      loading: () =>
+          Center(child: CircularProgressIndicator(color: c.accent)),
+      error: (e, _) => Text('Ошибка загрузки: $e',
+          style: TextStyle(color: c.textSecondary)),
+      data: (tips) {
+        if (tips.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Text(
+              'Пока нет ни одной подсказки',
+              style: TextStyle(color: c.textSecondary, fontSize: 13),
+            ),
+          );
+        }
+        return Column(
+          children: [for (final tip in tips) _tipRow(c, tip)],
+        );
+      },
+    );
+  }
+
+  Widget _tipRow(SieColors c, Tip tip) => Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: c.border),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(tip.title,
+                      style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(
+                    tip.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: c.textSecondary, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Switch(
+              value: tip.isActive,
+              activeColor: c.accent,
+              onChanged: (v) => _toggleTipActive(tip, v),
+            ),
+            IconButton(
+              icon: Icon(Icons.edit_outlined,
+                  color: c.textSecondary, size: 18),
+              onPressed: () => _editTip(tip),
+            ),
+            IconButton(
+              icon: Icon(Icons.delete_outline,
+                  color: c.textSecondary, size: 18),
+              onPressed: () => _deleteTip(tip),
+            ),
           ],
         ),
       );
