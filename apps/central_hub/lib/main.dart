@@ -45,6 +45,9 @@ void _handleWidgetUri(Uri? uri) {
     case 'focus':
       _openModuleScreen(nav, 'widget/focus',
           () => const FocusProtocolScreen());
+    case 'planning':
+      _openModuleScreen(nav, 'widget/planning',
+          () => const PlanningScreen());
     case 'habits':
     default:
       _openModuleScreen(nav, 'widget/habits',

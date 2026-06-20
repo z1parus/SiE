@@ -17,6 +17,7 @@ import '../models/mission_medal.dart';
 import '../models/mission_template.dart';
 import '../models/ai_decomposition.dart';
 import '../services/notification_service.dart';
+import '../widgets_home/widget_render_service.dart';
 import 'auth_state_provider.dart';
 import 'connectivity_provider.dart';
 import 'habits_provider.dart';
@@ -1296,6 +1297,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       synced: const Value(false),
       createdAtMs: Value(now.millisecondsSinceEpoch),
     ));
+    _refreshHomeWidgets();
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     final payload = jsonEncode(newGoal.toInsertJson());
@@ -1329,6 +1331,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       db.deleteGoalLocally(id),
       db.deleteMapPositionsForGoal(id),
     ]);
+    _refreshHomeWidgets();
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     if (isOnline) {
@@ -1730,6 +1733,14 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
 
   // ── Toggle Task ───────────────────────────────────────────────────────────
 
+  /// Fire-and-forget refresh of the Planning home-screen widget(s) after a
+  /// local mutation. Never throws into the caller.
+  void _refreshHomeWidgets() {
+    final db = ref.read(appDatabaseProvider);
+    WidgetRenderService.notifyModuleChanged('planning', db)
+        .catchError((e) => debugPrint('SiE Planning: widget refresh — $e'));
+  }
+
   Future<void> toggleTask(
       String taskId, String subGoalId, String goalId) async {
     final client = Supabase.instance.client;
@@ -1768,6 +1779,10 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       completedAtMs: Value(completedAt?.millisecondsSinceEpoch),
       synced: const Value(false),
     ));
+
+    // The home-screen Planning widget reads straight from Drift, so refresh it
+    // right after the local write (the online path below may early-return).
+    _refreshHomeWidgets();
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     var syncedToServer = false;

@@ -3,6 +3,7 @@ import 'package:home_widget/home_widget.dart';
 import '../local/app_database.dart';
 import 'modules/focus_widget_provider.dart';
 import 'modules/habits_widget_provider.dart';
+import 'modules/planning_widget_provider.dart';
 import 'widget_action_router.dart';
 import 'widget_config.dart';
 import 'widget_config_store.dart';
@@ -15,7 +16,8 @@ import 'widget_size_bucket.dart';
 void registerHomeWidgets() {
   WidgetRegistry.instance
     ..register(HabitsWidgetProvider())
-    ..register(FocusWidgetProvider());
+    ..register(FocusWidgetProvider())
+    ..register(PlanningWidgetProvider());
 }
 
 /// Re-render every active widget. Call on app launch so the home screen

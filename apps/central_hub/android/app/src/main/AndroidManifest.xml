@@ -76,6 +76,19 @@
                 android:resource="@xml/widget_focus_info" />
         </receiver>
 
+        <!-- home_widget: PlanningWidgetProvider -->
+        <receiver
+            android:name=".PlanningWidgetProvider"
+            android:exported="true"
+            android:label="Планирование">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_planning_info" />
+        </receiver>
+
         <!-- home_widget: background quick-action receiver + service -->
         <receiver
             android:name="es.antonborri.home_widget.HomeWidgetBackgroundReceiver"

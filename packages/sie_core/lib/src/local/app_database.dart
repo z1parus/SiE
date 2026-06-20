@@ -1635,6 +1635,19 @@ class AppDatabase extends _$AppDatabase {
       (select(localHabitLogs)
             ..where((t) => t.completedAt.equals(dateKey)))
           .get();
+
+  /// Active (non-deleted) goals for the Planning home widget. Single-user
+  /// device assumption (mirrors [habitsForWidget]); pinned first, then by
+  /// priority, then by creation order.
+  Future<List<LocalGoal>> goalsForWidget() => (select(localGoals)
+        ..where((t) =>
+            t.deletedLocally.not() & t.status.equals('active'))
+        ..orderBy([
+          (t) => OrderingTerm(expression: t.isPinned, mode: OrderingMode.desc),
+          (t) => OrderingTerm(expression: t.priority, mode: OrderingMode.desc),
+          (t) => OrderingTerm(expression: t.createdAtMs),
+        ]))
+      .get();
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────
