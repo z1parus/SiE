@@ -1079,18 +1079,12 @@ class _PlanningPreviewState extends ConsumerState<_PlanningPreview>
 
   // Per-ring geometry and motion. Revolutions per loop are distinct and
   // coprime so the composite motion looks chaotic yet loops seamlessly.
-  // Radii are spread out so the centre stays clear for the progress readout.
-  static const _radii  = [34.0, 50.0, 66.0];
-  static const _stroke = [5.5, 5.0, 4.5];
+  // Radii are spread wide so the centre stays clear for the progress readout.
+  static const _box    = 150.0;
+  static const _radii  = [42.0, 58.0, 72.0];
+  static const _stroke = [6.0, 5.5, 5.0];
   static const _revs   = [2.0, 3.0, 5.0];
   static const _phase  = [0.0, 2.1, 4.0];
-
-  // Darts: each takes turns aiming at its ring then striking it. Throws-per-loop
-  // are distinct and the phase offsets are spread, so they fire one after another
-  // rather than together.
-  static const _dartAngle  = [-2.30, -0.75, 1.55];
-  static const _dartThrows = [4.0, 3.0, 5.0];
-  static const _dartOffset = [0.0, 0.45, 0.80];
 
   @override
   void initState() {
@@ -1146,38 +1140,22 @@ class _PlanningPreviewState extends ConsumerState<_PlanningPreview>
         : (shown.map(goalProgress).reduce((a, b) => a + b) / shown.length)
             .round();
 
-    final motion = SieMotion.enabled(context);
-    final darts = List.generate(3, (i) {
-      // Frozen at a "struck" frame when motion is disabled.
-      final raw = motion
-          ? (_dartThrows[i] * _ctrl.value + _dartOffset[i])
-          : 0.78;
-      return _PlanDart(
-        angle: _dartAngle[i],
-        targetRadius: _radii[i],
-        local: raw - raw.floorToDouble(),
-        color: rings[i].color,
-      );
-    });
-
     return Center(
       child: SizedBox(
-        width: 140,
-        height: 140,
+        width: _box,
+        height: _box,
         child: Stack(
           alignment: Alignment.center,
           children: [
             AnimatedBuilder(
               animation: _ctrl,
               builder: (_, _) => CustomPaint(
-                size: const Size(140, 140),
+                size: const Size(_box, _box),
                 painter: _PlanningPreviewPainter(
                   rings: rings,
-                  darts: darts,
                   t: _ctrl.value,
                   trackColor: c.border,
                   tickColor: c.accent.withValues(alpha: 0.30),
-                  aimColor: c.accent,
                   glow: !c.isLightMode,
                 ),
               ),
@@ -1234,38 +1212,18 @@ class _PlanRing {
   });
 }
 
-class _PlanDart {
-  final double angle;
-  final double targetRadius;
-
-  /// Cycle position 0..1: aim → throw → strike → settle.
-  final double local;
-  final Color color;
-
-  const _PlanDart({
-    required this.angle,
-    required this.targetRadius,
-    required this.local,
-    required this.color,
-  });
-}
-
 class _PlanningPreviewPainter extends CustomPainter {
   final List<_PlanRing> rings;
-  final List<_PlanDart> darts;
   final double t;
   final Color trackColor;
   final Color tickColor;
-  final Color aimColor;
   final bool glow;
 
   const _PlanningPreviewPainter({
     required this.rings,
-    required this.darts,
     required this.t,
     required this.trackColor,
     required this.tickColor,
-    required this.aimColor,
     required this.glow,
   });
 
@@ -1318,77 +1276,14 @@ class _PlanningPreviewPainter extends CustomPainter {
       }
       canvas.drawArc(rect, start, sweep, false, arcPaint);
     }
-
-    for (final dart in darts) {
-      _paintDart(canvas, center, dart);
-    }
-  }
-
-  // Aim (0 → .42) → throw (.42 → .70) → strike flash (.70 → .82) → settle/fade.
-  void _paintDart(Canvas canvas, Offset center, _PlanDart d) {
-    final dir = Offset(math.cos(d.angle), math.sin(d.angle));
-    final tip = center + dir * d.targetRadius;
-    final local = d.local;
-
-    // Faint aiming guide line that telegraphs the shot, then fades.
-    final aimA = local < 0.42
-        ? (local / 0.42) * 0.22
-        : (1 - (local - 0.42) / 0.58).clamp(0.0, 1.0) * 0.22;
-    if (aimA > 0.01) {
-      canvas.drawLine(
-        center + dir * 6,
-        center + dir * (d.targetRadius + 7),
-        Paint()
-          ..color = aimColor.withValues(alpha: aimA)
-          ..strokeWidth = 1,
-      );
-    }
-
-    // Throw — a short dart segment flies from the centre out to the ring.
-    if (local >= 0.42 && local < 0.70) {
-      final p = Curves.easeIn.transform(((local - 0.42) / 0.28).clamp(0.0, 1.0));
-      final headR = d.targetRadius * p;
-      final tailR = math.max(0.0, headR - 12);
-      canvas.drawLine(
-        center + dir * tailR,
-        center + dir * headR,
-        Paint()
-          ..color = d.color
-          ..strokeWidth = 2.5
-          ..strokeCap = StrokeCap.round,
-      );
-    }
-
-    // Strike — impact flash on the ring + a dart head that settles then fades.
-    if (local >= 0.70) {
-      final settle = (1 - (local - 0.70) / 0.30).clamp(0.0, 1.0);
-      canvas.drawCircle(
-        tip,
-        3.0,
-        Paint()..color = d.color.withValues(alpha: settle),
-      );
-      if (local < 0.84) {
-        final f = ((local - 0.70) / 0.14).clamp(0.0, 1.0);
-        canvas.drawCircle(
-          tip,
-          2 + 7 * f,
-          Paint()
-            ..color = d.color.withValues(alpha: (1 - f) * 0.8)
-            ..strokeWidth = 1.5
-            ..style = PaintingStyle.stroke,
-        );
-      }
-    }
   }
 
   @override
   bool shouldRepaint(_PlanningPreviewPainter old) =>
       old.t != t ||
       old.rings != rings ||
-      old.darts != darts ||
       old.trackColor != trackColor ||
       old.tickColor != tickColor ||
-      old.aimColor != aimColor ||
       old.glow != glow;
 }
 
