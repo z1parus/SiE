@@ -121,15 +121,17 @@ class _DefragPreviewState extends State<DefragPreview>
   }
 }
 
-/// A shard spec: its settled slot on the inner orbit plus its scattered pose
+/// A shard spec: its settled slot on a concentric band plus its scattered pose
 /// at the outer rim. Convergence `p` interpolates between the two.
 class _Shard {
   final double slotAngle; // angle on the ordered orbit
-  final double slotRadius; // radius of the ordered orbit
+  final double slotRadius; // radius of the ordered band
   final double scatterAngle; // angular jitter when scattered
   final double scatterRadius; // outer-rim radius when scattered
   final double spin; // rotation offset when scattered
   final double size; // chip half-size
+  final int shapeType; // 0 diamond · 1 triangle · 2 shard · 3 pentagon
+  final double bandDelay; // when this band starts converging (wave)
 
   const _Shard({
     required this.slotAngle,
@@ -138,6 +140,8 @@ class _Shard {
     required this.scatterRadius,
     required this.spin,
     required this.size,
+    required this.shapeType,
+    required this.bandDelay,
   });
 }
 
@@ -164,20 +168,39 @@ class _DefragPreviewPainter extends CustomPainter {
     required this.trackColor,
   });
 
-  // Fixed shard layout — deterministic, no per-paint randomness.
-  static const _orbitR = 52.0;
-  static const _shards = <_Shard>[
-    _Shard(slotAngle: 0.00, slotRadius: _orbitR, scatterAngle: -0.18, scatterRadius: 71, spin: 0.9, size: 4.6),
-    _Shard(slotAngle: 0.63, slotRadius: _orbitR, scatterAngle: 0.22, scatterRadius: 74, spin: -0.6, size: 4.0),
-    _Shard(slotAngle: 1.26, slotRadius: _orbitR, scatterAngle: -0.30, scatterRadius: 70, spin: 1.1, size: 5.0),
-    _Shard(slotAngle: 1.89, slotRadius: _orbitR, scatterAngle: 0.14, scatterRadius: 73, spin: -0.4, size: 3.8),
-    _Shard(slotAngle: 2.52, slotRadius: _orbitR, scatterAngle: 0.34, scatterRadius: 75, spin: 0.7, size: 4.4),
-    _Shard(slotAngle: 3.15, slotRadius: _orbitR, scatterAngle: -0.10, scatterRadius: 71, spin: -0.9, size: 4.2),
-    _Shard(slotAngle: 3.78, slotRadius: _orbitR, scatterAngle: 0.26, scatterRadius: 74, spin: 0.5, size: 4.8),
-    _Shard(slotAngle: 4.41, slotRadius: _orbitR, scatterAngle: -0.34, scatterRadius: 70, spin: -1.0, size: 3.6),
-    _Shard(slotAngle: 5.04, slotRadius: _orbitR, scatterAngle: 0.10, scatterRadius: 73, spin: 0.8, size: 4.5),
-    _Shard(slotAngle: 5.67, slotRadius: _orbitR, scatterAngle: -0.22, scatterRadius: 75, spin: -0.5, size: 4.1),
+  // Three concentric bands of shards (inner → outer), denser toward the rim.
+  // (radius, count, baseSize, convergence delay for the defrag wave)
+  static const _bands = <({double r, int count, double size, double delay})>[
+    (r: 32.0, count: 7, size: 3.6, delay: 0.00),
+    (r: 49.0, count: 9, size: 4.3, delay: 0.12),
+    (r: 66.0, count: 11, size: 5.0, delay: 0.24),
   ];
+
+  // Deterministic layout (no per-paint randomness) — built once.
+  static final List<_Shard> _shards = _buildShards();
+
+  static List<_Shard> _buildShards() {
+    final out = <_Shard>[];
+    var idx = 0;
+    for (var b = 0; b < _bands.length; b++) {
+      final band = _bands[b];
+      for (var k = 0; k < band.count; k++) {
+        final slot = k * 2 * math.pi / band.count + b * 0.45;
+        out.add(_Shard(
+          slotAngle: slot,
+          slotRadius: band.r,
+          scatterAngle: math.sin(idx * 1.7) * 0.28,
+          scatterRadius: 76.0 + (idx % 3) * 3.0,
+          spin: math.sin(idx * 2.3),
+          size: band.size + math.sin(idx * 0.9) * 0.6,
+          shapeType: idx % 4,
+          bandDelay: band.delay,
+        ));
+        idx++;
+      }
+    }
+    return out;
+  }
 
   static Offset _dir(double a) => Offset(math.cos(a), math.sin(a));
 
@@ -189,20 +212,43 @@ class _DefragPreviewPainter extends CustomPainter {
     }
   }
 
-  Path _shardPath(double size) {
-    // A thin geometric glass chip — elongated diamond.
-    return Path()
-      ..moveTo(0, -size * 1.4)
-      ..lineTo(size * 0.55, 0)
-      ..lineTo(0, size * 1.4)
-      ..lineTo(-size * 0.55, 0)
-      ..close();
+  Path _shardPath(int type, double s) {
+    switch (type) {
+      case 1: // triangle
+        return Path()
+          ..moveTo(0, -s * 1.5)
+          ..lineTo(s * 1.25, s * 1.0)
+          ..lineTo(-s * 1.25, s * 1.0)
+          ..close();
+      case 2: // irregular shard
+        return Path()
+          ..moveTo(0, -s * 1.5)
+          ..lineTo(s * 0.95, -s * 0.1)
+          ..lineTo(s * 0.35, s * 1.35)
+          ..lineTo(-s * 0.8, s * 0.5)
+          ..close();
+      case 3: // pentagon crystal
+        final p = Path();
+        for (var i = 0; i < 5; i++) {
+          final a = -math.pi / 2 + i * 2 * math.pi / 5;
+          final o = Offset(math.cos(a) * s * 1.2, math.sin(a) * s * 1.2);
+          i == 0 ? p.moveTo(o.dx, o.dy) : p.lineTo(o.dx, o.dy);
+        }
+        return p..close();
+      default: // elongated diamond
+        return Path()
+          ..moveTo(0, -s * 1.4)
+          ..lineTo(s * 0.55, 0)
+          ..lineTo(0, s * 1.4)
+          ..lineTo(-s * 0.55, 0)
+          ..close();
+    }
   }
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
-    const coreR = 15.0;
+    const coreR = 18.0;
 
     // Cold-side shard gradient stops — derived from the `cold` token
     // (c.focusBreak) pulled toward the shared teal-rim constants, so the left
@@ -248,32 +294,35 @@ class _DefragPreviewPainter extends CustomPainter {
       );
     }
 
-    // ── 3. Faint dotted orbital arcs (ordered orbit + inner + outer guide) ──
+    // ── 3. Concentric band rings (smooth) — one per shard band, for depth ────
+    for (final band in _bands) {
+      canvas.drawCircle(
+        center,
+        band.r,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0
+          ..color = trackColor.withValues(alpha: isLight ? 0.30 : 0.18),
+      );
+    }
+
+    // ── 3b. Faint dotted orbital guides (drifting) ───────────────────────────
     _dottedCircle(
       canvas,
       center,
-      _orbitR,
+      _bands[1].r,
       Paint()
         ..color = gold.withValues(alpha: isLight ? 0.32 : 0.24)
-        ..strokeWidth = 1.4,
+        ..strokeWidth = 1.3,
     );
     _dottedCircle(
       canvas,
       center,
-      66,
+      _bands[2].r,
       Paint()
-        ..color = trackColor.withValues(alpha: isLight ? 0.32 : 0.24)
+        ..color = trackColor.withValues(alpha: isLight ? 0.30 : 0.22)
         ..strokeWidth = 1.2,
       dots: 60,
-    );
-    _dottedCircle(
-      canvas,
-      center,
-      38,
-      Paint()
-        ..color = gold.withValues(alpha: isLight ? 0.28 : 0.20)
-        ..strokeWidth = 1.1,
-      dots: 44,
     );
 
     // ── 3b. Quadrant axes — thin crosshair dividing the circle in four ──────
@@ -292,8 +341,10 @@ class _DefragPreviewPainter extends CustomPainter {
     // ── 4. Shards: scattered (dim frosted) → settled (bright) ───────────────
     // `ease` sharpens the settle so shards read as "snapping into order".
     // Color split: warm gold on the right half (cos ≥ 0), cool teal on the left.
-    final ep = p * p * (3 - 2 * p); // smoothstep
     for (final s in _shards) {
+      // Per-band convergence wave — inner band settles first.
+      final bp = ((p - s.bandDelay) / (1 - s.bandDelay)).clamp(0.0, 1.0);
+      final ep = bp * bp * (3 - 2 * bp); // smoothstep
       final angle = s.scatterAngle * (1 - ep) + s.slotAngle + drift * 0.4;
       final radius = s.scatterRadius * (1 - ep) + s.slotRadius * ep;
       final pos = center + _dir(angle) * radius;
@@ -320,7 +371,7 @@ class _DefragPreviewPainter extends CustomPainter {
       canvas.save();
       canvas.translate(pos.dx, pos.dy);
       canvas.rotate(rotation);
-      final path = _shardPath(s.size);
+      final path = _shardPath(s.shapeType, s.size);
       // Frosted fill — warm gold (right) or cool teal (left) gradient.
       final fillPaint = Paint()
         ..shader = LinearGradient(
@@ -353,14 +404,22 @@ class _DefragPreviewPainter extends CustomPainter {
       canvas.restore();
     }
 
-    // ── 5. Glowing gold-sand core ────────────────────────────────────────────
-    const coreGlowR = 26.0;
+    // ── 5. Glowing gold-sand core — layered nebula halo + bright sphere ───────
+    // Soft outer halos (nebula): large, faint, blurred — builds the "излучает
+    // тёплое свечение" look of the reference core.
     canvas.drawCircle(
       center,
-      coreGlowR,
+      coreR * 2.1,
       Paint()
-        ..color = gold.withValues(alpha: isLight ? 0.10 : 0.16)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+        ..color = gold.withValues(alpha: isLight ? 0.06 : 0.12)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16),
+    );
+    canvas.drawCircle(
+      center,
+      coreR * 1.5,
+      Paint()
+        ..color = gold.withValues(alpha: isLight ? 0.10 : 0.18)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9),
     );
     // Core sphere — warm radial gradient (light centre → bronze edge).
     canvas.drawCircle(
@@ -371,6 +430,14 @@ class _DefragPreviewPainter extends CustomPainter {
           colors: [goldLight, gold, gold2],
           stops: const [0.0, 0.55, 1.0],
         ).createShader(Rect.fromCircle(center: center, radius: coreR)),
+    );
+    // Bright inner seed — concentrated highlight just off-centre.
+    canvas.drawCircle(
+      center.translate(-coreR * 0.12, -coreR * 0.12),
+      coreR * 0.42,
+      Paint()
+        ..color = goldLight.withValues(alpha: 0.9)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
     );
     // Thin gold rim.
     canvas.drawCircle(
