@@ -10,7 +10,7 @@ final tipsProvider = FutureProvider.autoDispose<List<Tip>>((ref) async {
         .select()
         .eq('is_active', true)
         .order('created_at');
-    return (data as List).map(Tip.fromJson).toList();
+    return (data as List).map((e) => Tip.fromJson(e as Map<String, dynamic>)).toList();
   } catch (e) {
     debugPrint('SiE Tips: fetch failed — $e');
     return const [];
@@ -23,7 +23,7 @@ final allTipsProvider = FutureProvider.autoDispose<List<Tip>>((ref) async {
         .from('tips')
         .select()
         .order('created_at');
-    return (data as List).map(Tip.fromJson).toList();
+    return (data as List).map((e) => Tip.fromJson(e as Map<String, dynamic>)).toList();
   } catch (e) {
     debugPrint('SiE Tips (all): fetch failed — $e');
     return const [];
