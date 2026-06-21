@@ -24,7 +24,7 @@ class DefragPreview extends StatefulWidget {
 
   const DefragPreview({
     super.key,
-    this.size = 150,
+    this.size = 172,
     required this.gold,
     required this.gold2,
     required this.goldLight,
@@ -130,7 +130,7 @@ class _Shard {
   final double scatterRadius; // outer-rim radius when scattered
   final double spin; // rotation offset when scattered
   final double size; // chip half-size
-  final int shapeType; // 0 diamond · 1 triangle · 2 shard · 3 pentagon
+  final int shapeType; // 0 diamond · 1 triangle · 2 shard · 3 pentagon · 4 hexagon
   final double bandDelay; // when this band starts converging (wave)
 
   const _Shard({
@@ -142,6 +142,21 @@ class _Shard {
     required this.size,
     required this.shapeType,
     required this.bandDelay,
+  });
+}
+
+/// Small static accent crystals that sit between the main shard bands.
+class _Connector {
+  final double angle;
+  final double radius;
+  final double size;
+  final int shapeType; // 0 dot · 1 hexagon
+
+  const _Connector({
+    required this.angle,
+    required this.radius,
+    required this.size,
+    required this.shapeType,
   });
 }
 
@@ -171,13 +186,21 @@ class _DefragPreviewPainter extends CustomPainter {
   // Three concentric bands of shards (inner → outer), denser toward the rim.
   // (radius, count, baseSize, convergence delay for the defrag wave)
   static const _bands = <({double r, int count, double size, double delay})>[
-    (r: 32.0, count: 7, size: 3.6, delay: 0.00),
-    (r: 49.0, count: 9, size: 4.3, delay: 0.12),
-    (r: 66.0, count: 11, size: 5.0, delay: 0.24),
+    (r: 34.0, count: 8, size: 4.8, delay: 0.00),
+    (r: 52.0, count: 11, size: 5.8, delay: 0.14),
+    (r: 70.0, count: 14, size: 6.8, delay: 0.28),
+  ];
+
+  // Small connector chips placed halfway between shard bands to mimic the fine
+  // detail in the reference mandala.
+  static const _connectorBands = <({double r, int count, double size})>[
+    (r: 43.0, count: 10, size: 2.4),
+    (r: 61.0, count: 13, size: 2.8),
   ];
 
   // Deterministic layout (no per-paint randomness) — built once.
   static final List<_Shard> _shards = _buildShards();
+  static final List<_Connector> _connectors = _buildConnectors();
 
   static List<_Shard> _buildShards() {
     final out = <_Shard>[];
@@ -190,14 +213,33 @@ class _DefragPreviewPainter extends CustomPainter {
           slotAngle: slot,
           slotRadius: band.r,
           scatterAngle: math.sin(idx * 1.7) * 0.28,
-          scatterRadius: 76.0 + (idx % 3) * 3.0,
+          scatterRadius: 82.0 + (idx % 3) * 4.0,
           spin: math.sin(idx * 2.3),
-          size: band.size + math.sin(idx * 0.9) * 0.6,
-          shapeType: idx % 4,
+          size: band.size *
+              (1.0 + (idx % 5 == 0 ? 0.35 : 0.0) + math.sin(idx * 0.9) * 0.12),
+          shapeType: idx % 5,
           bandDelay: band.delay,
         ));
         idx++;
       }
+    }
+    return out;
+  }
+
+  static List<_Connector> _buildConnectors() {
+    final out = <_Connector>[];
+    var idx = 0;
+    for (final band in _connectorBands) {
+      for (var k = 0; k < band.count; k++) {
+        final a = k * 2 * math.pi / band.count + idx * 0.55;
+        out.add(_Connector(
+          angle: a,
+          radius: band.r,
+          size: band.size,
+          shapeType: idx % 2,
+        ));
+      }
+      idx++;
     }
     return out;
   }
@@ -235,6 +277,14 @@ class _DefragPreviewPainter extends CustomPainter {
           i == 0 ? p.moveTo(o.dx, o.dy) : p.lineTo(o.dx, o.dy);
         }
         return p..close();
+      case 4: // hexagon crystal
+        final p = Path();
+        for (var i = 0; i < 6; i++) {
+          final a = -math.pi / 2 + i * math.pi / 3;
+          final o = Offset(math.cos(a) * s * 1.15, math.sin(a) * s * 1.15);
+          i == 0 ? p.moveTo(o.dx, o.dy) : p.lineTo(o.dx, o.dy);
+        }
+        return p..close();
       default: // elongated diamond
         return Path()
           ..moveTo(0, -s * 1.4)
@@ -248,7 +298,7 @@ class _DefragPreviewPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
-    const coreR = 18.0;
+    const coreR = 26.0;
 
     // Cold-side shard gradient stops — derived from the `cold` token
     // (c.focusBreak) pulled toward the shared teal-rim constants, so the left
@@ -271,13 +321,13 @@ class _DefragPreviewPainter extends CustomPainter {
       );
     }
 
-    disc(72, isLight ? 0.09 : 0.05, isLight ? 0.22 : 0.10);
+    disc(76, isLight ? 0.09 : 0.05, isLight ? 0.22 : 0.10);
     disc(52, isLight ? 0.11 : 0.06, isLight ? 0.26 : 0.12);
     disc(34, isLight ? 0.12 : 0.07, isLight ? 0.30 : 0.15);
 
     // ── 2. Outer radar tick ring — longer cardinal ticks ─────────────────────
-    const ticks = 36;
-    const tickR = 72.0;
+    const ticks = 48;
+    const tickR = 80.0;
     for (var i = 0; i < ticks; i++) {
       final a = i * 2 * math.pi / ticks + drift;
       final cardinal = i % 9 == 0;
@@ -288,8 +338,8 @@ class _DefragPreviewPainter extends CustomPainter {
         p2,
         Paint()
           ..color = gold
-              .withValues(alpha: (isLight ? 0.45 : 0.40) * (cardinal ? 1 : 0.55))
-          ..strokeWidth = cardinal ? 1.4 : 1
+              .withValues(alpha: (isLight ? 0.55 : 0.50) * (cardinal ? 1 : 0.65))
+          ..strokeWidth = cardinal ? 1.6 : 1.1
           ..strokeCap = StrokeCap.round,
       );
     }
@@ -354,8 +404,8 @@ class _DefragPreviewPainter extends CustomPainter {
       final baseMain = warm ? gold : cold;
       final baseDeep = warm ? gold2 : coldDark;
       // Brightness: dim frosted at scatter → rich at settle.
-      final fillA = (isLight ? 0.22 : 0.18) + ep * (isLight ? 0.50 : 0.55);
-      final strokeA = (isLight ? 0.40 : 0.34) + ep * (isLight ? 0.45 : 0.50);
+      final fillA = (isLight ? 0.32 : 0.26) + ep * (isLight ? 0.52 : 0.58);
+      final strokeA = (isLight ? 0.60 : 0.55) + ep * (isLight ? 0.40 : 0.45);
 
       // Spoke core → settled shard — only as the shard aligns.
       if (ep > 0.15) {
@@ -372,55 +422,112 @@ class _DefragPreviewPainter extends CustomPainter {
       canvas.translate(pos.dx, pos.dy);
       canvas.rotate(rotation);
       final path = _shardPath(s.shapeType, s.size);
+      // Soft inner glow behind every shard for the glassy "ignited" look.
+      canvas.drawCircle(
+        Offset.zero,
+        s.size * 1.1,
+        Paint()
+          ..color = baseMain.withValues(alpha: fillA * 0.35)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+      );
       // Frosted fill — warm gold (right) or cool teal (left) gradient.
       final fillPaint = Paint()
         ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
           colors: [
-            baseLight.withValues(alpha: fillA * 0.7),
+            baseLight.withValues(alpha: fillA * 0.8),
             baseMain.withValues(alpha: fillA),
-            baseDeep.withValues(alpha: fillA),
+            baseDeep.withValues(alpha: fillA * 0.9),
           ],
-        ).createShader(Rect.fromCircle(center: Offset.zero, radius: s.size * 1.6));
+        ).createShader(Rect.fromCircle(center: Offset.zero, radius: s.size * 1.7));
       canvas.drawPath(path, fillPaint);
+      // Main edge — slightly brighter to define the crystal silhouette.
       canvas.drawPath(
         path,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1
+          ..strokeWidth = 1.1
           ..color = baseMain.withValues(alpha: strokeA),
       );
-      // Settled shards get a soft halo for the "ignited" look.
-      if (ep > 0.6 && !isLight) {
+      // Top-left glossy highlight edge (glass reflection).
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0
+          ..color = Colors.white.withValues(alpha: isLight ? 0.55 : 0.75),
+      );
+      canvas.restore();
+    }
+
+    // ── 4b. Small static connector chips between shard bands ──────────────────
+    // These add the fine grain detail visible in the reference mandala.
+    for (final conn in _connectors) {
+      final pos = center + _dir(conn.angle + drift * 0.25) * conn.radius;
+      final warm = math.cos(conn.angle) >= 0;
+      final baseMain = warm ? gold : cold;
+      final fillA = isLight ? 0.20 : 0.16;
+      final strokeA = isLight ? 0.45 : 0.40;
+
+      canvas.save();
+      canvas.translate(pos.dx, pos.dy);
+      if (conn.shapeType == 1) {
+        final path = Path();
+        for (var i = 0; i < 6; i++) {
+          final a = -math.pi / 2 + i * math.pi / 3;
+          final o = Offset(math.cos(a) * conn.size, math.sin(a) * conn.size);
+          i == 0 ? path.moveTo(o.dx, o.dy) : path.lineTo(o.dx, o.dy);
+        }
+        path.close();
+        canvas.drawPath(
+          path,
+          Paint()..color = baseMain.withValues(alpha: fillA),
+        );
+        canvas.drawPath(
+          path,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 0.8
+            ..color = baseMain.withValues(alpha: strokeA),
+        );
+      } else {
         canvas.drawCircle(
           Offset.zero,
-          s.size * 0.9,
+          conn.size * 0.7,
+          Paint()..color = baseMain.withValues(alpha: fillA),
+        );
+        canvas.drawCircle(
+          Offset.zero,
+          conn.size * 0.7,
           Paint()
-            ..color = baseMain.withValues(alpha: (ep - 0.6) * 0.6)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5),
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 0.8
+            ..color = baseMain.withValues(alpha: strokeA),
         );
       }
       canvas.restore();
     }
 
     // ── 5. Glowing gold-sand core — layered nebula halo + bright sphere ───────
-    // Soft outer halos (nebula): large, faint, blurred — builds the "излучает
-    // тёплое свечение" look of the reference core.
-    canvas.drawCircle(
-      center,
-      coreR * 2.1,
-      Paint()
-        ..color = gold.withValues(alpha: isLight ? 0.06 : 0.12)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16),
-    );
-    canvas.drawCircle(
-      center,
-      coreR * 1.5,
-      Paint()
-        ..color = gold.withValues(alpha: isLight ? 0.10 : 0.18)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9),
-    );
+    // Reference-style sun-like core: multiple blurred halos for a soft nimbus,
+    // then a bright radial sphere and a hot highlight seed.
+    final haloBaseAlpha = isLight ? 0.08 : 0.12;
+    for (final (radiusMul, blur, alphaMul) in [
+      (3.2, 28.0, 1.0),
+      (2.6, 20.0, 1.4),
+      (2.0, 12.0, 1.85),
+      (1.5, 6.0, 2.2),
+    ]) {
+      canvas.drawCircle(
+        center,
+        coreR * radiusMul,
+        Paint()
+          ..color = gold.withValues(
+              alpha: (haloBaseAlpha * alphaMul).clamp(0.0, 1.0))
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, blur),
+      );
+    }
     // Core sphere — warm radial gradient (light centre → bronze edge).
     canvas.drawCircle(
       center,
@@ -428,16 +535,24 @@ class _DefragPreviewPainter extends CustomPainter {
       Paint()
         ..shader = RadialGradient(
           colors: [goldLight, gold, gold2],
-          stops: const [0.0, 0.55, 1.0],
+          stops: const [0.0, 0.50, 1.0],
         ).createShader(Rect.fromCircle(center: center, radius: coreR)),
     );
     // Bright inner seed — concentrated highlight just off-centre.
     canvas.drawCircle(
-      center.translate(-coreR * 0.12, -coreR * 0.12),
-      coreR * 0.42,
+      center.translate(-coreR * 0.10, -coreR * 0.10),
+      coreR * 0.45,
       Paint()
-        ..color = goldLight.withValues(alpha: 0.9)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+        ..color = goldLight.withValues(alpha: 1.0)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+    );
+    // Extra hot pinpoint to keep the centre from going flat.
+    canvas.drawCircle(
+      center.translate(-coreR * 0.06, -coreR * 0.06),
+      coreR * 0.22,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.55)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
     );
     // Thin gold rim.
     canvas.drawCircle(
@@ -446,17 +561,17 @@ class _DefragPreviewPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.2
-        ..color = gold.withValues(alpha: isLight ? 0.55 : 0.7),
+        ..color = gold.withValues(alpha: isLight ? 0.55 : 0.75),
     );
     // Cardinal tick marks — tactical-instrument feel.
     for (final a in [0.0, math.pi / 2, math.pi, -math.pi / 2]) {
       final p1 = center + _dir(a) * (coreR + 3);
-      final p2 = center + _dir(a) * (coreR + 6);
+      final p2 = center + _dir(a) * (coreR + 7);
       canvas.drawLine(
         p1,
         p2,
         Paint()
-          ..color = gold.withValues(alpha: 0.8)
+          ..color = gold.withValues(alpha: 0.85)
           ..strokeWidth = 1.4
           ..strokeCap = StrokeCap.round,
       );
