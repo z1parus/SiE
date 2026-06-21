@@ -20,7 +20,13 @@ supabase/functions/.env
 # IDE
 .idea/
 .vscode/
+.vs/
 *.iml
+
+# Node (local supabase CLI install)
+node_modules/
+package.json
+package-lock.json
 
 # OS
 .DS_Store
