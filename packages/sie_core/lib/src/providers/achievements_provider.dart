@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -19,7 +20,21 @@ class SessionCompletionNotifier extends Notifier<void> {
   @override
   void build() {}
 
-  Future<SessionResult> completeSession({required int durationSeconds}) async {
+  /// Logs a finished breathing session. The practice metrics ([breaths],
+  /// [rounds], [longestHoldSeconds], [totalHoldSeconds]) and the optional
+  /// post-practice reflection ([moodEmoji], [calmness], [confidence]) are
+  /// stored both locally and — now — in the Supabase `breathing_sessions`
+  /// table (queued for sync when offline).
+  Future<SessionResult> completeSession({
+    required int durationSeconds,
+    int breaths = 0,
+    int rounds = 0,
+    int longestHoldSeconds = 0,
+    int totalHoldSeconds = 0,
+    String? moodEmoji,
+    int? calmness,
+    int? confidence,
+  }) async {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
     if (userId == null) throw StateError('Not authenticated');
@@ -28,16 +43,43 @@ class SessionCompletionNotifier extends Notifier<void> {
     final db = ref.read(appDatabaseProvider);
     final xp = ((durationSeconds / 60.0) * 10).round().clamp(10, 9999);
 
+    final id = _uuid.v4();
+    final completedAt = DateTime.now();
+
     // Always record locally.
     await db.insertBreathingSession(LocalBreathingSessionsCompanion(
-      id: Value(_uuid.v4()),
+      id: Value(id),
       userId: Value(userId),
       durationSeconds: Value(durationSeconds),
-      completedAtMs: Value(DateTime.now().millisecondsSinceEpoch),
+      completedAtMs: Value(completedAt.millisecondsSinceEpoch),
       xpAwarded: Value(xp),
       dpAwarded: const Value(_breathingDp),
+      breaths: Value(breaths),
+      rounds: Value(rounds),
+      longestHoldSeconds: Value(longestHoldSeconds),
+      totalHoldSeconds: Value(totalHoldSeconds),
+      moodEmoji: Value(moodEmoji),
+      calmness: Value(calmness),
+      confidence: Value(confidence),
       synced: Value(isOnline),
     ));
+
+    // The row that mirrors this session into Supabase.
+    final sessionRow = <String, dynamic>{
+      'id': id,
+      'user_id': userId,
+      'duration_seconds': durationSeconds,
+      'breaths': breaths,
+      'rounds': rounds,
+      'longest_hold_seconds': longestHoldSeconds,
+      'total_hold_seconds': totalHoldSeconds,
+      'mood_emoji': moodEmoji,
+      'calmness': calmness,
+      'confidence': confidence,
+      'xp_awarded': xp,
+      'dp_awarded': _breathingDp,
+      'completed_at': completedAt.toUtc().toIso8601String(),
+    };
 
     // Refresh the Breathing home widget(s) from the local mirror.
     WidgetRenderService.notifyModuleChanged('breathing', db)
@@ -46,6 +88,9 @@ class SessionCompletionNotifier extends Notifier<void> {
     Achievement? earned;
 
     if (isOnline) {
+      await client.from('breathing_sessions').insert(sessionRow);
+      await db.markBreathingSessionSynced(id);
+
       await Future.wait([
         client.rpc('increment_xp', params: {
           'p_user_id': userId,
@@ -75,6 +120,11 @@ class SessionCompletionNotifier extends Notifier<void> {
           earned = Achievement.fromMap(ach);
         }
       }
+    } else {
+      // Offline: queue the session row so it reaches Supabase on reconnect.
+      // (XP/DP increments are reconciled separately via the pending profile
+      // deltas applied below.)
+      await db.enqueueSyncOp('insert_breathing_session', jsonEncode(sessionRow));
     }
 
     // Apply local XP delta for immediate UI update regardless of connectivity.

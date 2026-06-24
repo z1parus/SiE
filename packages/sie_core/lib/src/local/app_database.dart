@@ -91,6 +91,17 @@ class LocalBreathingSessions extends Table {
   IntColumn get completedAtMs => integer()();
   IntColumn get xpAwarded => integer()();
   IntColumn get dpAwarded => integer()();
+  // Practice metrics (added in schema v38).
+  IntColumn get breaths => integer().withDefault(const Constant(0))();
+  IntColumn get rounds => integer().withDefault(const Constant(0))();
+  IntColumn get longestHoldSeconds =>
+      integer().withDefault(const Constant(0))();
+  IntColumn get totalHoldSeconds =>
+      integer().withDefault(const Constant(0))();
+  // Post-practice reflection (all nullable — the user may skip it).
+  TextColumn get moodEmoji => text().nullable()();
+  IntColumn get calmness => integer().nullable()();
+  IntColumn get confidence => integer().nullable()();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
 
   @override
@@ -517,7 +528,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 37;
+  int get schemaVersion => 38;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -754,6 +765,20 @@ class AppDatabase extends _$AppDatabase {
             'ON local_breathing_sequences(user_id)',
             const []);
       }
+      if (from < 38) {
+        await m.addColumn(localBreathingSessions, localBreathingSessions.breaths);
+        await m.addColumn(localBreathingSessions, localBreathingSessions.rounds);
+        await m.addColumn(
+            localBreathingSessions, localBreathingSessions.longestHoldSeconds);
+        await m.addColumn(
+            localBreathingSessions, localBreathingSessions.totalHoldSeconds);
+        await m.addColumn(
+            localBreathingSessions, localBreathingSessions.moodEmoji);
+        await m.addColumn(
+            localBreathingSessions, localBreathingSessions.calmness);
+        await m.addColumn(
+            localBreathingSessions, localBreathingSessions.confidence);
+      }
       } catch (e) {
         // Migration failed (e.g. table/column already exists from a dev build
         // that didn't bump schemaVersion). The local DB is a pure Supabase cache
@@ -983,6 +1008,17 @@ class AppDatabase extends _$AppDatabase {
       (update(localBreathingSessions)..where((t) => t.id.equals(id)))
           .write(
               const LocalBreathingSessionsCompanion(synced: Value(true)));
+
+  /// All breathing sessions for [userId], newest first — backs the journal and
+  /// stats screens when offline (and mirrors the Supabase rows when online).
+  Future<List<LocalBreathingSession>> breathingSessionsForUser(String userId) =>
+      (select(localBreathingSessions)
+            ..where((t) => t.userId.equals(userId))
+            ..orderBy([
+              (t) => OrderingTerm(
+                  expression: t.completedAtMs, mode: OrderingMode.desc)
+            ]))
+          .get();
 
   // ── Bootcamp Activity Queries ─────────────────────────────────────────────
 

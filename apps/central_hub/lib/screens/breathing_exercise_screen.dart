@@ -6,9 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sie_core/sie_core.dart';
-import 'mission_accomplished_screen.dart';
 import 'session_orb_painters.dart';
 import 'breathing_sequences_screen.dart';
+import 'breathing_reflection_screen.dart';
+import 'breathing_journal_screen.dart';
+import 'breathing_stats_screen.dart';
 
 const _kRimGold  = kRimGold;
 const _kRimLight = kRimLight;
@@ -218,6 +220,12 @@ class _BreathingExerciseScreenState
   int _countdownValue = 5;
   bool _spherePressed = false;
 
+  // Accumulated practice metrics for the session log / journal.
+  int _totalBreaths = 0;
+  int _roundsCompleted = 0;
+  int _longestHold = 0;
+  int _totalHold = 0;
+
   Timer? _breathTimer;
   Timer? _retentionTimer;
   Timer? _transitionTimer;
@@ -325,10 +333,15 @@ class _BreathingExerciseScreenState
     final elapsed = DateTime.now().difference(_sessionStart!).inSeconds;
     if (elapsed < 30) return;
     try {
-      await ref
-          .read(sessionCompletionProvider.notifier)
-          .completeSession(durationSeconds: elapsed);
+      await ref.read(sessionCompletionProvider.notifier).completeSession(
+            durationSeconds: elapsed,
+            breaths: _totalBreaths,
+            rounds: _roundsCompleted,
+            longestHoldSeconds: _longestHold,
+            totalHoldSeconds: _totalHold,
+          );
       ref.invalidate(userProfileProvider);
+      ref.invalidate(breathingJournalProvider);
     } catch (_) {}
   }
 
@@ -337,7 +350,15 @@ class _BreathingExerciseScreenState
   void _startSession() {
     _round = 1;
     _rounds = _buildRounds();
+    _resetMetrics();
     _startCountdown();
+  }
+
+  void _resetMetrics() {
+    _totalBreaths = 0;
+    _roundsCompleted = 0;
+    _longestHold = 0;
+    _totalHold = 0;
   }
 
   void _restartSession() {
@@ -346,6 +367,7 @@ class _BreathingExerciseScreenState
     _heartbeatStart = null;
     _sessionStart = null;
     _rounds = _buildRounds();
+    _resetMetrics();
     setState(() {
       _round = 1;
       _cycle = 0;
@@ -437,6 +459,8 @@ class _BreathingExerciseScreenState
     if (!mounted) return;
     _breathTimer?.cancel();
     _pulseCtrl.stop();
+    // All active-breathing cycles for this round are now done — log the breaths.
+    _totalBreaths += _cur.cyclesPerRound;
     setState(() {
       _phase = _Phase.exhalePause;
       _pauseElapsed = 0;
@@ -500,6 +524,9 @@ class _BreathingExerciseScreenState
     _heartbeatTimer?.cancel();
     _heartbeatStart = null;
     _pulseCtrl.stop();
+    // Record this round's exhale-hold for the journal (longest + running total).
+    if (_retentionElapsed > _longestHold) _longestHold = _retentionElapsed;
+    _totalHold += _retentionElapsed;
     _startInhalePause();
   }
 
@@ -580,6 +607,8 @@ class _BreathingExerciseScreenState
 
   void _startRoundTransitionPhase() {
     if (!mounted) return;
+    // A full round (active → exhale hold → inhale hold) just finished.
+    _roundsCompleted++;
     _audio.stopHum();
     if (_settings.ambientEnabled) {
       _audio.fadeAmbientTo(_settings.ambientVolume);
@@ -629,33 +658,42 @@ class _BreathingExerciseScreenState
         ? 60
         : DateTime.now().difference(_sessionStart!).inSeconds;
 
-    final stopFuture = _audio.stopAll();
-    final dbFuture = ref
-        .read(sessionCompletionProvider.notifier)
-        .completeSession(durationSeconds: elapsed);
-
-    await stopFuture;
-    final result = await dbFuture;
-
-    ref.invalidate(userProfileProvider);
+    await _audio.stopAll();
 
     if (!mounted) return;
+    // Reflection first: capture the user's post-practice state, then the
+    // reflection screen logs the session (with the metrics below) and reveals
+    // the XP / achievement reward.
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => MissionAccomplishedScreen(
-          xpGained: result.xpGained,
-          dpGained: result.dpGained,
-          achievement: result.newAchievement,
+        builder: (_) => BreathingReflectionScreen(
+          durationSeconds: elapsed,
+          breaths: _totalBreaths,
+          rounds: _roundsCompleted,
+          longestHoldSeconds: _longestHold,
+          totalHoldSeconds: _totalHold,
         ),
       ),
     );
   }
 
-  // ── Sequences library ─────────────────────────────────────
+  // ── Sequences / Journal / Stats ───────────────────────────
 
   void _openSequences() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const BreathingSequencesScreen()),
+    );
+  }
+
+  void _openJournal() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const BreathingJournalScreen()),
+    );
+  }
+
+  void _openStats() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const BreathingStatsScreen()),
     );
   }
 
@@ -972,6 +1010,21 @@ class _BreathingExerciseScreenState
               const SizedBox(height: 12),
               _SequencesButton(onTap: _openSequences),
             ],
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _PillButton(
+                    icon: Icons.menu_book_outlined,
+                    label: 'ЖУРНАЛ',
+                    onTap: _openJournal),
+                const SizedBox(width: 12),
+                _PillButton(
+                    icon: Icons.insights_outlined,
+                    label: 'СТАТИСТИКА',
+                    onTap: _openStats),
+              ],
+            ),
             const SizedBox(height: 16),
             _SieButton(label: 'INITIATE PROTOCOL', onPressed: _startSession),
           ],
@@ -1559,6 +1612,43 @@ class _SequencesButton extends ConsumerWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact icon+label pill used for the secondary idle-screen actions
+/// (Journal, Stats) shown side by side.
+class _PillButton extends ConsumerWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _PillButton(
+      {required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: c.flatCard(radius: 16),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: c.textSecondary),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 11,
+                letterSpacing: 1.3,
+              ),
+            ),
+          ],
         ),
       ),
     );

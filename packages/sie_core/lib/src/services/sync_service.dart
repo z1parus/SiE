@@ -467,6 +467,11 @@ class SyncService {
                 .delete()
                 .eq('id', payload['id'] as String);
             await _db.purgeBreathingSequence(payload['id'] as String);
+          case 'insert_breathing_session':
+            await client
+                .from('breathing_sessions')
+                .upsert(payload, onConflict: 'id');
+            await _db.markBreathingSessionSynced(payload['id'] as String);
 
           default:
             debugPrint(
