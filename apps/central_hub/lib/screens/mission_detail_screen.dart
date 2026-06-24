@@ -262,16 +262,6 @@ class _MissionHeader extends StatelessWidget {
                 ),
               ],
               const Spacer(),
-              if (onSettings != null) ...[
-                IconButton(
-                  icon: Icon(Icons.settings_outlined,
-                      color: sc.textSecondary, size: 20),
-                  onPressed: onSettings,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-                const SizedBox(width: 4),
-              ],
               IconButton(
                 icon: Icon(Icons.menu_book_outlined,
                     color: sc.textSecondary, size: 20),
@@ -280,28 +270,16 @@ class _MissionHeader extends StatelessWidget {
                 constraints: const BoxConstraints(),
                 tooltip: 'Журнал заметок',
               ),
-              const SizedBox(width: 4),
-              IconButton(
-                icon: Icon(Icons.bar_chart_outlined,
-                    color: sc.textSecondary, size: 20),
-                onPressed: onStats,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-              if (onExport != null) ...[
-                const SizedBox(width: 2),
-                IconButton(
-                  icon: Icon(Icons.ios_share_outlined,
-                      color: sc.textSecondary, size: 20),
-                  onPressed: onExport,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  tooltip: 'Экспорт',
-                ),
-              ],
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
               _ViewToggle(
                   mapMode: mapMode, onToggle: onToggle, goalColor: goalColor, sc: sc),
+              const SizedBox(width: 2),
+              _HeaderOverflowMenu(
+                sc: sc,
+                onSettings: onSettings,
+                onStats: onStats,
+                onExport: onExport,
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -413,6 +391,65 @@ class _MissionHeader extends StatelessWidget {
       }
     }
     return advice;
+  }
+}
+
+// Overflow menu collapsing the secondary header actions (settings, stats,
+// export) behind a single three-dots button so the view toggle always fits.
+class _HeaderOverflowMenu extends StatelessWidget {
+  const _HeaderOverflowMenu({
+    required this.sc,
+    this.onSettings,
+    required this.onStats,
+    this.onExport,
+  });
+
+  final SieColors sc;
+  final VoidCallback? onSettings;
+  final VoidCallback onStats;
+  final VoidCallback? onExport;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.more_vert, color: sc.textSecondary, size: 20),
+      iconSize: 20,
+      padding: EdgeInsets.zero,
+      color: sc.surface,
+      position: PopupMenuPosition.under,
+      tooltip: 'Ещё',
+      onSelected: (v) {
+        switch (v) {
+          case 'settings':
+            onSettings?.call();
+          case 'stats':
+            onStats();
+          case 'export':
+            onExport?.call();
+        }
+      },
+      itemBuilder: (_) => [
+        if (onSettings != null)
+          _item('settings', Icons.settings_outlined, 'Настройки'),
+        _item('stats', Icons.bar_chart_outlined, 'Статистика'),
+        if (onExport != null)
+          _item('export', Icons.ios_share_outlined, 'Экспорт'),
+      ],
+    );
+  }
+
+  PopupMenuItem<String> _item(String value, IconData icon, String label) {
+    return PopupMenuItem<String>(
+      value: value,
+      height: 44,
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: sc.textSecondary),
+          const SizedBox(width: 12),
+          Text(label, style: TextStyle(color: sc.textPrimary, fontSize: 14)),
+        ],
+      ),
+    );
   }
 }
 
