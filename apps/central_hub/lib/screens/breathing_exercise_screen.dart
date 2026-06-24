@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sie_core/sie_core.dart';
 import 'mission_accomplished_screen.dart';
 import 'session_orb_painters.dart';
+import 'breathing_sequences_screen.dart';
 
 const _kRimGold  = kRimGold;
 const _kRimLight = kRimLight;
@@ -124,11 +125,20 @@ enum _Phase { idle, countdown, active, retention, recovery, roundTransition, com
 // ── Screen ───────────────────────────────────────────────────
 
 class BreathingExerciseScreen extends ConsumerStatefulWidget {
-  const BreathingExerciseScreen({super.key, this.openSettings = false});
+  const BreathingExerciseScreen({
+    super.key,
+    this.openSettings = false,
+    this.sequence,
+  });
 
   /// When true, the protocol settings sheet auto-opens on entry — used by the
   /// Knowledge Base deep-link.
   final bool openSettings;
+
+  /// When non-null, the session runs this user-built sequence (each round has
+  /// its own params) instead of the uniform [BreathingSettings] rounds. Audio
+  /// still comes from the device-level settings.
+  final BreathingSequence? sequence;
 
   @override
   ConsumerState<BreathingExerciseScreen> createState() =>
@@ -149,6 +159,36 @@ class _BreathingExerciseScreenState
 
   _Phase _phase = _Phase.idle;
   BreathingSettings _settings = const BreathingSettings();
+
+  /// The per-round plan driving the current session. Derived either from the
+  /// passed [BreathingExerciseScreen.sequence] or generated from the uniform
+  /// [_settings] (N identical rounds). Always the source of truth at runtime.
+  List<BreathingRound> _rounds = const [];
+
+  /// Current round config (1-based [_round]). Falls back to a settings-derived
+  /// round if the plan is somehow empty.
+  BreathingRound get _cur => _rounds.isEmpty
+      ? _roundFromSettings()
+      : _rounds[(_round - 1).clamp(0, _rounds.length - 1)];
+
+  /// Total rounds for the active session (sequence length or settings count).
+  int get _totalRounds => _rounds.isEmpty ? _settings.rounds : _rounds.length;
+
+  bool get _isSequenceMode => widget.sequence != null;
+
+  BreathingRound _roundFromSettings() => BreathingRound(
+        cyclesPerRound: _settings.cyclesPerRound,
+        inhaleSecs: _settings.inhaleSecs,
+        exhaleSecs: _settings.exhaleSecs,
+        exhaustRetentionSecs: _settings.exhaustRetentionSecs,
+        recoveryHoldSecs: _settings.recoveryHoldSecs,
+      );
+
+  List<BreathingRound> _buildRounds() {
+    final seq = widget.sequence;
+    if (seq != null && seq.rounds.isNotEmpty) return seq.rounds;
+    return List.generate(_settings.rounds, (_) => _roundFromSettings());
+  }
 
   bool _onboardingDismissed = false;
   bool _showOnboardingManual = false;
@@ -186,6 +226,7 @@ class _BreathingExerciseScreenState
       vsync: this,
       duration: const Duration(seconds: 60),
     )..repeat();
+    _rounds = _buildRounds();
     _loadSphereShader();
     if (widget.openSettings) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -277,6 +318,7 @@ class _BreathingExerciseScreenState
 
   void _startSession() {
     _round = 1;
+    _rounds = _buildRounds();
     _startCountdown();
   }
 
@@ -285,6 +327,7 @@ class _BreathingExerciseScreenState
     _audio.stopAll();
     _heartbeatStart = null;
     _sessionStart = null;
+    _rounds = _buildRounds();
     setState(() {
       _round = 1;
       _cycle = 0;
@@ -337,29 +380,29 @@ class _BreathingExerciseScreenState
 
   void _runNextCycle() {
     if (!mounted || _phase != _Phase.active) return;
-    if (_cycle >= _settings.cyclesPerRound) {
+    if (_cycle >= _cur.cyclesPerRound) {
       _startRetentionPhase();
       return;
     }
     setState(() => _isInhaling = true);
     _breathColorCtrl.animateTo(0.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
-    if (_settings.breathingSoundsEnabled) _audio.playInhale(targetSecs: _settings.inhaleSecs, volumeFactor: _settings.breathingVolume);
+    if (_settings.breathingSoundsEnabled) _audio.playInhale(targetSecs: _cur.inhaleSecs, volumeFactor: _settings.breathingVolume);
     _circleCtrl.animateTo(
       1.0,
-      duration: Duration(seconds: _settings.inhaleSecs),
+      duration: Duration(seconds: _cur.inhaleSecs),
       curve: Curves.easeIn,
     );
-    _breathTimer = Timer(Duration(seconds: _settings.inhaleSecs), () {
+    _breathTimer = Timer(Duration(seconds: _cur.inhaleSecs), () {
       if (!mounted || _phase != _Phase.active) return;
       setState(() => _isInhaling = false);
       _breathColorCtrl.animateTo(1.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
-      if (_settings.breathingSoundsEnabled) _audio.playExhale(targetSecs: _settings.exhaleSecs, volumeFactor: _settings.breathingVolume);
+      if (_settings.breathingSoundsEnabled) _audio.playExhale(targetSecs: _cur.exhaleSecs, volumeFactor: _settings.breathingVolume);
       _circleCtrl.animateTo(
         0.3,
-        duration: Duration(seconds: _settings.exhaleSecs),
+        duration: Duration(seconds: _cur.exhaleSecs),
         curve: Curves.easeOut,
       );
-      _breathTimer = Timer(Duration(seconds: _settings.exhaleSecs), () {
+      _breathTimer = Timer(Duration(seconds: _cur.exhaleSecs), () {
         if (!mounted || _phase != _Phase.active) return;
         setState(() => _cycle++);
         _runNextCycle();
@@ -382,17 +425,17 @@ class _BreathingExerciseScreenState
       _audio.fadeAmbientTo(0.0);
       _audio.startHum(volumeFactor: _settings.ambientVolume);
     }
-    if (_settings.exhaustRetentionSecs <= 30) _startHeartbeatSequence();
+    if (_cur.exhaustRetentionSecs <= 30) _startHeartbeatSequence();
     _retentionTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) { t.cancel(); return; }
       final next = _retentionElapsed + 1;
-      if (next >= _settings.exhaustRetentionSecs) {
+      if (next >= _cur.exhaustRetentionSecs) {
         t.cancel();
         setState(() => _retentionElapsed = next);
         _endRetention();
       } else {
         setState(() => _retentionElapsed = next);
-        if (next == _settings.exhaustRetentionSecs - 30) _startHeartbeatSequence();
+        if (next == _cur.exhaustRetentionSecs - 30) _startHeartbeatSequence();
       }
     });
   }
@@ -442,7 +485,7 @@ class _BreathingExerciseScreenState
       if (_settings.tickEnabled) _audio.playTick(volumeFactor: _settings.tickVolume);
       final next = _recoveryElapsed + 1;
       setState(() => _recoveryElapsed = next);
-      if (next >= _settings.recoveryHoldSecs) {
+      if (next >= _cur.recoveryHoldSecs) {
         t.cancel();
         _startRoundTransitionPhase();
       }
@@ -483,7 +526,7 @@ class _BreathingExerciseScreenState
   void _endTransition() {
     _transitionTimer?.cancel();
     if (!mounted) return;
-    if (_round < _settings.rounds) {
+    if (_round < _totalRounds) {
       setState(() => _round++);
       _startActivePhase();
     } else {
@@ -521,6 +564,14 @@ class _BreathingExerciseScreenState
           achievement: result.newAchievement,
         ),
       ),
+    );
+  }
+
+  // ── Sequences library ─────────────────────────────────────
+
+  void _openSequences() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const BreathingSequencesScreen()),
     );
   }
 
@@ -572,7 +623,7 @@ class _BreathingExerciseScreenState
                     child: _TopBar(
                       phase: _phase,
                       round: _round,
-                      totalRounds: _settings.rounds,
+                      totalRounds: _totalRounds,
                       onBack: _handleBackRequest,
                       onInfo: () => setState(() => _showOnboardingManual = true),
                     ),
@@ -795,7 +846,9 @@ class _BreathingExerciseScreenState
               child: Column(
                 children: [
                   Text(
-                    'WIM HOF METHOD',
+                    _isSequenceMode
+                        ? widget.sequence!.name.toUpperCase()
+                        : 'WIM HOF METHOD',
                     style: TextStyle(
                       color: c.textPrimary,
                       fontSize: 16,
@@ -806,7 +859,9 @@ class _BreathingExerciseScreenState
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '${_settings.rounds} ROUNDS  ·  ${_settings.cyclesPerRound} CYCLES',
+                    _isSequenceMode
+                        ? '${widget.sequence!.roundCount} ROUNDS  ·  ${widget.sequence!.totalCycles} CYCLES'
+                        : '${_settings.rounds} ROUNDS  ·  ${_settings.cyclesPerRound} CYCLES',
                     style: TextStyle(
                       color: c.textSecondary,
                       fontSize: 12,
@@ -829,6 +884,10 @@ class _BreathingExerciseScreenState
             ),
             const SizedBox(height: 16),
             _SettingsButton(onTap: _showSettings),
+            if (!_isSequenceMode) ...[
+              const SizedBox(height: 12),
+              _SequencesButton(onTap: _openSequences),
+            ],
             const SizedBox(height: 16),
             _SieButton(label: 'INITIATE PROTOCOL', onPressed: _startSession),
           ],
@@ -895,7 +954,7 @@ class _BreathingExerciseScreenState
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'CYCLE ${_cycle + 1} / ${_settings.cyclesPerRound}',
+                    'CYCLE ${_cycle + 1} / ${_cur.cyclesPerRound}',
                     style: TextStyle(color: c.textSecondary, fontSize: 12),
                     textAlign: TextAlign.center,
                   ),
@@ -906,7 +965,7 @@ class _BreathingExerciseScreenState
                       width: 120,
                       height: 3,
                       child: LinearProgressIndicator(
-                        value: ((_cycle + 1) / _settings.cyclesPerRound)
+                        value: ((_cycle + 1) / _cur.cyclesPerRound)
                             .clamp(0.0, 1.0),
                         backgroundColor: c.border,
                         valueColor: AlwaysStoppedAnimation(activeColor),
@@ -985,7 +1044,7 @@ class _BreathingExerciseScreenState
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'MAX ${_settings.exhaustRetentionSecs ~/ 60}:${(_settings.exhaustRetentionSecs % 60).toString().padLeft(2, '0')}',
+                          'MAX ${_cur.exhaustRetentionSecs ~/ 60}:${(_cur.exhaustRetentionSecs % 60).toString().padLeft(2, '0')}',
                           style: TextStyle(
                             color: c.textSecondary,
                             fontSize: 11,
@@ -1007,7 +1066,7 @@ class _BreathingExerciseScreenState
 
       // ── Recovery (inhale hold) ────────────────────────────────
       case _Phase.recovery:
-        final recovSecsLeft = _settings.recoveryHoldSecs - _recoveryElapsed;
+        final recovSecsLeft = _cur.recoveryHoldSecs - _recoveryElapsed;
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1071,7 +1130,7 @@ class _BreathingExerciseScreenState
       // ── Round Transition ──────────────────────────────────────
       case _Phase.roundTransition:
         final secsLeft     = 10 - _transitionElapsed;
-        final isFinalRound = _round == _settings.rounds;
+        final isFinalRound = _round == _totalRounds;
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1263,6 +1322,41 @@ class _SettingsButton extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           decoration: c.flatCard(radius: 16),
           child: content,
+        ),
+      ),
+    );
+  }
+}
+
+class _SequencesButton extends ConsumerWidget {
+  final VoidCallback onTap;
+  const _SequencesButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Center(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          decoration: c.flatCard(radius: 16),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.format_list_numbered_rounded,
+                  size: 20, color: c.textSecondary),
+              const SizedBox(width: 10),
+              Text(
+                'МОИ ПОСЛЕДОВАТЕЛЬНОСТИ',
+                style: TextStyle(
+                  color: c.textSecondary,
+                  fontSize: 12,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

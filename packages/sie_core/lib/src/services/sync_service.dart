@@ -456,6 +456,18 @@ class SyncService {
                 .eq('id', payload['id'] as String);
             await _db.purgeGoalNote(payload['id'] as String);
 
+          case 'upsert_breathing_sequence':
+            await client
+                .from('breathing_sequences')
+                .upsert(payload, onConflict: 'id');
+            await _db.markBreathingSequenceSynced(payload['id'] as String);
+          case 'delete_breathing_sequence':
+            await client
+                .from('breathing_sequences')
+                .delete()
+                .eq('id', payload['id'] as String);
+            await _db.purgeBreathingSequence(payload['id'] as String);
+
           default:
             debugPrint(
                 'SiE Sync: unknown op ${op.operationType}');
