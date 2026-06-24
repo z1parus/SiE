@@ -444,6 +444,18 @@ class SyncService {
                   payload['node_id'] as String, payload['user_id'] as String);
             }
 
+          case 'upsert_goal_note':
+            await client
+                .from('goal_notes')
+                .upsert(payload, onConflict: 'id');
+            await _db.markGoalNoteSynced(payload['id'] as String);
+          case 'delete_goal_note':
+            await client
+                .from('goal_notes')
+                .delete()
+                .eq('id', payload['id'] as String);
+            await _db.purgeGoalNote(payload['id'] as String);
+
           default:
             debugPrint(
                 'SiE Sync: unknown op ${op.operationType}');

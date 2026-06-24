@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'tactical_map_view.dart';
 import 'mission_accomplished_screen.dart';
 import 'goal_stats_screen.dart';
+import 'goal_notes_screen.dart';
 import 'ai_decomposition_sheet.dart';
 import 'milestone_metric_screen.dart';
 import 'focus_protocol_screen.dart';
@@ -136,6 +137,12 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
                     builder: (_) => GoalStatsScreen(goal: goal),
                   ),
                 ),
+                onJournal: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => GoalNotesScreen(goal: goal, canEdit: canEdit),
+                  ),
+                ),
                 onAiDecompose: canEdit && goal.status == 'active' && GroqService.isInitialized
                     ? () => showAiDecompositionSheet(context, goal)
                     : null,
@@ -189,6 +196,7 @@ class _MissionHeader extends StatelessWidget {
     required this.onBack,
     this.onSettings,
     required this.onStats,
+    required this.onJournal,
     this.onAiDecompose,
     this.isShared = false,
     this.onExport,
@@ -201,6 +209,7 @@ class _MissionHeader extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback? onSettings;
   final VoidCallback onStats;
+  final VoidCallback onJournal;
   final VoidCallback? onAiDecompose;
   final bool isShared;
   final VoidCallback? onExport;
@@ -263,6 +272,15 @@ class _MissionHeader extends StatelessWidget {
                 ),
                 const SizedBox(width: 4),
               ],
+              IconButton(
+                icon: Icon(Icons.menu_book_outlined,
+                    color: sc.textSecondary, size: 20),
+                onPressed: onJournal,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Журнал заметок',
+              ),
+              const SizedBox(width: 4),
               IconButton(
                 icon: Icon(Icons.bar_chart_outlined,
                     color: sc.textSecondary, size: 20),
