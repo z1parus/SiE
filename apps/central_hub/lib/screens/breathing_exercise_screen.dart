@@ -13,6 +13,11 @@ import 'breathing_sequences_screen.dart';
 const _kRimGold  = kRimGold;
 const _kRimLight = kRimLight;
 
+/// Length of the short "breathe out / breathe in" transition pauses that bridge
+/// active breathing → exhale hold and exhale hold → inhale hold. Give the user
+/// time to settle their breath before each retention.
+const int _kBreathPauseSecs = 5;
+
 // ── Settings ──────────────────────────────────────────────────
 
 class BreathingSettings {
@@ -120,7 +125,17 @@ class BreathingSettings {
 
 // ── Phase ─────────────────────────────────────────────────────
 
-enum _Phase { idle, countdown, active, retention, recovery, roundTransition, complete }
+enum _Phase {
+  idle,
+  countdown,
+  active,
+  exhalePause,
+  retention,
+  inhalePause,
+  recovery,
+  roundTransition,
+  complete,
+}
 
 // ── Screen ───────────────────────────────────────────────────
 
@@ -199,12 +214,14 @@ class _BreathingExerciseScreenState
   int _retentionElapsed = 0;
   int _recoveryElapsed = 0;
   int _transitionElapsed = 0;
+  int _pauseElapsed = 0;
   int _countdownValue = 5;
   bool _spherePressed = false;
 
   Timer? _breathTimer;
   Timer? _retentionTimer;
   Timer? _transitionTimer;
+  Timer? _pauseTimer;
   Timer? _heartbeatTimer;
   DateTime? _sessionStart;
   DateTime? _heartbeatStart;
@@ -261,6 +278,7 @@ class _BreathingExerciseScreenState
     _breathTimer?.cancel();
     _retentionTimer?.cancel();
     _transitionTimer?.cancel();
+    _pauseTimer?.cancel();
     _heartbeatTimer?.cancel();
   }
 
@@ -334,6 +352,7 @@ class _BreathingExerciseScreenState
       _retentionElapsed = 0;
       _recoveryElapsed = 0;
       _transitionElapsed = 0;
+      _pauseElapsed = 0;
     });
     _circleCtrl.stop();
     _breathColorCtrl.stop();
@@ -381,7 +400,7 @@ class _BreathingExerciseScreenState
   void _runNextCycle() {
     if (!mounted || _phase != _Phase.active) return;
     if (_cycle >= _cur.cyclesPerRound) {
-      _startRetentionPhase();
+      _startExhalePause();
       return;
     }
     setState(() => _isInhaling = true);
@@ -410,19 +429,55 @@ class _BreathingExerciseScreenState
     });
   }
 
+  // ── Phase: Exhale Pause (active → exhale hold) ────────────
+
+  /// 5-second breathe-out bridge after active breathing: lets the user fully
+  /// exhale before the retention, while the ambient music fades out smoothly.
+  void _startExhalePause() {
+    if (!mounted) return;
+    _breathTimer?.cancel();
+    _pulseCtrl.stop();
+    setState(() {
+      _phase = _Phase.exhalePause;
+      _pauseElapsed = 0;
+    });
+    _breathColorCtrl.animateTo(1.0,
+        duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+    if (_settings.breathingSoundsEnabled) {
+      _audio.playExhale(
+          targetSecs: _kBreathPauseSecs, volumeFactor: _settings.breathingVolume);
+    }
+    _circleCtrl.animateTo(0.3,
+        duration: const Duration(seconds: 3), curve: Curves.easeOut);
+    // Fade the music out gently across the whole pause.
+    if (_settings.ambientEnabled) {
+      _audio.fadeAmbientTo(0.0, durationMs: _kBreathPauseSecs * 1000);
+    }
+    _pauseTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) { t.cancel(); return; }
+      final next = _pauseElapsed + 1;
+      setState(() => _pauseElapsed = next);
+      if (next >= _kBreathPauseSecs) {
+        t.cancel();
+        _startRetentionPhase();
+      }
+    });
+  }
+
   // ── Phase: Retention ──────────────────────────────────────
 
   void _startRetentionPhase() {
     if (!mounted) return;
     _breathTimer?.cancel();
+    _pauseTimer?.cancel();
     setState(() {
       _phase = _Phase.retention;
       _retentionElapsed = 0;
     });
     _pulseCtrl.repeat(reverse: true);
     _breathColorCtrl.animateTo(1.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+    // Music has already faded out during the exhale pause — just bring in the hum.
     if (_settings.ambientEnabled) {
-      _audio.fadeAmbientTo(0.0);
       _audio.startHum(volumeFactor: _settings.ambientVolume);
     }
     if (_cur.exhaustRetentionSecs <= 30) _startHeartbeatSequence();
@@ -445,7 +500,39 @@ class _BreathingExerciseScreenState
     _heartbeatTimer?.cancel();
     _heartbeatStart = null;
     _pulseCtrl.stop();
-    _startRecoveryPhase();
+    _startInhalePause();
+  }
+
+  // ── Phase: Inhale Pause (exhale hold → inhale hold) ───────
+
+  /// 5-second breathe-in bridge after the exhale hold: lets the user take a
+  /// full recovery breath before holding it for the inhale retention.
+  void _startInhalePause() {
+    if (!mounted) return;
+    _retentionTimer?.cancel();
+    _heartbeatTimer?.cancel();
+    _heartbeatStart = null;
+    _pulseCtrl.stop();
+    setState(() {
+      _phase = _Phase.inhalePause;
+      _pauseElapsed = 0;
+    });
+    _breathColorCtrl.animateTo(0.0,
+        duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+    if (_settings.breathingSoundsEnabled) {
+      _audio.playInhale(targetSecs: 3, volumeFactor: _settings.breathingVolume);
+    }
+    _circleCtrl.animateTo(1.0,
+        duration: const Duration(seconds: 3), curve: Curves.easeIn);
+    _pauseTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) { t.cancel(); return; }
+      final next = _pauseElapsed + 1;
+      setState(() => _pauseElapsed = next);
+      if (next >= _kBreathPauseSecs) {
+        t.cancel();
+        _startRecoveryPhase();
+      }
+    });
   }
 
   void _startHeartbeatSequence() {
@@ -469,22 +556,24 @@ class _BreathingExerciseScreenState
 
   void _startRecoveryPhase() {
     if (!mounted) return;
+    _pauseTimer?.cancel();
     setState(() {
       _phase = _Phase.recovery;
       _recoveryElapsed = 0;
     });
-    _breathColorCtrl.animateTo(0.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
-    if (_settings.breathingSoundsEnabled) _audio.playInhale(targetSecs: 3, volumeFactor: _settings.breathingVolume);
-    _circleCtrl.animateTo(
-      1.0,
-      duration: const Duration(seconds: 3),
-      curve: Curves.easeIn,
-    );
+    // The recovery breath was already taken during the inhale pause — hold it.
+    _breathColorCtrl.value = 0.0;
+    _circleCtrl.value = 1.0;
     _breathTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) { t.cancel(); return; }
-      if (_settings.tickEnabled) _audio.playTick(volumeFactor: _settings.tickVolume);
       final next = _recoveryElapsed + 1;
       setState(() => _recoveryElapsed = next);
+      final secsLeft = _cur.recoveryHoldSecs - next;
+      // Tick through the final 10 seconds of the round so the user senses it
+      // wrapping up. Half the configured tick volume — a soft cue, not an alarm.
+      if (_settings.tickEnabled && secsLeft >= 0 && secsLeft < 10) {
+        _audio.playTick(volumeFactor: _settings.tickVolume * 0.5);
+      }
       if (next >= _cur.recoveryHoldSecs) {
         t.cancel();
         _startRoundTransitionPhase();
@@ -980,6 +1069,65 @@ class _BreathingExerciseScreenState
           ],
         );
 
+      // ── Exhale Pause (active → exhale hold) ───────────────────
+      case _Phase.exhalePause:
+        final secsLeft = _kBreathPauseSecs - _pauseElapsed;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _hudCard(
+              c,
+              blur: 3.0,
+              glow: 0.86,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'ВЫДОХНИТЕ',
+                    style: TextStyle(
+                      color: c.accentSecondary,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 3,
+                      shadows: c.isLightMode
+                          ? null
+                          : [Shadow(color: c.accentSecondary, blurRadius: 10)],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'ПЕРЕД ЗАДЕРЖКОЙ',
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 12,
+                      letterSpacing: 2,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '${secsLeft}s',
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 52,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 4,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      shadows: c.isLightMode
+                          ? null
+                          : [Shadow(color: c.accentSecondary, blurRadius: 14)],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _RestartButton(onTap: _restartSession),
+          ],
+        );
+
       // ── Retention (breath hold) ───────────────────────────────
       case _Phase.retention:
         final mins = _retentionElapsed ~/ 60;
@@ -1059,6 +1207,65 @@ class _BreathingExerciseScreenState
             ),
             const SizedBox(height: 16),
             _SieButton(label: 'RELEASE', onPressed: _endRetention),
+            const SizedBox(height: 12),
+            _RestartButton(onTap: _restartSession),
+          ],
+        );
+
+      // ── Inhale Pause (exhale hold → inhale hold) ──────────────
+      case _Phase.inhalePause:
+        final secsLeft = _kBreathPauseSecs - _pauseElapsed;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _hudCard(
+              c,
+              blur: 3.0,
+              glow: 0.90,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'ВДОХНИТЕ',
+                    style: TextStyle(
+                      color: c.accent,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 3,
+                      shadows: c.isLightMode
+                          ? null
+                          : [Shadow(color: c.accent, blurRadius: 10)],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'ПЕРЕД ЗАДЕРЖКОЙ',
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 12,
+                      letterSpacing: 2,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '${secsLeft}s',
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 52,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 4,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      shadows: c.isLightMode
+                          ? null
+                          : [Shadow(color: c.accent, blurRadius: 14)],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 12),
             _RestartButton(onTap: _restartSession),
           ],
