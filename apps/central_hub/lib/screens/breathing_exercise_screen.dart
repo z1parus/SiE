@@ -568,12 +568,7 @@ class _BreathingExerciseScreenState
       if (!mounted) { t.cancel(); return; }
       final next = _recoveryElapsed + 1;
       setState(() => _recoveryElapsed = next);
-      final secsLeft = _cur.recoveryHoldSecs - next;
-      // Tick through the final 10 seconds of the round so the user senses it
-      // wrapping up. Half the configured tick volume — a soft cue, not an alarm.
-      if (_settings.tickEnabled && secsLeft >= 0 && secsLeft < 10) {
-        _audio.playTick(volumeFactor: _settings.tickVolume * 0.5);
-      }
+      if (_settings.tickEnabled) _audio.playTick(volumeFactor: _settings.tickVolume);
       if (next >= _cur.recoveryHoldSecs) {
         t.cancel();
         _startRoundTransitionPhase();
