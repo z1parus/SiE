@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/cosmetic_asset.dart';
 import '../theme/sie_colors.dart';
 import '../theme/sie_motion.dart';
+import 'profile_background_view.dart';
 import 'profile_pattern_layer.dart';
 
 /// Shared "operative card" hero used by both the personal ([ProfileScreen])
@@ -59,23 +60,6 @@ class ProfileHeroCard extends ConsumerWidget {
     return 'Commander';
   }
 
-  static BoxDecoration _baseDecoration(SieColors c, CosmeticAsset? bg) {
-    if (bg?.backgroundColor != null) {
-      return BoxDecoration(
-        color: bg!.backgroundColor,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: bg.accentColor.withValues(alpha: 0.25)),
-      );
-    }
-    if (bg?.backgroundGradient != null) {
-      return BoxDecoration(
-        gradient: bg!.backgroundGradient,
-        borderRadius: BorderRadius.circular(24),
-      );
-    }
-    return c.flatCard(radius: 24);
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
@@ -86,9 +70,8 @@ class ProfileHeroCard extends ConsumerWidget {
     final progress = (xpInLevel / 1000.0).clamp(0.0, 1.0);
     final xpToNext = 1000 - xpInLevel;
 
-    final hasCustomBg = background != null &&
-        (background!.backgroundColor != null ||
-            background!.backgroundGradient != null);
+    final hasCustomBg =
+        background != null && background!.isDecorativeBackground;
     final showPattern = pattern != null;
     final decorated = hasCustomBg || showPattern;
 
@@ -103,9 +86,9 @@ class ProfileHeroCard extends ConsumerWidget {
       duration: SieMotion.duration(context, SieMotion.slow),
       curve: Curves.easeOutCubic,
       builder: (context, animProgress, _) {
-        return Container(
-          clipBehavior: Clip.hardEdge,
-          decoration: _baseDecoration(c, background),
+        return ProfileBackgroundView(
+          background: background,
+          colors: c,
           child: Stack(
             children: [
               if (showPattern)

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="0dp">
+
+    <!-- Placeholder shown before the first Flutter render -->
+    <TextView
+        android:id="@+id/widget_planning_placeholder"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/widget_bg"
+        android:gravity="center"
+        android:text="SiE · Планирование"
+        android:textColor="#88FFFFFF"
+        android:textSize="14sp"
+        android:fontFamily="sans-serif-medium"
+        android:visibility="visible" />
+
+    <!-- Flutter-rendered PNG -->
+    <ImageView
+        android:id="@+id/widget_planning_image"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:visibility="gone" />
+
+    <!-- Tap-zone overlay (no per-row actions for planning widget yet) -->
+    <LinearLayout
+        android:id="@+id/widget_planning_actions"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:visibility="gone" />
+
+</FrameLayout>

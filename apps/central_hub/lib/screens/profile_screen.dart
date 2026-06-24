@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 
 import 'customization_screen.dart';
+import 'dev_studio_screen.dart';
 import 'edit_profile_screen.dart';
 import 'friends_list_screen.dart';
 import 'knowledge_base_screen.dart';
+import 'my_widgets_screen.dart';
 import 'progress_analytics_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -251,6 +253,87 @@ class _ProfileContent extends ConsumerWidget {
                         ),
                       ],
                     ],
+                  ),
+                  if (profile?.isAdmin ?? false) ...[
+                    const SizedBox(height: 12),
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const DevStudioScreen()),
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                        decoration: c.subtleContainer(radius: 16),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color:
+                                    c.accentSecondary.withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(11),
+                              ),
+                              child: Icon(Icons.developer_mode,
+                                  color: c.accentSecondary, size: 20),
+                            ),
+                            const SizedBox(width: 14),
+                            Text(
+                              'DEV STUDIO',
+                              style: TextStyle(
+                                color: c.textPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                            const Spacer(),
+                            Icon(Icons.chevron_right,
+                                color: c.textSecondary, size: 20),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => const MyWidgetsScreen()),
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      decoration: c.subtleContainer(radius: 16),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: c.accent.withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Icon(Icons.widgets_outlined,
+                                color: c.accent, size: 20),
+                          ),
+                          const SizedBox(width: 14),
+                          Text(
+                            'МОИ ВИДЖЕТЫ',
+                            style: TextStyle(
+                              color: c.textPrimary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                          const Spacer(),
+                          Icon(Icons.chevron_right,
+                              color: c.textSecondary, size: 20),
+                        ],
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 28),
                   const _AwardsHeader(),

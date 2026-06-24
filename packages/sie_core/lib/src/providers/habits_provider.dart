@@ -9,6 +9,7 @@ import '../models/habit.dart';
 import '../models/habit_log_entry.dart';
 import '../models/life_area.dart';
 import '../services/notification_service.dart';
+import '../widgets_home/widget_render_service.dart';
 import 'auth_state_provider.dart';
 import 'connectivity_provider.dart';
 import 'user_profile_provider.dart';
@@ -872,6 +873,16 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       Error.throwWithStackTrace(e, st);
     }
     _inProgress.remove(toggleKey);
+    _refreshHomeWidgets();
+  }
+
+  /// Event-driven home-screen widget refresh. Fire-and-forget: never blocks or
+  /// throws into the toggle path. No-op on web (widgets are mobile-only).
+  void _refreshHomeWidgets() {
+    if (kIsWeb) return;
+    final db = ref.read(appDatabaseProvider);
+    WidgetRenderService.notifyModuleChanged('habits', db).catchError(
+        (e) => debugPrint('SiE Habits: widget refresh failed — $e'));
   }
 
   /// Stage 2 — accumulate [delta] towards today's goal for a count/duration
@@ -1035,6 +1046,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       Error.throwWithStackTrace(e, st);
     }
     _inProgress.remove(toggleKey);
+    _refreshHomeWidgets();
   }
 
   Future<void> archiveHabit(String habitId) async {

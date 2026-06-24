@@ -112,6 +112,8 @@ class _OperationsControlScreenState
               children: [
                 const SectionHeader(title: 'DEPARTMENTS'),
                 const SizedBox(height: 12),
+                _DailyTipBanner(),
+                const SizedBox(height: 8),
                 _LeaderboardTile(),
                 const SizedBox(height: 16),
               ],
@@ -699,6 +701,10 @@ class _BranchCarouselCard extends ConsumerWidget {
     switch (branch.slug) {
       case 'habit_archive':
         final habitsState = ref.watch(habitsProvider).valueOrNull;
+        final streak = habitsState == null || habitsState.streaks.isEmpty
+            ? 0
+            : habitsState.streaks.values.reduce(math.max);
+        if (streak > 0) return '🔥 $streak DAY STREAK';
         final count = habitsState?.habits.length ?? 0;
         return '$count Active';
       case 'focus_protocol':
@@ -964,90 +970,711 @@ class _PreviewShaderPainter extends CustomPainter {
       time != old.time || sphereSize != old.sphereSize || isDark != old.isDark;
 }
 
-class _HabitMatrixPreview extends ConsumerWidget {
+/// Consistency heatmap preview: a GitHub-style contribution grid (7 weekday rows
+/// × 6 week columns, bottom-right = today) where each cell's gold intensity is
+/// that day's habit-completion ratio (done / scheduled), with a flame badge for
+/// the current best streak. Cells cascade in on appear, a faint shimmer sweeps
+/// the grid, and today's cell gently pulses.
+class _HabitMatrixPreview extends ConsumerStatefulWidget {
   const _HabitMatrixPreview();
 
-  static const _lit = {
-    (0, 2),
-    (1, 1), (1, 3),
-    (2, 0), (2, 2), (2, 4),
-    (3, 1), (3, 3),
-    (4, 2),
-  };
+  @override
+  ConsumerState<_HabitMatrixPreview> createState() =>
+      _HabitMatrixPreviewState();
+}
+
+class _HabitMatrixPreviewState extends ConsumerState<_HabitMatrixPreview>
+    with TickerProviderStateMixin {
+  static const _rows = 7; // weekdays Mon..Sun
+  static const _cols = 6; // 6 weeks
+
+  late final AnimationController _intro; // one-shot cascade
+  late final AnimationController _loop;  // shimmer + today pulse
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void initState() {
+    super.initState();
+    _intro = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    );
+    _loop = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 6),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (SieMotion.enabled(context)) {
+      if (_intro.status == AnimationStatus.dismissed) _intro.forward();
+      if (!_loop.isAnimating) _loop.repeat();
+    } else {
+      _intro.value = 1;
+      _loop.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _intro.dispose();
+    _loop.dispose();
+    super.dispose();
+  }
+
+  /// Builds the [_rows]×[_cols] intensity grid (0..1), the today cell position
+  /// and the best current streak from live habit data.
+  ({List<double> cells, int todayRow, int todayCol, int streak}) _model(
+    HabitsState? s,
+  ) {
+    final cells = List<double>.filled(_rows * _cols, -1); // -1 = future/none
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final todayRow = today.weekday - 1; // Mon=0 .. Sun=6
+
+    String fmt(DateTime d) =>
+        '${d.year}-${d.month.toString().padLeft(2, '0')}-'
+        '${d.day.toString().padLeft(2, '0')}';
+
+    if (s != null && s.habits.isNotEmpty) {
+      for (var col = 0; col < _cols; col++) {
+        for (var row = 0; row < _rows; row++) {
+          final offset = (_cols - 1 - col) * 7 + (todayRow - row);
+          if (offset < 0) continue; // future cell — leave as -1
+          final d = today.subtract(Duration(days: offset));
+          final key = fmt(d);
+          var done = 0;
+          for (final h in s.habits) {
+            if (s.logDates[h.id]?.contains(key) ?? false) done++;
+          }
+          final scheduled = s.dueOn(d).length;
+          final intensity = scheduled > 0
+              ? (done / scheduled).clamp(0.0, 1.0)
+              : (done > 0 ? 1.0 : 0.0);
+          cells[row * _cols + col] = intensity;
+        }
+      }
+    } else {
+      // No habits — render an empty (but valid) past grid.
+      for (var col = 0; col < _cols; col++) {
+        for (var row = 0; row < _rows; row++) {
+          final offset = (_cols - 1 - col) * 7 + (todayRow - row);
+          if (offset >= 0) cells[row * _cols + col] = 0.0;
+        }
+      }
+    }
+
+    final streak = (s == null || s.streaks.isEmpty)
+        ? 0
+        : s.streaks.values.reduce(math.max);
+    return (cells: cells, todayRow: todayRow, todayCol: _cols - 1, streak: streak);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final c = ref.watch(sieColorsProvider);
+    final s = ref.watch(habitsProvider).valueOrNull;
+    final m = _model(s);
+
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: List.generate(5, (row) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 5),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: List.generate(5, (col) {
-                final glow = _lit.contains((row, col));
-                return Container(
-                  width: 11,
-                  height: 11,
-                  margin: const EdgeInsets.symmetric(horizontal: 6),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: glow ? c.accent : c.border,
-                    boxShadow: null,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: AnimatedBuilder(
+                animation: Listenable.merge([_intro, _loop]),
+                builder: (_, _) => CustomPaint(
+                  painter: _HabitHeatmapPainter(
+                    cells: m.cells,
+                    rows: _rows,
+                    cols: _cols,
+                    todayRow: m.todayRow,
+                    todayCol: m.todayCol,
+                    intro: _intro.value,
+                    loop: _loop.value,
+                    accent: c.accent,
+                    track: c.border,
                   ),
-                );
-              }),
+                ),
+              ),
             ),
-          );
-        }),
+            if (m.streak > 0)
+              Positioned(
+                top: -6,
+                right: -8,
+                child: _FlameBadge(streak: m.streak, loop: _loop, c: c),
+              ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _FocusRingPreview extends ConsumerWidget {
+class _FlameBadge extends StatelessWidget {
+  const _FlameBadge({required this.streak, required this.loop, required this.c});
+
+  final int streak;
+  final Animation<double> loop;
+  final SieColors c;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: loop,
+      builder: (_, _) {
+        // Subtle flicker on the flame glyph.
+        final flick = 0.85 + 0.15 * math.sin(loop.value * 2 * math.pi * 3);
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: c.accent.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: c.accent.withValues(alpha: 0.40)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Opacity(
+                opacity: flick.clamp(0.0, 1.0),
+                child: Text('🔥', style: const TextStyle(fontSize: 11)),
+              ),
+              const SizedBox(width: 3),
+              Text(
+                '$streak',
+                style: TextStyle(
+                  color: c.accent,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _HabitHeatmapPainter extends CustomPainter {
+  final List<double> cells;
+  final int rows;
+  final int cols;
+  final int todayRow;
+  final int todayCol;
+  final double intro;
+  final double loop;
+  final Color accent;
+  final Color track;
+
+  const _HabitHeatmapPainter({
+    required this.cells,
+    required this.rows,
+    required this.cols,
+    required this.todayRow,
+    required this.todayCol,
+    required this.intro,
+    required this.loop,
+    required this.accent,
+    required this.track,
+  });
+
+  // Discrete heatmap levels → alpha.
+  static double _alphaFor(double intensity) {
+    if (intensity <= 0) return 0.0;
+    if (intensity < 0.34) return 0.35;
+    if (intensity < 0.67) return 0.55;
+    if (intensity < 1.0) return 0.78;
+    return 1.0;
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const gap = 4.0;
+    final cellW = (size.width - gap * (cols - 1)) / cols;
+    final cellH = (size.height - gap * (rows - 1)) / rows;
+    final cell = math.min(cellW, cellH);
+    // Centre the grid within the available box.
+    final gridW = cell * cols + gap * (cols - 1);
+    final gridH = cell * rows + gap * (rows - 1);
+    final ox = (size.width - gridW) / 2;
+    final oy = (size.height - gridH) / 2;
+    final radius = Radius.circular(cell * 0.28);
+    final maxDiag = (rows - 1) + (cols - 1);
+
+    for (var row = 0; row < rows; row++) {
+      for (var col = 0; col < cols; col++) {
+        final v = cells[row * cols + col];
+        if (v < 0) continue; // future cell
+
+        // Cascade appearance: diagonal wave past → today.
+        final delay = ((row + col) / maxDiag) * 0.65;
+        final appear = ((intro - delay) / 0.35).clamp(0.0, 1.0);
+        if (appear <= 0) continue;
+
+        final left = ox + col * (cell + gap);
+        final top = oy + row * (cell + gap);
+        final scale = 0.6 + 0.4 * appear;
+        final inset = cell * (1 - scale) / 2;
+        final rect = RRect.fromRectAndRadius(
+          Rect.fromLTWH(left + inset, top + inset, cell * scale, cell * scale),
+          radius,
+        );
+
+        var alpha = _alphaFor(v);
+
+        // Faint diagonal shimmer sweeping across the grid.
+        final diag = (row + col) / maxDiag;
+        final band = 1 - (((diag - loop) % 1.0).abs() * 3).clamp(0.0, 1.0);
+        final shimmer = band * 0.12;
+
+        // Today cell breathes.
+        final isToday = row == todayRow && col == todayCol;
+        final pulse =
+            isToday ? 0.18 * (0.5 + 0.5 * math.sin(loop * 2 * math.pi)) : 0.0;
+
+        final paint = Paint();
+        if (alpha <= 0) {
+          paint.color = track.withValues(alpha: (0.45 + shimmer) * appear);
+        } else {
+          alpha = (alpha + shimmer + pulse).clamp(0.0, 1.0);
+          paint.color = accent.withValues(alpha: alpha * appear);
+        }
+        canvas.drawRRect(rect, paint);
+
+        if (isToday) {
+          canvas.drawRRect(
+            rect,
+            Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.2
+              ..color = accent.withValues(alpha: 0.85 * appear),
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_HabitHeatmapPainter old) =>
+      old.intro != intro ||
+      old.loop != loop ||
+      old.cells != cells ||
+      old.accent != accent ||
+      old.track != track;
+}
+
+/// Live focus-timer preview. Reflects the real [focusTimerProvider] state:
+/// idle shows the configured work minutes + a slow "radar" standby tick; an
+/// active session shows live MM:SS, a progress arc with a glowing leading tip,
+/// a phase colour (gold = work, cool = break) and a minute ripple. A row of
+/// dots underneath tracks today's completed pomodoros (target 4).
+class _FocusRingPreview extends ConsumerStatefulWidget {
   const _FocusRingPreview();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_FocusRingPreview> createState() => _FocusRingPreviewState();
+}
+
+class _FocusRingPreviewState extends ConsumerState<_FocusRingPreview>
+    with SingleTickerProviderStateMixin {
+  static const _ring = 116.0;
+  static const _sessionTarget = 4;
+
+  late final AnimationController _loop;
+
+  @override
+  void initState() {
+    super.initState();
+    _loop = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 4500),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (SieMotion.enabled(context)) {
+      if (!_loop.isAnimating) _loop.repeat();
+    } else {
+      _loop.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _loop.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final c = ref.watch(sieColorsProvider);
+    final s = ref.watch(focusTimerProvider);
+    final doneToday = ref
+            .watch(bootcampDailyActivityProvider)
+            .valueOrNull
+            ?.focusSessionsToday ??
+        0;
+    final motion = SieMotion.enabled(context);
+
+    final idle = s.phase == FocusPhase.idle;
+    final isBreak = s.phase == FocusPhase.breakTime;
+    final timeText = idle ? '${s.settings.workMinutes}:00' : s.formattedTime;
+    final label = idle ? 'READY' : (isBreak ? 'BREAK' : 'WORK');
+    final progress = idle ? 0.0 : s.progress;
+    final phase = isBreak ? c.focusBreak : c.accent;
+    final phase2 = isBreak ? c.focusBreak : c.accentSecondary;
+
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: _ring,
+            height: _ring,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                AnimatedBuilder(
+                  animation: _loop,
+                  builder: (_, _) {
+                    final breathe = motion
+                        ? 0.97 + 0.03 * (0.5 + 0.5 * math.sin(_loop.value * 2 * math.pi))
+                        : 1.0;
+                    return Transform.scale(
+                      scale: breathe,
+                      child: CustomPaint(
+                        size: const Size(_ring, _ring),
+                        painter: _FocusRingPainter(
+                          progress: progress,
+                          loop: _loop.value,
+                          idle: idle,
+                          motion: motion,
+                          track: c.border,
+                          phase: phase,
+                          phase2: phase2,
+                          glow: !c.isLightMode,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      timeText,
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 2,
+                        height: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: idle ? c.iconMuted : phase,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 2.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          _SessionDots(
+            done: doneToday,
+            target: _sessionTarget,
+            color: phase,
+            track: c.border,
+            loop: _loop,
+            motion: motion,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SessionDots extends StatelessWidget {
+  const _SessionDots({
+    required this.done,
+    required this.target,
+    required this.color,
+    required this.track,
+    required this.loop,
+    required this.motion,
+  });
+
+  final int done;
+  final int target;
+  final Color color;
+  final Color track;
+  final Animation<double> loop;
+  final bool motion;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: loop,
+      builder: (_, _) {
+        final pulse = motion ? 0.4 + 0.6 * (0.5 + 0.5 * math.sin(loop.value * 2 * math.pi)) : 1.0;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(target, (i) {
+            final filled = i < done;
+            final isNext = i == done && done < target;
+            final dotColor = filled
+                ? color
+                : isNext
+                    ? color.withValues(alpha: 0.25 + 0.45 * pulse)
+                    : track;
+            return Container(
+              width: 6,
+              height: 6,
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: dotColor),
+            );
+          }),
+        );
+      },
+    );
+  }
+}
+
+class _FocusRingPainter extends CustomPainter {
+  final double progress;
+  final double loop;
+  final bool idle;
+  final bool motion;
+  final Color track;
+  final Color phase;
+  final Color phase2;
+  final bool glow;
+
+  const _FocusRingPainter({
+    required this.progress,
+    required this.loop,
+    required this.idle,
+    required this.motion,
+    required this.track,
+    required this.phase,
+    required this.phase2,
+    required this.glow,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.width / 2 - 9;
+    final bounds = Rect.fromCircle(center: center, radius: radius);
+
+    // Track.
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..color = track.withValues(alpha: idle ? 0.5 : 0.35)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 7,
+    );
+
+    // Running minute ripple — expanding ring fading out.
+    if (!idle && motion) {
+      final rr = radius * (0.62 + 0.5 * loop);
+      canvas.drawCircle(
+        center,
+        rr,
+        Paint()
+          ..color = phase.withValues(alpha: (1 - loop) * 0.22)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.4,
+      );
+    }
+
+    // Progress arc + glowing leading tip.
+    if (progress > 0) {
+      final sweep = 2 * math.pi * progress.clamp(0.0, 1.0);
+      canvas.drawArc(
+        bounds,
+        -math.pi / 2,
+        sweep,
+        false,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [phase2, phase],
+          ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 7
+          ..strokeCap = StrokeCap.round,
+      );
+
+      final tipAngle = -math.pi / 2 + sweep;
+      final tip = center +
+          Offset(math.cos(tipAngle), math.sin(tipAngle)) * radius;
+      final pulseR = 4 + (motion ? 1.6 * (0.5 + 0.5 * math.sin(loop * 2 * math.pi)) : 0.0);
+      final tipPaint = Paint()..color = phase;
+      if (glow) {
+        tipPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+      }
+      canvas.drawCircle(tip, pulseR, tipPaint);
+    }
+
+    // Idle standby — a single glowing tick sweeping the track like radar.
+    if (idle && motion) {
+      final ang = -math.pi / 2 + loop * 2 * math.pi;
+      final p = center + Offset(math.cos(ang), math.sin(ang)) * radius;
+      final tickPaint = Paint()..color = phase.withValues(alpha: 0.9);
+      if (glow) {
+        tickPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+      }
+      canvas.drawCircle(p, 3.5, tickPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_FocusRingPainter old) =>
+      old.progress != progress ||
+      old.loop != loop ||
+      old.idle != idle ||
+      old.motion != motion ||
+      old.track != track ||
+      old.phase != phase ||
+      old.phase2 != phase2 ||
+      old.glow != glow;
+}
+
+/// Mission-progress preview: one rotating ring per active goal. Each ring's
+/// arc length encodes that goal's real progress and its colour is the goal's
+/// own colour. The rings spin clockwise "like clock hands" but at staggered
+/// speeds (2 / 3 / 5 turns per loop) so they never move in sync. The centre
+/// shows the average progress across the displayed missions.
+class _PlanningPreview extends ConsumerStatefulWidget {
+  const _PlanningPreview();
+
+  @override
+  ConsumerState<_PlanningPreview> createState() => _PlanningPreviewState();
+}
+
+class _PlanningPreviewState extends ConsumerState<_PlanningPreview>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  // Per-ring geometry and motion. Revolutions per loop are distinct and
+  // coprime so the composite motion looks chaotic yet loops seamlessly.
+  // Radii are spread wide so the centre stays clear for the progress readout.
+  static const _box    = 150.0;
+  static const _radii  = [42.0, 58.0, 72.0];
+  static const _stroke = [6.0, 5.5, 5.0];
+  static const _revs   = [2.0, 3.0, 5.0];
+  static const _phase  = [0.0, 2.1, 4.0];
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 20),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (SieMotion.enabled(context)) {
+      if (!_ctrl.isAnimating) _ctrl.repeat();
+    } else {
+      _ctrl.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
+    final goals = ref.watch(
+      planningProvider.select(
+        (s) => s.valueOrNull?.activeGoals ?? const <Goal>[],
+      ),
+    );
+
+    final shown = goals.take(3).toList();
+    final rings = List.generate(3, (i) {
+      final goal = i < shown.length ? shown[i] : null;
+      return _PlanRing(
+        radius: _radii[i],
+        stroke: _stroke[i],
+        revs: _revs[i],
+        phase: _phase[i],
+        color: goal?.color ?? c.accent,
+        progress: goal == null
+            ? null
+            : (goalProgress(goal) / 100.0).clamp(0.0, 1.0),
+      );
+    });
+
+    final avg = shown.isEmpty
+        ? null
+        : (shown.map(goalProgress).reduce((a, b) => a + b) / shown.length)
+            .round();
+
     return Center(
       child: SizedBox(
-        width: 140,
-        height: 140,
+        width: _box,
+        height: _box,
         child: Stack(
           alignment: Alignment.center,
           children: [
-            CustomPaint(
-              size: const Size(140, 140),
-              painter: _ArcPainter(
-                progress: 0.65,
-                trackColor: c.border,
-                arcStart: c.accent,
-                arcEnd: c.accentSecondary,
+            AnimatedBuilder(
+              animation: _ctrl,
+              builder: (_, _) => CustomPaint(
+                size: const Size(_box, _box),
+                painter: _PlanningPreviewPainter(
+                  rings: rings,
+                  t: _ctrl.value,
+                  trackColor: c.border,
+                  tickColor: c.accent.withValues(alpha: 0.30),
+                  glow: !c.isLightMode,
+                ),
               ),
             ),
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  '15:00',
+                  avg == null ? '—' : '$avg%',
                   style: TextStyle(
                     color: c.textPrimary,
-                    fontSize: 24,
+                    fontSize: 22,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: 2,
+                    letterSpacing: 1,
                     height: 1,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
-                  'FOCUS',
+                  'PROGRESS',
                   style: TextStyle(
                     color: c.iconMuted,
-                    fontSize: 9,
+                    fontSize: 8,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 2.5,
                   ),
@@ -1061,73 +1688,99 @@ class _FocusRingPreview extends ConsumerWidget {
   }
 }
 
-class _PlanningPreview extends StatelessWidget {
-  const _PlanningPreview();
+class _PlanRing {
+  final double radius;
+  final double stroke;
+  final double revs;
+  final double phase;
+  final Color color;
 
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _PlanningPreviewPainter(),
-    );
-  }
+  /// Real goal progress 0..1, or null when no goal occupies this ring.
+  final double? progress;
+
+  const _PlanRing({
+    required this.radius,
+    required this.stroke,
+    required this.revs,
+    required this.phase,
+    required this.color,
+    required this.progress,
+  });
 }
 
 class _PlanningPreviewPainter extends CustomPainter {
-  static const _teal = Color(0xFF5AADA0);
+  final List<_PlanRing> rings;
+  final double t;
+  final Color trackColor;
+  final Color tickColor;
+  final bool glow;
+
+  const _PlanningPreviewPainter({
+    required this.rings,
+    required this.t,
+    required this.trackColor,
+    required this.tickColor,
+    required this.glow,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    final center = Offset(cx, cy);
+    final center = size.center(Offset.zero);
 
-    // Concentric arc rings
-    final rings = [
-      (28.0, 0.75, 0.9),
-      (44.0, 0.45, 0.6),
-      (60.0, 0.25, 0.35),
-    ];
+    for (final ring in rings) {
+      final rect = Rect.fromCircle(center: center, radius: ring.radius);
 
-    for (final (r, fill, alpha) in rings) {
-      final trackPaint = Paint()
-        ..color = _teal.withValues(alpha: 0.12)
-        ..strokeWidth = 5
-        ..style = PaintingStyle.stroke;
+      // Faint full-circle track.
+      canvas.drawArc(
+        rect,
+        0,
+        math.pi * 2,
+        false,
+        Paint()
+          ..color = trackColor.withValues(alpha: 0.45)
+          ..strokeWidth = ring.stroke
+          ..style = PaintingStyle.stroke,
+      );
+
+      // Clockwise rotation, staggered per ring → "clock hands" out of sync.
+      final start = -math.pi / 2 + ring.phase + 2 * math.pi * ring.revs * t;
+
+      if (ring.progress == null) {
+        // Empty ring — a small accent tick keeps it alive.
+        canvas.drawArc(
+          rect,
+          start,
+          0.05 * 2 * math.pi,
+          false,
+          Paint()
+            ..color = tickColor
+            ..strokeWidth = ring.stroke
+            ..style = PaintingStyle.stroke
+            ..strokeCap = StrokeCap.round,
+        );
+        continue;
+      }
+
+      final sweep = math.max(ring.progress!, 0.05) * 2 * math.pi;
       final arcPaint = Paint()
-        ..color = _teal.withValues(alpha: alpha)
-        ..strokeWidth = 5
+        ..color = ring.color
+        ..strokeWidth = ring.stroke
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round;
-
-      final rect = Rect.fromCircle(center: center, radius: r);
-      canvas.drawArc(rect, 0, math.pi * 2, false, trackPaint);
-      canvas.drawArc(
-          rect, -math.pi / 2, math.pi * 2 * fill, false, arcPaint);
-    }
-
-    // Node dots at corners
-    final dotPaint = Paint()
-      ..color = _teal.withValues(alpha: 0.5)
-      ..style = PaintingStyle.fill;
-    final linePaint = Paint()
-      ..color = _teal.withValues(alpha: 0.2)
-      ..strokeWidth = 1;
-
-    final nodes = [
-      Offset(cx - 68, cy - 40),
-      Offset(cx + 68, cy - 40),
-      Offset(cx - 60, cy + 50),
-      Offset(cx + 60, cy + 50),
-    ];
-
-    for (final n in nodes) {
-      canvas.drawLine(center, n, linePaint);
-      canvas.drawCircle(n, 3.5, dotPaint);
+      if (glow) {
+        arcPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+      }
+      canvas.drawArc(rect, start, sweep, false, arcPaint);
     }
   }
 
   @override
-  bool shouldRepaint(_PlanningPreviewPainter _) => false;
+  bool shouldRepaint(_PlanningPreviewPainter old) =>
+      old.t != t ||
+      old.rings != rings ||
+      old.trackColor != trackColor ||
+      old.tickColor != tickColor ||
+      old.glow != glow;
 }
 
 /// Meditation module preview — a calm teal orb that slowly breathes while
@@ -1268,59 +1921,6 @@ class _MeditationRipplePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_MeditationRipplePainter old) => old.progress != progress;
-}
-
-class _ArcPainter extends CustomPainter {
-  final double progress;
-  final Color trackColor;
-  final Color arcStart;
-  final Color arcEnd;
-
-  const _ArcPainter({
-    required this.progress,
-    required this.trackColor,
-    required this.arcStart,
-    required this.arcEnd,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 8;
-    final bounds = Rect.fromCircle(center: center, radius: radius);
-
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..color = trackColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 7,
-    );
-
-    final sweepAngle = 2 * math.pi * progress.clamp(0.0, 1.0);
-    canvas.drawArc(
-      bounds,
-      -math.pi / 2,
-      sweepAngle,
-      false,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [arcStart, arcEnd],
-        ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 7
-        ..strokeCap = StrokeCap.round,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_ArcPainter old) =>
-      old.progress != progress ||
-      old.arcStart != arcStart ||
-      old.trackColor != trackColor;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1990,4 +2590,131 @@ class _NAvatar extends StatelessWidget {
             style: TextStyle(
                 color: c.accent, fontSize: 16, fontWeight: FontWeight.w200)),
       );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Daily Tip Banner — random hint shown above the leaderboard tile
+// ─────────────────────────────────────────────────────────────────────────────
+class _DailyTipBanner extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_DailyTipBanner> createState() => _DailyTipBannerState();
+}
+
+class _DailyTipBannerState extends ConsumerState<_DailyTipBanner>
+    with SingleTickerProviderStateMixin {
+  Tip? _tip;
+  bool _dismissed = false;
+  late final AnimationController _ctrl;
+  late final Animation<double> _fade;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, -0.15),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _pickTip(List<Tip> tips) {
+    if (tips.isEmpty || _tip != null) return;
+    final rnd = DateTime.now().millisecondsSinceEpoch;
+    _tip = tips[rnd % tips.length];
+    if (mounted) _ctrl.forward();
+  }
+
+  void _dismiss() {
+    _ctrl.reverse().then((_) {
+      if (mounted) setState(() => _dismissed = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
+    final tipsAsync = ref.watch(tipsProvider);
+
+    tipsAsync.whenData(_pickTip);
+
+    if (_dismissed || _tip == null) return const SizedBox.shrink();
+
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(
+        position: _slide,
+        child: SieGlassCard(
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 3,
+                height: 36,
+                margin: const EdgeInsets.only(right: 10, top: 2),
+                decoration: BoxDecoration(
+                  color: c.accent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _tip!.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: c.accent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _tip!.description,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 12,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: _dismiss,
+                behavior: HitTestBehavior.opaque,
+                child: Semantics(
+                  button: true,
+                  label: 'Закрыть подсказку',
+                  child: Padding(
+                    padding: const EdgeInsets.all(2),
+                    child: Icon(Icons.close,
+                        size: 16, color: c.iconMuted),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

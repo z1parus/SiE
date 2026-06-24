@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 <uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.VIBRATE" />
 <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 <uses-permission android:name="android.permission.CAMERA" />
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -29,6 +30,10 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- home_widget: deep-link launches from a widget tap. -->
+            <intent-filter>
+                <action android:name="es.antonborri.home_widget.action.LAUNCH" />
+            </intent-filter>
         </activity>
         <!-- flutter_local_notifications: scheduled + boot receivers -->
         <receiver
@@ -44,6 +49,78 @@
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
+
+        <!-- home_widget: per-size receivers. Each size is its own system widget
+             so the launcher locks the cell and the PNG never has to stretch. -->
+
+        <!-- Привычки -->
+        <receiver android:name=".HabitsSmallWidgetProvider" android:exported="true" android:label="Привычки · Малый">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_habits_small_info" />
+        </receiver>
+        <receiver android:name=".HabitsMediumWidgetProvider" android:exported="true" android:label="Привычки · Средний">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_habits_medium_info" />
+        </receiver>
+        <receiver android:name=".HabitsLargeWidgetProvider" android:exported="true" android:label="Привычки · Большой">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_habits_large_info" />
+        </receiver>
+
+        <!-- Фокус -->
+        <receiver android:name=".FocusSmallWidgetProvider" android:exported="true" android:label="Фокус · Малый">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_focus_small_info" />
+        </receiver>
+        <receiver android:name=".FocusMediumWidgetProvider" android:exported="true" android:label="Фокус · Средний">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_focus_medium_info" />
+        </receiver>
+        <receiver android:name=".FocusLargeWidgetProvider" android:exported="true" android:label="Фокус · Большой">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_focus_large_info" />
+        </receiver>
+
+        <!-- Планирование -->
+        <receiver android:name=".PlanningSmallWidgetProvider" android:exported="true" android:label="Планирование · Малый">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_planning_small_info" />
+        </receiver>
+        <receiver android:name=".PlanningMediumWidgetProvider" android:exported="true" android:label="Планирование · Средний">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_planning_medium_info" />
+        </receiver>
+        <receiver android:name=".PlanningLargeWidgetProvider" android:exported="true" android:label="Планирование · Большой">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_planning_large_info" />
+        </receiver>
+
+        <!-- Дыхание -->
+        <receiver android:name=".BreathingSmallWidgetProvider" android:exported="true" android:label="Дыхание · Малый">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_breathing_small_info" />
+        </receiver>
+        <receiver android:name=".BreathingMediumWidgetProvider" android:exported="true" android:label="Дыхание · Средний">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_breathing_medium_info" />
+        </receiver>
+        <receiver android:name=".BreathingLargeWidgetProvider" android:exported="true" android:label="Дыхание · Большой">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_breathing_large_info" />
+        </receiver>
+
+        <!-- home_widget: background quick-action receiver + service -->
+        <receiver
+            android:name="es.antonborri.home_widget.HomeWidgetBackgroundReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+            </intent-filter>
+        </receiver>
+        <service
+            android:name="es.antonborri.home_widget.HomeWidgetBackgroundService"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="true" />
 
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

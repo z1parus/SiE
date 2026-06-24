@@ -14,6 +14,7 @@ class Profile {
   final String? equippedStatStyleId;
   final String? equippedPatternId;
   final int designPoints;
+  final bool isAdmin;
 
   const Profile({
     required this.id,
@@ -31,6 +32,7 @@ class Profile {
     this.equippedStatStyleId,
     this.equippedPatternId,
     this.designPoints = 0,
+    this.isAdmin = false,
   });
 
   Profile copyWith({
@@ -56,6 +58,7 @@ class Profile {
         equippedStatStyleId: equippedStatStyleId,
         equippedPatternId: equippedPatternId,
         designPoints: designPoints ?? this.designPoints,
+        isAdmin: isAdmin,
       );
 
   factory Profile.fromJson(Map<String, dynamic> json) => Profile(
@@ -77,5 +80,6 @@ class Profile {
         equippedStatStyleId: json['equipped_stat_style_id'] as String?,
         equippedPatternId: json['equipped_pattern_id'] as String?,
         designPoints: json['design_points'] as int? ?? 0,
+        isAdmin: json['is_admin'] as bool? ?? false,
       );
 }
