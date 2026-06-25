@@ -42,11 +42,11 @@ Color _categoryColor(GoalCategory cat) => switch (cat) {
     };
 
 String _categoryLabel(GoalCategory cat) => switch (cat) {
-      GoalCategory.learning   => 'Обучение',
-      GoalCategory.health     => 'Здоровье',
-      GoalCategory.project    => 'Проект',
-      GoalCategory.lifestyle  => 'Образ жизни',
-      GoalCategory.discipline => 'Дисциплина',
+      GoalCategory.learning   => t.planning.category.learning,
+      GoalCategory.health     => t.planning.category.health,
+      GoalCategory.project    => t.planning.category.project,
+      GoalCategory.lifestyle  => t.planning.category.lifestyle,
+      GoalCategory.discipline => t.planning.category.discipline,
     };
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                         color: sc.accent, strokeWidth: 2),
                   ),
                   error: (e, _) => Center(
-                    child: Text('Ошибка загрузки',
+                    child: Text(t.planning.loadError,
                         style: TextStyle(color: sc.textSecondary)),
                   ),
                   data: (state) {
@@ -293,21 +293,21 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
             context: context,
             builder: (_) => AlertDialog(
               backgroundColor: sc.surface,
-              title: Text('Удалить миссию?',
+              title: Text(t.planning.delete.title,
                   style: TextStyle(color: sc.textPrimary)),
               content: Text(
-                'Все данные цели «${goal.name}» будут удалены.',
+                t.planning.delete.message(name: goal.name),
                 style: TextStyle(color: sc.textSecondary),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context, false),
-                  child: Text('Отмена',
+                  child: Text(t.planning.delete.cancel,
                       style: TextStyle(color: sc.textSecondary)),
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context, true),
-                  child: Text('Удалить',
+                  child: Text(t.planning.delete.confirm,
                       style: TextStyle(color: sc.danger)),
                 ),
               ],
@@ -328,14 +328,14 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: sc.surface,
-        title: Text('Сохранить как шаблон',
+        title: Text(t.planning.saveTemplate.title,
             style: TextStyle(color: sc.textPrimary, fontSize: 16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Структура (этапы, задачи и вехи) сохранится без дат и прогресса.',
+              t.planning.saveTemplate.description,
               style: TextStyle(color: sc.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 14),
@@ -345,7 +345,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
               style: TextStyle(color: sc.textPrimary, fontSize: 15),
               textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
-                hintText: 'Название шаблона',
+                hintText: t.planning.saveTemplate.hint,
                 hintStyle: TextStyle(color: sc.textSecondary),
                 enabledBorder: UnderlineInputBorder(
                     borderSide: BorderSide(color: sc.border)),
@@ -359,11 +359,11 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child:
-                Text('Отмена', style: TextStyle(color: sc.textSecondary)),
+                Text(t.planning.saveTemplate.cancel, style: TextStyle(color: sc.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: Text('Сохранить', style: TextStyle(color: sc.accent)),
+            child: Text(t.planning.saveTemplate.save, style: TextStyle(color: sc.accent)),
           ),
         ],
       ),
@@ -376,7 +376,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Шаблон «$name» сохранён'),
+          content: Text(t.planning.saveTemplate.saved(name: name)),
           behavior: SnackBarBehavior.floating,
           backgroundColor: sc.surface,
         ),
@@ -413,7 +413,7 @@ class _PlanningHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'MISSION CONTROL',
+                t.planning.header.missionControl,
                 style: TextStyle(
                   color: sc.textSecondary,
                   fontSize: 10,
@@ -423,7 +423,7 @@ class _PlanningHeader extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                showArchive ? 'Архив миссий' : 'Активные миссии',
+                showArchive ? t.planning.header.archiveTitle : t.planning.header.activeTitle,
                 style: TextStyle(
                   color: sc.textPrimary,
                   fontSize: 20,
@@ -508,9 +508,9 @@ class _ModeSwitch extends StatelessWidget {
         ),
         child: Row(
           children: [
-            _segment('Повестка', Icons.today_outlined, showAgenda,
+            _segment(t.planning.modeSwitch.agenda, Icons.today_outlined, showAgenda,
                 () => onChanged(true)),
-            _segment('Цели', Icons.account_tree_outlined, !showAgenda,
+            _segment(t.planning.modeSwitch.goals, Icons.account_tree_outlined, !showAgenda,
                 () => onChanged(false)),
           ],
         ),
@@ -683,7 +683,7 @@ class _GoalCard extends ConsumerWidget {
                                       color: sc.warning, size: 11),
                                   const SizedBox(width: 3),
                                   Text(
-                                    'ЗАСТОЙ',
+                                    t.planning.card.stagnation,
                                     style: TextStyle(
                                       color: sc.warning,
                                       fontSize: 8,
@@ -729,14 +729,14 @@ class _GoalCard extends ConsumerWidget {
                                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                                     Icon(Icons.people_outlined, size: 10, color: sc.accent),
                                     const SizedBox(width: 4),
-                                    Text('СОВМЕСТНАЯ',
+                                    Text(t.planning.card.collaborative,
                                         style: TextStyle(fontSize: 9, color: sc.accent, letterSpacing: 0.5)),
                                   ]),
                                 ),
                               ]),
                               if (goal.ownerProfile != null) ...[
                                 const SizedBox(height: 2),
-                                Text('Владелец: ${goal.ownerProfile!.username ?? 'Unknown'}',
+                                Text(t.planning.card.owner(name: goal.ownerProfile!.username ?? t.planning.card.unknownOwner),
                                     style: TextStyle(fontSize: 11, color: sc.textSecondary)),
                               ],
                             ],
@@ -769,7 +769,7 @@ class _GoalCard extends ConsumerWidget {
                                     ),
                                   ),
                                   Text(
-                                    'прогресс',
+                                    t.planning.card.progress,
                                     style: TextStyle(
                                       color: sc.textSecondary,
                                       fontSize: 9,
@@ -790,19 +790,19 @@ class _GoalCard extends ConsumerWidget {
                         children: [
                           _MiniStat(
                             icon: Icons.checklist_rtl,
-                            label: '$doneSubGoals/$totalSubGoals этапов',
+                            label: t.planning.card.stages(done: doneSubGoals, total: totalSubGoals),
                             sc: sc,
                           ),
                           _MiniStat(
                             icon: Icons.link,
-                            label: '${goal.habitLinks.length} привычек',
+                            label: t.planning.card.habits(n: goal.habitLinks.length),
                             sc: sc,
                           ),
                           if (goal.totalTasks > 0)
                             _MiniStat(
                               icon: Icons.task_alt,
                               label:
-                                  '${goal.completedTasks}/${goal.totalTasks} задач',
+                                  t.planning.card.tasks(done: goal.completedTasks, total: goal.totalTasks),
                               sc: sc,
                             ),
                         ],
@@ -883,10 +883,10 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (status) {
-      'completed' => ('ЗАВЕРШЕНА', const Color(0xFF5AADA0)),
-      'frozen' => ('ЗАМОРОЖЕНА', const Color(0xFF6A8ED8)),
-      'failed' => ('ПРОВАЛЕНА', const Color(0xFFE03050)),
-      _ => ('АКТИВНА', const Color(0xFF5AADA0)),
+      'completed' => (t.planning.status.completed, const Color(0xFF5AADA0)),
+      'frozen' => (t.planning.status.frozen, const Color(0xFF6A8ED8)),
+      'failed' => (t.planning.status.failed, const Color(0xFFE03050)),
+      _ => (t.planning.status.active, const Color(0xFF5AADA0)),
     };
 
     return Container(
@@ -925,8 +925,8 @@ class _DeadlineChip extends StatelessWidget {
     final color =
         isOverdue ? const Color(0xFFE03050) : const Color(0xFF5AADA0);
     final label = isOverdue
-        ? 'просрочено ${daysLeft.abs()} дн.'
-        : 'через $daysLeft дн.';
+        ? t.planning.deadline.overdue(n: daysLeft.abs())
+        : t.planning.deadline.inDays(n: daysLeft);
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -994,7 +994,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            isArchive ? 'Архив пуст' : 'Нет активных миссий',
+            isArchive ? t.planning.empty.archiveEmpty : t.planning.empty.noActiveMissions,
             style: TextStyle(color: sc.textSecondary, fontSize: 16),
           ),
           if (!isArchive && onCreate != null) ...[
@@ -1014,7 +1014,7 @@ class _EmptyState extends StatelessWidget {
                     Icon(Icons.add, color: sc.accent, size: 18),
                     const SizedBox(width: 6),
                     Text(
-                      'СОЗДАТЬ МИССИЮ',
+                      t.planning.empty.createMission,
                       style: TextStyle(
                         color: sc.accent,
                         fontSize: 12,
@@ -1073,7 +1073,7 @@ class _CreateChooserSheet extends StatelessWidget {
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'НОВАЯ МИССИЯ',
+                t.planning.createChooser.newMission,
                 style: TextStyle(
                     color: sc.textSecondary,
                     fontSize: 10,
@@ -1085,19 +1085,19 @@ class _CreateChooserSheet extends StatelessWidget {
           Divider(height: 1, color: sc.border),
           _OptionTile(
             icon: Icons.add_circle_outline,
-            label: 'Пустая цель',
+            label: t.planning.createChooser.emptyGoal,
             color: const Color(0xFF5AADA0),
             onTap: onEmpty,
           ),
           _OptionTile(
             icon: Icons.dashboard_customize_outlined,
-            label: 'Из шаблона',
+            label: t.planning.createChooser.fromTemplate,
             color: const Color(0xFF9B6AD8),
             onTap: onTemplate,
           ),
           _OptionTile(
             icon: Icons.auto_awesome_outlined,
-            label: 'AI-декомпозиция',
+            label: t.planning.createChooser.aiDecomposition,
             color: const Color(0xFF6A8ED8),
             onTap: onAi,
           ),
@@ -1168,7 +1168,7 @@ class _GoalOptionsSheet extends StatelessWidget {
           Divider(height: 1, color: sc.border),
           _OptionTile(
             icon: Icons.bar_chart_outlined,
-            label: 'Статистика миссии',
+            label: t.planning.options.stats,
             color: const Color(0xFF6A8ED8),
             onTap: () {
               Navigator.pop(context);
@@ -1178,7 +1178,7 @@ class _GoalOptionsSheet extends StatelessWidget {
           if (onPin != null)
             _OptionTile(
               icon: goal.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-              label: goal.isPinned ? 'Открепить миссию' : 'Закрепить миссию',
+              label: goal.isPinned ? t.planning.options.unpin : t.planning.options.pin,
               color: const Color(0xFFF4C430),
               onTap: () {
                 Navigator.pop(context);
@@ -1188,7 +1188,7 @@ class _GoalOptionsSheet extends StatelessWidget {
           if (onFreeze != null)
             _OptionTile(
               icon: isFrozen ? Icons.play_arrow_outlined : Icons.ac_unit,
-              label: isFrozen ? 'Разморозить миссию' : 'Заморозить миссию',
+              label: isFrozen ? t.planning.options.unfreeze : t.planning.options.freeze,
               color: const Color(0xFF6A8ED8),
               onTap: () {
                 Navigator.pop(context);
@@ -1198,7 +1198,7 @@ class _GoalOptionsSheet extends StatelessWidget {
           if (onComplete != null && goal.status != 'completed')
             _OptionTile(
               icon: Icons.check_circle_outline,
-              label: 'Завершить миссию',
+              label: t.planning.options.complete,
               color: const Color(0xFF5AADA0),
               onTap: () {
                 Navigator.pop(context);
@@ -1208,7 +1208,7 @@ class _GoalOptionsSheet extends StatelessWidget {
           if (onSaveAsTemplate != null)
             _OptionTile(
               icon: Icons.bookmark_add_outlined,
-              label: 'Сохранить как шаблон',
+              label: t.planning.options.saveAsTemplate,
               color: const Color(0xFF9B6AD8),
               onTap: () {
                 Navigator.pop(context);
@@ -1217,7 +1217,7 @@ class _GoalOptionsSheet extends StatelessWidget {
             ),
           _OptionTile(
             icon: isViewer ? Icons.exit_to_app_outlined : Icons.delete_outline,
-            label: isViewer ? 'Покинуть миссию' : 'Удалить миссию',
+            label: isViewer ? t.planning.options.leave : t.planning.options.delete,
             color: const Color(0xFFE03050),
             onTap: () {
               Navigator.pop(context);
@@ -1331,7 +1331,7 @@ class _AddGoalSheetState extends ConsumerState<_AddGoalSheet> {
           ),
           const SizedBox(height: 16),
           Text(
-            'НОВАЯ МИССИЯ',
+            t.planning.addGoal.newMission,
             style: TextStyle(
               color: sc.textSecondary,
               fontSize: 10,
@@ -1345,7 +1345,7 @@ class _AddGoalSheetState extends ConsumerState<_AddGoalSheet> {
             controller: _nameCtrl,
             style: TextStyle(color: sc.textPrimary, fontSize: 16),
             decoration: InputDecoration(
-              hintText: 'Название миссии',
+              hintText: t.planning.addGoal.nameHint,
               hintStyle:
                   TextStyle(color: sc.textSecondary, fontSize: 16),
               enabledBorder: UnderlineInputBorder(
@@ -1358,7 +1358,7 @@ class _AddGoalSheetState extends ConsumerState<_AddGoalSheet> {
           ),
           const SizedBox(height: 20),
           // Priority selector
-          Text('ПРИОРИТЕТ',
+          Text(t.planning.addGoal.priority,
               style: TextStyle(
                   color: sc.textSecondary,
                   fontSize: 9,
@@ -1368,28 +1368,28 @@ class _AddGoalSheetState extends ConsumerState<_AddGoalSheet> {
           Row(
             children: [
               _PriorityBtn(
-                  label: 'Низкий',
+                  label: t.planning.addGoal.priorityLow,
                   priority: 1,
                   selected: _priority == 1,
                   sc: sc,
                   onTap: () => setState(() => _priority = 1)),
               const SizedBox(width: 6),
               _PriorityBtn(
-                  label: 'Средний',
+                  label: t.planning.addGoal.priorityMedium,
                   priority: 2,
                   selected: _priority == 2,
                   sc: sc,
                   onTap: () => setState(() => _priority = 2)),
               const SizedBox(width: 6),
               _PriorityBtn(
-                  label: 'Высокий',
+                  label: t.planning.addGoal.priorityHigh,
                   priority: 3,
                   selected: _priority == 3,
                   sc: sc,
                   onTap: () => setState(() => _priority = 3)),
               const SizedBox(width: 6),
               _PriorityBtn(
-                  label: 'Крит.',
+                  label: t.planning.addGoal.priorityCritical,
                   priority: 4,
                   selected: _priority == 4,
                   sc: sc,
@@ -1398,7 +1398,7 @@ class _AddGoalSheetState extends ConsumerState<_AddGoalSheet> {
           ),
           const SizedBox(height: 20),
           // Color selector
-          Text('ЦВЕТ МИССИИ',
+          Text(t.planning.addGoal.missionColor,
               style: TextStyle(
                   color: sc.textSecondary,
                   fontSize: 9,
@@ -1455,8 +1455,10 @@ class _AddGoalSheetState extends ConsumerState<_AddGoalSheet> {
                 const SizedBox(width: 8),
                 Text(
                   _deadline != null
-                      ? 'Дедлайн: ${_deadline!.day}.${_deadline!.month.toString().padLeft(2, '0')}.${_deadline!.year}'
-                      : 'Установить дедлайн (необязательно)',
+                      ? t.planning.addGoal.deadlineSet(
+                          date:
+                              '${_deadline!.day}.${_deadline!.month.toString().padLeft(2, '0')}.${_deadline!.year}')
+                      : t.planning.addGoal.deadlineEmpty,
                   style: TextStyle(color: sc.accent, fontSize: 13),
                 ),
                 if (_deadline != null) ...[
@@ -1493,9 +1495,9 @@ class _AddGoalSheetState extends ConsumerState<_AddGoalSheet> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
               ),
-              child: const Text(
-                'СОЗДАТЬ МИССИЮ',
-                style: TextStyle(
+              child: Text(
+                t.planning.addGoal.submit,
+                style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.5),

@@ -1,0 +1,30 @@
+{
+  "title": {
+    "stackFallback": "СТЭК ПРИВЫЧЕК",
+    "morning": "УТРЕННЯЯ РУТИНА",
+    "evening": "ВЕЧЕРНЯЯ РУТИНА"
+  },
+  "empty": {
+    "noHabits": "НЕТ ПРИВЫЧЕК",
+    "addBelow": "Добавьте привычки ниже"
+  },
+  "removeSnackbar": "Привычка убрана из рутины",
+  "dialog": {
+    "save": "СОХРАНИТЬ",
+    "stackHeader": "СТЭК ПРИВЫЧЕК",
+    "nameLabel": "НАЗВАНИЕ",
+    "cueLabel": "ЯКОРЬ-ТРИГГЕР (необязательно)",
+    "cueHint": "После утреннего кофе…",
+    "cancel": "ОТМЕНА"
+  },
+  "tile": {
+    "removeFromRoutine": "Убрать из рутины",
+    "dragToReorder": "Перетащите для сортировки"
+  },
+  "addHabit": "ДОБАВИТЬ ПРИВЫЧКУ",
+  "picker": {
+    "addToRoutine": "ADD TO ROUTINE",
+    "createFirst": "Сначала создайте привычки в Архиве",
+    "allAdded": "Все активные привычки уже добавлены"
+  }
+}

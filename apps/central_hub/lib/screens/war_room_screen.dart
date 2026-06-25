@@ -118,7 +118,7 @@ class WarRoomView extends ConsumerWidget {
 
     if (overdue.isNotEmpty) {
       children.add(_Section(
-        title: 'Просрочено',
+        title: t.warRoom.section.overdue,
         icon: Icons.error_outline,
         accent: c.danger,
         items: overdue,
@@ -129,7 +129,7 @@ class WarRoomView extends ConsumerWidget {
     }
     if (todayItems.isNotEmpty) {
       children.add(_Section(
-        title: 'Сегодня',
+        title: t.warRoom.section.today,
         icon: Icons.star_outline,
         accent: c.accent,
         items: todayItems,
@@ -140,7 +140,7 @@ class WarRoomView extends ConsumerWidget {
     }
     if (tomorrow.isNotEmpty) {
       children.add(_Section(
-        title: 'Завтра',
+        title: t.warRoom.section.tomorrow,
         icon: Icons.wb_twilight_outlined,
         accent: c.textSecondary,
         items: tomorrow,
@@ -151,7 +151,7 @@ class WarRoomView extends ConsumerWidget {
     }
     if (thisWeek.isNotEmpty) {
       children.add(_Section(
-        title: 'На этой неделе',
+        title: t.warRoom.section.thisWeek,
         icon: Icons.calendar_view_week_outlined,
         accent: c.textSecondary,
         items: thisWeek,
@@ -168,7 +168,7 @@ class WarRoomView extends ConsumerWidget {
 
     if (later.isNotEmpty) {
       children.add(_CollapsibleSection(
-        title: 'Позже',
+        title: t.warRoom.section.later,
         count: later.length,
         items: later,
         today: today,
@@ -178,7 +178,7 @@ class WarRoomView extends ConsumerWidget {
     }
     if (noDate.isNotEmpty) {
       children.add(_CollapsibleSection(
-        title: 'Без срока',
+        title: t.warRoom.section.noDate,
         count: noDate.length,
         items: noDate,
         today: today,
@@ -228,8 +228,13 @@ class _DaySummary extends StatelessWidget {
     final planned = agenda.todayPlanned;
 
     final summary = planned == 0
-        ? 'На сегодня задач нет'
-        : '$remaining ${_taskWord(remaining)} осталось · $done из $planned';
+        ? t.warRoom.summary.noTasksToday
+        : t.warRoom.summary.remaining(
+            remaining: remaining,
+            taskWord: t.warRoom.taskWord(n: remaining),
+            done: done,
+            planned: planned,
+          );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -264,7 +269,7 @@ class _DaySummary extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'СВОДКА ДНЯ',
+                  t.warRoom.summary.label,
                   style: TextStyle(
                     color: c.textSecondary,
                     fontSize: 10,
@@ -284,7 +289,10 @@ class _DaySummary extends StatelessWidget {
                 if (agenda.overdueCount > 0) ...[
                   const SizedBox(height: 4),
                   Text(
-                    '${agenda.overdueCount} ${_taskWord(agenda.overdueCount)} просрочено',
+                    t.warRoom.summary.overdueCount(
+                      count: agenda.overdueCount,
+                      taskWord: t.warRoom.taskWord(n: agenda.overdueCount),
+                    ),
                     style: TextStyle(
                       color: c.danger,
                       fontSize: 12,
@@ -372,13 +380,13 @@ class _ReviewBanner extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Доступен обзор недели',
+                  Text(t.warRoom.reviewBanner.title,
                       style: TextStyle(
                           color: c.textPrimary,
                           fontSize: 14,
                           fontWeight: FontWeight.w700)),
                   const SizedBox(height: 2),
-                  Text('Подведём итоги и наметим фокус',
+                  Text(t.warRoom.reviewBanner.subtitle,
                       style:
                           TextStyle(color: c.textSecondary, fontSize: 12)),
                 ],
@@ -421,8 +429,8 @@ class _BlockedToggle extends StatelessWidget {
             const SizedBox(width: 6),
             Text(
               showBlocked
-                  ? 'Скрыть заблокированные'
-                  : 'Показать заблокированные ($count)',
+                  ? t.warRoom.blockedToggle.hide
+                  : t.warRoom.blockedToggle.show(count: count),
               style: TextStyle(
                 color: c.textSecondary,
                 fontSize: 12,
@@ -474,7 +482,7 @@ class _FocusSuggestionCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'СФОКУСИРОВАТЬСЯ',
+                    t.warRoom.focusCard.label,
                     style: TextStyle(
                       color: c.accent,
                       fontSize: 9,
@@ -674,10 +682,12 @@ class _AgendaRow extends ConsumerWidget {
     if (due == null) return null;
     final d = DateUtils.dateOnly(due);
     final diff = d.difference(today).inDays;
-    if (diff < 0) return 'просрочено на ${-diff} ${_dayWord(-diff)}';
-    if (diff == 0) return 'сегодня';
-    if (diff == 1) return 'завтра';
-    return 'через $diff ${_dayWord(diff)}';
+    if (diff < 0) {
+      return t.warRoom.due.overdueBy(n: -diff, dayWord: t.warRoom.dayWord(n: -diff));
+    }
+    if (diff == 0) return t.warRoom.due.today;
+    if (diff == 1) return t.warRoom.due.tomorrow;
+    return t.warRoom.due.inDays(n: diff, dayWord: t.warRoom.dayWord(n: diff));
   }
 
   void _open(BuildContext context) {
@@ -815,7 +825,8 @@ class _AgendaRow extends ConsumerWidget {
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
-                            'Ждёт: ${item.blockerNames.join(', ')}',
+                            t.warRoom.blocker.waiting(
+                                names: item.blockerNames.join(', ')),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -869,13 +880,13 @@ class _AgendaRow extends ConsumerWidget {
       background: _swipeBg(
         align: Alignment.centerLeft,
         icon: Icons.event_outlined,
-        label: 'На завтра',
+        label: t.warRoom.swipe.tomorrow,
         color: c.accent,
       ),
       secondaryBackground: _swipeBg(
         align: Alignment.centerRight,
         icon: Icons.event_busy_outlined,
-        label: 'Снять срок',
+        label: t.warRoom.swipe.clearDate,
         color: c.textSecondary,
       ),
       confirmDismiss: (dir) async {
@@ -944,7 +955,7 @@ class _MilestoneHorizon extends StatelessWidget {
               Icon(Icons.flag_outlined, color: c.accentSecondary, size: 16),
               const SizedBox(width: 6),
               Text(
-                'ВЕХИ НА ГОРИЗОНТЕ',
+                t.warRoom.milestones.title,
                 style: TextStyle(
                   color: c.accentSecondary,
                   fontSize: 11,
@@ -959,10 +970,12 @@ class _MilestoneHorizon extends StatelessWidget {
           final days = m.daysUntil ?? 0;
           final overdue = days < 0;
           final label = overdue
-              ? 'просрочена на ${-days} ${_dayWord(-days)}'
+              ? t.warRoom.milestones.overdueBy(
+                  n: -days, dayWord: t.warRoom.dayWord(n: -days))
               : days == 0
-                  ? 'сегодня'
-                  : 'через $days ${_dayWord(days)}';
+                  ? t.warRoom.milestones.today
+                  : t.warRoom.milestones.inDays(
+                      n: days, dayWord: t.warRoom.dayWord(n: days));
           return Container(
             margin: const EdgeInsets.symmetric(vertical: 3),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1036,7 +1049,7 @@ class _AllClear extends StatelessWidget {
           Icon(Icons.check_circle_outline, color: c.success, size: 56),
           const SizedBox(height: 16),
           Text(
-            'Чисто',
+            t.warRoom.allClear.title,
             style: TextStyle(
               color: c.textPrimary,
               fontSize: 18,
@@ -1045,27 +1058,11 @@ class _AllClear extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Все цели под контролем',
+            t.warRoom.allClear.subtitle,
             style: TextStyle(color: c.textSecondary, fontSize: 13),
           ),
         ],
       ),
     );
   }
-}
-
-// ─── Word helpers ──────────────────────────────────────────────────────────────
-
-String _dayWord(int n) {
-  final m10 = n % 10, m100 = n % 100;
-  if (m10 == 1 && m100 != 11) return 'день';
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'дня';
-  return 'дней';
-}
-
-String _taskWord(int n) {
-  final m10 = n % 10, m100 = n % 100;
-  if (m10 == 1 && m100 != 11) return 'задача';
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'задачи';
-  return 'задач';
 }

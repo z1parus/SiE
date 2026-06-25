@@ -1,0 +1,62 @@
+{
+  "section": {
+    "overdue": "Просрочено",
+    "today": "Сегодня",
+    "tomorrow": "Завтра",
+    "thisWeek": "На этой неделе",
+    "later": "Позже",
+    "noDate": "Без срока"
+  },
+  "summary": {
+    "label": "СВОДКА ДНЯ",
+    "noTasksToday": "На сегодня задач нет",
+    "remaining": "{remaining} {taskWord} осталось · {done} из {planned}",
+    "overdueCount": "{count} {taskWord} просрочено"
+  },
+  "reviewBanner": {
+    "title": "Доступен обзор недели",
+    "subtitle": "Подведём итоги и наметим фокус"
+  },
+  "blockedToggle": {
+    "hide": "Скрыть заблокированные",
+    "show": "Показать заблокированные ({count})"
+  },
+  "focusCard": {
+    "label": "СФОКУСИРОВАТЬСЯ"
+  },
+  "due": {
+    "overdueBy": "просрочено на {n} {dayWord}",
+    "today": "сегодня",
+    "tomorrow": "завтра",
+    "inDays": "через {n} {dayWord}"
+  },
+  "blocker": {
+    "waiting": "Ждёт: {names}"
+  },
+  "swipe": {
+    "tomorrow": "На завтра",
+    "clearDate": "Снять срок"
+  },
+  "milestones": {
+    "title": "ВЕХИ НА ГОРИЗОНТЕ",
+    "overdueBy": "просрочена на {n} {dayWord}",
+    "today": "сегодня",
+    "inDays": "через {n} {dayWord}"
+  },
+  "allClear": {
+    "title": "Чисто",
+    "subtitle": "Все цели под контролем"
+  },
+  "dayWord": {
+    "one": "день",
+    "few": "дня",
+    "many": "дней",
+    "other": "дня"
+  },
+  "taskWord": {
+    "one": "задача",
+    "few": "задачи",
+    "many": "задач",
+    "other": "задачи"
+  }
+}

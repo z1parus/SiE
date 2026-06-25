@@ -7,7 +7,7 @@ class MissionAccomplishedScreen extends ConsumerStatefulWidget {
   final int dpGained;
   final Achievement? achievement;
   final MissionMedal? medal;
-  final String subtitle;
+  final String? subtitle;
 
   const MissionAccomplishedScreen({
     super.key,
@@ -15,7 +15,7 @@ class MissionAccomplishedScreen extends ConsumerStatefulWidget {
     this.dpGained = 0,
     this.achievement,
     this.medal,
-    this.subtitle = 'BREATHING PROTOCOL COMPLETE',
+    this.subtitle,
   });
 
   @override
@@ -112,13 +112,14 @@ class _MissionAccomplishedScreenState
                     child: Column(
                       children: [
                         Text(
-                          'MISSION ACCOMPLISHED',
+                          t.missionAccomplished.title,
                           style: Theme.of(context).textTheme.headlineMedium,
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          widget.subtitle,
+                          widget.subtitle ??
+                              t.missionAccomplished.defaultSubtitle,
                           style: Theme.of(context).textTheme.bodyMedium,
                           textAlign: TextAlign.center,
                         ),
@@ -234,10 +235,11 @@ class _XpPanel extends ConsumerWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('XP GAINED', style: Theme.of(context).textTheme.bodyMedium),
+              Text(t.missionAccomplished.xp.label,
+                  style: Theme.of(context).textTheme.bodyMedium),
               const SizedBox(height: 2),
               Text(
-                'TOTAL: $totalXp XP',
+                t.missionAccomplished.xp.total(totalXp: totalXp),
                 style: Theme.of(context)
                     .textTheme
                     .bodyMedium
@@ -246,7 +248,7 @@ class _XpPanel extends ConsumerWidget {
             ],
           ),
           Text(
-            '+$xpGained XP',
+            t.missionAccomplished.xp.gained(xpGained: xpGained),
             style: TextStyle(
               color: c.accent,
               fontSize: 22,
@@ -292,11 +294,12 @@ class _DpPanel extends ConsumerWidget {
               Icon(Icons.palette_outlined,
                   size: 14, color: c.dp.withValues(alpha: 0.85)),
               const SizedBox(width: 8),
-              Text('DP GAINED', style: Theme.of(context).textTheme.bodyMedium),
+              Text(t.missionAccomplished.dp.label,
+                  style: Theme.of(context).textTheme.bodyMedium),
             ],
           ),
           Text(
-            '+$dpGained DP',
+            t.missionAccomplished.dp.gained(dpGained: dpGained),
             style: TextStyle(
               color: c.dp,
               fontSize: 20,
@@ -353,7 +356,7 @@ class _AchievementPanel extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'ACHIEVEMENT UNLOCKED',
+                  t.missionAccomplished.achievement.label,
                   style: Theme.of(context).textTheme.labelSmall,
                 ),
                 const SizedBox(height: 4),
@@ -389,7 +392,7 @@ class _ReturnButton extends ConsumerWidget {
           borderRadius: BorderRadius.circular(2),
         ),
         child: Text(
-          'RETURN TO OPERATIONS',
+          t.missionAccomplished.returnButton,
           style: TextStyle(
             color: c.accent,
             fontSize: 13,

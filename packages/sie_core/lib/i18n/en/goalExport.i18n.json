@@ -1,0 +1,23 @@
+{
+  "header": {
+    "title": "Export goal"
+  },
+  "status": {
+    "generating": "Generating…"
+  },
+  "markdown": {
+    "title": "Markdown (.md)",
+    "subtitle": "Goal structure, tasks, milestones — in a readable format for Notion, Obsidian, GitHub"
+  },
+  "png": {
+    "title": "Map snapshot (PNG)",
+    "subtitleAvailable": "High-resolution screenshot of the tactical map",
+    "subtitleUnavailable": "Open the map view (toggle at the top), then export"
+  },
+  "errors": {
+    "generic": "Error: {error}",
+    "mapNotRendered": "Map is not rendered. Switch to map mode.",
+    "repaintBoundaryNotFound": "RepaintBoundary not found",
+    "imageSaveFailed": "Failed to save the image"
+  }
+}

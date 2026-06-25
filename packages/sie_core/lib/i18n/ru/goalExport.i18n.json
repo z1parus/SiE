@@ -1,0 +1,23 @@
+{
+  "header": {
+    "title": "Экспорт цели"
+  },
+  "status": {
+    "generating": "Генерирую…"
+  },
+  "markdown": {
+    "title": "Markdown (.md)",
+    "subtitle": "Структура цели, задачи, вехи — в читаемом формате для Notion, Obsidian, GitHub"
+  },
+  "png": {
+    "title": "Снимок карты (PNG)",
+    "subtitleAvailable": "Скриншот тактической карты в высоком разрешении",
+    "subtitleUnavailable": "Откройте вид карты (переключитель сверху), затем экспортируйте"
+  },
+  "errors": {
+    "generic": "Ошибка: {error}",
+    "mapNotRendered": "Карта не отрисована. Переключитесь в режим карты.",
+    "repaintBoundaryNotFound": "RepaintBoundary не найден",
+    "imageSaveFailed": "Не удалось сохранить изображение"
+  }
+}

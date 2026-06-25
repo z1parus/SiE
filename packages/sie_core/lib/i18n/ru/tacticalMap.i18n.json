@@ -1,0 +1,111 @@
+{
+  "limits": {
+    "maxElements": "Достигнут лимит элементов на карте",
+    "imageUploadError": "Ошибка загрузки изображения"
+  },
+  "imagePicker": {
+    "fromGallery": "Выбрать из галереи",
+    "pasteUrl": "Вставить ссылку / URL",
+    "urlTitle": "URL изображения",
+    "cancel": "Отмена",
+    "add": "Добавить"
+  },
+  "preview": {
+    "title": "Предпросмотр",
+    "rotateLeft": "Повернуть влево",
+    "rotateRight": "Повернуть вправо",
+    "cancel": "Отмена",
+    "place": "Разместить"
+  },
+  "rebuild": {
+    "done": "Карта перестроена",
+    "undo": "Отменить"
+  },
+  "owner": "Владелец",
+  "members": {
+    "title": "Участники",
+    "editingBadge": "{name} редактирует"
+  },
+  "connector": {
+    "pickTarget": "Выберите цель стрелки"
+  },
+  "addSheet": {
+    "subGoal": "Под-цель",
+    "milestone": "Чекпоинт",
+    "subGoalNameHint": "Название под-цели",
+    "milestoneNameHint": "Название чекпоинта",
+    "add": "Добавить"
+  },
+  "task": {
+    "complete": "Завершить",
+    "addTask": "Добавить задачу",
+    "addSubStage": "Добавить под-этап",
+    "unparent": "Вынести на уровень выше",
+    "delete": "Удалить",
+    "subStageNameHint": "Название под-этапа",
+    "cancel": "Отмена",
+    "add": "Добавить",
+    "taskNameHint": "Название задачи",
+    "weight": "Вес:",
+    "markIncomplete": "Отметить невыполненной",
+    "markComplete": "Выполнено"
+  },
+  "milestone": {
+    "targetDate": "Цель: {date}",
+    "reached": "Достигнут",
+    "delete": "Удалить"
+  },
+  "habitLink": {
+    "title": "Связанная привычка",
+    "unlink": "Отвязать привычку"
+  },
+  "assignee": {
+    "title": "Исполнитель",
+    "notAssigned": "не назначен",
+    "change": "Изменить",
+    "pickerTitle": "Назначить исполнителя"
+  },
+  "search": {
+    "hint": "Поиск по карте…"
+  },
+  "editMode": {
+    "done": "ГОТОВО",
+    "edit": "РЕДАКТ."
+  },
+  "tools": {
+    "note": "Заметка",
+    "label": "Метка",
+    "connector": "Связь",
+    "image": "Изобр."
+  },
+  "noteElement": {
+    "hint": "Заметка…"
+  },
+  "labelElement": {
+    "hint": "Метка…"
+  },
+  "elementActions": {
+    "noteHeader": "ЗАМЕТКА",
+    "labelHeader": "МЕТКА",
+    "color": "Цвет",
+    "editText": "Изменить текст",
+    "delete": "Удалить"
+  },
+  "connectorActions": {
+    "header": "СВЯЗЬ",
+    "caption": "Подпись",
+    "captionHint": "Без подписи…",
+    "ok": "OK",
+    "makeSolid": "Сделать сплошной",
+    "makeDashed": "Сделать пунктирной",
+    "color": "Цвет",
+    "delete": "Удалить"
+  },
+  "imageActions": {
+    "header": "ИЗОБРАЖЕНИЕ",
+    "caption": "Подпись",
+    "captionHint": "Добавить подпись…",
+    "ok": "OK",
+    "delete": "Удалить"
+  }
+}

@@ -7,16 +7,16 @@ import 'package:sie_core/sie_core.dart';
 String _relativeDate(DateTime d) {
   final now = DateTime.now();
   final diff = now.difference(d);
-  if (diff.inMinutes < 1) return 'только что';
-  if (diff.inMinutes < 60) return '${diff.inMinutes} мин назад';
+  if (diff.inMinutes < 1) return t.goalNotes.date.justNow;
+  if (diff.inMinutes < 60) return t.goalNotes.date.minutesAgo(n: diff.inMinutes);
+  final time = '${d.hour.toString().padLeft(2, '0')}:'
+      '${d.minute.toString().padLeft(2, '0')}';
   if (diff.inHours < 24 && now.day == d.day) {
-    return 'сегодня ${d.hour.toString().padLeft(2, '0')}:'
-        '${d.minute.toString().padLeft(2, '0')}';
+    return t.goalNotes.date.today(time: time);
   }
   final yesterday = now.subtract(const Duration(days: 1));
   if (d.day == yesterday.day && d.month == yesterday.month && d.year == yesterday.year) {
-    return 'вчера ${d.hour.toString().padLeft(2, '0')}:'
-        '${d.minute.toString().padLeft(2, '0')}';
+    return t.goalNotes.date.yesterday(time: time);
   }
   return '${d.day}.${d.month.toString().padLeft(2, '0')}.${d.year}';
 }
@@ -61,7 +61,7 @@ class GoalNotesScreen extends ConsumerWidget {
                   error: (_, __) => _EmptyState(
                     sc: sc,
                     icon: Icons.cloud_off_outlined,
-                    text: 'Не удалось загрузить заметки',
+                    text: t.goalNotes.list.loadError,
                   ),
                   data: (notes) {
                     if (notes.isEmpty) {
@@ -69,8 +69,8 @@ class GoalNotesScreen extends ConsumerWidget {
                         sc: sc,
                         icon: Icons.sticky_note_2_outlined,
                         text: canEdit
-                            ? 'Пока нет заметок.\nНажмите +, чтобы добавить пометку.'
-                            : 'Пока нет заметок.',
+                            ? t.goalNotes.list.emptyEditable
+                            : t.goalNotes.list.empty,
                       );
                     }
                     return RefreshIndicator(
@@ -129,20 +129,22 @@ class GoalNotesScreen extends ConsumerWidget {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: sc.surface,
-        title: Text('Удалить заметку?',
+        title: Text(t.goalNotes.delete.title,
             style: TextStyle(color: sc.textPrimary, fontSize: 17)),
         content: Text(
-          'Это действие нельзя отменить.',
+          t.goalNotes.delete.message,
           style: TextStyle(color: sc.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Отмена', style: TextStyle(color: sc.textSecondary)),
+            child: Text(t.goalNotes.delete.cancel,
+                style: TextStyle(color: sc.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('Удалить', style: TextStyle(color: sc.danger)),
+            child: Text(t.goalNotes.delete.confirm,
+                style: TextStyle(color: sc.danger)),
           ),
         ],
       ),
@@ -192,7 +194,7 @@ class _NotesHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Журнал заметок',
+                  t.goalNotes.header.title,
                   style: TextStyle(
                     color: sc.textPrimary,
                     fontSize: 17,
@@ -297,7 +299,7 @@ class _NoteCard extends StatelessWidget {
                   icon: Icon(Icons.delete_outline,
                       size: 19, color: sc.textSecondary),
                   onPressed: onDelete,
-                  tooltip: 'Удалить',
+                  tooltip: t.goalNotes.card.deleteTooltip,
                   visualDensity: VisualDensity.compact,
                 ),
             ],
@@ -415,7 +417,7 @@ class _NoteEditorSheetState extends ConsumerState<_NoteEditorSheet> {
             ),
             const SizedBox(height: 16),
             Text(
-              isEdit ? 'Редактировать заметку' : 'Новая заметка',
+              isEdit ? t.goalNotes.editor.titleEdit : t.goalNotes.editor.titleNew,
               style: TextStyle(
                 color: sc.textPrimary,
                 fontSize: 17,
@@ -431,7 +433,7 @@ class _NoteEditorSheetState extends ConsumerState<_NoteEditorSheet> {
                   fontWeight: FontWeight.w600),
               textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
-                hintText: 'Заголовок (необязательно)',
+                hintText: t.goalNotes.editor.titleHint,
                 hintStyle: TextStyle(color: sc.textSecondary, fontSize: 16),
                 enabledBorder: UnderlineInputBorder(
                     borderSide: BorderSide(color: sc.border)),
@@ -449,7 +451,7 @@ class _NoteEditorSheetState extends ConsumerState<_NoteEditorSheet> {
               textCapitalization: TextCapitalization.sentences,
               keyboardType: TextInputType.multiline,
               decoration: InputDecoration(
-                hintText: 'Что не забыть…',
+                hintText: t.goalNotes.editor.bodyHint,
                 hintStyle: TextStyle(color: sc.textSecondary, fontSize: 15),
                 enabledBorder: UnderlineInputBorder(
                     borderSide: BorderSide(color: sc.border)),
@@ -477,7 +479,7 @@ class _NoteEditorSheetState extends ConsumerState<_NoteEditorSheet> {
                             strokeWidth: 2, color: Colors.white),
                       )
                     : Text(
-                        isEdit ? 'СОХРАНИТЬ' : 'ДОБАВИТЬ',
+                        isEdit ? t.goalNotes.editor.save : t.goalNotes.editor.add,
                         style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,

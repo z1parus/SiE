@@ -1,0 +1,17 @@
+{
+  "title": "MISSION ACCOMPLISHED",
+  "defaultSubtitle": "BREATHING PROTOCOL COMPLETE",
+  "xp": {
+    "label": "XP GAINED",
+    "total": "TOTAL: {totalXp} XP",
+    "gained": "+{xpGained} XP"
+  },
+  "dp": {
+    "label": "DP GAINED",
+    "gained": "+{dpGained} DP"
+  },
+  "achievement": {
+    "label": "ACHIEVEMENT UNLOCKED"
+  },
+  "returnButton": "RETURN TO OPERATIONS"
+}

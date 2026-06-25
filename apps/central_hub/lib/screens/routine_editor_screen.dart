@@ -29,8 +29,11 @@ class RoutineEditorScreen extends ConsumerWidget {
             : routinesVal?.evening);
     final habits = routine?.habits ?? [];
     final title = _isStack
-        ? (routine?.displayName.toUpperCase() ?? 'СТЭК ПРИВЫЧЕК')
-        : (routineType == 'morning' ? 'УТРЕННЯЯ РУТИНА' : 'ВЕЧЕРНЯЯ РУТИНА');
+        ? (routine?.displayName.toUpperCase() ??
+            t.routineEditor.title.stackFallback)
+        : (routineType == 'morning'
+            ? t.routineEditor.title.morning
+            : t.routineEditor.title.evening);
 
     return SieBackground(
       child: Scaffold(
@@ -79,7 +82,7 @@ class RoutineEditorScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: 12),
                             Text(
-                              'НЕТ ПРИВЫЧЕК',
+                              t.routineEditor.empty.noHabits,
                               style: TextStyle(
                                 color: sc.textSecondary,
                                 fontSize: 11,
@@ -89,7 +92,7 @@ class RoutineEditorScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              'Добавьте привычки ниже',
+                              t.routineEditor.empty.addBelow,
                               style: TextStyle(
                                 color: sc.textSecondary.withValues(alpha: 0.55),
                                 fontSize: 11,
@@ -134,7 +137,7 @@ class RoutineEditorScreen extends ConsumerWidget {
                                   showUndoSnackbar(
                                     context,
                                     ref,
-                                    message: 'Привычка убрана из рутины',
+                                    message: t.routineEditor.removeSnackbar,
                                     onUndo: () async {
                                       await notifier.addHabitToRoutine(
                                           routine.id, removedId);
@@ -205,8 +208,9 @@ void showStackMetaDialog(
   String? initialName,
   String? initialCue,
   required void Function(String name, String? cue) onSave,
-  String saveLabel = 'СОХРАНИТЬ',
+  String? saveLabel,
 }) {
+  final resolvedSaveLabel = saveLabel ?? t.routineEditor.dialog.save;
   final sc        = ref.read(sieColorsProvider);
   final nameCtrl  = TextEditingController(text: initialName ?? '');
   final cueCtrl   = TextEditingController(text: initialCue ?? '');
@@ -232,7 +236,7 @@ void showStackMetaDialog(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'СТЭК ПРИВЫЧЕК',
+                t.routineEditor.dialog.stackHeader,
                 style: TextStyle(
                   color: sc.textSecondary,
                   fontSize: 10,
@@ -245,7 +249,7 @@ void showStackMetaDialog(
                 controller: nameCtrl,
                 style: TextStyle(color: sc.textPrimary, fontSize: 14),
                 decoration: InputDecoration(
-                  labelText: 'НАЗВАНИЕ',
+                  labelText: t.routineEditor.dialog.nameLabel,
                   labelStyle:
                       TextStyle(color: sc.textSecondary, fontSize: 11),
                   enabledBorder: UnderlineInputBorder(
@@ -259,8 +263,8 @@ void showStackMetaDialog(
                 controller: cueCtrl,
                 style: TextStyle(color: sc.textPrimary, fontSize: 14),
                 decoration: InputDecoration(
-                  labelText: 'ЯКОРЬ-ТРИГГЕР (необязательно)',
-                  hintText: 'После утреннего кофе…',
+                  labelText: t.routineEditor.dialog.cueLabel,
+                  hintText: t.routineEditor.dialog.cueHint,
                   hintStyle: TextStyle(
                       color: sc.textSecondary.withValues(alpha: 0.4),
                       fontSize: 12),
@@ -281,7 +285,7 @@ void showStackMetaDialog(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 8),
-                      child: Text('ОТМЕНА',
+                      child: Text(t.routineEditor.dialog.cancel,
                           style: TextStyle(
                               color: sc.textSecondary,
                               fontSize: 11,
@@ -307,7 +311,7 @@ void showStackMetaDialog(
                         border: Border.all(
                             color: sc.accent.withValues(alpha: 0.6)),
                       ),
-                      child: Text(saveLabel,
+                      child: Text(resolvedSaveLabel,
                           style: TextStyle(
                               color: sc.accent,
                               fontSize: 11,
@@ -457,7 +461,7 @@ class _RoutineMemberTile extends ConsumerWidget {
             if (onRemove != null)
               Semantics(
                 button: true,
-                label: 'Убрать из рутины',
+                label: t.routineEditor.tile.removeFromRoutine,
                 child: GestureDetector(
                   onTap: onRemove,
                   behavior: HitTestBehavior.opaque,
@@ -477,7 +481,7 @@ class _RoutineMemberTile extends ConsumerWidget {
             ReorderableDragStartListener(
               index: index,
               child: Semantics(
-                label: 'Перетащите для сортировки',
+                label: t.routineEditor.tile.dragToReorder,
                 child: SizedBox(
                   width: 44,
                   height: 44,
@@ -519,7 +523,7 @@ class _AddHabitChip extends ConsumerWidget {
             Icon(Icons.add, color: sc.accent, size: 18),
             const SizedBox(width: 8),
             Text(
-              'ДОБАВИТЬ ПРИВЫЧКУ',
+              t.routineEditor.addHabit,
               style: TextStyle(
                 color: sc.accent,
                 fontSize: 11,
@@ -581,7 +585,7 @@ class _HabitPickerSheet extends ConsumerWidget {
             ),
           ),
           Text(
-            'ADD TO ROUTINE',
+            t.routineEditor.picker.addToRoutine,
             style: TextStyle(
               color: sc.textSecondary,
               fontSize: 10,
@@ -610,8 +614,8 @@ class _HabitPickerSheet extends ConsumerWidget {
                   child: Center(
                     child: Text(
                       noHabitsAtAll
-                          ? 'Сначала создайте привычки в Архиве'
-                          : 'Все активные привычки уже добавлены',
+                          ? t.routineEditor.picker.createFirst
+                          : t.routineEditor.picker.allAdded,
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: sc.textSecondary,

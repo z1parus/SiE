@@ -57,7 +57,7 @@ class MilestoneMetricScreen extends ConsumerWidget {
         body: logsAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Center(
-              child: Text('Ошибка загрузки',
+              child: Text(t.milestoneMetric.loadError,
                   style: TextStyle(color: sc.textSecondary))),
           data: (logs) => _Body(
             ms: ms,
@@ -118,17 +118,17 @@ class _Body extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _StatBox(
-                      label: 'СЕЙЧАС',
+                      label: t.milestoneMetric.summary.now,
                       value: currentDisplay,
                       color: sc.accent,
                       sc: sc),
                   _StatBox(
-                      label: 'ЦЕЛЬ',
+                      label: t.milestoneMetric.summary.target,
                       value: targetDisplay,
                       color: sc.textSecondary,
                       sc: sc),
                   _StatBox(
-                      label: 'ПРОГРЕСС',
+                      label: t.milestoneMetric.summary.progress,
                       value: '$pct%',
                       color: ms.isCompleted ? sc.success : sc.accent,
                       sc: sc),
@@ -153,7 +153,7 @@ class _Body extends ConsumerWidget {
                   children: [
                     Icon(Icons.emoji_events, color: sc.accent, size: 16),
                     const SizedBox(width: 6),
-                    Text('Цель достигнута!',
+                    Text(t.milestoneMetric.summary.goalReached,
                         style: TextStyle(color: sc.accent, fontSize: 13)),
                   ],
                 ),
@@ -166,7 +166,7 @@ class _Body extends ConsumerWidget {
 
         // Full chart (if 2+ data points).
         if (values.length >= 2) ...[
-          Text('ДИНАМИКА',
+          Text(t.milestoneMetric.chart.title,
               style: TextStyle(
                   color: sc.textSecondary,
                   fontSize: 11,
@@ -189,7 +189,7 @@ class _Body extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('ИСТОРИЯ ЗАМЕРОВ',
+            Text(t.milestoneMetric.history.title,
                 style: TextStyle(
                     color: sc.textSecondary,
                     fontSize: 11,
@@ -208,7 +208,7 @@ class _Body extends ConsumerWidget {
                     children: [
                       Icon(Icons.add, size: 14, color: sc.accent),
                       const SizedBox(width: 4),
-                      Text('ЗАМЕР',
+                      Text(t.milestoneMetric.history.addMeasurement,
                           style: TextStyle(
                               color: sc.accent,
                               fontSize: 11,
@@ -225,7 +225,7 @@ class _Body extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
             child: Center(
-              child: Text('Нет замеров',
+              child: Text(t.milestoneMetric.history.empty,
                   style: TextStyle(color: sc.textSecondary, fontSize: 13)),
             ),
           )
@@ -406,19 +406,21 @@ class _LogTile extends ConsumerWidget {
                 context: context,
                 builder: (ctx) => AlertDialog(
                   backgroundColor: sc.surface,
-                  title: Text('Удалить замер?',
+                  title: Text(t.milestoneMetric.delete.title,
                       style: TextStyle(color: sc.textPrimary)),
                   content: Text(
-                      'Замер ${_fmt(log.value)}${unit.isNotEmpty ? ' $unit' : ''} будет удалён.',
+                      t.milestoneMetric.delete.message(
+                          value:
+                              '${_fmt(log.value)}${unit.isNotEmpty ? ' $unit' : ''}'),
                       style: TextStyle(color: sc.textSecondary)),
                   actions: [
                     TextButton(
                         onPressed: () => Navigator.pop(ctx, false),
-                        child: Text('ОТМЕНА',
+                        child: Text(t.milestoneMetric.delete.cancel,
                             style: TextStyle(color: sc.textSecondary))),
                     TextButton(
                         onPressed: () => Navigator.pop(ctx, true),
-                        child: Text('УДАЛИТЬ',
+                        child: Text(t.milestoneMetric.delete.confirm,
                             style: TextStyle(color: sc.danger))),
                   ],
                 ),
@@ -504,7 +506,7 @@ class _LogMeasurementSheetState
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('ВНЕСТИ ЗАМЕР',
+          Text(t.milestoneMetric.sheet.title,
               style: TextStyle(
                   color: sc.textSecondary,
                   fontSize: 11,
@@ -586,8 +588,9 @@ class _LogMeasurementSheetState
                     borderRadius: BorderRadius.circular(12)),
                 elevation: 0,
               ),
-              child: const Text('СОХРАНИТЬ',
-                  style: TextStyle(letterSpacing: 1.5, fontWeight: FontWeight.w600)),
+              child: Text(t.milestoneMetric.sheet.save,
+                  style: const TextStyle(
+                      letterSpacing: 1.5, fontWeight: FontWeight.w600)),
             ),
           ),
         ],

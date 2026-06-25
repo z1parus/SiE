@@ -1,0 +1,76 @@
+{
+  "monthsShort": [
+    "янв", "фев", "мар", "апр", "мая", "июн",
+    "июл", "авг", "сен", "окт", "ноя", "дек"
+  ],
+  "status": {
+    "completed": "ЗАВЕРШЕНА",
+    "frozen": "ЗАМОРОЖЕНА",
+    "failed": "ПРОВАЛЕНА",
+    "active": "АКТИВНА"
+  },
+  "momentum": {
+    "title": "ИМПУЛЬС",
+    "loadError": "Не удалось загрузить аналитику темпа.",
+    "collecting": "Собираем данные о темпе… ({count}/3 замера прогресса)",
+    "paceLabel": "Темп (за 7 дней)",
+    "paceValue": "{value} прогресса",
+    "projection": "Прогноз финиша",
+    "projectionZero": "темп нулевой",
+    "vsDeadline": "Относительно дедлайна",
+    "deltaOnTime": "точно в срок",
+    "deltaEarlier": "на {n} дн. раньше",
+    "deltaLater": "на {n} дн. позже",
+    "legendFact": "факт",
+    "legendIdeal": "идеал",
+    "legendDeadline": "дедлайн"
+  },
+  "tasks": {
+    "title": "Задачи",
+    "total": "Всего",
+    "done": "Выполнено",
+    "light": "Лёгкие (×1)",
+    "medium": "Средние (×3)",
+    "heavy": "Тяжёлые (×5)",
+    "overdue": "Просроченных",
+    "doneOfTotal": "{done} из {total}"
+  },
+  "subGoals": {
+    "title": "Этапы",
+    "totalStages": "Всего этапов",
+    "completed": "Завершено",
+    "topLevel": "Верхний уровень",
+    "nested": "Вложенных"
+  },
+  "milestones": {
+    "title": "Контрольные точки",
+    "total": "Всего",
+    "completed": "Завершено",
+    "nearest": "Ближайшая: {name} ({date})"
+  },
+  "time": {
+    "title": "Время",
+    "created": "Создана",
+    "activeFor": "Активна уже",
+    "updated": "Обновлена",
+    "deadline": "Дедлайн",
+    "daysLeft": "Осталось дней",
+    "days": "{n} дн.",
+    "notSet": "не задан",
+    "overdue": "просрочено",
+    "dash": "—"
+  },
+  "focus": {
+    "title": "Время в фокусе",
+    "empty": "Пока нет фокус-сессий по этой цели. Запусти ▶ на задаче, чтобы засчитать время.",
+    "totalInvested": "всего вложено",
+    "topTasks": "ТОП ЗАДАЧ ПО ВРЕМЕНИ"
+  },
+  "habits": {
+    "title": "Привязанные привычки",
+    "deleted": "Привычка удалена"
+  },
+  "advice": {
+    "title": "СОВЕТЫ"
+  }
+}

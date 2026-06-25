@@ -1,0 +1,52 @@
+{
+  "privacy": {
+    "title": "AI STRATEGIST",
+    "body": "The goal name and description will be sent to Groq AI to generate a plan.\n\nThe data is used only for this request and is not stored by the service.",
+    "cancel": "CANCEL",
+    "continueBtn": "CONTINUE"
+  },
+  "header": {
+    "title": "AI STRATEGIST"
+  },
+  "loading": {
+    "analyzing": "AI STRATEGIST IS ANALYZING THE GOAL...",
+    "estimate": "Usually takes 3–5 seconds"
+  },
+  "applying": {
+    "saving": "SAVING PLAN..."
+  },
+  "error": {
+    "title": "GENERATION ERROR",
+    "unknown": "Unknown error",
+    "network": "No network connection. Check your internet and try again.",
+    "auth": "API authorization error. Contact the developer.",
+    "rateLimit": "Too many requests. Wait a moment and try again.",
+    "timeout": "The server did not respond in time. Try again.",
+    "generic": "Failed to get the plan. Try again.",
+    "saveFailed": "Save error: {error}",
+    "close": "CLOSE",
+    "retry": "RETRY"
+  },
+  "summary": {
+    "chip": "{stages} stages · {tasks} tasks · {milestones} checkpoints"
+  },
+  "milestones": {
+    "title": "CHECKPOINTS"
+  },
+  "actions": {
+    "cancel": "CANCEL",
+    "regenerate": "REGENERATE",
+    "accept": "ACCEPT"
+  },
+  "subGoal": {
+    "tasksCount": {
+      "one": "{n} task",
+      "other": "{n} tasks"
+    }
+  },
+  "weight": {
+    "light": "Light task",
+    "medium": "Medium task",
+    "heavy": "Heavy task"
+  }
+}

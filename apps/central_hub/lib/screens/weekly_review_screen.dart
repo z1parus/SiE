@@ -56,14 +56,14 @@ class _WeeklyReviewScreenState extends ConsumerState<WeeklyReviewScreen> {
             icon: Icon(Icons.close, color: sc.textPrimary),
             onPressed: () => Navigator.pop(context),
           ),
-          title: Text('Обзор недели',
+          title: Text(t.weeklyReview.title,
               style: TextStyle(color: sc.textPrimary, fontSize: 18)),
         ),
         body: async.when(
           loading: () =>
               Center(child: CircularProgressIndicator(color: sc.accent)),
           error: (_, __) => Center(
-            child: Text('Не удалось собрать данные недели',
+            child: Text(t.weeklyReview.loadError,
                 style: TextStyle(color: sc.textSecondary)),
           ),
           data: (data) {
@@ -121,8 +121,8 @@ class _WeeklyReviewScreenState extends ConsumerState<WeeklyReviewScreen> {
                               borderRadius: BorderRadius.circular(12)),
                           elevation: 0,
                         ),
-                        child: const Text('ГОТОВО',
-                            style: TextStyle(
+                        child: Text(t.weeklyReview.done,
+                            style: const TextStyle(
                                 letterSpacing: 1.5,
                                 fontWeight: FontWeight.w600)),
                       ),
@@ -179,21 +179,21 @@ class _SummaryStep extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        _StepTitle('Итоги недели', Icons.insights_outlined, sc),
+        _StepTitle(t.weeklyReview.summary.title, Icons.insights_outlined, sc),
         const SizedBox(height: 16),
         Row(
           children: [
             Expanded(
                 child: _MetricBox(
                     value: '${data.completedTasks}',
-                    label: 'задач выполнено',
+                    label: t.weeklyReview.summary.tasksDone,
                     color: sc.accent,
                     sc: sc)),
             const SizedBox(width: 12),
             Expanded(
                 child: _MetricBox(
                     value: '${data.reviewStreak}',
-                    label: 'недель подряд',
+                    label: t.weeklyReview.summary.weeksInRow,
                     color: sc.accentSecondary,
                     sc: sc)),
           ],
@@ -213,8 +213,8 @@ class _SummaryStep extends StatelessWidget {
               Expanded(
                 child: Text(
                   data.completedTasks == 0
-                      ? 'Тихая неделя — это нормально. Перезагрузимся и наметим фокус.'
-                      : 'Отличная работа на этой неделе. Сделаем паузу и оглянёмся.',
+                      ? t.weeklyReview.summary.quietWeek
+                      : t.weeklyReview.summary.greatWeek,
                   style: TextStyle(
                       color: sc.textSecondary, fontSize: 13, height: 1.4),
                 ),
@@ -239,14 +239,14 @@ class _StuckStep extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        _StepTitle('Застрявшее и просроченное', Icons.warning_amber_outlined,
+        _StepTitle(t.weeklyReview.stuck.title, Icons.warning_amber_outlined,
             sc),
         const SizedBox(height: 16),
         if (data.stallingGoals.isEmpty && data.overdue.isEmpty)
-          _EmptyHint('Ничего не застряло — чисто! 🎯', sc)
+          _EmptyHint(t.weeklyReview.stuck.allClear, sc)
         else ...[
           if (data.stallingGoals.isNotEmpty) ...[
-            Text('ТЕРЯЮТ ТЕМП',
+            Text(t.weeklyReview.stuck.losingPace,
                 style: TextStyle(
                     color: sc.textSecondary,
                     fontSize: 10,
@@ -286,7 +286,7 @@ class _StuckStep extends ConsumerWidget {
           if (data.overdue.isNotEmpty) ...[
             Row(
               children: [
-                Text('ПРОСРОЧЕНО (${data.overdue.length})',
+                Text(t.weeklyReview.stuck.overdue(n: data.overdue.length),
                     style: TextStyle(
                         color: sc.danger,
                         fontSize: 10,
@@ -314,7 +314,7 @@ class _StuckStep extends ConsumerWidget {
             if (data.overdue.length > 5)
               Padding(
                 padding: const EdgeInsets.only(top: 4, left: 13),
-                child: Text('…и ещё ${data.overdue.length - 5}',
+                child: Text(t.weeklyReview.stuck.andMore(n: data.overdue.length - 5),
                     style:
                         TextStyle(color: sc.textSecondary, fontSize: 12)),
               ),
@@ -324,7 +324,7 @@ class _StuckStep extends ConsumerWidget {
               child: OutlinedButton.icon(
                 onPressed: () => _rescheduleAll(context, ref),
                 icon: Icon(Icons.event_available, size: 18, color: sc.accent),
-                label: Text('Перенести всё на сегодня',
+                label: Text(t.weeklyReview.stuck.rescheduleAll,
                     style: TextStyle(color: sc.accent)),
                 style: OutlinedButton.styleFrom(
                   side: BorderSide(color: sc.accent.withValues(alpha: 0.5)),
@@ -351,7 +351,7 @@ class _StuckStep extends ConsumerWidget {
       SieHaptics.success();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Перенесено задач: ${data.overdue.length}'),
+          content: Text(t.weeklyReview.stuck.rescheduled(n: data.overdue.length)),
           behavior: SnackBarBehavior.floating,
           backgroundColor: sc.surface,
         ),
@@ -379,13 +379,13 @@ class _FocusStep extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        _StepTitle('Фокус недели', Icons.star_outline, sc),
+        _StepTitle(t.weeklyReview.focus.title, Icons.star_outline, sc),
         const SizedBox(height: 4),
-        Text('Выбери до 3 целей — они отметятся ⭐ в Повестке.',
+        Text(t.weeklyReview.focus.subtitle,
             style: TextStyle(color: sc.textSecondary, fontSize: 13)),
         const SizedBox(height: 16),
         if (goals.isEmpty)
-          _EmptyHint('Нет активных целей.', sc)
+          _EmptyHint(t.weeklyReview.focus.noActiveGoals, sc)
         else
           ...goals.map((g) {
             final isSel = selected.contains(g.id);
@@ -439,9 +439,9 @@ class _ReflectionStep extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        _StepTitle('Главный вывод', Icons.edit_note_outlined, sc),
+        _StepTitle(t.weeklyReview.reflection.title, Icons.edit_note_outlined, sc),
         const SizedBox(height: 4),
-        Text('Одна мысль, которую стоит унести из этой недели (необязательно).',
+        Text(t.weeklyReview.reflection.subtitle,
             style: TextStyle(color: sc.textSecondary, fontSize: 13)),
         const SizedBox(height: 16),
         TextField(
@@ -450,7 +450,7 @@ class _ReflectionStep extends StatelessWidget {
           style: TextStyle(color: sc.textPrimary, fontSize: 15, height: 1.4),
           textCapitalization: TextCapitalization.sentences,
           decoration: InputDecoration(
-            hintText: 'Например: меньше задач, больше глубины…',
+            hintText: t.weeklyReview.reflection.hint,
             hintStyle: TextStyle(color: sc.textSecondary),
             filled: true,
             fillColor: sc.surface,
@@ -500,14 +500,14 @@ class _RewardStep extends StatelessWidget {
               child: Icon(Icons.explore_outlined, size: 40, color: sc.accent),
             ),
             const SizedBox(height: 24),
-            Text('ОБЗОР ЗАВЕРШЁН',
+            Text(t.weeklyReview.reward.title,
                 style: TextStyle(
                     color: sc.textPrimary,
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.5)),
             const SizedBox(height: 8),
-            Text('Неделя осмыслена. Курс намечен.',
+            Text(t.weeklyReview.reward.subtitle,
                 style: TextStyle(color: sc.textSecondary, fontSize: 13)),
             const SizedBox(height: 24),
             if (result != null && result!.xpGained > 0)
@@ -560,13 +560,13 @@ class _AlreadyDone extends StatelessWidget {
           children: [
             Icon(Icons.check_circle_outline, color: sc.success, size: 56),
             const SizedBox(height: 16),
-            Text('Обзор этой недели уже сделан',
+            Text(t.weeklyReview.alreadyDone.title,
                 style: TextStyle(
                     color: sc.textPrimary,
                     fontSize: 17,
                     fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
-            Text('Стрик обзоров: ${data.reviewStreak} нед.',
+            Text(t.weeklyReview.alreadyDone.streak(n: data.reviewStreak),
                 style: TextStyle(color: sc.textSecondary, fontSize: 13)),
           ],
         ),
@@ -608,7 +608,7 @@ class _NavBar extends StatelessWidget {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: Text('Назад',
+                  child: Text(t.weeklyReview.nav.back,
                       style: TextStyle(color: sc.textSecondary)),
                 ),
               ),
@@ -631,7 +631,7 @@ class _NavBar extends StatelessWidget {
                         height: 18,
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: Colors.white))
-                    : Text(step < 3 ? 'Далее' : 'Завершить обзор',
+                    : Text(step < 3 ? t.weeklyReview.nav.next : t.weeklyReview.nav.finish,
                         style: const TextStyle(
                             letterSpacing: 1, fontWeight: FontWeight.w600)),
               ),
