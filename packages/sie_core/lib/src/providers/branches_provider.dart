@@ -21,6 +21,16 @@ const _fallbackBranches = [
     slug: 'focus_protocol',
     name: 'Focus Protocol',
   ),
+  Branch(
+    id: 'offline-planning',
+    slug: 'planning',
+    name: 'Planning',
+  ),
+  Branch(
+    id: 'offline-meditation',
+    slug: 'meditation',
+    name: 'Meditation',
+  ),
 ];
 
 final branchesProvider = FutureProvider<List<Branch>>((ref) async {

@@ -11,6 +11,7 @@ import 'screens/focus_protocol_screen.dart';
 import 'screens/habit_tracker_screen.dart';
 import 'screens/main_navigation_shell.dart';
 import 'screens/meditation_hub_screen.dart';
+import 'screens/offline_shell.dart';
 import 'screens/planning_screen.dart';
 import 'screens/splash_screen.dart';
 
@@ -141,6 +142,9 @@ class _SieAppState extends ConsumerState<SieApp> {
   @override
   void initState() {
     super.initState();
+    // Warm the startup reachability probe now so it resolves during the splash
+    // animation instead of adding its latency after the splash dismisses.
+    ref.read(appModeProvider);
     if (!kIsWeb) _initWidgetDeepLinks();
   }
 
@@ -195,8 +199,22 @@ class _SieAppState extends ConsumerState<SieApp> {
   Widget _authGate() {
     final authAsync = ref.watch(authStateProvider);
     return authAsync.when(
-      data: (isAuthenticated) =>
-          isAuthenticated ? const MainNavigationShell() : const AuthScreen(),
+      data: (isAuthenticated) {
+        if (!isAuthenticated) return const AuthScreen();
+        // Authenticated (session restored from local storage even offline).
+        // Route to the full shell only when the backend was reachable at
+        // startup; otherwise run the reduced offline shell.
+        final modeAsync = ref.watch(appModeProvider);
+        return modeAsync.when(
+          data: (mode) => mode == AppMode.offline
+              ? const OfflineShell()
+              : const MainNavigationShell(),
+          loading: () => const _LoadingScreen(),
+          // Probe failed unexpectedly — assume online and let the offline-first
+          // providers degrade gracefully if it's actually down.
+          error: (_, _) => const MainNavigationShell(),
+        );
+      },
       loading: () => const _LoadingScreen(),
       error: (_, _) => const AuthScreen(),
     );

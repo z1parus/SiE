@@ -25,9 +25,18 @@ const _kBranchOrderKey = 'branch_order';
 // OperationsControlScreen
 // ─────────────────────────────────────────────────────────────────────────────
 class OperationsControlScreen extends ConsumerStatefulWidget {
-  const OperationsControlScreen({super.key, this.asTab = false});
+  const OperationsControlScreen({
+    super.key,
+    this.asTab = false,
+    this.offline = false,
+  });
 
   final bool asTab;
+
+  /// When true the screen is embedded in the offline shell: network-only
+  /// surfaces (daily tip, leaderboard, profile/search/logout actions in the
+  /// header) are hidden, leaving the module carousel — which works offline.
+  final bool offline;
 
   @override
   ConsumerState<OperationsControlScreen> createState() =>
@@ -102,7 +111,8 @@ class _OperationsControlScreenState
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
-            child: _ScreenHeader(profileAsync: profileAsync),
+            child: _ScreenHeader(
+                profileAsync: profileAsync, offline: widget.offline),
           ),
           const SizedBox(height: 24),
           Padding(
@@ -112,10 +122,12 @@ class _OperationsControlScreenState
               children: [
                 const SectionHeader(title: 'DEPARTMENTS'),
                 const SizedBox(height: 12),
-                _DailyTipBanner(),
-                const SizedBox(height: 8),
-                _LeaderboardTile(),
-                const SizedBox(height: 16),
+                if (!widget.offline) ...[
+                  _DailyTipBanner(),
+                  const SizedBox(height: 8),
+                  _LeaderboardTile(),
+                  const SizedBox(height: 16),
+                ],
               ],
             ),
           ),
@@ -1983,8 +1995,9 @@ class _GlassHeaderBtn extends ConsumerWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 class _ScreenHeader extends ConsumerWidget {
   final AsyncValue<Profile?> profileAsync;
+  final bool offline;
 
-  const _ScreenHeader({required this.profileAsync});
+  const _ScreenHeader({required this.profileAsync, this.offline = false});
 
   static String _badge(int level) {
     if (level <= 5)  return 'Recruit';
@@ -2041,60 +2054,71 @@ class _ScreenHeader extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  GestureDetector(
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          'OPERATIVE: $operative',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontSize: 13,
-                            letterSpacing: 1.5,
+                  if (offline)
+                    Text(
+                      'OPERATIVE: $operative',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontSize: 13,
+                        letterSpacing: 1.5,
+                      ),
+                    )
+                  else
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            'OPERATIVE: $operative',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontSize: 13,
+                              letterSpacing: 1.5,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 6),
-                        Icon(
-                          Icons.chevron_right,
-                          color: gradientColors.first.withValues(alpha: 0.7),
-                          size: 14,
-                        ),
-                      ],
+                          const SizedBox(width: 6),
+                          Icon(
+                            Icons.chevron_right,
+                            color: gradientColors.first.withValues(alpha: 0.7),
+                            size: 14,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
-            const _NotificationBell(),
-            const SizedBox(width: 8),
-            _GlassHeaderBtn(
-              icon: Icons.search,
-              size: 20,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const UserSearchScreen()),
+            if (!offline) ...[
+              const _NotificationBell(),
+              const SizedBox(width: 8),
+              _GlassHeaderBtn(
+                icon: Icons.search,
+                size: 20,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const UserSearchScreen()),
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            _GlassHeaderBtn(
-              icon: Icons.logout,
-              size: 20,
-              onTap: () async {
-                final ok = await confirmDestructive(
-                  context,
-                  ref,
-                  title: 'Выйти из системы?',
-                  message: 'Сессия будет завершена. Несинхронизированные '
-                      'данные сохранятся локально.',
-                  confirmLabel: 'Выйти',
-                );
-                if (!ok) return;
-                await SupabaseService.signOut();
-                ref.invalidate(userProfileProvider);
-                ref.invalidate(habitsProvider);
-                ref.invalidate(branchesProvider);
-              },
-            ),
+              const SizedBox(width: 8),
+              _GlassHeaderBtn(
+                icon: Icons.logout,
+                size: 20,
+                onTap: () async {
+                  final ok = await confirmDestructive(
+                    context,
+                    ref,
+                    title: 'Выйти из системы?',
+                    message: 'Сессия будет завершена. Несинхронизированные '
+                        'данные сохранятся локально.',
+                    confirmLabel: 'Выйти',
+                  );
+                  if (!ok) return;
+                  await SupabaseService.signOut();
+                  ref.invalidate(userProfileProvider);
+                  ref.invalidate(habitsProvider);
+                  ref.invalidate(branchesProvider);
+                },
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 20),

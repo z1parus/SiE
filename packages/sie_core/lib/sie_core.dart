@@ -1,6 +1,7 @@
 export 'src/supabase_service.dart';
 export 'src/local/app_database.dart';
 export 'src/providers/connectivity_provider.dart';
+export 'src/providers/app_mode_provider.dart';
 export 'src/services/sync_service.dart';
 export 'src/widgets/offline_banner.dart';
 export 'src/theme/sie_theme.dart';
