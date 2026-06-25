@@ -1,0 +1,24 @@
+{
+  "language": "Language",
+  "operativeFallback": "OPERATIVE",
+  "cancel": "Cancel",
+  "settings": "SETTINGS",
+  "darkTheme": "Dark theme",
+  "notifications": "Notifications & reminders",
+  "logout": {
+    "action": "Log out",
+    "confirmTitle": "Log out?",
+    "confirmMessage": "Your session will end. Unsynced data is kept locally. Signing back in requires an internet connection."
+  },
+  "offline": {
+    "badge": "OFFLINE MODE",
+    "terminal": "PERSONAL TERMINAL",
+    "level": "LEVEL {n}",
+    "xp": "XP",
+    "designPoints": "DESIGN POINTS",
+    "connect": "CONNECT",
+    "connectFailed": "Could not reconnect to the server",
+    "tabModules": "Modules",
+    "tabHub": "Hub"
+  }
+}

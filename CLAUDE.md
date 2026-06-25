@@ -99,6 +99,17 @@
 - **Local DB:** Drift (SQLite), кодогенерация через build_runner
 - **Backend:** Supabase (PostgreSQL, Edge Functions, RLS)
 - **Offline-first:** локальный Drift + синхронизация с Supabase
+- **Локализация (i18n):** пакет **slang**. Переводы — JSON-файлы в `packages/sie_core/lib/i18n/<locale>/<namespace>.i18n.json` (`en`, `ru`). Базовый/запасной язык — `en`, по умолчанию берётся язык устройства. Доступ через глобальный `t` (`t.namespace.key`), без `BuildContext`. Язык переключается в провайдере `localeProvider`.
+
+## Кодогенерация
+
+`*.g.dart` в `.gitignore` и не коммитятся — их нужно генерировать локально. После клонирования или изменения схемы Drift / JSON-переводов:
+
+```bash
+cd packages/sie_core
+dart run build_runner build   # Drift (app_database.g.dart)
+dart run slang                # переводы (i18n/translations*.g.dart)
+```
 
 ## Окружение (remote)
 

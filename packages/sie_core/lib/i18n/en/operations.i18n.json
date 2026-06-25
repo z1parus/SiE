@@ -1,0 +1,40 @@
+{
+  "title": "OPERATIONS CONTROL",
+  "operative": "OPERATIVE: {name}",
+  "unidentified": "UNIDENTIFIED",
+  "departments": "DEPARTMENTS",
+  "noDepartments": "NO DEPARTMENTS AVAILABLE",
+  "comingSoon": "This module will be available soon",
+  "reorderDone": "Module order changed",
+  "exitHint": "Press back again to exit",
+  "leaderboard": {
+    "title": "DAILY VANGUARD",
+    "subtitle": "Activity ranking for the current cycle"
+  },
+  "modules": {
+    "breathing": "BREATHING PRACTICES",
+    "habits": "HABIT ARCHIVE",
+    "focus": "FOCUS PROTOCOL",
+    "planning": "PLANNING",
+    "meditation": "MEDITATION"
+  },
+  "status": {
+    "protocolReady": "PROTOCOL READY",
+    "sessionReady": "SESSION READY",
+    "active": "ACTIVE",
+    "dayStreak": "🔥 {n} DAY STREAK",
+    "activeCount": "{n} Active",
+    "minutes": "{n} min",
+    "missions(plural)": {
+      "one": "{n} Mission",
+      "other": "{n} Missions"
+    }
+  },
+  "welcome": {
+    "tag": "INCOMING MESSAGE",
+    "title": "WELCOME,\nOPERATIVE {name}",
+    "body": "You have successfully logged into the SiE Corporation system. All protocols are active. Complete missions, track your progress and earn experience.\n\nThe mission begins now.",
+    "accept": "ACCEPT MISSION",
+    "close": "Close"
+  }
+}

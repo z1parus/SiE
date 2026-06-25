@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
 
+import 'language_picker.dart';
 import 'operations_control_screen.dart';
 import 'reminder_settings_screen.dart';
 
@@ -36,11 +37,11 @@ class _OfflineShellState extends ConsumerState<OfflineShell> {
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
         ..showSnackBar(
-          const SnackBar(
-            content: Text('Нажмите ещё раз для выхода'),
-            duration: Duration(seconds: 2),
+          SnackBar(
+            content: Text(t.operations.exitHint),
+            duration: const Duration(seconds: 2),
             behavior: SnackBarBehavior.floating,
-            margin: EdgeInsets.fromLTRB(16, 0, 16, 80),
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
           ),
         );
     }
@@ -116,7 +117,7 @@ class _OfflineBadgeBar extends ConsumerWidget {
             Icon(Icons.cloud_off_outlined, size: 13, color: c.warning),
             const SizedBox(width: 8),
             Text(
-              'ОФЛАЙН-РЕЖИМ',
+              t.common.offline.badge,
               style: TextStyle(
                 color: c.warning,
                 fontSize: 10,
@@ -140,15 +141,14 @@ class _OfflineNavBar extends ConsumerWidget {
 
   const _OfflineNavBar({required this.activeIndex, required this.onTabChanged});
 
-  static const _items = [
-    (icon: Icons.my_location_outlined, label: 'Модули'),
-    (icon: Icons.person_outline, label: 'Hub'),
-  ];
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
     final bottomInset = MediaQuery.of(context).padding.bottom;
+    final items = [
+      (icon: Icons.my_location_outlined, label: t.common.offline.tabModules),
+      (icon: Icons.person_outline, label: t.common.offline.tabHub),
+    ];
 
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 0, 16, math.max(bottomInset, 16)),
@@ -161,8 +161,8 @@ class _OfflineNavBar extends ConsumerWidget {
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: List.generate(_items.length, (i) {
-            final item = _items[i];
+          children: List.generate(items.length, (i) {
+            final item = items[i];
             final active = i == activeIndex;
             final color = active ? c.accent : c.iconMuted;
             return Semantics(
@@ -244,10 +244,10 @@ class _OfflineHubScreenState extends ConsumerState<OfflineHubScreen> {
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
         ..showSnackBar(
-          const SnackBar(
+          SnackBar(
             behavior: SnackBarBehavior.floating,
-            content: Text('Связь с сервером не восстановлена'),
-            duration: Duration(seconds: 2),
+            content: Text(t.common.offline.connectFailed),
+            duration: const Duration(seconds: 2),
           ),
         );
     }
@@ -257,10 +257,9 @@ class _OfflineHubScreenState extends ConsumerState<OfflineHubScreen> {
     final ok = await confirmDestructive(
       context,
       ref,
-      title: 'Выйти из системы?',
-      message: 'Сессия будет завершена. Несинхронизированные данные сохранятся '
-          'локально. Повторный вход требует подключения к интернету.',
-      confirmLabel: 'Выйти',
+      title: t.common.logout.confirmTitle,
+      message: t.common.logout.confirmMessage,
+      confirmLabel: t.common.logout.action,
     );
     if (!ok) return;
     await SupabaseService.signOut();
@@ -277,7 +276,7 @@ class _OfflineHubScreenState extends ConsumerState<OfflineHubScreen> {
         SieThemeMode.classicDark;
     final isDark = themeMode == SieThemeMode.classicDark;
 
-    final name = profile?.username?.toUpperCase() ?? 'ОПЕРАТИВНИК';
+    final name = profile?.username?.toUpperCase() ?? t.common.operativeFallback;
     final xp = profile?.totalXp ?? 0;
     final dp = profile?.designPoints ?? 0;
     final level = xp ~/ 1000 + 1;
@@ -290,7 +289,7 @@ class _OfflineHubScreenState extends ConsumerState<OfflineHubScreen> {
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 110),
           children: [
             Text(
-              'ЛИЧНЫЙ ТЕРМИНАЛ',
+              t.common.offline.terminal,
               style: TextStyle(
                 color: c.textSecondary,
                 fontSize: 11,
@@ -304,7 +303,7 @@ class _OfflineHubScreenState extends ConsumerState<OfflineHubScreen> {
             _ConnectButton(busy: _connecting, onTap: _tryConnect, c: c),
             const SizedBox(height: 24),
             Text(
-              'НАСТРОЙКИ',
+              t.common.settings,
               style: TextStyle(
                 color: c.textSecondary,
                 fontSize: 11,
@@ -314,8 +313,24 @@ class _OfflineHubScreenState extends ConsumerState<OfflineHubScreen> {
             ),
             const SizedBox(height: 12),
             _SettingRow(
+              icon: Icons.language,
+              label: t.common.language,
+              c: c,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(languageLabel(ref.watch(localeProvider)),
+                      style: TextStyle(color: c.textSecondary, fontSize: 13)),
+                  const SizedBox(width: 4),
+                  Icon(Icons.chevron_right, color: c.textSecondary, size: 18),
+                ],
+              ),
+              onTap: () => showLanguagePicker(context, ref),
+            ),
+            const SizedBox(height: 8),
+            _SettingRow(
               icon: isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
-              label: 'Тёмная тема',
+              label: t.common.darkTheme,
               c: c,
               trailing: Switch(
                 value: isDark,
@@ -328,7 +343,7 @@ class _OfflineHubScreenState extends ConsumerState<OfflineHubScreen> {
             const SizedBox(height: 8),
             _SettingRow(
               icon: Icons.notifications_none_rounded,
-              label: 'Уведомления и напоминания',
+              label: t.common.notifications,
               c: c,
               trailing: Icon(Icons.chevron_right, color: c.textSecondary, size: 18),
               onTap: () => Navigator.of(context).push(
@@ -338,7 +353,7 @@ class _OfflineHubScreenState extends ConsumerState<OfflineHubScreen> {
             const SizedBox(height: 8),
             _SettingRow(
               icon: Icons.logout,
-              label: 'Выйти из аккаунта',
+              label: t.common.logout.action,
               c: c,
               danger: true,
               onTap: _logout,
@@ -429,7 +444,7 @@ class _IdentityCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'УРОВЕНЬ $level',
+                      t.common.offline.level(n: level),
                       style: TextStyle(
                         color: c.textSecondary,
                         fontSize: 11,
@@ -446,8 +461,8 @@ class _IdentityCard extends StatelessWidget {
           const SizedBox(height: 14),
           Row(
             children: [
-              Expanded(child: stat('$xp', 'ОПЫТ (XP)')),
-              Expanded(child: stat('$dp', 'DESIGN POINTS')),
+              Expanded(child: stat('$xp', t.common.offline.xp)),
+              Expanded(child: stat('$dp', t.common.offline.designPoints)),
             ],
           ),
         ],
@@ -487,7 +502,7 @@ class _ConnectButton extends StatelessWidget {
                   Icon(Icons.wifi_tethering, color: c.accent, size: 18),
                   const SizedBox(width: 10),
                   Text(
-                    'ПОДКЛЮЧИТЬСЯ',
+                    t.common.offline.connect,
                     style: TextStyle(
                       color: c.accent,
                       fontSize: 13,
