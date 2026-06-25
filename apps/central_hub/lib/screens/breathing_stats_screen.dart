@@ -8,10 +8,10 @@ enum _Period { week, month, year, all }
 
 extension _PeriodX on _Period {
   String get label => switch (this) {
-        _Period.week => 'Неделя',
-        _Period.month => 'Месяц',
-        _Period.year => 'Год',
-        _Period.all => 'Всё время',
+        _Period.week => t.breathingStats.period.week,
+        _Period.month => t.breathingStats.period.month,
+        _Period.year => t.breathingStats.period.year,
+        _Period.all => t.breathingStats.period.all,
       };
 
   /// Inclusive lower bound for this period, or null for "all time".
@@ -56,7 +56,7 @@ class _BreathingStatsScreenState extends ConsumerState<BreathingStatsScreen> {
                       Center(child: CircularProgressIndicator(color: kRimGold)),
                   error: (_, _) => _Empty(
                     c: c,
-                    text: 'Не удалось загрузить статистику',
+                    text: t.breathingStats.empty.loadError,
                   ),
                   data: (sessions) {
                     final now = DateTime.now();
@@ -81,8 +81,7 @@ class _BreathingStatsScreenState extends ConsumerState<BreathingStatsScreen> {
                         if (stats.count == 0)
                           _Empty(
                             c: c,
-                            text: 'За этот период практик не было.\n'
-                                'Время подышать.',
+                            text: t.breathingStats.empty.noSessions,
                           )
                         else ...[
                           _HeroHold(c: c, seconds: stats.bestHold),
@@ -179,7 +178,7 @@ class _Header extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Статистика дыхания',
+              t.breathingStats.header.title,
               style: TextStyle(
                 color: c.textPrimary,
                 fontSize: 18,
@@ -275,7 +274,7 @@ class _HeroHold extends StatelessWidget {
       child: Column(
         children: [
           Text(
-            'РЕКОРД ЗАДЕРЖКИ',
+            t.breathingStats.hero.label,
             style: TextStyle(
               color: c.textSecondary,
               fontSize: 11,
@@ -297,7 +296,7 @@ class _HeroHold extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          Text('задержка дыхания на выдохе',
+          Text(t.breathingStats.hero.caption,
               style: TextStyle(color: c.textSecondary, fontSize: 11)),
         ],
       ),
@@ -318,9 +317,11 @@ class _StatsGrid extends StatelessWidget {
       _Cell(Icons.self_improvement_rounded, '${stats.count}',
           sessionsWord(stats.count)),
       _Cell(Icons.timer_outlined, fmtDuration(stats.totalSeconds),
-          'общее время'),
-      _Cell(Icons.air_rounded, '${stats.totalBreaths}', 'вдохов всего'),
-      _Cell(Icons.repeat_rounded, '${stats.totalRounds}', 'раундов'),
+          t.breathingStats.grid.totalTime),
+      _Cell(Icons.air_rounded, '${stats.totalBreaths}',
+          t.breathingStats.grid.totalBreaths),
+      _Cell(Icons.repeat_rounded, '${stats.totalRounds}',
+          t.breathingStats.grid.rounds),
     ];
     return GridView.count(
       crossAxisCount: 2,
@@ -396,7 +397,7 @@ class _MoodRow extends StatelessWidget {
         Expanded(
           child: _AvgCard(
             c: c,
-            title: 'Ср. спокойствие',
+            title: t.breathingStats.mood.calmness,
             value: stats.avgCalmness,
             accent: c.accentSecondary,
           ),
@@ -405,7 +406,7 @@ class _MoodRow extends StatelessWidget {
         Expanded(
           child: _AvgCard(
             c: c,
-            title: 'Ср. уверенность',
+            title: t.breathingStats.mood.confidence,
             value: stats.avgConfidence,
             accent: c.accent,
           ),

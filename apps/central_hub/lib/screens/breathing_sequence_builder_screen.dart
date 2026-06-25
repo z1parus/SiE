@@ -91,7 +91,7 @@ class _BreathingSequenceBuilderScreenState
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Введите название последовательности')),
+        SnackBar(content: Text(t.breathingBuilder.name.emptyError)),
       );
       return;
     }
@@ -140,8 +140,8 @@ class _BreathingSequenceBuilderScreenState
                     Expanded(
                       child: Text(
                         isEdit
-                            ? 'Редактирование'
-                            : 'Новая последовательность',
+                            ? t.breathingBuilder.header.edit
+                            : t.breathingBuilder.header.create,
                         style: TextStyle(
                           color: c.textPrimary,
                           fontSize: 18,
@@ -167,7 +167,7 @@ class _BreathingSequenceBuilderScreenState
                           fontWeight: FontWeight.w600),
                       textCapitalization: TextCapitalization.sentences,
                       decoration: InputDecoration(
-                        hintText: 'Название последовательности',
+                        hintText: t.breathingBuilder.name.hint,
                         hintStyle:
                             TextStyle(color: c.textSecondary, fontSize: 17),
                         enabledBorder: UnderlineInputBorder(
@@ -181,7 +181,8 @@ class _BreathingSequenceBuilderScreenState
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'РАУНДЫ (${_items.length})',
+                          t.breathingBuilder.rounds
+                              .sectionLabel(count: _items.length),
                           style: TextStyle(
                             color: c.textSecondary.withValues(alpha: 0.7),
                             fontSize: 11,
@@ -190,7 +191,8 @@ class _BreathingSequenceBuilderScreenState
                           ),
                         ),
                         Text(
-                          '≈ ${_fmt(_totalSeconds)}',
+                          t.breathingBuilder.rounds
+                              .totalTime(time: _fmt(_totalSeconds)),
                           style: TextStyle(
                               color: c.textSecondary, fontSize: 12),
                         ),
@@ -198,7 +200,7 @@ class _BreathingSequenceBuilderScreenState
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Зажмите блок и перетащите, чтобы изменить порядок.',
+                      t.breathingBuilder.rounds.reorderHint,
                       style: TextStyle(
                           color: c.textSecondary.withValues(alpha: 0.6),
                           fontSize: 11),
@@ -255,7 +257,9 @@ class _BreathingSequenceBuilderScreenState
                                 strokeWidth: 2, color: Colors.white),
                           )
                         : Text(
-                            isEdit ? 'СОХРАНИТЬ' : 'СОЗДАТЬ',
+                            isEdit
+                                ? t.breathingBuilder.save.save
+                                : t.breathingBuilder.save.create,
                             style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -330,7 +334,7 @@ class _RoundBlock extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'РАУНД ${index + 1}',
+                        t.breathingBuilder.rounds.roundTitle(number: index + 1),
                         style: TextStyle(
                           color: c.textPrimary,
                           fontSize: 13,
@@ -343,13 +347,26 @@ class _RoundBlock extends StatelessWidget {
                         spacing: 12,
                         runSpacing: 4,
                         children: [
-                          _stat(Icons.repeat, '${round.cyclesPerRound} циклов'),
-                          _stat(Icons.south, '${round.inhaleSecs}с вдох'),
-                          _stat(Icons.north, '${round.exhaleSecs}с выдох'),
-                          _stat(Icons.pause_circle_outline,
-                              '${round.exhaustRetentionSecs}с задержка'),
-                          _stat(Icons.favorite_outline,
-                              '${round.recoveryHoldSecs}с восст.'),
+                          _stat(
+                              Icons.repeat,
+                              t.breathingBuilder.stats
+                                  .cycles(n: round.cyclesPerRound)),
+                          _stat(
+                              Icons.south,
+                              t.breathingBuilder.stats
+                                  .inhale(secs: round.inhaleSecs)),
+                          _stat(
+                              Icons.north,
+                              t.breathingBuilder.stats
+                                  .exhale(secs: round.exhaleSecs)),
+                          _stat(
+                              Icons.pause_circle_outline,
+                              t.breathingBuilder.stats
+                                  .retention(secs: round.exhaustRetentionSecs)),
+                          _stat(
+                              Icons.favorite_outline,
+                              t.breathingBuilder.stats
+                                  .recovery(secs: round.recoveryHoldSecs)),
                         ],
                       ),
                     ],
@@ -412,7 +429,7 @@ class _AddRoundButton extends StatelessWidget {
             children: [
               Icon(Icons.add, color: c.accent, size: 20),
               const SizedBox(width: 8),
-              Text('ДОБАВИТЬ РАУНД',
+              Text(t.breathingBuilder.rounds.addRound,
                   style: TextStyle(
                       color: c.accent,
                       fontSize: 12,
@@ -470,7 +487,8 @@ class _RoundEditorSheetState extends State<_RoundEditorSheet> {
                   ),
                 ),
               ),
-              Text('РАУНД ${widget.index + 1}',
+              Text(
+                  t.breathingBuilder.editor.roundTitle(number: widget.index + 1),
                   style: TextStyle(
                       color: c.textPrimary,
                       fontSize: 16,
@@ -478,7 +496,7 @@ class _RoundEditorSheetState extends State<_RoundEditorSheet> {
                       letterSpacing: 1.5)),
               const SizedBox(height: 16),
               _StepperRow(
-                label: 'ЦИКЛОВ ДЫХАНИЯ',
+                label: t.breathingBuilder.editor.cyclesPerRound,
                 value: _r.cyclesPerRound,
                 min: 5,
                 max: 60,
@@ -487,7 +505,7 @@ class _RoundEditorSheetState extends State<_RoundEditorSheet> {
                 onChanged: (v) => setState(() => _r = _r.copyWith(cyclesPerRound: v)),
               ),
               _StepperRow(
-                label: 'ВДОХ (СЕК)',
+                label: t.breathingBuilder.editor.inhaleSec,
                 value: _r.inhaleSecs,
                 min: 1,
                 max: 10,
@@ -495,7 +513,7 @@ class _RoundEditorSheetState extends State<_RoundEditorSheet> {
                 onChanged: (v) => setState(() => _r = _r.copyWith(inhaleSecs: v)),
               ),
               _StepperRow(
-                label: 'ВЫДОХ (СЕК)',
+                label: t.breathingBuilder.editor.exhaleSec,
                 value: _r.exhaleSecs,
                 min: 1,
                 max: 10,
@@ -503,7 +521,7 @@ class _RoundEditorSheetState extends State<_RoundEditorSheet> {
                 onChanged: (v) => setState(() => _r = _r.copyWith(exhaleSecs: v)),
               ),
               _StepperRow(
-                label: 'ЗАДЕРЖКА НА ВЫДОХЕ (СЕК)',
+                label: t.breathingBuilder.editor.exhaleRetentionSec,
                 value: _r.exhaustRetentionSecs,
                 min: 10,
                 max: 300,
@@ -513,7 +531,7 @@ class _RoundEditorSheetState extends State<_RoundEditorSheet> {
                     setState(() => _r = _r.copyWith(exhaustRetentionSecs: v)),
               ),
               _StepperRow(
-                label: 'ВОССТАНОВИТЕЛЬНАЯ ЗАДЕРЖКА (СЕК)',
+                label: t.breathingBuilder.editor.recoveryHoldSec,
                 value: _r.recoveryHoldSecs,
                 min: 5,
                 max: 120,
@@ -534,8 +552,8 @@ class _RoundEditorSheetState extends State<_RoundEditorSheet> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10)),
                   ),
-                  child: const Text('ГОТОВО',
-                      style: TextStyle(
+                  child: Text(t.breathingBuilder.editor.done,
+                      style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 1.5)),

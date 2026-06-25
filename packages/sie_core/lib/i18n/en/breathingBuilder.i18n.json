@@ -1,0 +1,40 @@
+{
+  "header": {
+    "edit": "Editing",
+    "create": "New sequence"
+  },
+  "name": {
+    "hint": "Sequence name",
+    "emptyError": "Enter a sequence name"
+  },
+  "rounds": {
+    "sectionLabel": "ROUNDS ({count})",
+    "totalTime": "≈ {time}",
+    "reorderHint": "Press and drag a block to change the order.",
+    "roundTitle": "ROUND {number}",
+    "addRound": "ADD ROUND"
+  },
+  "stats": {
+    "cycles(plural)": {
+      "one": "{n} cycle",
+      "other": "{n} cycles"
+    },
+    "inhale": "{secs}s inhale",
+    "exhale": "{secs}s exhale",
+    "retention": "{secs}s hold",
+    "recovery": "{secs}s recovery"
+  },
+  "editor": {
+    "roundTitle": "ROUND {number}",
+    "cyclesPerRound": "BREATHING CYCLES",
+    "inhaleSec": "INHALE (SEC)",
+    "exhaleSec": "EXHALE (SEC)",
+    "exhaleRetentionSec": "EXHALE RETENTION (SEC)",
+    "recoveryHoldSec": "RECOVERY HOLD (SEC)",
+    "done": "DONE"
+  },
+  "save": {
+    "save": "SAVE",
+    "create": "CREATE"
+  }
+}

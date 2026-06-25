@@ -1,6 +1,8 @@
 // Shared formatting + the curated mood set for the Breathing journal,
 // reflection and stats screens.
 
+import 'package:sie_core/sie_core.dart';
+
 /// A post-practice mood the user can pick from. The [emoji] is what gets stored
 /// and shown in the journal; [label] is the human hint shown while choosing.
 class BreathingMood {
@@ -9,16 +11,18 @@ class BreathingMood {
   const BreathingMood(this.emoji, this.label);
 }
 
-/// Curated, fixed set of moods — keeps journal entries uniform and scannable.
-const List<BreathingMood> kBreathingMoods = [
-  BreathingMood('😣', 'Тяжело'),
-  BreathingMood('😕', 'Так себе'),
-  BreathingMood('😐', 'Нейтрально'),
-  BreathingMood('🙂', 'Неплохо'),
-  BreathingMood('😌', 'Спокойно'),
-  BreathingMood('😄', 'Бодро'),
-  BreathingMood('🤩', 'Превосходно'),
-];
+/// Fixed emoji set — language-independent, stored verbatim in the journal.
+const List<String> _moodEmojis = ['😣', '😕', '😐', '🙂', '😌', '😄', '🤩'];
+
+/// Curated, fixed set of moods — labels are localized, emoji order is stable so
+/// the stored emoji keeps its meaning across languages.
+List<BreathingMood> breathingMoods() {
+  final labels = t.breathingShared.moodLabels;
+  return [
+    for (var i = 0; i < _moodEmojis.length; i++)
+      BreathingMood(_moodEmojis[i], labels[i]),
+  ];
+}
 
 /// `M:SS` for short durations / holds, `H:MM:SS` once it crosses an hour.
 String fmtDuration(int totalSeconds) {
@@ -36,37 +40,20 @@ String fmtDuration(int totalSeconds) {
 String fmtClock(DateTime dt) =>
     '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
-const List<String> _months = [
-  'янв', 'фев', 'мар', 'апр', 'мая', 'июн',
-  'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
-];
-
-/// `Сегодня` / `Вчера` / `5 авг` / `5 авг 2025` relative to today.
+/// `Today` / `Yesterday` / `5 Aug` / `5 Aug 2025` relative to today.
 String fmtJournalDate(DateTime dt) {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final that = DateTime(dt.year, dt.month, dt.day);
   final diff = today.difference(that).inDays;
-  if (diff == 0) return 'Сегодня';
-  if (diff == 1) return 'Вчера';
-  final base = '${dt.day} ${_months[dt.month - 1]}';
+  if (diff == 0) return t.breathingShared.today;
+  if (diff == 1) return t.breathingShared.yesterday;
+  final base = '${dt.day} ${t.breathingShared.months[dt.month - 1]}';
   return dt.year == now.year ? base : '$base ${dt.year}';
 }
 
-/// Correct Russian declension for "вдох".
-String breathsWord(int n) {
-  final mod10 = n % 10;
-  final mod100 = n % 100;
-  if (mod10 == 1 && mod100 != 11) return 'вдох';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'вдоха';
-  return 'вдохов';
-}
+/// Correct localized declension for "breath".
+String breathsWord(int n) => t.breathingShared.breathsWord(n: n);
 
-/// Correct Russian declension for "сессия".
-String sessionsWord(int n) {
-  final mod10 = n % 10;
-  final mod100 = n % 100;
-  if (mod10 == 1 && mod100 != 11) return 'сессия';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'сессии';
-  return 'сессий';
-}
+/// Correct localized declension for "session".
+String sessionsWord(int n) => t.breathingShared.sessionsWord(n: n);

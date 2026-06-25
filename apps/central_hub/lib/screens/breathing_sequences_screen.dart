@@ -28,8 +28,9 @@ class BreathingSequencesScreen extends ConsumerWidget {
           backgroundColor: c.accent,
           foregroundColor: Colors.white,
           icon: const Icon(Icons.add),
-          label: const Text('СОЗДАТЬ',
-              style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+          label: Text(t.breathingSequences.fab.create,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w700, letterSpacing: 1.2)),
         ),
         body: SafeArea(
           bottom: false,
@@ -43,16 +44,14 @@ class BreathingSequencesScreen extends ConsumerWidget {
                   error: (_, __) => _Empty(
                     c: c,
                     icon: Icons.cloud_off_outlined,
-                    text: 'Не удалось загрузить последовательности',
+                    text: t.breathingSequences.empty.loadError,
                   ),
                   data: (seqs) {
                     if (seqs.isEmpty) {
                       return _Empty(
                         c: c,
                         icon: Icons.format_list_numbered_rounded,
-                        text: 'Пока нет сохранённых последовательностей.\n'
-                            'Нажмите «Создать», чтобы собрать свою цепочку '
-                            'раундов.',
+                        text: t.breathingSequences.empty.noSequences,
                       );
                     }
                     return RefreshIndicator(
@@ -112,18 +111,21 @@ class BreathingSequencesScreen extends ConsumerWidget {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: c.surface,
-        title: Text('Удалить последовательность?',
+        title: Text(t.breathingSequences.deleteDialog.title,
             style: TextStyle(color: c.textPrimary, fontSize: 17)),
-        content: Text('«${seq.name}» будет удалена безвозвратно.',
+        content: Text(
+            t.breathingSequences.deleteDialog.content(name: seq.name),
             style: TextStyle(color: c.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Отмена', style: TextStyle(color: c.textSecondary)),
+            child: Text(t.breathingSequences.deleteDialog.cancel,
+                style: TextStyle(color: c.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('Удалить', style: TextStyle(color: c.danger)),
+            child: Text(t.breathingSequences.deleteDialog.delete,
+                style: TextStyle(color: c.danger)),
           ),
         ],
       ),
@@ -161,7 +163,7 @@ class _Header extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Мои последовательности',
+              t.breathingSequences.header.title,
               style: TextStyle(
                 color: c.textPrimary,
                 fontSize: 18,
@@ -230,8 +232,11 @@ class _SequenceCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${seq.roundCount} ${_roundsWord(seq.roundCount)}  ·  '
-                      '${seq.totalCycles} циклов  ·  ~${formatMinSec(seq.estimatedSeconds)}',
+                      '${seq.roundCount} '
+                      '${t.breathingSequences.card.roundsWord(n: seq.roundCount)}'
+                      '  ·  '
+                      '${t.breathingSequences.card.cyclesCount(n: seq.totalCycles)}'
+                      '  ·  ~${formatMinSec(seq.estimatedSeconds)}',
                       style: TextStyle(color: c.textSecondary, fontSize: 12),
                     ),
                     const SizedBox(height: 10),
@@ -266,10 +271,12 @@ class _SequenceCard extends StatelessWidget {
                       }
                     },
                     itemBuilder: (_) => [
-                      _menuItem('edit', Icons.edit_outlined, 'Редактировать', c),
+                      _menuItem('edit', Icons.edit_outlined,
+                          t.breathingSequences.menu.edit, c),
                       _menuItem('duplicate', Icons.copy_all_outlined,
-                          'Дублировать', c),
-                      _menuItem('delete', Icons.delete_outline, 'Удалить', c,
+                          t.breathingSequences.menu.duplicate, c),
+                      _menuItem('delete', Icons.delete_outline,
+                          t.breathingSequences.menu.delete, c,
                           danger: true),
                     ],
                   ),
@@ -297,16 +304,6 @@ class _SequenceCard extends StatelessWidget {
       ),
     );
   }
-
-  String _roundsWord(int n) {
-    final mod10 = n % 10;
-    final mod100 = n % 100;
-    if (mod10 == 1 && mod100 != 11) return 'раунд';
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) {
-      return 'раунда';
-    }
-    return 'раундов';
-  }
 }
 
 class _RoundChip extends StatelessWidget {
@@ -325,7 +322,11 @@ class _RoundChip extends StatelessWidget {
         border: Border.all(color: c.accent.withValues(alpha: 0.25)),
       ),
       child: Text(
-        '${index + 1}: ${round.cyclesPerRound}ц · ${round.exhaustRetentionSecs}с',
+        t.breathingSequences.card.roundChip(
+          index: index + 1,
+          cycles: round.cyclesPerRound,
+          seconds: round.exhaustRetentionSecs,
+        ),
         style: TextStyle(
             color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.w500),
       ),

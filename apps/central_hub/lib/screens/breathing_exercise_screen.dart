@@ -309,10 +309,9 @@ class _BreathingExerciseScreenState
       final ok = await confirmDestructive(
         context,
         ref,
-        title: 'Прервать сессию?',
-        message: 'Если вы продержались дольше 30 секунд, прогресс '
-            'сохранится частично.',
-        confirmLabel: 'Прервать',
+        title: t.breathingExercise.confirmAbort.title,
+        message: t.breathingExercise.confirmAbort.message,
+        confirmLabel: t.breathingExercise.confirmAbort.confirmLabel,
       );
       if (!ok) return;
     }
@@ -818,11 +817,9 @@ class _BreathingExerciseScreenState
         Positioned.fill(
           child: OnboardingOverlay(
             visible: showOnboarding,
-            moduleLabel: 'ДЫХАНИЕ',
-            description: 'Сброс нервной системы и насыщение кислородом.',
-            benefit:
-                'Моментальное снижение стресса, управляемый выброс адреналина '
-                'и ясность ума через гипервентиляцию с задержкой дыхания.',
+            moduleLabel: t.breathingExercise.onboarding.moduleLabel,
+            description: t.breathingExercise.onboarding.description,
+            benefit: t.breathingExercise.onboarding.benefit,
             xpReward: 50,
             onAccept: () {
               if (_showOnboardingManual) {
@@ -976,7 +973,7 @@ class _BreathingExerciseScreenState
                   Text(
                     _isSequenceMode
                         ? widget.sequence!.name.toUpperCase()
-                        : 'WIM HOF METHOD',
+                        : t.breathingExercise.idle.defaultTitle,
                     style: TextStyle(
                       color: c.textPrimary,
                       fontSize: 16,
@@ -988,8 +985,12 @@ class _BreathingExerciseScreenState
                   const SizedBox(height: 6),
                   Text(
                     _isSequenceMode
-                        ? '${widget.sequence!.roundCount} ROUNDS  ·  ${widget.sequence!.totalCycles} CYCLES'
-                        : '${_settings.rounds} ROUNDS  ·  ${_settings.cyclesPerRound} CYCLES',
+                        ? t.breathingExercise.idle.roundsAndCycles(
+                            rounds: widget.sequence!.roundCount,
+                            cycles: widget.sequence!.totalCycles)
+                        : t.breathingExercise.idle.roundsAndCycles(
+                            rounds: _settings.rounds,
+                            cycles: _settings.cyclesPerRound),
                     style: TextStyle(
                       color: c.textSecondary,
                       fontSize: 12,
@@ -999,7 +1000,7 @@ class _BreathingExerciseScreenState
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'TAP SPHERE TO START',
+                    t.breathingExercise.idle.tapToStart,
                     style: TextStyle(
                       color: c.accent.withValues(alpha: 0.55),
                       fontSize: 11,
@@ -1017,7 +1018,7 @@ class _BreathingExerciseScreenState
               _SequencesButton(onTap: _openSequences),
             ],
             const SizedBox(height: 16),
-            _SieButton(label: 'INITIATE PROTOCOL', onPressed: _startSession),
+            _SieButton(label: t.breathingExercise.idle.initiateProtocol, onPressed: _startSession),
           ],
         );
 
@@ -1031,7 +1032,7 @@ class _BreathingExerciseScreenState
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'ПРИГОТОВЬТЕСЬ',
+                t.breathingExercise.countdown.getReady,
                 style: TextStyle(
                   color: c.textPrimary,
                   fontSize: 16,
@@ -1042,7 +1043,7 @@ class _BreathingExerciseScreenState
               ),
               const SizedBox(height: 4),
               Text(
-                'К ПРАКТИКЕ',
+                t.breathingExercise.countdown.forPractice,
                 style: TextStyle(color: c.textSecondary, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
@@ -1063,7 +1064,9 @@ class _BreathingExerciseScreenState
               child: Column(
                 children: [
                   Text(
-                    _isInhaling ? 'INHALE' : 'EXHALE',
+                    _isInhaling
+                        ? t.breathingExercise.active.inhale
+                        : t.breathingExercise.active.exhale,
                     style: TextStyle(
                       color: activeColor,
                       fontSize: 22,
@@ -1082,7 +1085,8 @@ class _BreathingExerciseScreenState
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'CYCLE ${_cycle + 1} / ${_cur.cyclesPerRound}',
+                    t.breathingExercise.active.cycle(
+                        current: _cycle + 1, total: _cur.cyclesPerRound),
                     style: TextStyle(color: c.textSecondary, fontSize: 12),
                     textAlign: TextAlign.center,
                   ),
@@ -1122,7 +1126,7 @@ class _BreathingExerciseScreenState
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'ВЫДОХНИТЕ',
+                    t.breathingExercise.exhalePause.title,
                     style: TextStyle(
                       color: c.accentSecondary,
                       fontSize: 22,
@@ -1136,7 +1140,7 @@ class _BreathingExerciseScreenState
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'ПЕРЕД ЗАДЕРЖКОЙ',
+                    t.breathingExercise.exhalePause.subtitle,
                     style: TextStyle(
                       color: c.textSecondary,
                       fontSize: 12,
@@ -1146,7 +1150,7 @@ class _BreathingExerciseScreenState
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    '${secsLeft}s',
+                    t.breathingExercise.exhalePause.seconds(secs: secsLeft),
                     style: TextStyle(
                       color: c.textPrimary,
                       fontSize: 52,
@@ -1188,7 +1192,7 @@ class _BreathingExerciseScreenState
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Text(
-                          'HOLD',
+                          t.breathingExercise.retention.hold,
                           style: TextStyle(
                             color: c.accentSecondary,
                             fontSize: 13,
@@ -1231,7 +1235,9 @@ class _BreathingExerciseScreenState
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'MAX ${_cur.exhaustRetentionSecs ~/ 60}:${(_cur.exhaustRetentionSecs % 60).toString().padLeft(2, '0')}',
+                          t.breathingExercise.retention.max(
+                              time:
+                                  '${_cur.exhaustRetentionSecs ~/ 60}:${(_cur.exhaustRetentionSecs % 60).toString().padLeft(2, '0')}'),
                           style: TextStyle(
                             color: c.textSecondary,
                             fontSize: 11,
@@ -1245,7 +1251,7 @@ class _BreathingExerciseScreenState
               ),
             ),
             const SizedBox(height: 16),
-            _SieButton(label: 'RELEASE', onPressed: _endRetention),
+            _SieButton(label: t.breathingExercise.retention.release, onPressed: _endRetention),
             const SizedBox(height: 12),
             _RestartButton(onTap: _restartSession),
           ],
@@ -1265,7 +1271,7 @@ class _BreathingExerciseScreenState
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'ВДОХНИТЕ',
+                    t.breathingExercise.inhalePause.title,
                     style: TextStyle(
                       color: c.accent,
                       fontSize: 22,
@@ -1279,7 +1285,7 @@ class _BreathingExerciseScreenState
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'ПЕРЕД ЗАДЕРЖКОЙ',
+                    t.breathingExercise.inhalePause.subtitle,
                     style: TextStyle(
                       color: c.textSecondary,
                       fontSize: 12,
@@ -1289,7 +1295,7 @@ class _BreathingExerciseScreenState
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    '${secsLeft}s',
+                    t.breathingExercise.inhalePause.seconds(secs: secsLeft),
                     style: TextStyle(
                       color: c.textPrimary,
                       fontSize: 52,
@@ -1325,7 +1331,7 @@ class _BreathingExerciseScreenState
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Text(
-                    'HOLD YOUR BREATH',
+                    t.breathingExercise.recovery.holdYourBreath,
                     style: TextStyle(
                       color: c.accent,
                       fontSize: 18,
@@ -1339,7 +1345,7 @@ class _BreathingExerciseScreenState
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '(INHALE)',
+                    t.breathingExercise.recovery.inhale,
                     style: TextStyle(
                       color: c.textSecondary,
                       fontSize: 12,
@@ -1349,7 +1355,7 @@ class _BreathingExerciseScreenState
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    '${recovSecsLeft}s',
+                    t.breathingExercise.recovery.seconds(secs: recovSecsLeft),
                     style: TextStyle(
                       color: c.textPrimary,
                       fontSize: 52,
@@ -1389,7 +1395,7 @@ class _BreathingExerciseScreenState
                 children: [
                   if (isFinalRound) ...[
                     Text(
-                      'EXHALE',
+                      t.breathingExercise.roundTransition.exhale,
                       style: TextStyle(
                         color: c.accent,
                         fontSize: 22,
@@ -1403,7 +1409,7 @@ class _BreathingExerciseScreenState
                     ),
                   ] else ...[
                     Text(
-                      'PREPARE FOR THE',
+                      t.breathingExercise.roundTransition.prepareForThe,
                       style: TextStyle(
                         color: c.textSecondary,
                         fontSize: 12,
@@ -1413,7 +1419,7 @@ class _BreathingExerciseScreenState
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'NEXT ROUND',
+                      t.breathingExercise.roundTransition.nextRound,
                       style: TextStyle(
                         color: c.accent,
                         fontSize: 22,
@@ -1428,7 +1434,7 @@ class _BreathingExerciseScreenState
                   ],
                   const SizedBox(height: 10),
                   Text(
-                    '${secsLeft}s',
+                    t.breathingExercise.roundTransition.seconds(secs: secsLeft),
                     style: TextStyle(
                       color: c.textPrimary,
                       fontSize: 52,
@@ -1529,7 +1535,7 @@ class _TopBar extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
               decoration: c.flatCard(radius: 16),
               child: Text(
-                'ROUND $round / $totalRounds',
+                t.breathingExercise.topBar.round(round: round, total: totalRounds),
                 style: TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1.5),
               ),
             ),
@@ -1563,7 +1569,7 @@ class _SettingsButton extends ConsumerWidget {
         Icon(Icons.tune, size: 20, color: c.textSecondary),
         const SizedBox(width: 10),
         Text(
-          'PROTOCOL SETTINGS',
+          t.breathingExercise.buttons.protocolSettings,
           style: TextStyle(
             color: c.textSecondary,
             fontSize: 12,
@@ -1606,7 +1612,7 @@ class _SequencesButton extends ConsumerWidget {
                   size: 20, color: c.textSecondary),
               const SizedBox(width: 10),
               Text(
-                'МОИ ПОСЛЕДОВАТЕЛЬНОСТИ',
+                t.breathingExercise.buttons.mySequences,
                 style: TextStyle(
                   color: c.textSecondary,
                   fontSize: 12,
@@ -1683,8 +1689,11 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
   }
 
   String _presetLabel(BreathingSettings? s) => s == null
-      ? 'ПУСТО'
-      : '${s.rounds}r · ${s.cyclesPerRound}c · ${s.exhaustRetentionSecs}s';
+      ? t.breathingExercise.settings.presetEmpty
+      : t.breathingExercise.settings.presetLabel(
+          rounds: s.rounds,
+          cycles: s.cyclesPerRound,
+          retention: s.exhaustRetentionSecs);
 
   void _update(BreathingSettings s) {
     setState(() => _s = s);
@@ -1731,22 +1740,22 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 ),
               ),
               Text(
-                'PROTOCOL SETTINGS',
+                t.breathingExercise.settings.title,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: c.textPrimary,
                     ),
               ),
               const SizedBox(height: 16),
-              _sectionLabel(context, c, 'PROTOCOL'),
+              _sectionLabel(context, c, t.breathingExercise.settings.sectionProtocol),
               _SettingRow(
-                label: 'ROUNDS',
+                label: t.breathingExercise.settings.rounds,
                 value: _s.rounds,
                 min: 1,
                 max: 5,
                 onChanged: (v) => _update(_s.copyWith(rounds: v)),
               ),
               _SettingRow(
-                label: 'CYCLES / ROUND',
+                label: t.breathingExercise.settings.cyclesPerRound,
                 value: _s.cyclesPerRound,
                 min: 10,
                 max: 40,
@@ -1754,21 +1763,21 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 onChanged: (v) => _update(_s.copyWith(cyclesPerRound: v)),
               ),
               _SettingRow(
-                label: 'INHALE  (SEC)',
+                label: t.breathingExercise.settings.inhaleSec,
                 value: _s.inhaleSecs,
                 min: 1,
                 max: 5,
                 onChanged: (v) => _update(_s.copyWith(inhaleSecs: v)),
               ),
               _SettingRow(
-                label: 'EXHALE  (SEC)',
+                label: t.breathingExercise.settings.exhaleSec,
                 value: _s.exhaleSecs,
                 min: 1,
                 max: 7,
                 onChanged: (v) => _update(_s.copyWith(exhaleSecs: v)),
               ),
               _SettingRow(
-                label: 'EXHALE RETENTION (SEC)',
+                label: t.breathingExercise.settings.exhaleRetentionSec,
                 value: _s.exhaustRetentionSecs,
                 min: 30,
                 max: 180,
@@ -1777,59 +1786,59 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                     _update(_s.copyWith(exhaustRetentionSecs: v)),
               ),
               _SettingRow(
-                label: 'RECOVERY HOLD (SEC)',
+                label: t.breathingExercise.settings.recoveryHoldSec,
                 value: _s.recoveryHoldSecs,
                 min: 10,
                 max: 30,
                 onChanged: (v) => _update(_s.copyWith(recoveryHoldSecs: v)),
               ),
               const SizedBox(height: 12),
-              _sectionLabel(context, c, 'SOUND TOGGLES'),
+              _sectionLabel(context, c, t.breathingExercise.settings.sectionSoundToggles),
               _ToggleRow(
-                label: 'AMBIENT MUSIC',
+                label: t.breathingExercise.settings.ambientMusic,
                 value: _s.ambientEnabled,
                 onChanged: (v) => _update(_s.copyWith(ambientEnabled: v)),
               ),
               _ToggleRow(
-                label: 'BREATHING SOUNDS',
+                label: t.breathingExercise.settings.breathingSounds,
                 value: _s.breathingSoundsEnabled,
                 onChanged: (v) =>
                     _update(_s.copyWith(breathingSoundsEnabled: v)),
               ),
               _ToggleRow(
-                label: 'HEARTBEAT',
+                label: t.breathingExercise.settings.heartbeat,
                 value: _s.heartbeatEnabled,
                 onChanged: (v) => _update(_s.copyWith(heartbeatEnabled: v)),
               ),
               _ToggleRow(
-                label: 'CLOCK TICKS',
+                label: t.breathingExercise.settings.clockTicks,
                 value: _s.tickEnabled,
                 onChanged: (v) => _update(_s.copyWith(tickEnabled: v)),
               ),
               const SizedBox(height: 12),
-              _sectionLabel(context, c, 'VOLUME'),
+              _sectionLabel(context, c, t.breathingExercise.settings.sectionVolume),
               _VolumeRow(
-                label: 'AMBIENT MUSIC',
+                label: t.breathingExercise.settings.ambientMusic,
                 value: _s.ambientVolume,
                 onChanged: (v) => _update(_s.copyWith(ambientVolume: v)),
               ),
               _VolumeRow(
-                label: 'BREATHING',
+                label: t.breathingExercise.settings.volumeBreathing,
                 value: _s.breathingVolume,
                 onChanged: (v) => _update(_s.copyWith(breathingVolume: v)),
               ),
               _VolumeRow(
-                label: 'HEARTBEAT',
+                label: t.breathingExercise.settings.heartbeat,
                 value: _s.heartbeatVolume,
                 onChanged: (v) => _update(_s.copyWith(heartbeatVolume: v)),
               ),
               _VolumeRow(
-                label: 'CLOCK TICKS',
+                label: t.breathingExercise.settings.clockTicks,
                 value: _s.tickVolume,
                 onChanged: (v) => _update(_s.copyWith(tickVolume: v)),
               ),
               const SizedBox(height: 12),
-              _sectionLabel(context, c, 'PRESETS'),
+              _sectionLabel(context, c, t.breathingExercise.settings.sectionPresets),
               const SizedBox(height: 4),
               for (var i = 0; i < 3; i++)
                 _PresetRow(
@@ -2059,10 +2068,10 @@ class _PresetRow extends ConsumerWidget {
             ),
           ),
           if (onLoad != null) ...[
-            _PresetBtn(label: 'LOAD', onTap: onLoad!, c: c),
+            _PresetBtn(label: t.breathingExercise.settings.load, onTap: onLoad!, c: c),
             const SizedBox(width: 8),
           ],
-          _PresetBtn(label: 'SAVE', onTap: onSave, c: c, isPrimary: true),
+          _PresetBtn(label: t.breathingExercise.settings.save, onTap: onSave, c: c, isPrimary: true),
         ],
       ),
     );
@@ -2195,7 +2204,7 @@ class _RestartButton extends ConsumerWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           child: Text(
-            'НАЧАТЬ ЗАНОВО',
+            t.breathingExercise.buttons.restart,
             style: TextStyle(
               color: c.textSecondary.withValues(alpha: 0.55),
               fontSize: 11,

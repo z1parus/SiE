@@ -1,0 +1,28 @@
+{
+  "header": {
+    "title": "Breathing stats"
+  },
+  "period": {
+    "week": "Week",
+    "month": "Month",
+    "year": "Year",
+    "all": "All time"
+  },
+  "empty": {
+    "loadError": "Failed to load statistics",
+    "noSessions": "No practices in this period.\nTime to breathe."
+  },
+  "hero": {
+    "label": "BEST HOLD",
+    "caption": "breath hold on exhale"
+  },
+  "grid": {
+    "totalTime": "total time",
+    "totalBreaths": "breaths total",
+    "rounds": "rounds"
+  },
+  "mood": {
+    "calmness": "Avg. calmness",
+    "confidence": "Avg. confidence"
+  }
+}

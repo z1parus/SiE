@@ -49,7 +49,7 @@ class _BreathingReflectionScreenState
                 longestHoldSeconds: widget.longestHoldSeconds,
                 totalHoldSeconds: widget.totalHoldSeconds,
                 moodEmoji: withReflection && _moodIndex != null
-                    ? kBreathingMoods[_moodIndex!].emoji
+                    ? breathingMoods()[_moodIndex!].emoji
                     : null,
                 calmness: withReflection ? _calmness : null,
                 confidence: withReflection ? _confidence : null,
@@ -94,7 +94,7 @@ class _BreathingReflectionScreenState
                     children: [
                       const SizedBox(height: 8),
                       Text(
-                        'ПРАКТИКА ЗАВЕРШЕНА',
+                        t.breathingReflection.header,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: kRimGold,
@@ -112,7 +112,7 @@ class _BreathingReflectionScreenState
                       ),
                       const SizedBox(height: 28),
                       Text(
-                        'Как вы себя чувствуете?',
+                        t.breathingReflection.moodQuestion,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: c.textPrimary,
@@ -129,7 +129,7 @@ class _BreathingReflectionScreenState
                       const SizedBox(height: 28),
                       _LevelSection(
                         c: c,
-                        title: 'СПОКОЙСТВИЕ',
+                        title: t.breathingReflection.level.calmness,
                         accent: c.accentSecondary,
                         value: _calmness,
                         onPick: (v) => setState(() => _calmness = v),
@@ -137,7 +137,7 @@ class _BreathingReflectionScreenState
                       const SizedBox(height: 24),
                       _LevelSection(
                         c: c,
-                        title: 'УВЕРЕННОСТЬ',
+                        title: t.breathingReflection.level.confidence,
                         accent: c.accent,
                         value: _confidence,
                         onPick: (v) => setState(() => _confidence = v),
@@ -154,7 +154,7 @@ class _BreathingReflectionScreenState
                     children: [
                       _PrimaryButton(
                         c: c,
-                        label: 'СОХРАНИТЬ',
+                        label: t.breathingReflection.save,
                         busy: _saving,
                         onTap: () => _finish(withReflection: true),
                       ),
@@ -163,7 +163,7 @@ class _BreathingReflectionScreenState
                         onPressed:
                             _saving ? null : () => _finish(withReflection: false),
                         child: Text(
-                          'Пропустить',
+                          t.breathingReflection.skip,
                           style: TextStyle(
                             color: c.textSecondary.withValues(alpha: 0.7),
                             fontSize: 13,
@@ -221,10 +221,11 @@ class _SummaryCard extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          stat(Icons.timer_outlined, fmtDuration(durationSeconds), 'время'),
+          stat(Icons.timer_outlined, fmtDuration(durationSeconds),
+              t.breathingReflection.summary.timeLabel),
           stat(Icons.air_rounded, '$breaths', breathsWord(breaths)),
-          stat(Icons.hourglass_bottom_rounded,
-              fmtDuration(longestHoldSeconds), 'задержка'),
+          stat(Icons.hourglass_bottom_rounded, fmtDuration(longestHoldSeconds),
+              t.breathingReflection.summary.holdLabel),
         ],
       ),
     );
@@ -242,14 +243,15 @@ class _MoodPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final moods = breathingMoods();
     return Wrap(
       spacing: 10,
       runSpacing: 10,
       alignment: WrapAlignment.center,
       children: [
-        for (var i = 0; i < kBreathingMoods.length; i++)
+        for (var i = 0; i < moods.length; i++)
           _MoodChip(
-            mood: kBreathingMoods[i],
+            mood: moods[i],
             selected: selected == i,
             c: c,
             onTap: () => onPick(i),
@@ -346,7 +348,9 @@ class _LevelSection extends StatelessWidget {
             ),
             const Spacer(),
             Text(
-              value == null ? '—' : '$value / 10',
+              value == null
+                  ? '—'
+                  : t.breathingReflection.level.value(value: value!),
               style: TextStyle(
                   color: value == null ? c.textSecondary : accent,
                   fontSize: 12,

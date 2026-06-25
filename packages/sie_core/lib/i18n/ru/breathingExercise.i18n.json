@@ -1,0 +1,83 @@
+{
+  "confirmAbort": {
+    "title": "Прервать сессию?",
+    "message": "Если вы продержались дольше 30 секунд, прогресс сохранится частично.",
+    "confirmLabel": "Прервать"
+  },
+  "onboarding": {
+    "moduleLabel": "ДЫХАНИЕ",
+    "description": "Сброс нервной системы и насыщение кислородом.",
+    "benefit": "Моментальное снижение стресса, управляемый выброс адреналина и ясность ума через гипервентиляцию с задержкой дыхания."
+  },
+  "idle": {
+    "defaultTitle": "МЕТОД ВИМА ХОФА",
+    "roundsAndCycles": "{rounds} РАУНДОВ  ·  {cycles} ЦИКЛОВ",
+    "tapToStart": "НАЖМИТЕ НА СФЕРУ ДЛЯ СТАРТА",
+    "initiateProtocol": "ЗАПУСТИТЬ ПРОТОКОЛ"
+  },
+  "countdown": {
+    "getReady": "ПРИГОТОВЬТЕСЬ",
+    "forPractice": "К ПРАКТИКЕ"
+  },
+  "active": {
+    "inhale": "ВДОХ",
+    "exhale": "ВЫДОХ",
+    "cycle": "ЦИКЛ {current} / {total}"
+  },
+  "exhalePause": {
+    "title": "ВЫДОХНИТЕ",
+    "subtitle": "ПЕРЕД ЗАДЕРЖКОЙ",
+    "seconds": "{secs}с"
+  },
+  "retention": {
+    "hold": "ЗАДЕРЖКА",
+    "max": "МАКС {time}",
+    "release": "ОТПУСТИТЬ"
+  },
+  "inhalePause": {
+    "title": "ВДОХНИТЕ",
+    "subtitle": "ПЕРЕД ЗАДЕРЖКОЙ",
+    "seconds": "{secs}с"
+  },
+  "recovery": {
+    "holdYourBreath": "ЗАДЕРЖИТЕ ДЫХАНИЕ",
+    "inhale": "(ВДОХ)",
+    "seconds": "{secs}с"
+  },
+  "roundTransition": {
+    "exhale": "ВЫДОХ",
+    "prepareForThe": "ПРИГОТОВЬТЕСЬ К",
+    "nextRound": "СЛЕДУЮЩЕМУ РАУНДУ",
+    "seconds": "{secs}с"
+  },
+  "topBar": {
+    "round": "РАУНД {round} / {total}"
+  },
+  "buttons": {
+    "protocolSettings": "НАСТРОЙКИ ПРОТОКОЛА",
+    "mySequences": "МОИ ПОСЛЕДОВАТЕЛЬНОСТИ",
+    "restart": "НАЧАТЬ ЗАНОВО"
+  },
+  "settings": {
+    "title": "НАСТРОЙКИ ПРОТОКОЛА",
+    "sectionProtocol": "ПРОТОКОЛ",
+    "sectionSoundToggles": "ЗВУКОВЫЕ ПЕРЕКЛЮЧАТЕЛИ",
+    "sectionVolume": "ГРОМКОСТЬ",
+    "sectionPresets": "ПРЕСЕТЫ",
+    "rounds": "РАУНДЫ",
+    "cyclesPerRound": "ЦИКЛОВ / РАУНД",
+    "inhaleSec": "ВДОХ  (СЕК)",
+    "exhaleSec": "ВЫДОХ  (СЕК)",
+    "exhaleRetentionSec": "ЗАДЕРЖКА НА ВЫДОХЕ (СЕК)",
+    "recoveryHoldSec": "ЗАДЕРЖКА ВОССТАНОВЛЕНИЯ (СЕК)",
+    "ambientMusic": "ФОНОВАЯ МУЗЫКА",
+    "breathingSounds": "ЗВУКИ ДЫХАНИЯ",
+    "heartbeat": "СЕРДЦЕБИЕНИЕ",
+    "clockTicks": "ТИКАНЬЕ ЧАСОВ",
+    "volumeBreathing": "ДЫХАНИЕ",
+    "presetEmpty": "ПУСТО",
+    "presetLabel": "{rounds}р · {cycles}ц · {retention}с",
+    "load": "ЗАГРУЗИТЬ",
+    "save": "СОХРАНИТЬ"
+  }
+}

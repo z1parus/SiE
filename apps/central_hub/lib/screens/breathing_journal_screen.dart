@@ -54,15 +54,14 @@ class _BreathingJournalScreenState extends ConsumerState<BreathingJournalScreen>
                   error: (_, _) => _Empty(
                     c: c,
                     icon: Icons.cloud_off_outlined,
-                    text: 'Не удалось загрузить журнал практик',
+                    text: t.breathingJournal.empty.loadError,
                   ),
                   data: (sessions) {
                     if (sessions.isEmpty) {
                       return _Empty(
                         c: c,
                         icon: Icons.menu_book_outlined,
-                        text: 'Здесь появятся ваши практики дыхания.\n'
-                            'Завершите первую сессию, чтобы начать журнал.',
+                        text: t.breathingJournal.empty.noSessions,
                       );
                     }
                     return RefreshIndicator(
@@ -121,7 +120,7 @@ class _Header extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Журнал практик',
+              t.breathingJournal.header.title,
               style: TextStyle(
                 color: c.textPrimary,
                 fontSize: 18,
@@ -318,14 +317,14 @@ class _SessionCard extends StatelessWidget {
                 c: c,
                 icon: Icons.hourglass_bottom_rounded,
                 value: fmtDuration(session.longestHoldSeconds),
-                label: 'задержка',
+                label: t.breathingJournal.metrics.holdLabel,
               ),
               _MetricDivider(c: c),
               _Metric(
                 c: c,
                 icon: Icons.timer_outlined,
                 value: fmtDuration(session.durationSeconds),
-                label: 'время',
+                label: t.breathingJournal.metrics.timeLabel,
               ),
             ],
           ),
@@ -336,7 +335,7 @@ class _SessionCard extends StatelessWidget {
               Expanded(
                 child: _LevelBar(
                   c: c,
-                  label: 'Спокойствие',
+                  label: t.breathingJournal.reflection.calmness,
                   value: session.calmness,
                   accent: c.accentSecondary,
                 ),
@@ -345,7 +344,7 @@ class _SessionCard extends StatelessWidget {
               Expanded(
                 child: _LevelBar(
                   c: c,
-                  label: 'Уверенность',
+                  label: t.breathingJournal.reflection.confidence,
                   value: session.confidence,
                   accent: c.accent,
                 ),
@@ -355,7 +354,7 @@ class _SessionCard extends StatelessWidget {
           if (!hasReflection) ...[
             const SizedBox(height: 2),
             Text(
-              'Без оценки состояния',
+              t.breathingJournal.reflection.noRating,
               style: TextStyle(
                 color: c.textSecondary.withValues(alpha: 0.5),
                 fontSize: 10,
