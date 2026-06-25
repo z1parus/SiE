@@ -757,11 +757,20 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       return;
     }
 
-    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     final db = ref.read(appDatabaseProvider);
     final isDone = prev.logDates[habitId]?.contains(dateStr) ?? false;
 
-    // Write to local DB first to prevent race condition on rapid double-tap.
+    // A metric (count/duration) habit only counts as "done" for a day once its
+    // value reaches the daily target — so marking it done must store the FULL
+    // target. Storing the binary default (1) would make a reload (which
+    // re-checks isMetByValue) silently drop the day. Binary habits use 1.
+    final habit = prev.habits.cast<Habit?>()
+        .firstWhere((h) => h?.id == habitId, orElse: () => null);
+    final markValue = habit?.effectiveTarget ?? 1.0;
+
+    // ── 1. Local DB first — the offline-first source of truth. Written before
+    // any network call so a rapid double-tap and an offline tap behave the
+    // same. `synced: false` until the remote write is confirmed. ────────────
     if (isDone) {
       await db.deleteHabitLog(habitId, userId, dateStr);
     } else {
@@ -769,32 +778,39 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         habitId: Value(habitId),
         userId: Value(userId),
         completedAt: Value(dateStr),
+        value: Value(markValue),
         note: const Value(null),
         emoji: const Value(null),
-        synced: Value(isOnline),
+        synced: const Value(false),
       ));
     }
 
-    // Optimistic UI update (now consistent with local DB).
+    // ── 2. Optimistic UI update — kept consistent with the local DB (incl. the
+    // stored value, so a reload computes the same logDates). ────────────────
     final newLogDates = {
-      for (final e in prev.logDates.entries)
-        e.key: Set<String>.from(e.value),
+      for (final e in prev.logDates.entries) e.key: Set<String>.from(e.value),
     };
     final habitDates = newLogDates.putIfAbsent(habitId, () => {});
-
     final newLogEntries = {
       for (final e in prev.logEntries.entries)
         e.key: List<HabitLogEntry>.from(e.value),
     };
+    final newLogValues = {
+      for (final e in prev.logValues.entries)
+        e.key: Map<String, double>.from(e.value),
+    };
     if (isDone) {
       habitDates.remove(dateStr);
       newLogEntries[habitId]?.removeWhere((e) => e.completedAt == dateStr);
+      newLogValues[habitId]?.remove(dateStr);
     } else {
       habitDates.add(dateStr);
-      newLogEntries
-          .putIfAbsent(habitId, () => [])
-          .add(HabitLogEntry(
-              habitId: habitId, userId: userId, completedAt: dateStr));
+      newLogEntries.putIfAbsent(habitId, () => []).add(HabitLogEntry(
+          habitId: habitId,
+          userId: userId,
+          completedAt: dateStr,
+          value: markValue));
+      newLogValues.putIfAbsent(habitId, () => {})[dateStr] = markValue;
     }
 
     state = AsyncData(HabitsState(
@@ -802,78 +818,126 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       logDates: newLogDates,
       streaks: {...prev.streaks, habitId: _streakById(habitId, habitDates)},
       logEntries: newLogEntries,
-      logValues: prev.logValues,
+      logValues: newLogValues,
       restDates: prev.restDates,
       freezesAvailable: prev.freezesAvailable,
       lapseDates: prev.lapseDates,
     ));
 
-    try {
-      if (isDone) {
-        if (isOnline) {
-          await client
-              .from('habit_logs')
-              .delete()
-              .eq('habit_id', habitId)
-              .eq('user_id', userId)
-              .eq('completed_at', dateStr);
-        } else {
-          await db.enqueueSyncOp('delete_habit_log', jsonEncode({
-            'habit_id': habitId,
-            'user_id': userId,
-            'completed_at': dateStr,
-          }));
-        }
-      } else {
-        if (isOnline) {
-          try {
-            await client.from('habit_logs').insert({
-              'habit_id': habitId,
-              'user_id': userId,
-              'completed_at': dateStr,
-              'xp_awarded': 50,
-            });
-          } on PostgrestException catch (e) {
-            // 23505 = unique_violation: log already exists, treat as no-op.
-            if (e.code != '23505') rethrow;
-            _inProgress.remove(toggleKey);
-            return;
-          }
+    // ── 3. Persist remotely. Offline-first: a transient network failure must
+    // NEVER discard the action — it is already safe in the local DB, so we
+    // fall back to the sync queue instead of rolling the UI back. ───────────
+    if (isDone) {
+      await _persistLogDeletion(habitId, userId, dateStr);
+    } else {
+      await _persistLogCompletion(habitId, userId, dateStr, markValue);
+    }
+
+    _inProgress.remove(toggleKey);
+    _refreshHomeWidgets();
+  }
+
+  /// Removes a habit-log entry remotely, queuing the delete for later if the
+  /// network call fails or we're offline. Never throws — the local DB has
+  /// already recorded the removal.
+  Future<void> _persistLogDeletion(
+      String habitId, String userId, String dateStr) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+
+    if (isOnline) {
+      try {
+        await client
+            .from('habit_logs')
+            .delete()
+            .eq('habit_id', habitId)
+            .eq('user_id', userId)
+            .eq('completed_at', dateStr);
+        return;
+      } catch (e) {
+        debugPrint('SiE toggleHabit: remote delete failed, queuing — $e');
+      }
+    }
+    await db.enqueueSyncOp('delete_habit_log', jsonEncode({
+      'habit_id': habitId,
+      'user_id': userId,
+      'completed_at': dateStr,
+    }));
+  }
+
+  /// Persists a habit-log completion remotely and awards XP. The completion is
+  /// already in the local DB, so this never rolls back the UI: on a network
+  /// failure (or offline) it queues the log for later sync. XP RPCs and the
+  /// habit-synergy boost are best-effort side-effects — a failure in either
+  /// can't undo the (already persisted) completion. Never throws.
+  Future<void> _persistLogCompletion(
+      String habitId, String userId, String dateStr, double value) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+
+    var persistedRemotely = false;
+    if (isOnline) {
+      try {
+        // Upsert (not insert) so re-marking a day that already has a row — e.g.
+        // a metric day logged below target — succeeds instead of hitting a
+        // unique-violation, and preserves any existing note/emoji.
+        await client.from('habit_logs').upsert({
+          'habit_id': habitId,
+          'user_id': userId,
+          'completed_at': dateStr,
+          'value': value,
+          'xp_awarded': 50,
+        }, onConflict: 'user_id,habit_id,completed_at');
+        await db.markHabitLogSynced(habitId, userId, dateStr);
+        persistedRemotely = true;
+        try {
           await Future.wait([
             client.rpc('increment_xp',
                 params: {'p_user_id': userId, 'p_amount': 50}),
             client.rpc('add_design_points', params: {'p_amount': 10}),
           ]);
-        } else {
-          await db.enqueueSyncOp('insert_habit_log', jsonEncode({
-            'habit_id': habitId,
-            'user_id': userId,
-            'completed_at': dateStr,
-          }));
+        } catch (e) {
+          debugPrint('SiE toggleHabit: XP rpc failed — $e');
         }
-        // Always update local XP immediately (online: mirrors server;
-        // offline: accumulates pending delta for later sync).
-        await ref
-            .read(userProfileProvider.notifier)
-            .applyLocalXpDelta(50, 10);
-        // Habit Synergy: boost linked goals
-        final links = await db.habitLinksForHabit(habitId);
-        if (links.isNotEmpty) {
-          final planning = ref.read(planningProvider.notifier);
-          final streak = state.valueOrNull?.streaks[habitId] ?? 0;
-          for (final link in links) {
-            final boost = streak > 7 ? 1.0 : link.boostValue;
-            await planning.applyHabitBoost(link.goalId, boost);
-          }
+      } catch (e) {
+        debugPrint('SiE toggleHabit: remote insert failed, queuing — $e');
+      }
+    }
+
+    if (!persistedRemotely) {
+      // Offline, or the remote write failed — queue the log (the sync op also
+      // stamps xp_awarded) so it lands on the next sync.
+      await db.enqueueSyncOp('insert_habit_log', jsonEncode({
+        'habit_id': habitId,
+        'user_id': userId,
+        'completed_at': dateStr,
+        'value': value,
+      }));
+    }
+
+    // Mirror the XP locally in every case so the bar updates instantly.
+    try {
+      await ref.read(userProfileProvider.notifier).applyLocalXpDelta(50, 10);
+    } catch (e) {
+      debugPrint('SiE toggleHabit: local XP delta failed — $e');
+    }
+
+    // Habit Synergy: boost linked goals (best-effort).
+    try {
+      final links = await db.habitLinksForHabit(habitId);
+      if (links.isNotEmpty) {
+        final planning = ref.read(planningProvider.notifier);
+        final streak = state.valueOrNull?.streaks[habitId] ?? 0;
+        for (final link in links) {
+          final boost = streak > 7 ? 1.0 : link.boostValue;
+          await planning.applyHabitBoost(link.goalId, boost);
         }
       }
-    } catch (e, st) {
-      state = AsyncData(prev);
-      _inProgress.remove(toggleKey);
-      Error.throwWithStackTrace(e, st);
+    } catch (e) {
+      debugPrint('SiE toggleHabit: synergy boost failed — $e');
     }
-    _inProgress.remove(toggleKey);
-    _refreshHomeWidgets();
   }
 
   /// Event-driven home-screen widget refresh. Fire-and-forget: never blocks or
