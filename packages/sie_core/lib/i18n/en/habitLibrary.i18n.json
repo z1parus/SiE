@@ -1,0 +1,15 @@
+{
+  "title": {
+    "first": "HABIT ",
+    "second": "LIBRARY"
+  },
+  "loadError": "Failed to load the library",
+  "noArea": "— NO AREA",
+  "card": {
+    "added": "ADDED",
+    "add": "ADD"
+  },
+  "snackbar": {
+    "added": "«{name}» added"
+  }
+}

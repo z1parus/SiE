@@ -1,0 +1,15 @@
+{
+  "title": {
+    "first": "HABIT ",
+    "second": "LIBRARY"
+  },
+  "loadError": "Не удалось загрузить библиотеку",
+  "noArea": "— БЕЗ СФЕРЫ",
+  "card": {
+    "added": "ДОБАВЛЕНО",
+    "add": "ДОБАВИТЬ"
+  },
+  "snackbar": {
+    "added": "«{name}» добавлена"
+  }
+}

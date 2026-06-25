@@ -1,0 +1,18 @@
+{
+  "appBar": {
+    "titleAccent": "HABITS ",
+    "titleRest": "OVERVIEW"
+  },
+  "rate": {
+    "week": "НЕДЕЛЯ",
+    "month": "МЕСЯЦ"
+  },
+  "sections": {
+    "discipline28Days": "ДИСЦИПЛИНА · 28 ДНЕЙ",
+    "leaders": "ЛИДЕРЫ",
+    "lagging": "ПРОСЕДАЮТ"
+  },
+  "empty": {
+    "noHabits": "Привычки не добавлены"
+  }
+}

@@ -44,7 +44,7 @@ class HabitsOverviewScreen extends ConsumerWidget {
                       text: TextSpan(
                         children: [
                           TextSpan(
-                            text: 'HABITS ',
+                            text: t.habitsOverview.appBar.titleAccent,
                             style: TextStyle(
                               color: accent,
                               fontSize: 20,
@@ -53,7 +53,7 @@ class HabitsOverviewScreen extends ConsumerWidget {
                             ),
                           ),
                           TextSpan(
-                            text: 'OVERVIEW',
+                            text: t.habitsOverview.appBar.titleRest,
                             style: Theme.of(context)
                                 .textTheme
                                 .headlineLarge
@@ -79,7 +79,7 @@ class HabitsOverviewScreen extends ConsumerWidget {
                         _RateCard(
                           sc: sc,
                           accent: accent,
-                          label: 'НЕДЕЛЯ',
+                          label: t.habitsOverview.rate.week,
                           percent: weekPct,
                           total: dash.totalHabits,
                         ),
@@ -87,7 +87,7 @@ class HabitsOverviewScreen extends ConsumerWidget {
                         _RateCard(
                           sc: sc,
                           accent: accent,
-                          label: 'МЕСЯЦ',
+                          label: t.habitsOverview.rate.month,
                           percent: monthPct,
                           total: dash.totalHabits,
                         ),
@@ -96,7 +96,7 @@ class HabitsOverviewScreen extends ConsumerWidget {
                     const SizedBox(height: 20),
                     // ── Aggregate heatmap (last 28 days) ─────────────────
                     Text(
-                      'ДИСЦИПЛИНА · 28 ДНЕЙ',
+                      t.habitsOverview.sections.discipline28Days,
                       style: TextStyle(
                         color: sc.textSecondary.withValues(alpha: 0.55),
                         fontSize: 9,
@@ -114,7 +114,7 @@ class HabitsOverviewScreen extends ConsumerWidget {
                     // ── Top habits ────────────────────────────────────────
                     if (dash.topHabits.isNotEmpty) ...[
                       Text(
-                        'ЛИДЕРЫ',
+                        t.habitsOverview.sections.leaders,
                         style: TextStyle(
                           color: sc.textSecondary.withValues(alpha: 0.55),
                           fontSize: 9,
@@ -144,7 +144,7 @@ class HabitsOverviewScreen extends ConsumerWidget {
                     // ── Lagging habits ────────────────────────────────────
                     if (dash.laggingHabits.isNotEmpty) ...[
                       Text(
-                        'ПРОСЕДАЮТ',
+                        t.habitsOverview.sections.lagging,
                         style: TextStyle(
                           color: sc.textSecondary.withValues(alpha: 0.55),
                           fontSize: 9,
@@ -175,7 +175,7 @@ class HabitsOverviewScreen extends ConsumerWidget {
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 40),
                           child: Text(
-                            'Привычки не добавлены',
+                            t.habitsOverview.empty.noHabits,
                             style: TextStyle(
                               color: sc.textSecondary,
                               fontSize: 13,

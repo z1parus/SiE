@@ -1,0 +1,225 @@
+{
+  "list": {
+    "noHabitsToday": "No habits scheduled for today",
+    "notTodayHeader": "NOT TODAY · {count}",
+    "moduleLabel": "HABITS",
+    "archiveDescription": "Neural connection archive.",
+    "archiveBody": "Automating success through micro-actions and systematic discipline. Forming neural patterns that require no willpower resources."
+  },
+  "firstProtocol": {
+    "title": "FIRST DISCIPLINE PROTOCOL",
+    "xpEarned": "+25 XP earned"
+  },
+  "createStack": {
+    "saveLabel": "CREATE"
+  },
+  "addMenu": {
+    "customHabit": "CUSTOM HABIT",
+    "fromLibrary": "FROM LIBRARY"
+  },
+  "header": {
+    "habit": "HABIT ",
+    "matrix": "MATRIX",
+    "subtitle": "NEURAL MATRIX · DISCIPLINE ARCHIVE",
+    "help": "Help",
+    "habitsOverview": "Habits overview",
+    "groupByArea": "Group by area",
+    "habitArchive": "Habit archive"
+  },
+  "viewMode": {
+    "today": "TODAY",
+    "week": "WEEK",
+    "allTime": "ALL TIME"
+  },
+  "valueLabel": {
+    "durationProgress": "{cur} / {tgt} min"
+  },
+  "checkAction": {
+    "uncheckFor": "Undo mark for {day}",
+    "checkFor": "Mark complete for {day}"
+  },
+  "streak": {
+    "label": "STREAK: {streak}"
+  },
+  "empty": {
+    "noProtocols": "NO PROTOCOLS ACTIVE",
+    "tapToInit": "TAP + TO INITIALISE A HABIT"
+  },
+  "editor": {
+    "editPrefix": "EDIT ",
+    "newPrefix": "NEW ",
+    "protocol": "PROTOCOL",
+    "title": "TITLE",
+    "description": "DESCRIPTION (OPTIONAL)",
+    "polarity": "POLARITY",
+    "polarityBuild": "Build",
+    "polarityAvoid": "Break",
+    "avoidHint": "Success is a day without a slip. The «N days without…» counter grows by itself; the button on the card is «Slipped».",
+    "type": "TYPE",
+    "color": "COLOR",
+    "icon": "ICON",
+    "schedule": "SCHEDULE",
+    "reminder": "REMINDER",
+    "reminderOff": "Off",
+    "area": "AREA",
+    "cancel": "CANCEL",
+    "save": "SAVE",
+    "deploy": "DEPLOY"
+  },
+  "typeEditor": {
+    "binary": "Yes / No",
+    "count": "Count",
+    "duration": "Time",
+    "durationValue": "{mins} min",
+    "stepValue": "+{mins} min",
+    "targetMin": "Target (min)",
+    "target": "Target",
+    "suffixMin": "min",
+    "unitLabel": "UNIT (reps, pages, times…)",
+    "stepLabel": "Step «+»"
+  },
+  "notToday": {
+    "header": "NOT TODAY · {count}"
+  },
+  "scheduleEditor": {
+    "daily": "Every day",
+    "weekdays": "By day",
+    "weekly": "N times a week",
+    "interval": "Every N days",
+    "perWeek": "Per week",
+    "intervalLabel": "Interval",
+    "intervalSuffix": "d.",
+    "countFromFirst": "Counting starts from the first completion",
+    "timesWord(plural)": {
+      "one": "time",
+      "other": "times"
+    }
+  },
+  "noteSheet": {
+    "hint": "How did it go? Leave a note...",
+    "updateEntry": "UPDATE JOURNAL ENTRY",
+    "addReflection": "ADD REFLECTION",
+    "mood": "MOOD",
+    "note": "NOTE",
+    "removeNote": "REMOVE NOTE",
+    "cancel": "CANCEL",
+    "update": "UPDATE",
+    "save": "SAVE"
+  },
+  "archive": {
+    "headerPrefix": "HABIT ",
+    "headerSuffix": "ARCHIVE",
+    "completedProtocols": "COMPLETED NEURAL PROTOCOLS",
+    "empty": "ARCHIVE EMPTY",
+    "emptyBody": "Archive completed habits\nto see them here",
+    "restoring": "RESTORING...",
+    "restore": "RESTORE"
+  },
+  "errorState": {
+    "noConnection": "No internet connection",
+    "loadFailed": "Failed to load data"
+  },
+  "routine": {
+    "editMorning": "EDIT MORNING ROUTINE",
+    "editEvening": "EDIT EVENING ROUTINE",
+    "deleteMorning": "DELETE MORNING ROUTINE",
+    "deleteEvening": "DELETE EVENING ROUTINE",
+    "morning": "MORNING ROUTINE",
+    "evening": "EVENING ROUTINE",
+    "startMorning": "START MORNING ROUTINE",
+    "startEvening": "START EVENING ROUTINE",
+    "addHabits": "ADD HABITS",
+    "routineDone": "ROUTINE COMPLETE ✓",
+    "done": "DONE ✓",
+    "doneShort": "DONE",
+    "finishPrevious": "FINISH THE PREVIOUS",
+    "addHabit": "ADD HABIT"
+  },
+  "detail": {
+    "editProtocol": "EDIT PROTOCOL",
+    "archiveProtocol": "ARCHIVE PROTOCOL",
+    "deleteProtocol": "DELETE PROTOCOL",
+    "archiveConfirmTitle": "Archive habit?",
+    "archiveConfirmMessage": "The habit will disappear from the active list. You can restore it from the Archive at any time.",
+    "archiveConfirmLabel": "To archive",
+    "confirmDeletion": "CONFIRM DELETION",
+    "deleteMessage": "Delete \"{title}\"? All log history will be erased.",
+    "cancel": "CANCEL",
+    "delete": "DELETE",
+    "headerPrefix": "HABIT ",
+    "headerSuffix": "DETAIL",
+    "habitSettings": "Habit settings"
+  },
+  "avoidCard": {
+    "daysWithoutSlip": "DAYS WITHOUT SLIP",
+    "record": "RECORD",
+    "slips": "SLIPS",
+    "recordValue": "rec. {record}",
+    "streak": "STREAK",
+    "today": "TODAY",
+    "yes": "YES",
+    "no": "NO",
+    "freezes": "❄️ FREEZES",
+    "total": "TOTAL",
+    "lapsedMessage": "Today there was a slip. It's part of the journey — tomorrow we start over.",
+    "holdingMessage": "Holding on {streak} {daysWord}. Keep up the good work.",
+    "snapSlip": "REMOVE SLIP",
+    "wasSlip": "SLIPPED",
+    "cancelMark": "UNDO",
+    "mark": "MARK",
+    "restDone": "❄️ REST ✓",
+    "rest": "❄️ REST",
+    "noteEdit": "NOTE ✎",
+    "noteAdd": "+ NOTE",
+    "markFirst": "First mark it complete, then add a note",
+    "journal": "JOURNAL",
+    "loadError": "LOADING ERROR",
+    "confirmCancelSlip": "UNDO SLIP?",
+    "confirmMarkSlip": "MARK SLIP?",
+    "cancelSlipMessage": "Today's slip will be removed, the counter will be restored.",
+    "markSlipMessage": "A slip is part of the journey. Your record is {record} {daysWord}. The counter will reset and we continue on.",
+    "cancelBtn": "CANCEL",
+    "snap": "REMOVE",
+    "wasSlipBtn": "SLIPPED",
+    "withoutSlipSuffix": "{daysWord} without a slip",
+    "recordLine": "record: {record} {daysWord}",
+    "slipDone": "SLIP ✓",
+    "slip": "SLIP"
+  },
+  "journal": {
+    "empty": "JOURNAL EMPTY",
+    "emptyBody": "Mark a completion and add\na note via the \"+ NOTE\" button"
+  },
+  "analytics": {
+    "noWeekday": "—",
+    "title": "ANALYTICS",
+    "showWeeks": "← 16 WKS",
+    "showYear": "YEAR →",
+    "collectingData": "Collecting data — statistics will appear in a few days",
+    "days7": "7 days",
+    "days30": "30 days",
+    "record": "Record",
+    "bestDay": "Best day",
+    "worstDay": "Worst day",
+    "trend7d": "7-day trend"
+  },
+  "areaChip": {
+    "none": "—"
+  },
+  "areaSection": {
+    "noArea": "— NO AREA"
+  },
+  "stackCard": {
+    "tapToAdd": "Tap to add habits to the stack",
+    "create": "CREATE STACK"
+  },
+  "edit": "EDIT",
+  "days(plural)": {
+    "one": "{n} day",
+    "other": "{n} days"
+  },
+  "daysWord(plural)": {
+    "one": "day",
+    "other": "days"
+  }
+}
