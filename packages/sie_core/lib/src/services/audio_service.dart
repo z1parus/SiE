@@ -23,6 +23,7 @@ const _cueFadeSteps  = _cueFadeMs ~/ _cueFadeStepMs; // 14
 const _cueMaxVolume       = 0.80;   // 0.60 / 0.75
 const _heartbeatMaxVolume = 0.73;   // 0.55 / 0.75
 const _tickMaxVolume      = 0.29;   // 0.22 / 0.75
+const _humMaxVolume       = 0.09;   // halved from 0.18 — gentler in headphones
 
 class AudioService {
   // ── Ambient — AudioPlayer on all platforms (looping long audio) ─
@@ -366,7 +367,7 @@ class AudioService {
       if (bytes == null) return;
       await _hum.setReleaseMode(ReleaseMode.loop);
       await _hum.play(BytesSource(bytes), volume: 0.0);
-      final target = (0.18 * volumeFactor).clamp(0.0, 1.0);
+      final target = (_humMaxVolume * volumeFactor).clamp(0.0, 1.0);
       var step = 0;
       _humFadeTimer = Timer.periodic(
         const Duration(milliseconds: 80),
@@ -384,7 +385,7 @@ class AudioService {
 
   void fadeHumTo(double volumeFactor, {int durationMs = 1500}) {
     _humFadeTimer?.cancel();
-    final target = (volumeFactor * 0.18).clamp(0.0, 1.0);
+    final target = (volumeFactor * _humMaxVolume).clamp(0.0, 1.0);
     final start  = _humVolume;
     if ((start - target).abs() < 0.001) return;
     final steps = (durationMs / 80).round().clamp(1, 500);
@@ -546,22 +547,24 @@ class AudioService {
     return _buildWav(_applyEcho(raw, delayMs: 25, gain: 0.36, sr: sr), sr: sr);
   }
 
-  // Quiet 58 Hz ambient hum with harmonics and gentle tremolo; smooth loop points
+  // Monolithic 58 Hz ambient drone with harmonics — a seamless, monotone loop.
+  // The base frequencies (58/116/174 Hz) each complete a whole number of cycles
+  // in the 6 s buffer (58×6 = 348, etc.), so the loop point is sample-continuous
+  // in both value and slope: no audible pulsing every 6 s. Deliberately no
+  // per-buffer fade and no tremolo — the steady tone keeps the user focused on
+  // inner sensations during the breath hold. The fade in/out at the actual start
+  // and end of the phase is handled by the player via setVolume (startHum /
+  // stopHum / fadeHumTo).
   static Uint8List _generateAmbientHum({int sr = 44100}) {
     const durationSec = 6.0;
-    final n     = (sr * durationSec).round();
-    final fadeN = (sr * 0.3).round();
+    final n = (sr * durationSec).round();
 
     final samples = List<double>.generate(n, (i) {
-      final t       = i / sr;
-      final tremolo = 1.0 + 0.04 * math.sin(2 * math.pi * 0.07 * t);
-      final wave    = math.sin(2 * math.pi * 58.0  * t)        +
-                      math.sin(2 * math.pi * 116.0 * t) * 0.35 +
-                      math.sin(2 * math.pi * 174.0 * t) * 0.15;
-      double env = 1.0;
-      if (i < fadeN) env = i / fadeN;
-      else if (i >= n - fadeN) env = (n - i) / fadeN;
-      return 0.12 * env * tremolo * wave;
+      final t    = i / sr;
+      final wave = math.sin(2 * math.pi * 58.0  * t)        +
+                   math.sin(2 * math.pi * 116.0 * t) * 0.35 +
+                   math.sin(2 * math.pi * 174.0 * t) * 0.15;
+      return 0.12 * wave;
     });
 
     return _buildWav(samples, sr: sr);

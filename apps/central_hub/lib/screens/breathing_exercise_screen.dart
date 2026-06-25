@@ -574,7 +574,7 @@ class _BreathingExerciseScreenState
     final elapsedMs = DateTime.now().difference(_heartbeatStart!).inMilliseconds;
     if (elapsedMs >= 30000) return;
     final t = (elapsedMs / 30000).clamp(0.0, 1.0);
-    final bpm = 72.0 - 32.0 * t; // 72 BPM → 40 BPM over 30 s
+    final bpm = 60.0 - 25.0 * t; // 60 BPM → 35 BPM over 30 s
     final intervalMs = (60000 / bpm).round();
     _heartbeatTimer = Timer(Duration(milliseconds: intervalMs), _scheduleNextHeartbeat);
   }
