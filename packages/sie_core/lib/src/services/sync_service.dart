@@ -472,6 +472,25 @@ class SyncService {
                 .from('breathing_sessions')
                 .upsert(payload, onConflict: 'id');
             await _db.markBreathingSessionSynced(payload['id'] as String);
+          case 'insert_meditation_session':
+            // Plain row insert (not the XP-awarding RPC): XP/DP reach the
+            // server via the pending-XP flush, so awarding here would double.
+            await client
+                .from('meditation_logs')
+                .upsert(payload, onConflict: 'id');
+            await _db.markMeditationSessionSynced(payload['id'] as String);
+          case 'upsert_meditation_preset':
+            await client
+                .from('meditation_presets')
+                .upsert(payload, onConflict: 'id');
+            await _db.upsertMeditationPreset(LocalMeditationPresetsCompanion(
+                id: Value(payload['id'] as String),
+                synced: const Value(true)));
+          case 'delete_meditation_preset':
+            await client
+                .from('meditation_presets')
+                .delete()
+                .eq('id', payload['id'] as String);
 
           // ── Habit archive / restore ───────────────────────────────────────
           case 'archive_habit':

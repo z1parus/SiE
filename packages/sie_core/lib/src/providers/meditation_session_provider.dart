@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:drift/drift.dart' show Value;
@@ -400,24 +401,27 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
 
     final id = _uuid.v4();
     final now = DateTime.now();
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
 
-    // Save locally first
+    // XP/DP mirror the server RPC's formula (5 XP/min, ~0.5 DP/min) so the
+    // offline award matches what the server would have granted.
+    int xp = (durationSeconds ~/ 60) * 5;
+    int dp = durationSeconds ~/ 120;
+
+    // Save locally first (offline-first source of truth) — with the real
+    // award, not zeros, so the journal/stats and the queued row are accurate.
     await _db.insertMeditationSession(LocalMeditationSessionsCompanion(
       id: Value(id),
       userId: Value(userId),
       presetId: Value(preset?.id),
       durationSeconds: Value(durationSeconds),
       completedAtMs: Value(now.millisecondsSinceEpoch),
-      xpAwarded: const Value(0),
-      dpAwarded: const Value(0),
+      xpAwarded: Value(xp),
+      dpAwarded: Value(dp),
       stateBefore: Value(state.stateBefore),
       stateAfter: Value(stateAfter),
       synced: const Value(false),
     ));
-
-    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
-    int xp = (durationSeconds ~/ 60) * 5;
-    int dp = durationSeconds ~/ 120;
 
     if (isOnline) {
       try {
@@ -436,11 +440,20 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
         }
         await _db.markMeditationSessionSynced(id);
       } catch (e) {
-        debugPrint('MeditationSession: sync error — $e');
+        debugPrint('MeditationSession: sync error, queuing — $e');
+        // Online attempt failed — fall back to the queue so the session still
+        // reaches the server on the next sync instead of being lost.
+        await _enqueueSession(id, userId, preset?.id, durationSeconds,
+            stateAfter, xp, dp, now);
       }
+    } else {
+      // Offline — queue the session row. XP/DP are credited locally below and
+      // flushed to the server via the pending-XP path (same as breathing).
+      await _enqueueSession(id, userId, preset?.id, durationSeconds, stateAfter,
+          xp, dp, now);
     }
 
-    // Apply XP locally
+    // Apply XP locally for immediate UI update regardless of connectivity.
     try {
       ref.read(userProfileProvider.notifier).applyLocalXpDelta(xp, dp);
     } catch (_) {}
@@ -449,6 +462,32 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
       phase: MeditationPhase.complete,
       completionResult: MeditationSessionResult(xpGained: xp, dpGained: dp),
     );
+  }
+
+  /// Queues a finished meditation session for sync. The payload maps directly
+  /// to the `meditation_logs` table columns; replay does a plain insert (XP/DP
+  /// reach the server via the pending-XP flush, not a re-award).
+  Future<void> _enqueueSession(
+    String id,
+    String userId,
+    String? presetId,
+    int durationSeconds,
+    int? stateAfter,
+    int xp,
+    int dp,
+    DateTime completedAt,
+  ) async {
+    await _db.enqueueSyncOp('insert_meditation_session', jsonEncode({
+      'id': id,
+      'user_id': userId,
+      if (presetId != null) 'preset_id': presetId,
+      'duration_seconds': durationSeconds,
+      'xp_awarded': xp,
+      'dp_awarded': dp,
+      if (state.stateBefore != null) 'state_before': state.stateBefore,
+      if (stateAfter != null) 'state_after': stateAfter,
+      'completed_at': completedAt.toUtc().toIso8601String(),
+    }));
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

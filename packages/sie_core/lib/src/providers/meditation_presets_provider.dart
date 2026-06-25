@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -81,23 +82,32 @@ class MeditationPresetsNotifier
   }
 
   Future<MeditationPreset> createPreset(MeditationPreset preset) async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return preset;
+
     final newPreset = preset.copyWith(
       id: _uuid.v4(),
+      userId: preset.userId ?? userId,
       createdAt: DateTime.now(),
       isSystem: false,
     );
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return newPreset;
-
-    await _db.upsertMeditationPreset(_presetToCompanion(newPreset));
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    var synced = false;
     if (isOnline) {
       try {
         await Supabase.instance.client
             .from('meditation_presets')
             .insert(newPreset.toMap());
+        synced = true;
       } catch (_) {}
+    }
+
+    await _db.upsertMeditationPreset(
+        _presetToCompanion(newPreset).copyWith(synced: Value(synced)));
+    if (!synced) {
+      await _db.enqueueSyncOp(
+          'upsert_meditation_preset', jsonEncode(newPreset.toMap()));
     }
 
     final cur = state.valueOrNull ?? const MeditationPresetsState();
@@ -109,17 +119,23 @@ class MeditationPresetsNotifier
   Future<void> updatePreset(MeditationPreset updated) async {
     if (updated.isSystem) return;
 
-    await _db.upsertMeditationPreset(
-        _presetToCompanion(updated).copyWith(synced: const Value(false)));
-
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    var synced = false;
     if (isOnline) {
       try {
         await Supabase.instance.client
             .from('meditation_presets')
             .update(updated.toMap())
             .eq('id', updated.id);
+        synced = true;
       } catch (_) {}
+    }
+
+    await _db.upsertMeditationPreset(
+        _presetToCompanion(updated).copyWith(synced: Value(synced)));
+    if (!synced) {
+      await _db.enqueueSyncOp(
+          'upsert_meditation_preset', jsonEncode(updated.toMap()));
     }
 
     final cur = state.valueOrNull ?? const MeditationPresetsState();
@@ -132,13 +148,21 @@ class MeditationPresetsNotifier
     await _db.deletePresetLocally(id);
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    var synced = false;
     if (isOnline) {
       try {
         await Supabase.instance.client
             .from('meditation_presets')
             .delete()
             .eq('id', id);
+        synced = true;
       } catch (_) {}
+    }
+    // Without a queued delete an offline removal would resurrect on the next
+    // online load (the server row would still exist).
+    if (!synced) {
+      await _db.enqueueSyncOp(
+          'delete_meditation_preset', jsonEncode({'id': id}));
     }
 
     final cur = state.valueOrNull ?? const MeditationPresetsState();
