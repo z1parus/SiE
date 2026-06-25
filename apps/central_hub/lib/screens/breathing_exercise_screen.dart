@@ -610,8 +610,12 @@ class _BreathingExerciseScreenState
     // A full round (active → exhale hold → inhale hold) just finished.
     _roundsCompleted++;
     _audio.stopHum();
+    // Restart (not just fade-up) the ambient track: it was faded to silence for
+    // the retention hold and the looping player can go quiet for good after a
+    // long stretch at zero volume, so a fresh start guarantees music for the
+    // next round.
     if (_settings.ambientEnabled) {
-      _audio.fadeAmbientTo(_settings.ambientVolume);
+      _audio.startAmbient(volumeFactor: _settings.ambientVolume);
     }
     _circleCtrl.value = 1.0;
     setState(() {
@@ -748,6 +752,8 @@ class _BreathingExerciseScreenState
                       totalRounds: _totalRounds,
                       onBack: _handleBackRequest,
                       onInfo: () => setState(() => _showOnboardingManual = true),
+                      onJournal: _openJournal,
+                      onStats: _openStats,
                     ),
                   ),
                   Center(
@@ -1010,21 +1016,6 @@ class _BreathingExerciseScreenState
               const SizedBox(height: 12),
               _SequencesButton(onTap: _openSequences),
             ],
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _PillButton(
-                    icon: Icons.menu_book_outlined,
-                    label: 'ЖУРНАЛ',
-                    onTap: _openJournal),
-                const SizedBox(width: 12),
-                _PillButton(
-                    icon: Icons.insights_outlined,
-                    label: 'СТАТИСТИКА',
-                    onTap: _openStats),
-              ],
-            ),
             const SizedBox(height: 16),
             _SieButton(label: 'INITIATE PROTOCOL', onPressed: _startSession),
           ],
@@ -1492,6 +1483,8 @@ class _TopBar extends ConsumerWidget {
   final int totalRounds;
   final VoidCallback onBack;
   final VoidCallback onInfo;
+  final VoidCallback onJournal;
+  final VoidCallback onStats;
 
   const _TopBar({
     required this.phase,
@@ -1499,6 +1492,8 @@ class _TopBar extends ConsumerWidget {
     required this.totalRounds,
     required this.onBack,
     required this.onInfo,
+    required this.onJournal,
+    required this.onStats,
   });
 
   @override
@@ -1507,6 +1502,7 @@ class _TopBar extends ConsumerWidget {
     final showRound = phase != _Phase.idle &&
         phase != _Phase.countdown &&
         phase != _Phase.complete;
+    final isIdle = phase == _Phase.idle;
 
     Widget circleBtn(IconData icon, VoidCallback onTap, {double alpha = 1.0}) {
       return GestureDetector(
@@ -1538,6 +1534,13 @@ class _TopBar extends ConsumerWidget {
               ),
             ),
           const Spacer(),
+          // Journal & Stats live in the header on the start screen only.
+          if (isIdle) ...[
+            circleBtn(Icons.menu_book_outlined, onJournal, alpha: 0.7),
+            const SizedBox(width: 8),
+            circleBtn(Icons.insights_outlined, onStats, alpha: 0.7),
+            const SizedBox(width: 8),
+          ],
           circleBtn(Icons.help_outline, onInfo, alpha: 0.7),
         ],
       ),
@@ -1612,43 +1615,6 @@ class _SequencesButton extends ConsumerWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Compact icon+label pill used for the secondary idle-screen actions
-/// (Journal, Stats) shown side by side.
-class _PillButton extends ConsumerWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  const _PillButton(
-      {required this.icon, required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c = ref.watch(sieColorsProvider);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: c.flatCard(radius: 16),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 18, color: c.textSecondary),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: c.textSecondary,
-                fontSize: 11,
-                letterSpacing: 1.3,
-              ),
-            ),
-          ],
         ),
       ),
     );

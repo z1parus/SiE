@@ -88,7 +88,7 @@ class _BreathingReflectionScreenState
             child: Stack(
               children: [
                 SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 168),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
