@@ -2,10 +2,16 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseService {
+  /// The project URL passed to [initialize]. Exposed so lightweight reachability
+  /// probes (see ConnectivityService) can ping the backend the app actually
+  /// depends on, rather than some unrelated third-party host.
+  static String? supabaseUrl;
+
   static Future<void> initialize({
     required String url,
     required String anonKey,
   }) async {
+    supabaseUrl = url;
     await Supabase.initialize(url: url, anonKey: anonKey);
     await _checkConnection();
   }
