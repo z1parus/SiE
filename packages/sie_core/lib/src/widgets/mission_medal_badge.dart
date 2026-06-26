@@ -49,6 +49,7 @@ class MissionMedalBadge extends StatelessWidget {
     this.size = 72,
     this.onTap,
     this.count,
+    this.showLabel = true,
   });
 
   final MissionMedal medal;
@@ -56,6 +57,10 @@ class MissionMedalBadge extends StatelessWidget {
   final VoidCallback? onTap;
   /// When > 1, shows a count badge on the bottom-right of the circle.
   final int? count;
+  /// The medal name caption under the circle, clamped to the badge width with
+  /// 2-line ellipsis. Disable in detail views that render the full name
+  /// separately so it isn't truncated.
+  final bool showLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -125,22 +130,24 @@ class MissionMedalBadge extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 5),
-          SizedBox(
-            width: size,
-            child: Text(
-              medal.name,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: levelColor,
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.3,
+          if (showLabel) ...[
+            const SizedBox(height: 5),
+            SizedBox(
+              width: size,
+              child: Text(
+                medal.name,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: levelColor,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
+                ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );

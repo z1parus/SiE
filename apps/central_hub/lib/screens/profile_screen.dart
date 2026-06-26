@@ -873,8 +873,17 @@ class _MedalDetailSheet extends StatelessWidget {
                 color: c.border, borderRadius: BorderRadius.circular(2)),
           ),
           const SizedBox(height: 20),
-          MissionMedalBadge(medal: medal, size: 80),
-          const SizedBox(height: 16),
+          MissionMedalBadge(medal: medal, size: 80, showLabel: false),
+          const SizedBox(height: 14),
+          Text(
+            medal.name,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 17,
+                fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
