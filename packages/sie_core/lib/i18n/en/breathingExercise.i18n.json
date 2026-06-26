@@ -76,6 +76,7 @@
     "heartbeat": "HEARTBEAT",
     "clockTicks": "CLOCK TICKS",
     "volumeBreathing": "BREATHING",
+    "volumeHum": "HUM (HOLD)",
     "presetEmpty": "EMPTY",
     "presetLabel": "{rounds}r · {cycles}c · {retention}s",
     "load": "LOAD",

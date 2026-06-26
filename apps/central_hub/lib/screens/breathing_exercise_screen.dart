@@ -37,6 +37,8 @@ class BreathingSettings {
   final double breathingVolume;
   final double heartbeatVolume;
   final double tickVolume;
+  /// Volume of the low hum played during the breath-hold (retention) phases.
+  final double humVolume;
 
   const BreathingSettings({
     this.rounds = 3,
@@ -53,6 +55,7 @@ class BreathingSettings {
     this.breathingVolume = 0.75,
     this.heartbeatVolume = 0.75,
     this.tickVolume = 0.75,
+    this.humVolume = 0.75,
   });
 
   BreathingSettings copyWith({
@@ -70,6 +73,7 @@ class BreathingSettings {
     double? breathingVolume,
     double? heartbeatVolume,
     double? tickVolume,
+    double? humVolume,
   }) =>
       BreathingSettings(
         rounds: rounds ?? this.rounds,
@@ -87,6 +91,7 @@ class BreathingSettings {
         breathingVolume: breathingVolume ?? this.breathingVolume,
         heartbeatVolume: heartbeatVolume ?? this.heartbeatVolume,
         tickVolume: tickVolume ?? this.tickVolume,
+        humVolume: humVolume ?? this.humVolume,
       );
 
   Map<String, dynamic> toJson() => {
@@ -104,6 +109,7 @@ class BreathingSettings {
         'breathingVolume': breathingVolume,
         'heartbeatVolume': heartbeatVolume,
         'tickVolume': tickVolume,
+        'humVolume': humVolume,
       };
 
   factory BreathingSettings.fromJson(Map<String, dynamic> json) =>
@@ -122,6 +128,7 @@ class BreathingSettings {
         breathingVolume: ((json['breathingVolume'] as num?)?.toDouble() ?? 0.75).clamp(0.0, 1.0),
         heartbeatVolume: ((json['heartbeatVolume'] as num?)?.toDouble() ?? 0.75).clamp(0.0, 1.0),
         tickVolume: ((json['tickVolume'] as num?)?.toDouble() ?? 0.75).clamp(0.0, 1.0),
+        humVolume: ((json['humVolume'] as num?)?.toDouble() ?? 0.75).clamp(0.0, 1.0),
       );
 }
 
@@ -499,9 +506,10 @@ class _BreathingExerciseScreenState
     });
     _pulseCtrl.repeat(reverse: true);
     _breathColorCtrl.animateTo(1.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
-    // Music has already faded out during the exhale pause — just bring in the hum.
-    if (_settings.ambientEnabled) {
-      _audio.startHum(volumeFactor: _settings.ambientVolume);
+    // Music has already faded out during the exhale pause — just bring in the
+    // hum. Gated on its own volume so it's controllable independently of music.
+    if (_settings.humVolume > 0) {
+      _audio.startHum(volumeFactor: _settings.humVolume);
     }
     if (_cur.exhaustRetentionSecs <= 30) _startHeartbeatSequence();
     _retentionTimer = Timer.periodic(const Duration(seconds: 1), (t) {
@@ -1876,6 +1884,11 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 label: t.breathingExercise.settings.ambientMusic,
                 value: _s.ambientVolume,
                 onChanged: (v) => _update(_s.copyWith(ambientVolume: v)),
+              ),
+              _VolumeRow(
+                label: t.breathingExercise.settings.volumeHum,
+                value: _s.humVolume,
+                onChanged: (v) => _update(_s.copyWith(humVolume: v)),
               ),
               _VolumeRow(
                 label: t.breathingExercise.settings.volumeBreathing,

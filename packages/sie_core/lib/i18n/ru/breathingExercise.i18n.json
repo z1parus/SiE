@@ -76,6 +76,7 @@
     "heartbeat": "СЕРДЦЕБИЕНИЕ",
     "clockTicks": "ТИКАНЬЕ ЧАСОВ",
     "volumeBreathing": "ДЫХАНИЕ",
+    "volumeHum": "ГУЛ (ЗАДЕРЖКА)",
     "presetEmpty": "ПУСТО",
     "presetLabel": "{rounds}р · {cycles}ц · {retention}с",
     "load": "ЗАГРУЗИТЬ",
