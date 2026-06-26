@@ -17,6 +17,8 @@ import 'session_orb_painters.dart';
 import 'profile_screen.dart';
 import 'public_profile_screen.dart';
 import 'user_search_screen.dart';
+import '../widgets/defrag_preview.dart';
+import '../widgets/focus_orbit_timer.dart';
 
 const _kOrange = Color(0xFFFF8C42);
 const _kBranchOrderKey = 'branch_order';
@@ -714,7 +716,7 @@ class _BranchCarouselCard extends ConsumerWidget {
       'habit_archive'       => const _HabitMatrixPreview(),
       'focus_protocol'      => const _FocusRingPreview(),
       'planning'            => const _PlanningPreview(),
-      'meditation'          => const _MeditationPreview(),
+      'meditation'          => const _DefragPreview(),
       _                     => const SizedBox.shrink(),
     };
   }
@@ -851,7 +853,7 @@ class _BreathSpherePreviewState extends ConsumerState<_BreathSpherePreview>
   late final Animation<double> _pulse;
   FragmentShader? _shader;
 
-  static const _size = 130.0;
+  static const _size = 144.0;
   static const _lightAngle = -math.pi / 4;
 
   @override
@@ -912,7 +914,7 @@ class _BreathSpherePreviewState extends ConsumerState<_BreathSpherePreview>
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFC8A84B).withValues(
+                        color: c.accent.withValues(
                             alpha: c.isLightMode ? 0.07 : 0.13),
                         blurRadius: c.isLightMode ? 18 : 22,
                       ),
@@ -992,11 +994,11 @@ class _PreviewShaderPainter extends CustomPainter {
       time != old.time || sphereSize != old.sphereSize || isDark != old.isDark;
 }
 
-/// Consistency heatmap preview: a GitHub-style contribution grid (7 weekday rows
-/// × 6 week columns, bottom-right = today) where each cell's gold intensity is
-/// that day's habit-completion ratio (done / scheduled), with a flame badge for
-/// the current best streak. Cells cascade in on appear, a faint shimmer sweeps
-/// the grid, and today's cell gently pulses.
+/// Glassmorphic "task complete" crystal preview for the habit module: layered
+/// frosted glass discs, a rotating orbital arrow (sync motif), a faceted
+/// translucent crystal with a glowing mint-green core, a bold white checkmark
+/// and three floating progress pills. Purely decorative; orbit + gentle float
+/// animate, and freeze under reduce-motion.
 class _HabitMatrixPreview extends ConsumerStatefulWidget {
   const _HabitMatrixPreview();
 
@@ -1006,287 +1008,346 @@ class _HabitMatrixPreview extends ConsumerStatefulWidget {
 }
 
 class _HabitMatrixPreviewState extends ConsumerState<_HabitMatrixPreview>
-    with TickerProviderStateMixin {
-  static const _rows = 7; // weekdays Mon..Sun
-  static const _cols = 6; // 6 weeks
-
-  late final AnimationController _intro; // one-shot cascade
-  late final AnimationController _loop;  // shimmer + today pulse
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
 
   @override
   void initState() {
     super.initState();
-    _intro = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1100),
-    );
-    _loop = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 6),
-    );
+    _ctrl =
+        AnimationController(vsync: this, duration: const Duration(seconds: 8));
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (SieMotion.enabled(context)) {
-      if (_intro.status == AnimationStatus.dismissed) _intro.forward();
-      if (!_loop.isAnimating) _loop.repeat();
+      if (!_ctrl.isAnimating) _ctrl.repeat();
     } else {
-      _intro.value = 1;
-      _loop.stop();
+      _ctrl.stop();
     }
   }
 
   @override
   void dispose() {
-    _intro.dispose();
-    _loop.dispose();
+    _ctrl.dispose();
     super.dispose();
-  }
-
-  /// Builds the [_rows]×[_cols] intensity grid (0..1), the today cell position
-  /// and the best current streak from live habit data.
-  ({List<double> cells, int todayRow, int todayCol, int streak}) _model(
-    HabitsState? s,
-  ) {
-    final cells = List<double>.filled(_rows * _cols, -1); // -1 = future/none
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final todayRow = today.weekday - 1; // Mon=0 .. Sun=6
-
-    String fmt(DateTime d) =>
-        '${d.year}-${d.month.toString().padLeft(2, '0')}-'
-        '${d.day.toString().padLeft(2, '0')}';
-
-    if (s != null && s.habits.isNotEmpty) {
-      for (var col = 0; col < _cols; col++) {
-        for (var row = 0; row < _rows; row++) {
-          final offset = (_cols - 1 - col) * 7 + (todayRow - row);
-          if (offset < 0) continue; // future cell — leave as -1
-          final d = today.subtract(Duration(days: offset));
-          final key = fmt(d);
-          var done = 0;
-          for (final h in s.habits) {
-            if (s.logDates[h.id]?.contains(key) ?? false) done++;
-          }
-          final scheduled = s.dueOn(d).length;
-          final intensity = scheduled > 0
-              ? (done / scheduled).clamp(0.0, 1.0)
-              : (done > 0 ? 1.0 : 0.0);
-          cells[row * _cols + col] = intensity;
-        }
-      }
-    } else {
-      // No habits — render an empty (but valid) past grid.
-      for (var col = 0; col < _cols; col++) {
-        for (var row = 0; row < _rows; row++) {
-          final offset = (_cols - 1 - col) * 7 + (todayRow - row);
-          if (offset >= 0) cells[row * _cols + col] = 0.0;
-        }
-      }
-    }
-
-    final streak = (s == null || s.streaks.isEmpty)
-        ? 0
-        : s.streaks.values.reduce(math.max);
-    return (cells: cells, todayRow: todayRow, todayCol: _cols - 1, streak: streak);
   }
 
   @override
   Widget build(BuildContext context) {
     final c = ref.watch(sieColorsProvider);
-    final s = ref.watch(habitsProvider).valueOrNull;
-    final m = _model(s);
-
+    final motion = SieMotion.enabled(context);
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: AnimatedBuilder(
-                animation: Listenable.merge([_intro, _loop]),
-                builder: (_, _) => CustomPaint(
-                  painter: _HabitHeatmapPainter(
-                    cells: m.cells,
-                    rows: _rows,
-                    cols: _cols,
-                    todayRow: m.todayRow,
-                    todayCol: m.todayCol,
-                    intro: _intro.value,
-                    loop: _loop.value,
-                    accent: c.accent,
-                    track: c.border,
-                  ),
-                ),
-              ),
+      child: SizedBox(
+        width: 150,
+        height: 150,
+        child: AnimatedBuilder(
+          animation: _ctrl,
+          builder: (_, _) => CustomPaint(
+            size: const Size(150, 150),
+            painter: _HabitCrystalPainter(
+              t: _ctrl.value,
+              motion: motion,
+              isLight: c.isLightMode,
+              gold: c.accent,
+              gold2: c.accentSecondary,
+              glass: c.glass,
             ),
-            if (m.streak > 0)
-              Positioned(
-                top: -6,
-                right: -8,
-                child: _FlameBadge(streak: m.streak, loop: _loop, c: c),
-              ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _FlameBadge extends StatelessWidget {
-  const _FlameBadge({required this.streak, required this.loop, required this.c});
+class _HabitCrystalPainter extends CustomPainter {
+  final double t;
+  final bool motion;
+  final bool isLight;
+  final Color gold;
+  final Color gold2;
+  final Color glass;
 
-  final int streak;
-  final Animation<double> loop;
-  final SieColors c;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: loop,
-      builder: (_, _) {
-        // Subtle flicker on the flame glyph.
-        final flick = 0.85 + 0.15 * math.sin(loop.value * 2 * math.pi * 3);
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-          decoration: BoxDecoration(
-            color: c.accent.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: c.accent.withValues(alpha: 0.40)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Opacity(
-                opacity: flick.clamp(0.0, 1.0),
-                child: Text('🔥', style: const TextStyle(fontSize: 11)),
-              ),
-              const SizedBox(width: 3),
-              Text(
-                '$streak',
-                style: TextStyle(
-                  color: c.accent,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _HabitHeatmapPainter extends CustomPainter {
-  final List<double> cells;
-  final int rows;
-  final int cols;
-  final int todayRow;
-  final int todayCol;
-  final double intro;
-  final double loop;
-  final Color accent;
-  final Color track;
-
-  const _HabitHeatmapPainter({
-    required this.cells,
-    required this.rows,
-    required this.cols,
-    required this.todayRow,
-    required this.todayCol,
-    required this.intro,
-    required this.loop,
-    required this.accent,
-    required this.track,
+  const _HabitCrystalPainter({
+    required this.t,
+    required this.motion,
+    required this.isLight,
+    required this.gold,
+    required this.gold2,
+    required this.glass,
   });
 
-  // Discrete heatmap levels → alpha.
-  static double _alphaFor(double intensity) {
-    if (intensity <= 0) return 0.0;
-    if (intensity < 0.34) return 0.35;
-    if (intensity < 0.67) return 0.55;
-    if (intensity < 1.0) return 0.78;
-    return 1.0;
+  static Offset _dir(double a) => Offset(math.cos(a), math.sin(a));
+
+  Path _poly(Offset c, double r, int n, double rot) {
+    final p = Path();
+    for (var k = 0; k < n; k++) {
+      final o = c + _dir(rot + k * 2 * math.pi / n) * r;
+      k == 0 ? p.moveTo(o.dx, o.dy) : p.lineTo(o.dx, o.dy);
+    }
+    return p..close();
   }
+
+  List<Offset> _verts(Offset c, double r, int n, double rot) =>
+      [for (var k = 0; k < n; k++) c + _dir(rot + k * 2 * math.pi / n) * r];
 
   @override
   void paint(Canvas canvas, Size size) {
-    const gap = 4.0;
-    final cellW = (size.width - gap * (cols - 1)) / cols;
-    final cellH = (size.height - gap * (rows - 1)) / rows;
-    final cell = math.min(cellW, cellH);
-    // Centre the grid within the available box.
-    final gridW = cell * cols + gap * (cols - 1);
-    final gridH = cell * rows + gap * (rows - 1);
-    final ox = (size.width - gridW) / 2;
-    final oy = (size.height - gridH) / 2;
-    final radius = Radius.circular(cell * 0.28);
-    final maxDiag = (rows - 1) + (cols - 1);
+    final center = size.center(Offset.zero);
+    final r = math.min(size.width, size.height) / 2;
+    final a = motion ? t * 2 * math.pi : 0.0;
+    final dy = motion ? math.sin(t * 2 * math.pi) * 2.0 : 0.0;
 
-    for (var row = 0; row < rows; row++) {
-      for (var col = 0; col < cols; col++) {
-        final v = cells[row * cols + col];
-        if (v < 0) continue; // future cell
+    // Theme-aware glass (token): white highlights on dark; a cool slate on light
+    // so the crystal stays visible against a light card.
+    final coreLight = Color.lerp(gold2, Colors.white, 0.55)!;
+    final coreDeep = Color.lerp(gold, Colors.black, 0.32)!;
 
-        // Cascade appearance: diagonal wave past → today.
-        final delay = ((row + col) / maxDiag) * 0.65;
-        final appear = ((intro - delay) / 0.35).clamp(0.0, 1.0);
-        if (appear <= 0) continue;
+    // ── 1. Frosted glass discs (depth) ──────────────────────────────────────
+    void disc(double rad, double fill, double stroke) {
+      canvas.drawCircle(
+          center, rad, Paint()..color = glass.withValues(alpha: fill));
+      canvas.drawCircle(
+        center,
+        rad,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2
+          ..color = glass.withValues(alpha: stroke),
+      );
+    }
 
-        final left = ox + col * (cell + gap);
-        final top = oy + row * (cell + gap);
-        final scale = 0.6 + 0.4 * appear;
-        final inset = cell * (1 - scale) / 2;
-        final rect = RRect.fromRectAndRadius(
-          Rect.fromLTWH(left + inset, top + inset, cell * scale, cell * scale),
-          radius,
-        );
+    disc(r * 0.96, isLight ? 0.10 : 0.05, isLight ? 0.22 : 0.10);
+    disc(r * 0.80, isLight ? 0.13 : 0.07, isLight ? 0.26 : 0.13);
+    // Soft plate glow behind the crystal.
+    canvas.drawCircle(
+      center,
+      r * 0.60,
+      Paint()
+        ..color = glass.withValues(alpha: isLight ? 0.12 : 0.09)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+    );
 
-        var alpha = _alphaFor(v);
+    // ── 2. Orbital arrows (sync motif), rotating ────────────────────────────
+    _orbital(canvas, center, r * 0.92, -0.6 + a, 2.2,
+        glass.withValues(alpha: isLight ? 0.55 : 0.65), r);
+    _dottedArc(canvas, center, r * 0.92, math.pi - 0.2 + a, 1.9,
+        glass.withValues(alpha: isLight ? 0.45 : 0.5));
 
-        // Faint diagonal shimmer sweeping across the grid.
-        final diag = (row + col) / maxDiag;
-        final band = 1 - (((diag - loop) % 1.0).abs() * 3).clamp(0.0, 1.0);
-        final shimmer = band * 0.12;
+    // ── group with gentle float ─────────────────────────────────────────────
+    final cc = center.translate(0, dy);
 
-        // Today cell breathes.
-        final isToday = row == todayRow && col == todayCol;
-        final pulse =
-            isToday ? 0.18 * (0.5 + 0.5 * math.sin(loop * 2 * math.pi)) : 0.0;
+    // ── 3. Faceted crystal ──────────────────────────────────────────────────
+    _crystal(canvas, cc, r * 0.52, glass);
 
-        final paint = Paint();
-        if (alpha <= 0) {
-          paint.color = track.withValues(alpha: (0.45 + shimmer) * appear);
-        } else {
-          alpha = (alpha + shimmer + pulse).clamp(0.0, 1.0);
-          paint.color = accent.withValues(alpha: alpha * appear);
-        }
-        canvas.drawRRect(rect, paint);
+    // ── 4. Gold core (glow + body) ──────────────────────────────────────────
+    final rc = r * 0.30;
+    final corePath = _poly(cc, rc, 6, -math.pi / 2);
+    canvas.drawPath(
+      corePath,
+      Paint()
+        ..color = gold.withValues(alpha: 0.55)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+    );
+    canvas.drawPath(
+      corePath,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(-0.2, -0.4),
+          radius: 0.95,
+          colors: [coreLight, gold, coreDeep],
+          stops: const [0.0, 0.55, 1.0],
+        ).createShader(Rect.fromCircle(center: cc, radius: rc)),
+    );
+    // Glossy top highlight on the core.
+    canvas.drawPath(
+      corePath,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2
+        ..color = Colors.white.withValues(alpha: 0.45),
+    );
 
-        if (isToday) {
-          canvas.drawRRect(
-            rect,
-            Paint()
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 1.2
-              ..color = accent.withValues(alpha: 0.85 * appear),
-          );
-        }
+    // ── 5. Checkmark ────────────────────────────────────────────────────────
+    final check = Path()
+      ..moveTo(cc.dx - rc * 0.42, cc.dy + rc * 0.02)
+      ..lineTo(cc.dx - rc * 0.08, cc.dy + rc * 0.34)
+      ..lineTo(cc.dx + rc * 0.46, cc.dy - rc * 0.32);
+    canvas.drawPath(
+      check.shift(Offset(0, rc * 0.06)),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = rc * 0.22
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..color = coreDeep.withValues(alpha: 0.5),
+    );
+    canvas.drawPath(
+      check,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = rc * 0.20
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..color = Colors.white,
+    );
+
+    // ── 6. Floating progress pills (gold "COMMANDER" gradient), appearing one
+    //       after another from top to bottom in a loop. ──────────────────────
+    final pillPhase = motion ? (t * 2) % 1.0 : 1.0;
+    for (var i = 0; i < 3; i++) {
+      double vis, pop;
+      if (!motion) {
+        vis = 1;
+        pop = 1;
+      } else {
+        final start = 0.06 + i * 0.20;
+        pop = ((pillPhase - start) / 0.14).clamp(0.0, 1.0);
+        final out = 1 - ((pillPhase - 0.84) / 0.12).clamp(0.0, 1.0);
+        vis = pop * out;
       }
+      if (vis <= 0.02) continue;
+
+      final ph = r * 0.05;
+      final pw = r * 0.20 * (0.55 + 0.45 * pop);
+      final px = cc.dx + r * 0.14 + i * r * 0.04;
+      final py = cc.dy + r * 0.30 + i * (ph + r * 0.035);
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(px, py, pw, ph),
+        Radius.circular(ph),
+      );
+      canvas.drawRRect(
+        rect,
+        Paint()
+          ..shader = LinearGradient(
+            colors: [
+              gold.withValues(alpha: vis),
+              gold2.withValues(alpha: vis),
+            ],
+          ).createShader(rect.outerRect),
+      );
     }
   }
 
+  void _orbital(Canvas canvas, Offset c, double rad, double start, double sweep,
+      Color color, double r) {
+    final rect = Rect.fromCircle(center: c, radius: rad);
+    canvas.drawArc(
+      rect,
+      start,
+      sweep,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.2
+        ..strokeCap = StrokeCap.round
+        ..color = color,
+    );
+    // Arrowhead at the end, pointing along travel.
+    final endA = start + sweep;
+    final tip = c + _dir(endA) * rad;
+    final travel = Offset(-math.sin(endA), math.cos(endA)); // tangent (CW)
+    final s = r * 0.07;
+    Offset wing(double da) => Offset(
+          -travel.dx * math.cos(da) + travel.dy * math.sin(da),
+          -travel.dx * math.sin(da) - travel.dy * math.cos(da),
+        );
+    final p = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round
+      ..color = color;
+    canvas.drawLine(tip, tip + wing(0.5) * s, p);
+    canvas.drawLine(tip, tip + wing(-0.5) * s, p);
+  }
+
+  void _dottedArc(
+      Canvas canvas, Offset c, double rad, double start, double sweep, Color color) {
+    const n = 16;
+    final p = Paint()..color = color;
+    for (var i = 0; i <= n; i++) {
+      final ang = start + sweep * i / n;
+      canvas.drawCircle(c + _dir(ang) * rad, 1.4, p);
+    }
+  }
+
+  void _crystal(Canvas canvas, Offset cc, double r, Color glass) {
+    const rot = -math.pi / 2;
+    final outer = _verts(cc, r, 8, rot);
+    final inner = _verts(cc, r * 0.46, 8, rot);
+    final bounds = Rect.fromCircle(center: cc, radius: r);
+    final lightDir = _dir(-math.pi / 2 - 0.5);
+
+    // Base body fill.
+    canvas.drawPath(
+      _poly(cc, r, 8, rot),
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            glass.withValues(alpha: 0.22),
+            glass.withValues(alpha: 0.06),
+          ],
+        ).createShader(bounds),
+    );
+
+    // Side facets with directional shading.
+    for (var k = 0; k < 8; k++) {
+      final k2 = (k + 1) % 8;
+      final mid = (outer[k] + outer[k2]) / 2;
+      final normal = (mid - cc);
+      final nl = normal.distance;
+      final nrm = nl == 0 ? Offset.zero : normal / nl;
+      final lf = ((nrm.dx * lightDir.dx + nrm.dy * lightDir.dy) + 1) / 2;
+      final facet = Path()
+        ..moveTo(outer[k].dx, outer[k].dy)
+        ..lineTo(outer[k2].dx, outer[k2].dy)
+        ..lineTo(inner[k2].dx, inner[k2].dy)
+        ..lineTo(inner[k].dx, inner[k].dy)
+        ..close();
+      canvas.drawPath(
+        facet,
+        Paint()..color = glass.withValues(alpha: 0.05 + 0.17 * lf),
+      );
+    }
+
+    // Ridges from inner table to outer vertices.
+    final ridge = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = glass.withValues(alpha: 0.18);
+    for (var k = 0; k < 8; k++) {
+      canvas.drawLine(inner[k], outer[k], ridge);
+    }
+
+    // Bright outer edges.
+    canvas.drawPath(
+      _poly(cc, r, 8, rot),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4
+        ..strokeJoin = StrokeJoin.round
+        ..color = glass.withValues(alpha: 0.55),
+    );
+    // Extra highlight on the top-left edges.
+    final hl = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round
+      ..color = glass.withValues(alpha: 0.85);
+    canvas.drawLine(outer[5], outer[6], hl);
+    canvas.drawLine(outer[6], outer[7], hl);
+  }
+
   @override
-  bool shouldRepaint(_HabitHeatmapPainter old) =>
-      old.intro != intro ||
-      old.loop != loop ||
-      old.cells != cells ||
-      old.accent != accent ||
-      old.track != track;
+  bool shouldRepaint(_HabitCrystalPainter old) =>
+      old.t != t ||
+      old.motion != motion ||
+      old.isLight != isLight ||
+      old.gold != gold ||
+      old.gold2 != gold2;
 }
 
 /// Live focus-timer preview. Reflects the real [focusTimerProvider] state:
@@ -1294,296 +1355,49 @@ class _HabitHeatmapPainter extends CustomPainter {
 /// active session shows live MM:SS, a progress arc with a glowing leading tip,
 /// a phase colour (gold = work, cool = break) and a minute ripple. A row of
 /// dots underneath tracks today's completed pomodoros (target 4).
-class _FocusRingPreview extends ConsumerStatefulWidget {
+class _FocusRingPreview extends ConsumerWidget {
   const _FocusRingPreview();
 
   @override
-  ConsumerState<_FocusRingPreview> createState() => _FocusRingPreviewState();
-}
-
-class _FocusRingPreviewState extends ConsumerState<_FocusRingPreview>
-    with SingleTickerProviderStateMixin {
-  static const _ring = 116.0;
-  static const _sessionTarget = 4;
-
-  late final AnimationController _loop;
-
-  @override
-  void initState() {
-    super.initState();
-    _loop = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 4500),
-    );
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (SieMotion.enabled(context)) {
-      if (!_loop.isAnimating) _loop.repeat();
-    } else {
-      _loop.stop();
-    }
-  }
-
-  @override
-  void dispose() {
-    _loop.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
     final s = ref.watch(focusTimerProvider);
-    final doneToday = ref
-            .watch(bootcampDailyActivityProvider)
-            .valueOrNull
-            ?.focusSessionsToday ??
-        0;
     final motion = SieMotion.enabled(context);
 
     final idle = s.phase == FocusPhase.idle;
     final isBreak = s.phase == FocusPhase.breakTime;
-    final timeText = idle ? '${s.settings.workMinutes}:00' : s.formattedTime;
-    final label = idle ? 'READY' : (isBreak ? 'BREAK' : 'WORK');
-    final progress = idle ? 0.0 : s.progress;
-    final phase = isBreak ? c.focusBreak : c.accent;
-    final phase2 = isBreak ? c.focusBreak : c.accentSecondary;
+    final timeText = idle ? '${s.settings.workMinutes}' : s.formattedTime;
+    final gold = isBreak ? c.focusBreak : c.accent;
+    final gold2 = isBreak ? c.focusBreak : c.accentSecondary;
+    final glass = c.glass;
 
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: _ring,
-            height: _ring,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                AnimatedBuilder(
-                  animation: _loop,
-                  builder: (_, _) {
-                    final breathe = motion
-                        ? 0.97 + 0.03 * (0.5 + 0.5 * math.sin(_loop.value * 2 * math.pi))
-                        : 1.0;
-                    return Transform.scale(
-                      scale: breathe,
-                      child: CustomPaint(
-                        size: const Size(_ring, _ring),
-                        painter: _FocusRingPainter(
-                          progress: progress,
-                          loop: _loop.value,
-                          idle: idle,
-                          motion: motion,
-                          track: c.border,
-                          phase: phase,
-                          phase2: phase2,
-                          glow: !c.isLightMode,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      timeText,
-                      style: TextStyle(
-                        color: c.textPrimary,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 2,
-                        height: 1,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      label,
-                      style: TextStyle(
-                        color: idle ? c.iconMuted : phase,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 2.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          _SessionDots(
-            done: doneToday,
-            target: _sessionTarget,
-            color: phase,
-            track: c.border,
-            loop: _loop,
-            motion: motion,
-          ),
-        ],
+      child: FocusOrbitTimer(
+        size: 150,
+        timeText: timeText,
+        subLabel: 'Min',
+        motion: motion,
+        gold: gold,
+        gold2: gold2,
+        glass: glass,
+        textColor: c.textPrimary,
+        subLabelColor: c.textSecondary,
+        isLight: c.isLightMode,
+        centerFontSize: 30,
+        glow: !c.isLightMode,
       ),
     );
   }
 }
 
-class _SessionDots extends StatelessWidget {
-  const _SessionDots({
-    required this.done,
-    required this.target,
-    required this.color,
-    required this.track,
-    required this.loop,
-    required this.motion,
-  });
-
-  final int done;
-  final int target;
-  final Color color;
-  final Color track;
-  final Animation<double> loop;
-  final bool motion;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: loop,
-      builder: (_, _) {
-        final pulse = motion ? 0.4 + 0.6 * (0.5 + 0.5 * math.sin(loop.value * 2 * math.pi)) : 1.0;
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(target, (i) {
-            final filled = i < done;
-            final isNext = i == done && done < target;
-            final dotColor = filled
-                ? color
-                : isNext
-                    ? color.withValues(alpha: 0.25 + 0.45 * pulse)
-                    : track;
-            return Container(
-              width: 6,
-              height: 6,
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              decoration: BoxDecoration(shape: BoxShape.circle, color: dotColor),
-            );
-          }),
-        );
-      },
-    );
-  }
-}
-
-class _FocusRingPainter extends CustomPainter {
-  final double progress;
-  final double loop;
-  final bool idle;
-  final bool motion;
-  final Color track;
-  final Color phase;
-  final Color phase2;
-  final bool glow;
-
-  const _FocusRingPainter({
-    required this.progress,
-    required this.loop,
-    required this.idle,
-    required this.motion,
-    required this.track,
-    required this.phase,
-    required this.phase2,
-    required this.glow,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final radius = size.width / 2 - 9;
-    final bounds = Rect.fromCircle(center: center, radius: radius);
-
-    // Track.
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..color = track.withValues(alpha: idle ? 0.5 : 0.35)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 7,
-    );
-
-    // Running minute ripple — expanding ring fading out.
-    if (!idle && motion) {
-      final rr = radius * (0.62 + 0.5 * loop);
-      canvas.drawCircle(
-        center,
-        rr,
-        Paint()
-          ..color = phase.withValues(alpha: (1 - loop) * 0.22)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.4,
-      );
-    }
-
-    // Progress arc + glowing leading tip.
-    if (progress > 0) {
-      final sweep = 2 * math.pi * progress.clamp(0.0, 1.0);
-      canvas.drawArc(
-        bounds,
-        -math.pi / 2,
-        sweep,
-        false,
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [phase2, phase],
-          ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 7
-          ..strokeCap = StrokeCap.round,
-      );
-
-      final tipAngle = -math.pi / 2 + sweep;
-      final tip = center +
-          Offset(math.cos(tipAngle), math.sin(tipAngle)) * radius;
-      final pulseR = 4 + (motion ? 1.6 * (0.5 + 0.5 * math.sin(loop * 2 * math.pi)) : 0.0);
-      final tipPaint = Paint()..color = phase;
-      if (glow) {
-        tipPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-      }
-      canvas.drawCircle(tip, pulseR, tipPaint);
-    }
-
-    // Idle standby — a single glowing tick sweeping the track like radar.
-    if (idle && motion) {
-      final ang = -math.pi / 2 + loop * 2 * math.pi;
-      final p = center + Offset(math.cos(ang), math.sin(ang)) * radius;
-      final tickPaint = Paint()..color = phase.withValues(alpha: 0.9);
-      if (glow) {
-        tickPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-      }
-      canvas.drawCircle(p, 3.5, tickPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_FocusRingPainter old) =>
-      old.progress != progress ||
-      old.loop != loop ||
-      old.idle != idle ||
-      old.motion != motion ||
-      old.track != track ||
-      old.phase != phase ||
-      old.phase2 != phase2 ||
-      old.glow != glow;
-}
-
-/// Mission-progress preview: one rotating ring per active goal. Each ring's
-/// arc length encodes that goal's real progress and its colour is the goal's
-/// own colour. The rings spin clockwise "like clock hands" but at staggered
-/// speeds (2 / 3 / 5 turns per loop) so they never move in sync. The centre
-/// shows the average progress across the displayed missions.
+/// Mission constellation preview for the planning module: a tactical orbit
+/// map. Each active goal is a glowing node on its own orbit ring, positioned
+/// around the ring by that goal's real progress; a bright arc traces the
+/// progress from the start to the node, and a faint spoke links the gold
+/// command core to every node. An outer dotted radar ring frames the field,
+/// frosted-glass discs add depth, and the whole constellation drifts slowly
+/// (decorative only — frozen under reduce-motion). The centre reads the
+/// average progress across the displayed missions.
 class _PlanningPreview extends ConsumerStatefulWidget {
   const _PlanningPreview();
 
@@ -1595,21 +1409,18 @@ class _PlanningPreviewState extends ConsumerState<_PlanningPreview>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 
-  // Per-ring geometry and motion. Revolutions per loop are distinct and
-  // coprime so the composite motion looks chaotic yet loops seamlessly.
-  // Radii are spread wide so the centre stays clear for the progress readout.
-  static const _box    = 150.0;
-  static const _radii  = [42.0, 58.0, 72.0];
-  static const _stroke = [6.0, 5.5, 5.0];
-  static const _revs   = [2.0, 3.0, 5.0];
-  static const _phase  = [0.0, 2.1, 4.0];
+  // Per-slot orbit geometry. Radii are spread wide so the central readout sits
+  // in a clear "target" core; base angles stagger the nodes so they don't cluster.
+  static const _box        = 150.0;
+  static const _radii      = [42.0, 54.0, 66.0];
+  static const _baseAngle  = [-math.pi / 2, -math.pi / 2 + 2.1, -math.pi / 2 + 4.0];
 
   @override
   void initState() {
     super.initState();
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 20),
+      duration: const Duration(seconds: 24),
     );
   }
 
@@ -1639,13 +1450,11 @@ class _PlanningPreviewState extends ConsumerState<_PlanningPreview>
     );
 
     final shown = goals.take(3).toList();
-    final rings = List.generate(3, (i) {
+    final nodes = List.generate(3, (i) {
       final goal = i < shown.length ? shown[i] : null;
-      return _PlanRing(
+      return _PlanNode(
         radius: _radii[i],
-        stroke: _stroke[i],
-        revs: _revs[i],
-        phase: _phase[i],
+        baseAngle: _baseAngle[i],
         color: goal?.color ?? c.accent,
         progress: goal == null
             ? null
@@ -1670,38 +1479,28 @@ class _PlanningPreviewState extends ConsumerState<_PlanningPreview>
               builder: (_, _) => CustomPaint(
                 size: const Size(_box, _box),
                 painter: _PlanningPreviewPainter(
-                  rings: rings,
+                  nodes: nodes,
                   t: _ctrl.value,
+                  motion: SieMotion.enabled(context),
+                  isLight: c.isLightMode,
                   trackColor: c.border,
-                  tickColor: c.accent.withValues(alpha: 0.30),
-                  glow: !c.isLightMode,
+                  tickColor: c.accent,
+                  glass: c.isLightMode ? c.textSecondary : c.textPrimary,
+                  gold: c.accent,
+                  gold2: c.accentSecondary,
                 ),
               ),
             ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  avg == null ? '—' : '$avg%',
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1,
-                    height: 1,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  'PROGRESS',
-                  style: TextStyle(
-                    color: c.iconMuted,
-                    fontSize: 8,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 2.5,
-                  ),
-                ),
-              ],
+            // Centre readout — the average progress across displayed missions.
+            Text(
+              avg == null ? '—' : '$avg%',
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1,
+                height: 1,
+              ),
             ),
           ],
         ),
@@ -1710,47 +1509,93 @@ class _PlanningPreviewState extends ConsumerState<_PlanningPreview>
   }
 }
 
-class _PlanRing {
+class _PlanNode {
   final double radius;
-  final double stroke;
-  final double revs;
-  final double phase;
+  final double baseAngle;
   final Color color;
 
-  /// Real goal progress 0..1, or null when no goal occupies this ring.
+  /// Real goal progress 0..1, or null when no goal occupies this orbit slot.
   final double? progress;
 
-  const _PlanRing({
+  const _PlanNode({
     required this.radius,
-    required this.stroke,
-    required this.revs,
-    required this.phase,
+    required this.baseAngle,
     required this.color,
     required this.progress,
   });
 }
 
 class _PlanningPreviewPainter extends CustomPainter {
-  final List<_PlanRing> rings;
+  final List<_PlanNode> nodes;
   final double t;
+  final bool motion;
+  final bool isLight;
   final Color trackColor;
   final Color tickColor;
-  final bool glow;
+  final Color glass;
+  final Color gold;
+  final Color gold2;
 
   const _PlanningPreviewPainter({
-    required this.rings,
+    required this.nodes,
     required this.t,
+    required this.motion,
+    required this.isLight,
     required this.trackColor,
     required this.tickColor,
-    required this.glow,
+    required this.glass,
+    required this.gold,
+    required this.gold2,
   });
+
+  static Offset _dir(double a) => Offset(math.cos(a), math.sin(a));
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
+    // Slow seamless rotation of the whole constellation — exactly one full turn
+    // per loop so it never snaps back. Frozen when motion is off.
+    final drift = motion ? t * 2 * math.pi : 0.0;
 
-    for (final ring in rings) {
-      final rect = Rect.fromCircle(center: center, radius: ring.radius);
+    // ── 1. Frosted glass discs (depth) ───────────────────────────────────────
+    void disc(double rad, double fill, double stroke) {
+      canvas.drawCircle(
+          center, rad, Paint()..color = glass.withValues(alpha: fill));
+      canvas.drawCircle(
+        center,
+        rad,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.1
+          ..color = glass.withValues(alpha: stroke),
+      );
+    }
+
+    disc(72, isLight ? 0.08 : 0.04, isLight ? 0.20 : 0.08);
+    disc(52, isLight ? 0.10 : 0.05, isLight ? 0.24 : 0.10);
+
+    // ── 2. Outer radar tick ring ─────────────────────────────────────────────
+    const ticks = 36;
+    const tickR = 72.0;
+    for (var i = 0; i < ticks; i++) {
+      final a = i * 2 * math.pi / ticks + drift;
+      final cardinal = i % 9 == 0;
+      final p1 = center + _dir(a) * (tickR - (cardinal ? 5 : 2.5));
+      final p2 = center + _dir(a) * tickR;
+      canvas.drawLine(
+        p1,
+        p2,
+        Paint()
+          ..color = tickColor
+              .withValues(alpha: (isLight ? 0.45 : 0.40) * (cardinal ? 1 : 0.55))
+          ..strokeWidth = cardinal ? 1.4 : 1
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    // ── 3. Orbits: track + progress arc + spoke + node ───────────────────────
+    for (final n in nodes) {
+      final rect = Rect.fromCircle(center: center, radius: n.radius);
 
       // Faint full-circle track.
       canvas.drawArc(
@@ -1759,190 +1604,139 @@ class _PlanningPreviewPainter extends CustomPainter {
         math.pi * 2,
         false,
         Paint()
-          ..color = trackColor.withValues(alpha: 0.45)
-          ..strokeWidth = ring.stroke
+          ..color = trackColor.withValues(alpha: 0.55)
+          ..strokeWidth = 1.4
           ..style = PaintingStyle.stroke,
       );
 
-      // Clockwise rotation, staggered per ring → "clock hands" out of sync.
-      final start = -math.pi / 2 + ring.phase + 2 * math.pi * ring.revs * t;
+      final start = n.baseAngle + drift;
+      final nodeAngle = start + (n.progress == null ? 0 : n.progress! * 2 * math.pi);
+      final node = center + _dir(nodeAngle) * n.radius;
 
-      if (ring.progress == null) {
-        // Empty ring — a small accent tick keeps it alive.
+      // Progress arc along the orbit up to the node (encodes real progress).
+      if (n.progress != null) {
+        final sweep = math.max(n.progress!, 0.04) * 2 * math.pi;
         canvas.drawArc(
           rect,
           start,
-          0.05 * 2 * math.pi,
+          sweep,
           false,
           Paint()
-            ..color = tickColor
-            ..strokeWidth = ring.stroke
+            ..color = n.color.withValues(alpha: isLight ? 0.75 : 0.9)
+            ..strokeWidth = 2.4
             ..style = PaintingStyle.stroke
             ..strokeCap = StrokeCap.round,
         );
-        continue;
+      } else {
+        // Empty slot — a small accent tick at the orbit start keeps it alive.
+        canvas.drawArc(
+          rect,
+          start,
+          0.04 * 2 * math.pi,
+          false,
+          Paint()
+            ..color = tickColor.withValues(alpha: 0.4)
+            ..strokeWidth = 2.4
+            ..style = PaintingStyle.stroke
+            ..strokeCap = StrokeCap.round,
+        );
       }
 
-      final sweep = math.max(ring.progress!, 0.05) * 2 * math.pi;
-      final arcPaint = Paint()
-        ..color = ring.color
-        ..strokeWidth = ring.stroke
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round;
-      if (glow) {
-        arcPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+      // Spoke core → node (mission link).
+      canvas.drawLine(
+        center,
+        node,
+        Paint()
+          ..color = glass.withValues(alpha: isLight ? 0.30 : 0.22)
+          ..strokeWidth = 1,
+      );
+
+      // Node dot with glow.
+      final nodeR = n.progress == null ? 3.0 : 4.5;
+      if (!isLight) {
+        canvas.drawCircle(
+          node,
+          nodeR + 2,
+          Paint()
+            ..color = n.color.withValues(alpha: 0.30)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+        );
       }
-      canvas.drawArc(rect, start, sweep, false, arcPaint);
+      canvas.drawCircle(node, nodeR, Paint()..color = n.color);
+      canvas.drawCircle(
+        node,
+        nodeR,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.1
+          ..color = Colors.white.withValues(alpha: 0.45),
+      );
+    }
+
+    // ── 4. Command core — faint glow + stroked ring framing the readout ──────
+    const coreR = 30.0;
+    canvas.drawCircle(
+      center,
+      coreR,
+      Paint()
+        ..color = gold.withValues(alpha: isLight ? 0.10 : 0.15)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+    );
+    canvas.drawCircle(
+      center,
+      coreR,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4
+        ..color = gold.withValues(alpha: isLight ? 0.55 : 0.7),
+    );
+    // Cardinal tick marks on the core ring — tactical-instrument feel.
+    for (final a in [0.0, math.pi / 2, math.pi, -math.pi / 2]) {
+      final p1 = center + _dir(a) * (coreR - 3);
+      final p2 = center + _dir(a) * (coreR + 3);
+      canvas.drawLine(
+        p1,
+        p2,
+        Paint()
+          ..color = gold.withValues(alpha: 0.8)
+          ..strokeWidth = 1.4
+          ..strokeCap = StrokeCap.round,
+      );
     }
   }
 
   @override
   bool shouldRepaint(_PlanningPreviewPainter old) =>
       old.t != t ||
-      old.rings != rings ||
+      old.motion != motion ||
+      old.isLight != isLight ||
       old.trackColor != trackColor ||
       old.tickColor != tickColor ||
-      old.glow != glow;
+      old.glass != glass ||
+      old.gold != gold ||
+      old.gold2 != gold2 ||
+      old.nodes != nodes;
 }
 
-/// Meditation module preview — a calm teal orb that slowly breathes while
-/// concentric "clarity" ripples radiate outward (the Дефрагментация motif).
-class _MeditationPreview extends StatefulWidget {
-  const _MeditationPreview();
+/// Дефрагментация module preview — binds the shared-gold [DefragPreview] to
+/// the runtime theme tokens (the gold-on-anthracite language of the carousel).
+class _DefragPreview extends ConsumerWidget {
+  const _DefragPreview();
 
   @override
-  State<_MeditationPreview> createState() => _MeditationPreviewState();
-}
-
-class _MeditationPreviewState extends State<_MeditationPreview>
-    with TickerProviderStateMixin {
-  late final AnimationController _pulseCtrl;
-  late final AnimationController _rippleCtrl;
-  late final Animation<double> _pulse;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 5),
-    )..repeat(reverse: true);
-    _pulse = Tween<double>(begin: 0.94, end: 1.06).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
-    );
-    _rippleCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 6),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _pulseCtrl.dispose();
-    _rippleCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: SizedBox(
-        width: 150,
-        height: 150,
-        child: AnimatedBuilder(
-          animation: Listenable.merge([_pulse, _rippleCtrl]),
-          builder: (_, _) {
-            return Stack(
-              alignment: Alignment.center,
-              children: [
-                // Expanding clarity ripples
-                CustomPaint(
-                  size: const Size(150, 150),
-                  painter: _MeditationRipplePainter(progress: _rippleCtrl.value),
-                ),
-                // Central breathing orb
-                Transform.scale(
-                  scale: _pulse.value,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Glow halo
-                      Container(
-                        width: 78,
-                        height: 78,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: kRimTeal.withValues(alpha: 0.28),
-                              blurRadius: 26,
-                              spreadRadius: 4,
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Core
-                      Container(
-                        width: 70,
-                        height: 70,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [kRimTealLight, kRimTeal, kRimTealDark],
-                            stops: [0.0, 0.55, 1.0],
-                          ),
-                        ),
-                      ),
-                      // Rim highlight
-                      CustomPaint(
-                        size: const Size(74, 74),
-                        painter: SphereRimPainter(
-                          lightAngle: -math.pi / 4,
-                          intensity: 0.6,
-                          isDark: true,
-                          rimGold: kRimTeal,
-                          rimBronze: kRimTealDark,
-                          rimLight: kRimTealLight,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return DefragPreview(
+      gold: c.accent,
+      gold2: c.accentSecondary,
+      goldLight: kRimLight,
+      cold: c.focusBreak,
+      glass: c.glass,
+      trackColor: c.border,
+      isLight: c.isLightMode,
+      motion: SieMotion.enabled(context),
     );
   }
-}
-
-class _MeditationRipplePainter extends CustomPainter {
-  final double progress; // 0..1, repeating
-  const _MeditationRipplePainter({required this.progress});
-
-  static const _count = 3;
-  static const _minRadius = 36.0;
-  static const _maxRadius = 72.0;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    for (var i = 0; i < _count; i++) {
-      final t = (progress + i / _count) % 1.0;
-      final radius = _minRadius + (_maxRadius - _minRadius) * t;
-      final alpha = (1.0 - t) * 0.32;
-      if (alpha <= 0.01) continue;
-      final paint = Paint()
-        ..color = kRimTeal.withValues(alpha: alpha)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5;
-      canvas.drawCircle(center, radius, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_MeditationRipplePainter old) => old.progress != progress;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
