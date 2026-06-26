@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import '../local/app_database.dart';
 import '../models/achievement.dart';
 import '../services/audio_service.dart';
+import '../widgets_home/widget_render_service.dart';
 import 'connectivity_provider.dart';
 import 'user_profile_provider.dart';
 
@@ -340,7 +341,7 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
       Duration(seconds: state.totalDurationSecs - state.secondsRemaining),
     );
     _startTicker();
-    _saveSession();
+    _saveSession().then((_) => _refreshFocusWidget());
   }
 
   void pause() {
@@ -349,7 +350,7 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
     state = state.copyWith(isRunning: false);
     // Ambient is intentionally left playing during pause so the user can
     // return to the session without an abrupt silence.
-    _saveSession();
+    _saveSession().then((_) => _refreshFocusWidget());
   }
 
   void reset() {
@@ -362,7 +363,7 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
       secondsRemaining: state.settings.workSecs,
       totalDurationSecs: state.settings.workSecs,
     );
-    _clearSession();
+    _clearSession().then((_) => _refreshFocusWidget());
   }
 
   void clearResult() {
@@ -384,6 +385,12 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
       state = state.copyWith(secondsRemaining: remaining);
       _startTicker();
     }
+  }
+
+  void _refreshFocusWidget() {
+    final db = ref.read(appDatabaseProvider);
+    WidgetRenderService.notifyModuleChanged('focus', db)
+        .catchError((e) => debugPrint('SiE FocusTimer: widget refresh — $e'));
   }
 
   void _startTicker() {
@@ -429,7 +436,7 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
         taskRef: boundRef,
       );
       _phaseStartedAt = null;
-      _saveSession();
+      _saveSession().then((_) => _refreshFocusWidget());
     } else if (state.phase == FocusPhase.breakTime) {
       state = FocusTimerState(
         settings: settings,
@@ -440,7 +447,7 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
         totalDurationSecs: settings.workSecs,
       );
       _phaseStartedAt = null;
-      _clearSession();
+      _clearSession().then((_) => _refreshFocusWidget());
     }
   }
 

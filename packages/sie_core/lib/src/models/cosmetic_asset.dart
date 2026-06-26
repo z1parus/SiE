@@ -14,6 +14,10 @@ extension AssetTypeX on AssetType {
 
 enum CosmeticRarity { common, rare, epic, legendary }
 
+/// How a [CosmeticAsset] background is rendered. Only meaningful for
+/// [AssetType.profileBackground]; other asset types default to [gradient].
+enum BackgroundKind { gradient, image, animatedWebp, lottie }
+
 class CosmeticAsset {
   final String id;
   final String slug;
@@ -23,6 +27,8 @@ class CosmeticAsset {
   final CosmeticRarity rarity;
   final Map<String, dynamic> styleConfig;
   final int priceDP;
+  final BackgroundKind backgroundKind;
+  final String? thumbnailUrl;
 
   const CosmeticAsset({
     required this.id,
@@ -33,6 +39,8 @@ class CosmeticAsset {
     required this.rarity,
     this.styleConfig = const {},
     this.priceDP = 0,
+    this.backgroundKind = BackgroundKind.gradient,
+    this.thumbnailUrl,
   });
 
   factory CosmeticAsset.fromJson(Map<String, dynamic> json, AssetType type) {
@@ -49,8 +57,17 @@ class CosmeticAsset {
       rarity: _parseRarity(json['rarity'] as String?),
       styleConfig: config,
       priceDP: json['price_dp'] as int? ?? 0,
+      backgroundKind: _parseKind(json['kind'] as String?),
+      thumbnailUrl: json['thumbnail_url'] as String?,
     );
   }
+
+  static BackgroundKind _parseKind(String? s) => switch (s) {
+        'image'         => BackgroundKind.image,
+        'animated_webp' => BackgroundKind.animatedWebp,
+        'lottie'        => BackgroundKind.lottie,
+        _               => BackgroundKind.gradient,
+      };
 
   static CosmeticRarity _parseRarity(String? s) => switch (s) {
         'rare'      => CosmeticRarity.rare,
@@ -114,6 +131,18 @@ class CosmeticAsset {
   Color? get backgroundColor =>
       _hexColor(styleConfig['background_color'] as String?);
 
+  /// True when this background is rendered from a remote media file
+  /// (static image, animated WebP, or Lottie) rather than a gradient/colour.
+  bool get isMediaBackground =>
+      backgroundKind != BackgroundKind.gradient && imageUrl != null;
+
+  /// True when the background paints something other than the themed default —
+  /// used by the hero card to decide whether to apply a readability scrim.
+  bool get isDecorativeBackground =>
+      isMediaBackground ||
+      backgroundColor != null ||
+      backgroundGradient != null;
+
   bool get useNeuralPattern =>
       styleConfig['use_neural_pattern'] as bool? ?? false;
 
@@ -132,6 +161,11 @@ class CosmeticAsset {
   /// equipped background accent at render time).
   double get patternOpacity =>
       (styleConfig['opacity'] as num?)?.toDouble() ?? 0.40;
+
+  /// Semi-transparent black scrim applied on top of the background media,
+  /// improving readability on busy images. Range 0.0–0.5.
+  double get overlayOpacity =>
+      (styleConfig['overlay_opacity'] as num?)?.toDouble() ?? 0.0;
 
   // ── Stat style helpers ─────────────────────────────────────
 

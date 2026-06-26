@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="0dp">
+
+    <!-- Placeholder shown before the first Flutter render -->
+    <TextView
+        android:id="@+id/widget_focus_placeholder"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/widget_bg"
+        android:gravity="center"
+        android:text="SiE · Фокус"
+        android:textColor="#88FFFFFF"
+        android:textSize="14sp"
+        android:fontFamily="sans-serif-medium"
+        android:visibility="visible" />
+
+    <!-- Flutter-rendered PNG -->
+    <ImageView
+        android:id="@+id/widget_focus_image"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:visibility="gone" />
+
+    <!-- Tap-zone overlay (no per-row actions for focus widget) -->
+    <LinearLayout
+        android:id="@+id/widget_focus_actions"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:visibility="gone" />
+
+    <!-- Live countdown overlay, positioned over the ring centre (fraction
+         ~0.43 down, horizontally centred) via weighted empty spacers so it
+         tracks the stretched PNG. App-widget layouts disallow <Space>, so we
+         use empty FrameLayouts as spacers. Shown only while running. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="370" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="130"
+            android:orientation="horizontal"
+            android:gravity="center">
+            <Chronometer
+                android:id="@+id/widget_focus_chrono"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFFFF"
+                android:includeFontPadding="false"
+                android:fontFamily="sans-serif"
+                android:fontFeatureSettings="tnum"
+                android:gravity="center"
+                android:visibility="gone" />
+        </LinearLayout>
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="500" />
+    </LinearLayout>
+
+</FrameLayout>

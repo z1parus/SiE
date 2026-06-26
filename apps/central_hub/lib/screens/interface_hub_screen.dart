@@ -838,6 +838,11 @@ class _AssetVisualBig extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Profile backgrounds always route through _BackgroundVisual which
+    // handles media (image/webp/lottie) vs gradient correctly.
+    if (asset.type == AssetType.profileBackground) {
+      return _BackgroundVisual(asset: asset);
+    }
     if (asset.imageUrl != null) {
       return SizedBox(
         width: 72,
@@ -904,46 +909,74 @@ class _BackgroundVisual extends StatelessWidget {
   final CosmeticAsset asset;
   const _BackgroundVisual({required this.asset});
 
+  static const double _w = 84;
+  static const double _h = 56;
+
   @override
-  Widget build(BuildContext context) => ClipRRect(
+  Widget build(BuildContext context) {
+    if (asset.isMediaBackground) {
+      final url = asset.backgroundKind == BackgroundKind.image
+          ? asset.imageUrl
+          : (asset.thumbnailUrl ?? asset.imageUrl);
+      return ClipRRect(
         borderRadius: BorderRadius.circular(4),
-        child: _buildBgContainer(
-          width: 84,
-          height: 56,
-          asset: asset,
+        child: SizedBox(
+          width: _w,
+          height: _h,
+          child: url == null
+              ? _gradient()
+              : Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CachedNetworkImage(
+                      imageUrl: url,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => _gradient(),
+                      errorWidget: (_, __, ___) => _gradient(),
+                    ),
+                    if (asset.overlayOpacity > 0)
+                      ColoredBox(
+                        color: Colors.black.withValues(alpha: asset.overlayOpacity),
+                      ),
+                  ],
+                ),
         ),
       );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: _gradient(),
+    );
+  }
 
-  Widget _buildBgContainer({
-    required double width,
-    required double height,
-    required CosmeticAsset asset,
-  }) {
+  Widget _gradient() {
     Widget pattern;
     if (asset.useNeuralPattern) {
-      pattern = NeuralNetworkWidget(color: asset.accentColor.withValues(alpha: 0.20));
+      pattern = NeuralNetworkWidget(
+          color: asset.accentColor.withValues(alpha: 0.20));
     } else {
       pattern = CustomPaint(painter: _GridPainter());
     }
 
     if (asset.backgroundColor != null) {
       return Container(
-        width: width,
-        height: height,
+        width: _w,
+        height: _h,
         color: asset.backgroundColor,
         child: pattern,
       );
     }
     return Container(
-      width: width,
-      height: height,
+      width: _w,
+      height: _h,
       decoration: BoxDecoration(
         gradient: asset.backgroundGradient ??
             const LinearGradient(
               colors: [Color(0xFF0D2A42), Color(0xFF071520)],
             ),
       ),
-      child: NeuralNetworkWidget(color: asset.accentColor.withValues(alpha: 0.18)),
+      child: NeuralNetworkWidget(
+          color: asset.accentColor.withValues(alpha: 0.18)),
     );
   }
 }
@@ -1018,6 +1051,33 @@ class _PreviewBgBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final activeBg = bg;
+    if (activeBg != null && activeBg.isMediaBackground) {
+      final url = activeBg.backgroundKind == BackgroundKind.image
+          ? activeBg.imageUrl
+          : (activeBg.thumbnailUrl ?? activeBg.imageUrl);
+      return Container(
+        height: 130,
+        clipBehavior: Clip.hardEdge,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: c.accent.withValues(alpha: 0.3)),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (url != null)
+              CachedNetworkImage(imageUrl: url, fit: BoxFit.cover),
+            if (activeBg.overlayOpacity > 0)
+              ColoredBox(
+                color: Colors.black.withValues(alpha: activeBg.overlayOpacity),
+              ),
+            child,
+          ],
+        ),
+      );
+    }
+
     BoxDecoration decoration;
     if (bg?.backgroundColor != null) {
       decoration = BoxDecoration(

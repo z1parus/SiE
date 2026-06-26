@@ -1,8 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../local/app_database.dart';
 import 'auth_state_provider.dart';
 import 'connectivity_provider.dart';
+
+/// SharedPreferences key holding the last known zen-streak from the profile, so
+/// the Breathing home widget (headless, offline) can display it without a
+/// network round-trip.
+const kWidgetZenStreakKey = 'widget_zen_streak';
 
 class MeditationStats {
   final int zenStreakDays;
@@ -40,6 +46,12 @@ final meditationStatsProvider =
           .eq('id', userId)
           .single();
       final streak = (profileRow['zen_streak_days'] as num?)?.toInt() ?? 0;
+
+      // Cache for the offline home widget.
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt(kWidgetZenStreakKey, streak);
+      } catch (_) {}
 
       final now = DateTime.now().toUtc();
       final weekAgo = now.subtract(const Duration(days: 7)).toIso8601String();

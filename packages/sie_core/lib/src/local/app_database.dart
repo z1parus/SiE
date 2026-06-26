@@ -1622,6 +1622,51 @@ class AppDatabase extends _$AppDatabase {
   Future<void> markGoalSnapshotSynced(String id) =>
       (update(localGoalProgressSnapshots)..where((t) => t.id.equals(id)))
           .write(const LocalGoalProgressSnapshotsCompanion(synced: Value(true)));
+
+  // ── Widget helpers ─────────────────────────────────────────────────────────
+
+  Future<List<LocalHabit>> habitsForWidget() => (select(localHabits)
+        ..where((t) => t.deletedLocally.not() & t.isArchived.not())
+        ..orderBy([(t) => OrderingTerm(
+            expression: t.isPinned, mode: OrderingMode.desc)]))
+      .get();
+
+  Future<List<LocalHabitLog>> habitLogsForDate(String dateKey) =>
+      (select(localHabitLogs)
+            ..where((t) => t.completedAt.equals(dateKey)))
+          .get();
+
+  /// All breathing sessions for the Breathing home widget, newest first.
+  /// Single-user device assumption (mirrors [habitsForWidget]).
+  Future<List<LocalBreathingSession>> breathingSessionsForWidget() =>
+      (select(localBreathingSessions)
+            ..orderBy([
+              (t) => OrderingTerm(
+                  expression: t.completedAtMs, mode: OrderingMode.desc)
+            ]))
+          .get();
+
+  /// All meditation sessions for the Breathing home widget, newest first.
+  Future<List<LocalMeditationSession>> meditationSessionsForWidget() =>
+      (select(localMeditationSessions)
+            ..orderBy([
+              (t) => OrderingTerm(
+                  expression: t.completedAtMs, mode: OrderingMode.desc)
+            ]))
+          .get();
+
+  /// Active (non-deleted) goals for the Planning home widget. Single-user
+  /// device assumption (mirrors [habitsForWidget]); pinned first, then by
+  /// priority, then by creation order.
+  Future<List<LocalGoal>> goalsForWidget() => (select(localGoals)
+        ..where((t) =>
+            t.deletedLocally.not() & t.status.equals('active'))
+        ..orderBy([
+          (t) => OrderingTerm(expression: t.isPinned, mode: OrderingMode.desc),
+          (t) => OrderingTerm(expression: t.priority, mode: OrderingMode.desc),
+          (t) => OrderingTerm(expression: t.createdAtMs),
+        ]))
+      .get();
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────

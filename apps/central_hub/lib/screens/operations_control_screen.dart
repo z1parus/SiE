@@ -114,6 +114,8 @@ class _OperationsControlScreenState
               children: [
                 const SectionHeader(title: 'DEPARTMENTS'),
                 const SizedBox(height: 12),
+                _DailyTipBanner(),
+                const SizedBox(height: 8),
                 _LeaderboardTile(),
                 const SizedBox(height: 16),
               ],
@@ -2378,4 +2380,131 @@ class _NAvatar extends StatelessWidget {
             style: TextStyle(
                 color: c.accent, fontSize: 16, fontWeight: FontWeight.w200)),
       );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Daily Tip Banner — random hint shown above the leaderboard tile
+// ─────────────────────────────────────────────────────────────────────────────
+class _DailyTipBanner extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_DailyTipBanner> createState() => _DailyTipBannerState();
+}
+
+class _DailyTipBannerState extends ConsumerState<_DailyTipBanner>
+    with SingleTickerProviderStateMixin {
+  Tip? _tip;
+  bool _dismissed = false;
+  late final AnimationController _ctrl;
+  late final Animation<double> _fade;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, -0.15),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _pickTip(List<Tip> tips) {
+    if (tips.isEmpty || _tip != null) return;
+    final rnd = DateTime.now().millisecondsSinceEpoch;
+    _tip = tips[rnd % tips.length];
+    if (mounted) _ctrl.forward();
+  }
+
+  void _dismiss() {
+    _ctrl.reverse().then((_) {
+      if (mounted) setState(() => _dismissed = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
+    final tipsAsync = ref.watch(tipsProvider);
+
+    tipsAsync.whenData(_pickTip);
+
+    if (_dismissed || _tip == null) return const SizedBox.shrink();
+
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(
+        position: _slide,
+        child: SieGlassCard(
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 3,
+                height: 36,
+                margin: const EdgeInsets.only(right: 10, top: 2),
+                decoration: BoxDecoration(
+                  color: c.accent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _tip!.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: c.accent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _tip!.description,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 12,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: _dismiss,
+                behavior: HitTestBehavior.opaque,
+                child: Semantics(
+                  button: true,
+                  label: 'Закрыть подсказку',
+                  child: Padding(
+                    padding: const EdgeInsets.all(2),
+                    child: Icon(Icons.close,
+                        size: 16, color: c.iconMuted),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

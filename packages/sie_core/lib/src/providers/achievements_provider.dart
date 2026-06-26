@@ -5,6 +5,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:uuid/uuid.dart';
 import '../local/app_database.dart';
 import '../models/achievement.dart';
+import '../widgets_home/widget_render_service.dart';
 import 'auth_state_provider.dart';
 import 'connectivity_provider.dart';
 import 'user_profile_provider.dart';
@@ -37,6 +38,10 @@ class SessionCompletionNotifier extends Notifier<void> {
       dpAwarded: const Value(_breathingDp),
       synced: Value(isOnline),
     ));
+
+    // Refresh the Breathing home widget(s) from the local mirror.
+    WidgetRenderService.notifyModuleChanged('breathing', db)
+        .catchError((e) => debugPrint('SiE Breathing: widget refresh — $e'));
 
     Achievement? earned;
 
