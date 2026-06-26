@@ -184,7 +184,11 @@
     "withoutSlipSuffix": "{daysWord} without a slip",
     "recordLine": "record: {record} {daysWord}",
     "slipDone": "SLIP ✓",
-    "slip": "SLIP"
+    "slip": "SLIP",
+    "setStartDate": "SET START DATE",
+    "startDateSince": "SINCE: {date}",
+    "resetStartDate": "RESET",
+    "startDatePickerTitle": "COUNTING SINCE"
   },
   "journal": {
     "empty": "JOURNAL EMPTY",

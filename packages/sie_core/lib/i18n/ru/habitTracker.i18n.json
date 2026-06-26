@@ -186,7 +186,11 @@
     "withoutSlipSuffix": "{daysWord} без срыва",
     "recordLine": "рекорд: {record} {daysWord}",
     "slipDone": "СРЫВ ✓",
-    "slip": "СРЫВ"
+    "slip": "СРЫВ",
+    "setStartDate": "УСТАНОВИТЬ ДАТУ НАЧАЛА",
+    "startDateSince": "НАЧАЛО: с {date}",
+    "resetStartDate": "СБРОСИТЬ",
+    "startDatePickerTitle": "НАЧАЛО ОТСЧЁТА"
   },
   "journal": {
     "empty": "ЖУРНАЛ ПУСТ",

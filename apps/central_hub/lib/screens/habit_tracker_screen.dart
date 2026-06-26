@@ -3225,10 +3225,11 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
           false;
 
       // Complete the habit if not yet done for today.
+      // Avoid habits skip this — notes are independent of the abstinence counter.
       // toggleHabit writes to local DB before the remote call, so even if
       // the Supabase insert fails we still have a local row to attach the
       // note/emoji to — catch the exception and continue.
-      if (!alreadyDone) {
+      if (!alreadyDone && !widget.habit.isAvoid) {
         try {
           await notifier.toggleHabit(widget.habit.id, date);
         } catch (_) {}
@@ -4537,6 +4538,37 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
     });
   }
 
+  static String _fmtShortDate(DateTime dt) {
+    const months = ['янв', 'фев', 'мар', 'апр', 'май', 'июн',
+                    'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+  }
+
+  Future<void> _pickAvoidStartDate(BuildContext context, DateTime? current, Habit currentHabit, Color accentColor) async {
+    final initial = current ?? currentHabit.createdAt;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial.isAfter(DateTime.now()) ? DateTime.now() : initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      helpText: t.habitTracker.avoidCard.startDatePickerTitle,
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: ColorScheme.dark(
+            primary: accentColor,
+            onPrimary: Colors.white,
+            surface: ref.read(sieColorsProvider).surface,
+            onSurface: ref.read(sieColorsProvider).textPrimary,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked == null || !mounted) return;
+    SieHaptics.selection();
+    ref.read(habitsProvider.notifier).setAvoidStartDate(widget.habit.id, picked);
+  }
+
   @override
   Widget build(BuildContext context) {
     final sc          = ref.watch(sieColorsProvider);
@@ -4560,8 +4592,12 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
 
     // Stage 7 — avoid-habit specifics.
     final isAvoid     = widget.habit.isAvoid;
+    // Read the live habit from state to pick up avoidStartDate changes.
+    final currentHabit = habitsState?.habits.cast<Habit?>()
+        .firstWhere((h) => h?.id == widget.habit.id, orElse: () => null)
+        ?? widget.habit;
     final lapseDates  = habitsState?.lapseDates[widget.habit.id] ?? {};
-    final recordClean = longestClean(widget.habit, lapseDates);
+    final recordClean = longestClean(currentHabit, lapseDates);
     final lapsedToday = lapseDates.contains(today);
     final totalLapses = lapseDates.length;
 
@@ -4738,20 +4774,105 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                           ],
                         ),
                         const SizedBox(height: 14),
-                        _DetailActionBtn(
-                          label: lapsedToday ? t.habitTracker.avoidCard.snapSlip : t.habitTracker.avoidCard.wasSlip,
-                          icon: lapsedToday
-                              ? Icons.undo
-                              : Icons.report_gmailerrorred_outlined,
-                          accentColor: lapsedToday
-                              ? sc.textSecondary.withValues(alpha: 0.7)
-                              : const Color(0xFFD98C6F),
-                          onTap: () {
-                            SieHaptics.light();
-                            ref
-                                .read(habitsProvider.notifier)
-                                .recordLapse(widget.habit.id, DateTime.now());
-                          },
+                        // Slip + Note buttons side by side.
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _DetailActionBtn(
+                                label: lapsedToday ? t.habitTracker.avoidCard.snapSlip : t.habitTracker.avoidCard.wasSlip,
+                                icon: lapsedToday
+                                    ? Icons.undo
+                                    : Icons.report_gmailerrorred_outlined,
+                                accentColor: lapsedToday
+                                    ? sc.textSecondary.withValues(alpha: 0.7)
+                                    : const Color(0xFFD98C6F),
+                                onTap: () {
+                                  SieHaptics.light();
+                                  ref
+                                      .read(habitsProvider.notifier)
+                                      .recordLapse(widget.habit.id, DateTime.now());
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _DetailActionBtn(
+                                label: todayEntry?.note != null || todayEntry?.emoji != null
+                                    ? t.habitTracker.avoidCard.noteEdit
+                                    : t.habitTracker.avoidCard.noteAdd,
+                                icon: Icons.edit_outlined,
+                                accentColor: accentColor,
+                                onTap: () => _openReflection(today, todayEntry, accentColor),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        // Start date row — tap to pick, ✕ to reset.
+                        GestureDetector(
+                          onTap: () => _pickAvoidStartDate(
+                              context, currentHabit.avoidStartDate, currentHabit, accentColor),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              color: currentHabit.avoidStartDate != null
+                                  ? accentColor.withValues(alpha: 0.06)
+                                  : Colors.transparent,
+                              border: Border.all(
+                                color: currentHabit.avoidStartDate != null
+                                    ? accentColor.withValues(alpha: 0.25)
+                                    : sc.border,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.calendar_today_outlined,
+                                  size: 11,
+                                  color: currentHabit.avoidStartDate != null
+                                      ? accentColor
+                                      : sc.textSecondary.withValues(alpha: 0.5),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    currentHabit.avoidStartDate != null
+                                        ? t.habitTracker.avoidCard.startDateSince(
+                                            date: _fmtShortDate(currentHabit.avoidStartDate!))
+                                        : t.habitTracker.avoidCard.setStartDate,
+                                    style: TextStyle(
+                                      color: currentHabit.avoidStartDate != null
+                                          ? accentColor
+                                          : sc.textSecondary.withValues(alpha: 0.55),
+                                      fontSize: 9,
+                                      letterSpacing: 1.2,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                if (currentHabit.avoidStartDate != null)
+                                  GestureDetector(
+                                    onTap: () {
+                                      SieHaptics.light();
+                                      ref.read(habitsProvider.notifier)
+                                          .setAvoidStartDate(widget.habit.id, null);
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(left: 8),
+                                      child: Text(
+                                        t.habitTracker.avoidCard.resetStartDate,
+                                        style: TextStyle(
+                                          color: sc.textSecondary.withValues(alpha: 0.5),
+                                          fontSize: 9,
+                                          letterSpacing: 1.2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
                         ),
                       ],
                     ),

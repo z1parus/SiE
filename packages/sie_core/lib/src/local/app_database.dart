@@ -41,6 +41,8 @@ class LocalHabits extends Table {
   // Stage 7: highest abstinence milestone (days) already rewarded; resets on lapse.
   IntColumn get lastAbstinenceMilestone =>
       integer().withDefault(const Constant(0))();
+  // Stage 7: custom counter start for avoid habits (ms since epoch). Null = use createdAt.
+  IntColumn get avoidStartMs => integer().nullable()();
   BoolColumn get deletedLocally =>
       boolean().withDefault(const Constant(false))();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
@@ -528,7 +530,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 38;
+  int get schemaVersion => 39;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -778,6 +780,9 @@ class AppDatabase extends _$AppDatabase {
             localBreathingSessions, localBreathingSessions.calmness);
         await m.addColumn(
             localBreathingSessions, localBreathingSessions.confidence);
+      }
+      if (from < 39) {
+        await m.addColumn(localHabits, localHabits.avoidStartMs);
       }
       } catch (e) {
         // Migration failed (e.g. table/column already exists from a dev build
