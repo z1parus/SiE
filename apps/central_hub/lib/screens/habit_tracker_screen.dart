@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sie_core/sie_core.dart';
 import '../widgets/habit_heatmap.dart';
 import 'habits_overview_screen.dart';
@@ -30,6 +31,41 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
   bool _notTodayExpanded = false;
   // Stage 6 — group habits by life area.
   bool _groupByArea = false;
+
+  // Persisted view preferences (remembered across sessions).
+  static const _kPrefGroupByArea = 'habit_group_by_area';
+  static const _kPrefViewMode = 'habit_view_mode';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadViewPrefs();
+  }
+
+  Future<void> _loadViewPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    final grouped = prefs.getBool(_kPrefGroupByArea);
+    final modeIdx = prefs.getInt(_kPrefViewMode);
+    setState(() {
+      if (grouped != null) _groupByArea = grouped;
+      if (modeIdx != null && modeIdx >= 0 && modeIdx < HabitViewMode.values.length) {
+        _viewMode = HabitViewMode.values[modeIdx];
+      }
+    });
+  }
+
+  Future<void> _setGroupByArea(bool value) async {
+    setState(() => _groupByArea = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kPrefGroupByArea, value);
+  }
+
+  Future<void> _setViewMode(HabitViewMode mode) async {
+    setState(() => _viewMode = mode);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kPrefViewMode, mode.index);
+  }
 
   Future<void> _onRefresh() async {
     ref.invalidate(habitsProvider);
@@ -88,7 +124,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
           _CyberTopBar(
             onArchive: _openArchive,
             onInfo: () => setState(() => _showOnboardingManual = true),
-            onGroupToggle: () => setState(() => _groupByArea = !_groupByArea),
+            onGroupToggle: () => _setGroupByArea(!_groupByArea),
             groupByArea: _groupByArea,
           ),
           // ── Routine Blocks ──────────────────────────────────────
@@ -128,7 +164,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
           ),
           _ViewModeToggle(
             current: _viewMode,
-            onChange: (m) => setState(() => _viewMode = m),
+            onChange: _setViewMode,
           ),
           Expanded(
             child: RefreshIndicator(
