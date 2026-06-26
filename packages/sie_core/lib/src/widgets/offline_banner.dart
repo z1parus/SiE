@@ -17,21 +17,20 @@ class OfflineBanner extends ConsumerWidget {
     );
     if (isOnline) return const SizedBox.shrink();
 
-    return SafeArea(
-      bottom: false,
-      child: Container(
-        width: double.infinity,
-        color: const Color(0xFFFF6F00),
-        padding: const EdgeInsets.symmetric(vertical: 5),
-        child: const Text(
-          'OFFLINE — changes will sync on reconnect',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.2,
-          ),
+    // No SafeArea here — the parent shell wraps the full body in SafeArea so
+    // the status-bar inset is consumed once, not twice.
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFFFF6F00),
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: const Text(
+        'OFFLINE — changes will sync on reconnect',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.2,
         ),
       ),
     );

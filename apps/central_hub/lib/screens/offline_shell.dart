@@ -60,19 +60,22 @@ class _OfflineShellState extends ConsumerState<OfflineShell> {
           backgroundColor: Colors.transparent,
           body: Stack(
             children: [
-              Column(
-                children: [
-                  const _OfflineBadgeBar(),
-                  Expanded(
-                    child: IndexedStack(
-                      index: _currentIndex,
-                      children: const [
-                        OperationsControlScreen(asTab: true, offline: true),
-                        OfflineHubScreen(),
-                      ],
+              SafeArea(
+                bottom: false,
+                child: Column(
+                  children: [
+                    const _OfflineBadgeBar(),
+                    Expanded(
+                      child: IndexedStack(
+                        index: _currentIndex,
+                        children: const [
+                          OperationsControlScreen(asTab: true, offline: true),
+                          OfflineHubScreen(),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               Positioned(
                 bottom: 0,
@@ -105,28 +108,25 @@ class _OfflineBadgeBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
-    return SafeArea(
-      bottom: false,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        color: c.warning.withValues(alpha: 0.12),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.cloud_off_outlined, size: 13, color: c.warning),
-            const SizedBox(width: 8),
-            Text(
-              t.common.offline.badge,
-              style: TextStyle(
-                color: c.warning,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 2,
-              ),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      color: c.warning.withValues(alpha: 0.12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.cloud_off_outlined, size: 13, color: c.warning),
+          const SizedBox(width: 8),
+          Text(
+            t.common.offline.badge,
+            style: TextStyle(
+              color: c.warning,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -82,38 +82,41 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
         },
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          body: Stack(
-            children: [
-              Column(
-                children: [
-                  const OfflineBanner(),
-                  Expanded(
-                    child: IndexedStack(
-                      index: _currentIndex,
-                      children: [
-                        ProfileScreen(asTab: true),
-                        OperationsControlScreen(asTab: true),
-                        const GarageScreen(asTab: true),
-                        LeaderboardScreen(asTab: true),
-                      ],
+          body: SafeArea(
+            bottom: false,
+            child: Stack(
+              children: [
+                Column(
+                  children: [
+                    const OfflineBanner(),
+                    Expanded(
+                      child: IndexedStack(
+                        index: _currentIndex,
+                        children: [
+                          ProfileScreen(asTab: true),
+                          OperationsControlScreen(asTab: true),
+                          const GarageScreen(asTab: true),
+                          LeaderboardScreen(asTab: true),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: _ShellNavBar(
-                  activeIndex: _currentIndex,
-                  onTabChanged: (i) {
-                    if (i == _currentIndex) return;
-                    SieHaptics.selection();
-                    setState(() => _currentIndex = i);
-                  },
+                  ],
                 ),
-              ),
-            ],
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: _ShellNavBar(
+                    activeIndex: _currentIndex,
+                    onTabChanged: (i) {
+                      if (i == _currentIndex) return;
+                      SieHaptics.selection();
+                      setState(() => _currentIndex = i);
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
