@@ -53,7 +53,7 @@ SiE/
 │   │   ├── lib/
 │   │   │   ├── sie_core.dart              # Баррел-экспорт ~93 модулей
 │   │   │   ├── src/
-│   │   │   │   ├── supabase_service.dart  # Инициализация + Auth (signUp/signIn/signOut/resetPassword)
+│   │   │   │   ├── supabase_service.dart  # Инициализация + Auth (signUp/signIn/signOut/resetPassword/signInWithTelegram)
 │   │   │   │   ├── local/app_database.dart  # Drift-БД: 26 таблиц, schemaVersion=35
 │   │   │   │   ├── models/               # ~30 data-классов (Dart-модели)
 │   │   │   │   ├── providers/            # ~30 Riverpod-провайдеров
@@ -73,8 +73,8 @@ SiE/
 ├── supabase/
 │   ├── schema.sql             # Полная схема БД (~1000 строк, 14+ таблиц)
 │   ├── config.toml            # Конфиг Supabase CLI
-│   ├── migrations/           # 52 миграции (см. раздел 5)
-│   └── functions/            # Edge Functions: ai-decompose, daily-winner, cleanup-attachment-storage
+│   ├── migrations/           # 54 миграции (см. раздел 5)
+│   └── functions/            # Edge Functions: ai-decompose, daily-winner, cleanup-attachment-storage, telegram-auth
 │
 ├── planningSources/           # Вся техдокументация и планы (ТОЛЬКО .md файлы)
 │   ├── PLANNING.md            # Стратегический roadmap до v1.0
@@ -111,7 +111,7 @@ SiE/
 | Экран                               | Назначение                                                                 |
 |-------------------------------------|---------------------------------------------------------------------------|
 | `splash_screen.dart`                | Анимированный сплэш при запуске (орб)                                      |
-| `auth_screen.dart`                  | Регистрация / вход (email + password через Supabase Auth)                  |
+| `auth_screen.dart`                  | Регистрация / вход (email + password или Telegram OAuth через Supabase Auth) |
 | `main_navigation_shell.dart`        | Нижняя навигация: Hub, Operations, Garage, Hall of Fame                    |
 | `operations_control_screen.dart`    | Главный дашборд: XP, уровень, активные департаменты                        |
 | `planning_screen.dart`              | Planning Module: список миссий                                            |
@@ -202,6 +202,8 @@ SiE/
 
 **52 миграции** — эволюция от init_core_schema до fix_collab_rls_recursion.
 
+> **Telegram OAuth (миграции `20260626200000_telegram_auth.sql` + `20260626210000_telegram_auth_codes.sql`, Edge Function `telegram-auth`):** Supabase Auth не поддерживает Telegram нативно, поэтому реализован Custom OAuth Provider `custom:telegram` через Edge Function-адаптер `supabase/functions/telegram-auth/index.ts`. Он оборачивает Telegram Login Widget в стандартный OAuth2 flow (`/authorize` → `/telegram-callback` → `/token` → `/userinfo`) и валидирует `hash` по алгоритму Telegram. Для активации: (1) создать бота через @BotFather → получить `bot_token`; (2) задать secrets в Edge Function: `TELEGRAM_BOT_TOKEN`, `JWT_SECRET` (= JWT secret проекта из Dashboard → Settings → API); (3) Dashboard → Authentication → Providers → New Provider → Manual: identifier `custom:telegram`, Client ID любой, Client Secret = bot_token, Authorization/Token/UserInfo URL = `https://bvqlqvzcqfgojzxztvrm.functions.supabase.co/telegram-auth/{authorize|token|userinfo}`; (4) включить **Email optional** (Advanced) — Telegram не отдаёт email; redirect URL `sie://auth/callback` и `https://bvqlqvzcqfgojzxztvrm.supabase.co/auth/v1/callback`.
+
 Основные таблицы:
 - `profiles` — профили пользователей (XP, DP, уровень, username, avatar_url, ...)
 - `branches` — департаменты/филиалы
@@ -235,6 +237,7 @@ SiE/
 - `ai-decompose` — AI-декомпозиция задач
 - `daily-winner` — определение победителя авангарда
 - `cleanup-attachment-storage` — очистка Storage
+- `telegram-auth` — OAuth2-адаптер для Telegram Login Widget (Custom OAuth Provider `custom:telegram`)
 
 ### Ключевые RPC-функции:
 - `increment_xp(p_user_id, p_amount)` — начисление XP

@@ -22,6 +22,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
   bool _isLogin = true;
   bool _isLoading = false;
+  bool _telegramLoading = false;
   bool _registrationPending = false;
   String? _errorMessage;
 
@@ -98,7 +99,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   ],
                   const SizedBox(height: 24),
                   _buildSubmitButton(),
-                  if (_isLogin)
+                  if (_isLogin) ...[
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
@@ -113,6 +114,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                         ),
                       ),
                     ),
+                  ],
+                  const SizedBox(height: 12),
+                  _buildTelegramSection(c),
                   const SizedBox(height: 12),
                   _buildToggle(c),
                 ],
@@ -121,6 +125,51 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _signInWithTelegram() async {
+    setState(() {
+      _telegramLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      await SupabaseService.signInWithTelegram();
+      // Session arrives via the sie://auth/callback deep link;
+      // authStateProvider fires and the app rebuilds into the main shell.
+    } catch (_) {
+      if (mounted) setState(() => _errorMessage = t.auth.telegram.error);
+    } finally {
+      if (mounted) setState(() => _telegramLoading = false);
+    }
+  }
+
+  Widget _buildTelegramSection(SieColors c) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: Divider(color: c.border, thickness: 1)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                t.auth.telegram.orDivider,
+                style: TextStyle(
+                  color: c.textSecondary,
+                  fontSize: 11,
+                  letterSpacing: 2.0,
+                ),
+              ),
+            ),
+            Expanded(child: Divider(color: c.border, thickness: 1)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _TelegramButton(
+          onTap: _telegramLoading ? null : _signInWithTelegram,
+          loading: _telegramLoading,
+        ),
+      ],
     );
   }
 
@@ -602,6 +651,107 @@ class _PendingConfirmScreen extends ConsumerWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ─── Telegram OAuth button (Telegram-blue accent) ────────────────────────────
+
+class _TelegramButton extends ConsumerStatefulWidget {
+  final VoidCallback? onTap;
+  final bool loading;
+
+  const _TelegramButton({required this.onTap, required this.loading});
+
+  @override
+  ConsumerState<_TelegramButton> createState() => _TelegramButtonState();
+}
+
+class _TelegramButtonState extends ConsumerState<_TelegramButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  static const Color _telegramBlue = Color(0xFF2AABEE);
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, value: 0.0);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _down(TapDownDetails _) {
+    if (widget.onTap == null) return;
+    _ctrl.animateTo(1.0,
+        duration: const Duration(milliseconds: 80), curve: Curves.easeIn);
+  }
+
+  void _release() {
+    _ctrl.animateTo(0.0,
+        duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: _down,
+      onTapUp: (_) => _release(),
+      onTapCancel: _release,
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (_, child) {
+          final pressT = _ctrl.value;
+          return Transform.scale(
+            scale: 1.0 - 0.03 * pressT,
+            child: Container(
+              height: 52,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                color: _telegramBlue,
+                boxShadow: [
+                  BoxShadow(
+                    color: _telegramBlue.withValues(alpha: 0.3 + 0.3 * pressT),
+                    blurRadius: 12.0 + 8.0 * pressT,
+                    spreadRadius: 0,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: child,
+            ),
+          );
+        },
+        child: widget.loading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.send, color: Colors.white, size: 18),
+                  const SizedBox(width: 10),
+                  Text(
+                    t.auth.telegram.signIn,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 2.0,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }

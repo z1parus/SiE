@@ -104,6 +104,8 @@ class UserProfileNotifier extends AsyncNotifier<Profile?> {
             'equipped_background_id': serverProfile.equippedBackgroundId,
             'equipped_stat_style_id': serverProfile.equippedStatStyleId,
             'equipped_pattern_id': serverProfile.equippedPatternId,
+            'telegram_id': serverProfile.telegramId,
+            'telegram_username': serverProfile.telegramUsername,
           })),
         ));
         if (pendingXp == 0 && pendingDp == 0) return serverProfile;

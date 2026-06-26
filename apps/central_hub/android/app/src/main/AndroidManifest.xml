@@ -34,6 +34,13 @@
             <intent-filter>
                 <action android:name="es.antonborri.home_widget.action.LAUNCH" />
             </intent-filter>
+            <!-- Supabase OAuth (Telegram) deep-link callback: sie://auth/callback -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="sie" android:host="auth" />
+            </intent-filter>
         </activity>
         <!-- flutter_local_notifications: scheduled + boot receivers -->
         <receiver

@@ -13,7 +13,11 @@ class SupabaseService {
     required String anonKey,
   }) async {
     supabaseUrl = url;
-    await Supabase.initialize(url: url, anonKey: anonKey);
+    await Supabase.initialize(
+      url: url,
+      anonKey: anonKey,
+      authCallbackUrlScheme: 'sie',
+    );
     // Fire-and-forget connectivity diagnostic. It MUST NOT be awaited: a real
     // network round-trip here on the cold-start path is what made the app hang
     // for the full socket timeout when the backend was unreachable.
@@ -45,6 +49,18 @@ class SupabaseService {
     return await client.auth.signInWithPassword(
       email: email,
       password: password,
+    );
+  }
+
+  /// Launches the Telegram OAuth flow. Supabase opens the Telegram Login
+  /// Widget / bot flow; after the user confirms, Telegram redirects to
+  /// `sie://auth/callback` which `supabase_flutter` intercepts (configured via
+  /// `authCallbackUrlScheme: 'sie'`). The resulting session is picked up by
+  /// `authStateProvider` and the app routes to the main shell automatically.
+  static Future<void> signInWithTelegram() async {
+    await client.auth.signInWithOAuth(
+      OAuthProvider('custom:telegram'),
+      redirectTo: 'sie://auth/callback',
     );
   }
 
