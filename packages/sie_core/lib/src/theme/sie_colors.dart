@@ -17,6 +17,7 @@ class SieColors {
     required this.border,
     required this.iconMuted,
     required this.dp,
+    required this.glass,
     // ── Semantic tokens (Stage 0 — design system) ──────────────────────────
     // Theme-independent by default; override per mode only where needed.
     this.rankGold = const Color(0xFFFFD700),
@@ -39,6 +40,11 @@ class SieColors {
   final Color border;
   final Color iconMuted;
   final Color dp;
+
+  /// Glass / highlight tint for translucent tube & crystal visuals — white on
+  /// dark, a cool slate on light so frosted elements stay readable on a light
+  /// card. Replaces the repeated `Color(0xFF5B6480)` / `Colors.white` literal.
+  final Color glass;
 
   // ── Semantic tokens ────────────────────────────────────────────────────────
   /// Leaderboard / medal rank colours.
@@ -133,6 +139,7 @@ class SieColors {
     border: Color(0xFF3E3E48),
     iconMuted: Color(0xFF888898),
     dp: Color(0xFFAA7744),
+    glass: Color(0xFFFFFFFF),
   );
 
   static const _light = SieColors(
@@ -146,6 +153,7 @@ class SieColors {
     border: Color(0xFFE4E4EE),
     iconMuted: Color(0xFF9494A0),
     dp: Color(0xFF8B5CF6),
+    glass: Color(0xFF5B6480),
   );
 }
 
