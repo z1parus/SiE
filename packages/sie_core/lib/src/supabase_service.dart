@@ -13,11 +13,7 @@ class SupabaseService {
     required String anonKey,
   }) async {
     supabaseUrl = url;
-    await Supabase.initialize(
-      url: url,
-      anonKey: anonKey,
-      authCallbackUrlScheme: 'sie',
-    );
+    await Supabase.initialize(url: url, anonKey: anonKey);
     // Fire-and-forget connectivity diagnostic. It MUST NOT be awaited: a real
     // network round-trip here on the cold-start path is what made the app hang
     // for the full socket timeout when the backend was unreachable.
