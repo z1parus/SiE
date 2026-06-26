@@ -61,6 +61,7 @@
   "settings": {
     "title": "PROTOCOL SETTINGS",
     "sectionProtocol": "PROTOCOL",
+    "protocolLockedHint": "The protocol is defined by your custom sequence and can't be changed here.",
     "sectionSoundToggles": "SOUND TOGGLES",
     "sectionVolume": "VOLUME",
     "sectionPresets": "PRESETS",

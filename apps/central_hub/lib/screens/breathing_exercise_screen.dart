@@ -713,6 +713,9 @@ class _BreathingExerciseScreenState
       builder: (_) => _SettingsSheet(
         settings: _settings,
         onChanged: (s) => setState(() => _settings = s),
+        // In a custom-sequence session the protocol (rounds, cycles, timings,
+        // holds) is fixed by the sequence config — lock those controls.
+        lockProtocol: _isSequenceMode,
       ),
     );
   }
@@ -1633,7 +1636,15 @@ class _SettingsSheet extends ConsumerStatefulWidget {
   final BreathingSettings settings;
   final ValueChanged<BreathingSettings> onChanged;
 
-  const _SettingsSheet({required this.settings, required this.onChanged});
+  /// When true, the "Протокол" section controls are read-only because the
+  /// session runs a custom sequence whose protocol is fixed.
+  final bool lockProtocol;
+
+  const _SettingsSheet({
+    required this.settings,
+    required this.onChanged,
+    this.lockProtocol = false,
+  });
 
   @override
   ConsumerState<_SettingsSheet> createState() => _SettingsSheetState();
@@ -1685,7 +1696,23 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
 
   void _loadPreset(int zeroIndex) {
     final p = _presets[zeroIndex];
-    if (p != null) _update(p);
+    if (p == null) return;
+    if (!widget.lockProtocol) {
+      _update(p);
+      return;
+    }
+    // Protocol is locked by the active sequence — apply only the audio part of
+    // the preset and keep the current (sequence-defined) protocol values.
+    _update(_s.copyWith(
+      ambientEnabled: p.ambientEnabled,
+      breathingSoundsEnabled: p.breathingSoundsEnabled,
+      heartbeatEnabled: p.heartbeatEnabled,
+      tickEnabled: p.tickEnabled,
+      ambientVolume: p.ambientVolume,
+      breathingVolume: p.breathingVolume,
+      heartbeatVolume: p.heartbeatVolume,
+      tickVolume: p.tickVolume,
+    ));
   }
 
   String _presetLabel(BreathingSettings? s) => s == null
@@ -1747,11 +1774,34 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
               ),
               const SizedBox(height: 16),
               _sectionLabel(context, c, t.breathingExercise.settings.sectionProtocol),
+              if (widget.lockProtocol)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, bottom: 6),
+                  child: Row(
+                    children: [
+                      Icon(Icons.lock_outline,
+                          size: 13,
+                          color: c.textSecondary.withValues(alpha: 0.6)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          t.breathingExercise.settings.protocolLockedHint,
+                          style: TextStyle(
+                            color: c.textSecondary.withValues(alpha: 0.7),
+                            fontSize: 11,
+                            height: 1.3,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               _SettingRow(
                 label: t.breathingExercise.settings.rounds,
                 value: _s.rounds,
                 min: 1,
                 max: 5,
+                locked: widget.lockProtocol,
                 onChanged: (v) => _update(_s.copyWith(rounds: v)),
               ),
               _SettingRow(
@@ -1760,6 +1810,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 min: 10,
                 max: 40,
                 step: 5,
+                locked: widget.lockProtocol,
                 onChanged: (v) => _update(_s.copyWith(cyclesPerRound: v)),
               ),
               _SettingRow(
@@ -1767,6 +1818,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 value: _s.inhaleSecs,
                 min: 1,
                 max: 5,
+                locked: widget.lockProtocol,
                 onChanged: (v) => _update(_s.copyWith(inhaleSecs: v)),
               ),
               _SettingRow(
@@ -1774,6 +1826,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 value: _s.exhaleSecs,
                 min: 1,
                 max: 7,
+                locked: widget.lockProtocol,
                 onChanged: (v) => _update(_s.copyWith(exhaleSecs: v)),
               ),
               _SettingRow(
@@ -1782,6 +1835,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 min: 30,
                 max: 180,
                 step: 15,
+                locked: widget.lockProtocol,
                 onChanged: (v) =>
                     _update(_s.copyWith(exhaustRetentionSecs: v)),
               ),
@@ -1790,6 +1844,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 value: _s.recoveryHoldSecs,
                 min: 10,
                 max: 30,
+                locked: widget.lockProtocol,
                 onChanged: (v) => _update(_s.copyWith(recoveryHoldSecs: v)),
               ),
               const SizedBox(height: 12),
@@ -1880,6 +1935,7 @@ class _SettingRow extends ConsumerWidget {
   final int min;
   final int max;
   final int step;
+  final bool locked;
   final ValueChanged<int> onChanged;
 
   const _SettingRow({
@@ -1888,52 +1944,56 @@ class _SettingRow extends ConsumerWidget {
     required this.min,
     required this.max,
     this.step = 1,
+    this.locked = false,
     required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(color: c.textSecondary, fontSize: 12),
-            ),
-          ),
-          _StepBtn(
-            icon: Icons.remove,
-            active: value > min,
-            onTap: value > min
-                ? () => onChanged((value - step).clamp(min, max))
-                : null,
-          ),
-          const SizedBox(width: 20),
-          SizedBox(
-            width: 32,
-            child: Text(
-              '$value',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: c.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1,
+    return Opacity(
+      opacity: locked ? 0.4 : 1.0,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(color: c.textSecondary, fontSize: 12),
               ),
             ),
-          ),
-          const SizedBox(width: 20),
-          _StepBtn(
-            icon: Icons.add,
-            active: value < max,
-            onTap: value < max
-                ? () => onChanged((value + step).clamp(min, max))
-                : null,
-          ),
-        ],
+            _StepBtn(
+              icon: Icons.remove,
+              active: !locked && value > min,
+              onTap: !locked && value > min
+                  ? () => onChanged((value - step).clamp(min, max))
+                  : null,
+            ),
+            const SizedBox(width: 20),
+            SizedBox(
+              width: 32,
+              child: Text(
+                '$value',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+            const SizedBox(width: 20),
+            _StepBtn(
+              icon: Icons.add,
+              active: !locked && value < max,
+              onTap: !locked && value < max
+                  ? () => onChanged((value + step).clamp(min, max))
+                  : null,
+            ),
+          ],
+        ),
       ),
     );
   }

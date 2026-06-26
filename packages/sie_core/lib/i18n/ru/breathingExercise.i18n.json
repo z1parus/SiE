@@ -61,6 +61,7 @@
   "settings": {
     "title": "НАСТРОЙКИ ПРОТОКОЛА",
     "sectionProtocol": "ПРОТОКОЛ",
+    "protocolLockedHint": "Протокол задан пользовательской последовательностью и недоступен для изменения.",
     "sectionSoundToggles": "ЗВУКОВЫЕ ПЕРЕКЛЮЧАТЕЛИ",
     "sectionVolume": "ГРОМКОСТЬ",
     "sectionPresets": "ПРЕСЕТЫ",
