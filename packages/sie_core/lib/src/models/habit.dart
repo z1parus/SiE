@@ -43,6 +43,10 @@ class Habit {
   /// 'avoid' (abstain from a bad thing; success = a day without a lapse).
   final String polarity;
 
+  /// Optional custom start date for avoid habits. When set, the abstinence
+  /// counter runs from this date instead of [createdAt].
+  final DateTime? avoidStartDate;
+
   const Habit({
     required this.id,
     required this.userId,
@@ -60,6 +64,7 @@ class Habit {
     this.reminderTime,
     this.area,
     this.polarity = 'build',
+    this.avoidStartDate,
     required this.createdAt,
   });
 
@@ -86,6 +91,9 @@ class Habit {
         polarity: (map['polarity']?.toString().isNotEmpty ?? false)
             ? map['polarity'].toString()
             : 'build',
+        avoidStartDate: map['avoid_start_date'] != null
+            ? DateTime.tryParse(map['avoid_start_date'].toString())
+            : null,
         createdAt:
             DateTime.tryParse(map['created_at']?.toString() ?? '') ??
                 DateTime.now(),
@@ -106,6 +114,7 @@ class Habit {
     Object? reminderTime = _sentinel,
     Object? area = _sentinel,
     String? polarity,
+    Object? avoidStartDate = _sentinel,
   }) =>
       Habit(
         id: id,
@@ -128,6 +137,9 @@ class Habit {
             : reminderTime as String?,
         area: area == _sentinel ? this.area : area as LifeArea?,
         polarity: polarity ?? this.polarity,
+        avoidStartDate: avoidStartDate == _sentinel
+            ? this.avoidStartDate
+            : avoidStartDate as DateTime?,
         createdAt: createdAt,
       );
 
@@ -435,14 +447,14 @@ const abstinenceMilestones = <int>[1, 7, 30, 90, 180, 365];
 
 /// Number of clean days since the most recent lapse, inclusive of today.
 ///
-/// With no lapses the count runs from the habit's creation date. A lapse
-/// recorded today yields 0 (the streak just reset).
+/// With no lapses the count runs from [Habit.avoidStartDate] when set,
+/// otherwise from the habit's creation date. A lapse recorded today yields 0.
 int abstinenceStreak(Habit habit, Set<String> lapseDates) {
   final today = _dateOnly(DateTime.now());
   final last = _lastLapseDate(lapseDates);
   final from = last != null
       ? last.add(const Duration(days: 1)) // first clean day after the lapse
-      : _dateOnly(habit.createdAt);
+      : _dateOnly(habit.avoidStartDate ?? habit.createdAt);
   if (from.isAfter(today)) return 0;
   return today.difference(from).inDays + 1;
 }
@@ -454,7 +466,7 @@ int abstinenceStreak(Habit habit, Set<String> lapseDates) {
 /// first lapse).
 int longestClean(Habit habit, Set<String> lapseDates) {
   final today = _dateOnly(DateTime.now());
-  final created = _dateOnly(habit.createdAt);
+  final created = _dateOnly(habit.avoidStartDate ?? habit.createdAt);
   final lapses = lapseDates
       .map(DateTime.tryParse)
       .whereType<DateTime>()

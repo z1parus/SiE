@@ -62,7 +62,7 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
         ..clearSnackBars()
         ..showSnackBar(
           SnackBar(
-            content: const Text('Нажмите ещё раз для выхода'),
+            content: Text(t.mainNav.backToExit),
             duration: const Duration(seconds: 2),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
@@ -82,38 +82,41 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
         },
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          body: Stack(
-            children: [
-              Column(
-                children: [
-                  const OfflineBanner(),
-                  Expanded(
-                    child: IndexedStack(
-                      index: _currentIndex,
-                      children: [
-                        ProfileScreen(asTab: true),
-                        OperationsControlScreen(asTab: true),
-                        const GarageScreen(asTab: true),
-                        LeaderboardScreen(asTab: true),
-                      ],
+          body: SafeArea(
+            bottom: false,
+            child: Stack(
+              children: [
+                Column(
+                  children: [
+                    const OfflineBanner(),
+                    Expanded(
+                      child: IndexedStack(
+                        index: _currentIndex,
+                        children: [
+                          ProfileScreen(asTab: true),
+                          OperationsControlScreen(asTab: true),
+                          const GarageScreen(asTab: true),
+                          LeaderboardScreen(asTab: true),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: _ShellNavBar(
-                  activeIndex: _currentIndex,
-                  onTabChanged: (i) {
-                    if (i == _currentIndex) return;
-                    SieHaptics.selection();
-                    setState(() => _currentIndex = i);
-                  },
+                  ],
                 ),
-              ),
-            ],
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: _ShellNavBar(
+                    activeIndex: _currentIndex,
+                    onTabChanged: (i) {
+                      if (i == _currentIndex) return;
+                      SieHaptics.selection();
+                      setState(() => _currentIndex = i);
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -133,22 +136,22 @@ class _ShellNavBar extends ConsumerWidget {
     required this.onTabChanged,
   });
 
-  static const _items = [
-    (icon: Icons.language_outlined,    label: 'Hub'),
-    (icon: Icons.my_location_outlined, label: 'Operations'),
-    (icon: Icons.shield_outlined,      label: 'Garage'),
-    (icon: Icons.star_outline,         label: 'Hall of Fame'),
-  ];
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c           = ref.watch(sieColorsProvider);
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
+    final items = [
+      (icon: Icons.language_outlined,    label: t.mainNav.tabs.hub),
+      (icon: Icons.my_location_outlined, label: t.mainNav.tabs.operations),
+      (icon: Icons.shield_outlined,      label: t.mainNav.tabs.garage),
+      (icon: Icons.star_outline,         label: t.mainNav.tabs.hallOfFame),
+    ];
+
     final navContent = Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: List.generate(_items.length, (i) {
-        final item = _items[i];
+      children: List.generate(items.length, (i) {
+        final item = items[i];
         return _NavItem(
           icon: item.icon,
           label: item.label,

@@ -7,14 +7,17 @@ import 'mission_detail_screen.dart';
 
 ({String label, IconData icon}) _categoryMeta(GoalCategory? cat) =>
     switch (cat) {
-      GoalCategory.learning => (label: 'Обучение', icon: Icons.school_outlined),
-      GoalCategory.health => (label: 'Здоровье', icon: Icons.favorite_outline),
+      GoalCategory.learning =>
+        (label: t.templateGallery.category.learning, icon: Icons.school_outlined),
+      GoalCategory.health =>
+        (label: t.templateGallery.category.health, icon: Icons.favorite_outline),
       GoalCategory.project =>
-        (label: 'Проект', icon: Icons.rocket_launch_outlined),
-      GoalCategory.lifestyle => (label: 'Образ жизни', icon: Icons.spa_outlined),
+        (label: t.templateGallery.category.project, icon: Icons.rocket_launch_outlined),
+      GoalCategory.lifestyle =>
+        (label: t.templateGallery.category.lifestyle, icon: Icons.spa_outlined),
       GoalCategory.discipline =>
-        (label: 'Дисциплина', icon: Icons.bolt_outlined),
-      null => (label: 'Прочее', icon: Icons.flag_outlined),
+        (label: t.templateGallery.category.discipline, icon: Icons.bolt_outlined),
+      null => (label: t.templateGallery.category.other, icon: Icons.flag_outlined),
     };
 
 Color _hexColor(String hex) =>
@@ -40,31 +43,31 @@ class TemplateGalleryScreen extends ConsumerWidget {
             icon: Icon(Icons.arrow_back, color: sc.textPrimary),
             onPressed: () => Navigator.pop(context),
           ),
-          title: Text('Шаблоны миссий',
+          title: Text(t.templateGallery.title,
               style: TextStyle(color: sc.textPrimary, fontSize: 18)),
         ),
         body: templatesAsync.when(
           loading: () =>
               Center(child: CircularProgressIndicator(color: sc.accent)),
           error: (e, _) => Center(
-            child: Text('Не удалось загрузить шаблоны',
+            child: Text(t.templateGallery.loadError,
                 style: TextStyle(color: sc.textSecondary)),
           ),
           data: (templates) {
             if (templates.isEmpty) {
               return Center(
-                child: Text('Пока нет доступных шаблонов',
+                child: Text(t.templateGallery.empty,
                     style: TextStyle(color: sc.textSecondary)),
               );
             }
 
             // Group by category; "Мои шаблоны" surfaced separately at top.
-            final mine = templates.where((t) => !t.isSystem).toList();
-            final system = templates.where((t) => t.isSystem).toList();
+            final mine = templates.where((tpl) => !tpl.isSystem).toList();
+            final system = templates.where((tpl) => tpl.isSystem).toList();
 
             final byCategory = <GoalCategory?, List<MissionTemplate>>{};
-            for (final t in system) {
-              (byCategory[t.category] ??= []).add(t);
+            for (final tpl in system) {
+              (byCategory[tpl.category] ??= []).add(tpl);
             }
             // Stable category order.
             final orderedCats = <GoalCategory?>[
@@ -80,9 +83,9 @@ class TemplateGalleryScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
               children: [
                 if (mine.isNotEmpty) ...[
-                  _SectionLabel(label: 'МОИ ШАБЛОНЫ', sc: sc),
-                  ...mine.map((t) => _TemplateCard(
-                        template: t,
+                  _SectionLabel(label: t.templateGallery.myTemplates, sc: sc),
+                  ...mine.map((tpl) => _TemplateCard(
+                        template: tpl,
                         sc: sc,
                         deletable: true,
                       )),
@@ -91,8 +94,8 @@ class TemplateGalleryScreen extends ConsumerWidget {
                 for (final cat in orderedCats) ...[
                   _SectionLabel(
                       label: _categoryMeta(cat).label.toUpperCase(), sc: sc),
-                  ...byCategory[cat]!.map((t) => _TemplateCard(
-                        template: t,
+                  ...byCategory[cat]!.map((tpl) => _TemplateCard(
+                        template: tpl,
                         sc: sc,
                         deletable: false,
                       )),
@@ -188,8 +191,12 @@ class _TemplateCard extends ConsumerWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${s.subGoalCount} этапов · ${s.taskCount} задач'
-                    '${s.milestoneCount > 0 ? ' · ${s.milestoneCount} вех' : ''}',
+                    t.templateGallery.card.stagesTasks(
+                            stages: s.subGoalCount, tasks: s.taskCount) +
+                        (s.milestoneCount > 0
+                            ? t.templateGallery.card
+                                .milestonesSuffix(n: s.milestoneCount)
+                            : ''),
                     style: TextStyle(color: sc.textSecondary, fontSize: 12),
                   ),
                 ],
@@ -207,18 +214,19 @@ class _TemplateCard extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: sc.surface,
-        title: Text('Удалить шаблон?',
+        title: Text(t.templateGallery.delete.title,
             style: TextStyle(color: sc.textPrimary)),
-        content: Text('«${template.name}» будет удалён из ваших шаблонов.',
+        content: Text(t.templateGallery.delete.message(name: template.name),
             style: TextStyle(color: sc.textSecondary)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: Text('Отмена',
+              child: Text(t.templateGallery.delete.cancel,
                   style: TextStyle(color: sc.textSecondary))),
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: Text('Удалить', style: TextStyle(color: sc.danger))),
+              child: Text(t.templateGallery.delete.confirm,
+                  style: TextStyle(color: sc.danger))),
         ],
       ),
     );
@@ -270,23 +278,24 @@ class TemplatePreviewScreen extends ConsumerWidget {
               children: [
                 _SummaryChip(
                     icon: Icons.account_tree_outlined,
-                    label: '${s.subGoalCount} этапов',
+                    label: t.templateGallery.card.stages(n: s.subGoalCount),
                     sc: sc),
                 _SummaryChip(
                     icon: Icons.task_alt,
-                    label: '${s.taskCount} задач',
+                    label: t.templateGallery.card.tasks(n: s.taskCount),
                     sc: sc),
                 if (s.milestoneCount > 0)
                   _SummaryChip(
                       icon: Icons.flag_outlined,
-                      label: '${s.milestoneCount} вех',
+                      label:
+                          t.templateGallery.card.milestones(n: s.milestoneCount),
                       sc: sc),
               ],
             ),
             const SizedBox(height: 20),
 
             // Sub-goal tree.
-            Text('СТРУКТУРА',
+            Text(t.templateGallery.preview.structure,
                 style: TextStyle(
                     color: sc.textSecondary,
                     fontSize: 11,
@@ -298,7 +307,7 @@ class TemplatePreviewScreen extends ConsumerWidget {
 
             if (s.milestones.isNotEmpty) ...[
               const SizedBox(height: 20),
-              Text('КОНТРОЛЬНЫЕ ТОЧКИ',
+              Text(t.templateGallery.preview.milestones,
                   style: TextStyle(
                       color: sc.textSecondary,
                       fontSize: 11,
@@ -319,7 +328,10 @@ class TemplatePreviewScreen extends ConsumerWidget {
                         Expanded(
                           child: Text(
                             m.kind == 'metric' && m.targetValue != null
-                                ? '${m.name} (цель: ${_fmt(m.targetValue!)}${m.unit != null ? ' ${m.unit}' : ''})'
+                                ? t.templateGallery.preview.metricTarget(
+                                    name: m.name,
+                                    value: _fmt(m.targetValue!),
+                                    unit: m.unit != null ? ' ${m.unit}' : '')
                                 : m.name,
                             style: TextStyle(
                                 color: sc.textPrimary, fontSize: 14),
@@ -339,8 +351,8 @@ class TemplatePreviewScreen extends ConsumerWidget {
               child: ElevatedButton.icon(
                 onPressed: () => _showCreateSheet(context, ref),
                 icon: const Icon(Icons.add),
-                label: const Text('СОЗДАТЬ МИССИЮ',
-                    style: TextStyle(
+                label: Text(t.templateGallery.preview.create,
+                    style: const TextStyle(
                         letterSpacing: 1.2, fontWeight: FontWeight.w600)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: color,
@@ -553,7 +565,7 @@ class _CreateFromTemplateSheetState
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('СОЗДАТЬ ИЗ ШАБЛОНА',
+          Text(t.templateGallery.createSheet.header,
               style: TextStyle(
                   color: sc.textSecondary,
                   fontSize: 10,
@@ -565,7 +577,7 @@ class _CreateFromTemplateSheetState
             style: TextStyle(color: sc.textPrimary, fontSize: 16),
             textCapitalization: TextCapitalization.sentences,
             decoration: InputDecoration(
-              hintText: 'Название миссии',
+              hintText: t.templateGallery.createSheet.nameHint,
               hintStyle: TextStyle(color: sc.textSecondary, fontSize: 16),
               enabledBorder: UnderlineInputBorder(
                   borderSide: BorderSide(color: sc.border)),
@@ -600,8 +612,10 @@ class _CreateFromTemplateSheetState
                 const SizedBox(width: 8),
                 Text(
                   _deadline != null
-                      ? 'Дедлайн: ${_deadline!.day}.${_deadline!.month.toString().padLeft(2, '0')}.${_deadline!.year}'
-                      : 'Установить дедлайн (необязательно)',
+                      ? t.templateGallery.createSheet.deadlineSet(
+                          date:
+                              '${_deadline!.day}.${_deadline!.month.toString().padLeft(2, '0')}.${_deadline!.year}')
+                      : t.templateGallery.createSheet.deadlineEmpty,
                   style: TextStyle(color: sc.accent, fontSize: 13),
                 ),
                 if (_deadline != null) ...[
@@ -634,8 +648,8 @@ class _CreateFromTemplateSheetState
                       height: 18,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
-                  : const Text('РАЗВЕРНУТЬ МИССИЮ',
-                      style: TextStyle(
+                  : Text(t.templateGallery.createSheet.submit,
+                      style: const TextStyle(
                           letterSpacing: 1.2,
                           fontWeight: FontWeight.w600)),
             ),

@@ -1,0 +1,58 @@
+{
+  "section": {
+    "overdue": "Overdue",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "thisWeek": "This week",
+    "later": "Later",
+    "noDate": "No date"
+  },
+  "summary": {
+    "label": "DAY SUMMARY",
+    "noTasksToday": "No tasks for today",
+    "remaining": "{remaining} {taskWord} left · {done} of {planned}",
+    "overdueCount": "{count} {taskWord} overdue"
+  },
+  "reviewBanner": {
+    "title": "Weekly review available",
+    "subtitle": "Let's wrap up and set the focus"
+  },
+  "blockedToggle": {
+    "hide": "Hide blocked",
+    "show": "Show blocked ({count})"
+  },
+  "focusCard": {
+    "label": "FOCUS"
+  },
+  "due": {
+    "overdueBy": "overdue by {n} {dayWord}",
+    "today": "today",
+    "tomorrow": "tomorrow",
+    "inDays": "in {n} {dayWord}"
+  },
+  "blocker": {
+    "waiting": "Waiting: {names}"
+  },
+  "swipe": {
+    "tomorrow": "Tomorrow",
+    "clearDate": "Clear date"
+  },
+  "milestones": {
+    "title": "MILESTONES AHEAD",
+    "overdueBy": "overdue by {n} {dayWord}",
+    "today": "today",
+    "inDays": "in {n} {dayWord}"
+  },
+  "allClear": {
+    "title": "All clear",
+    "subtitle": "All goals under control"
+  },
+  "dayWord": {
+    "one": "day",
+    "other": "days"
+  },
+  "taskWord": {
+    "one": "task",
+    "other": "tasks"
+  }
+}

@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'tactical_map_view.dart';
 import 'mission_accomplished_screen.dart';
 import 'goal_stats_screen.dart';
+import 'goal_notes_screen.dart';
 import 'ai_decomposition_sheet.dart';
 import 'milestone_metric_screen.dart';
 import 'focus_protocol_screen.dart';
@@ -136,6 +137,12 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
                     builder: (_) => GoalStatsScreen(goal: goal),
                   ),
                 ),
+                onJournal: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => GoalNotesScreen(goal: goal, canEdit: canEdit),
+                  ),
+                ),
                 onAiDecompose: canEdit && goal.status == 'active' && GroqService.isInitialized
                     ? () => showAiDecompositionSheet(context, goal)
                     : null,
@@ -189,6 +196,7 @@ class _MissionHeader extends StatelessWidget {
     required this.onBack,
     this.onSettings,
     required this.onStats,
+    required this.onJournal,
     this.onAiDecompose,
     this.isShared = false,
     this.onExport,
@@ -201,6 +209,7 @@ class _MissionHeader extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback? onSettings;
   final VoidCallback onStats;
+  final VoidCallback onJournal;
   final VoidCallback? onAiDecompose;
   final bool isShared;
   final VoidCallback? onExport;
@@ -249,41 +258,28 @@ class _MissionHeader extends StatelessWidget {
                   onPressed: onAiDecompose,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
-                  tooltip: 'AI-план',
+                  tooltip: t.missionDetail.header.aiPlanTooltip,
                 ),
               ],
               const Spacer(),
-              if (onSettings != null) ...[
-                IconButton(
-                  icon: Icon(Icons.settings_outlined,
-                      color: sc.textSecondary, size: 20),
-                  onPressed: onSettings,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-                const SizedBox(width: 4),
-              ],
               IconButton(
-                icon: Icon(Icons.bar_chart_outlined,
+                icon: Icon(Icons.menu_book_outlined,
                     color: sc.textSecondary, size: 20),
-                onPressed: onStats,
+                onPressed: onJournal,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
+                tooltip: t.missionDetail.header.journalTooltip,
               ),
-              if (onExport != null) ...[
-                const SizedBox(width: 2),
-                IconButton(
-                  icon: Icon(Icons.ios_share_outlined,
-                      color: sc.textSecondary, size: 20),
-                  onPressed: onExport,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  tooltip: 'Экспорт',
-                ),
-              ],
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
               _ViewToggle(
                   mapMode: mapMode, onToggle: onToggle, goalColor: goalColor, sc: sc),
+              const SizedBox(width: 2),
+              _HeaderOverflowMenu(
+                sc: sc,
+                onSettings: onSettings,
+                onStats: onStats,
+                onExport: onExport,
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -367,15 +363,14 @@ class _MissionHeader extends StatelessWidget {
     final ref_ = g.updatedAt ?? g.createdAt;
     final daysSinceUpdate = now.difference(ref_).inDays;
     if (daysSinceUpdate >= 7 && goalProgress(g) < 100.0) {
-      advice.add(
-          'Цель не обновлялась $daysSinceUpdate дн. Выполни хотя бы одну задачу.');
+      advice.add(t.missionDetail.advice.stale(n: daysSinceUpdate));
     }
 
     int overdue = 0;
     void countOverdue(List<SubGoal> sgs) {
       for (final sg in sgs) {
-        for (final t in sg.tasks) {
-          if (!t.isCompleted && t.dueDate != null && now.isAfter(t.dueDate!)) {
+        for (final task in sg.tasks) {
+          if (!task.isCompleted && task.dueDate != null && now.isAfter(task.dueDate!)) {
             overdue++;
           }
         }
@@ -384,17 +379,76 @@ class _MissionHeader extends StatelessWidget {
     }
     countOverdue(g.subGoals);
     if (overdue >= 2) {
-      advice.add('$overdue задач просрочено. Расставь приоритеты.');
+      advice.add(t.missionDetail.advice.overdue(n: overdue));
     }
 
     if (g.deadline != null) {
       final daysLeft = g.deadline!.difference(now).inDays;
       if (daysLeft >= 0 && daysLeft <= 14 && goalProgress(g) < 50.0) {
-        advice.add(
-            'До дедлайна $daysLeft дн., прогресс ${goalProgress(g).round()}%. Ускоряйся!');
+        advice.add(t.missionDetail.advice.deadline(
+            days: daysLeft, progress: goalProgress(g).round()));
       }
     }
     return advice;
+  }
+}
+
+// Overflow menu collapsing the secondary header actions (settings, stats,
+// export) behind a single three-dots button so the view toggle always fits.
+class _HeaderOverflowMenu extends StatelessWidget {
+  const _HeaderOverflowMenu({
+    required this.sc,
+    this.onSettings,
+    required this.onStats,
+    this.onExport,
+  });
+
+  final SieColors sc;
+  final VoidCallback? onSettings;
+  final VoidCallback onStats;
+  final VoidCallback? onExport;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.more_vert, color: sc.textSecondary, size: 20),
+      iconSize: 20,
+      padding: EdgeInsets.zero,
+      color: sc.surface,
+      position: PopupMenuPosition.under,
+      tooltip: t.missionDetail.header.moreTooltip,
+      onSelected: (v) {
+        switch (v) {
+          case 'settings':
+            onSettings?.call();
+          case 'stats':
+            onStats();
+          case 'export':
+            onExport?.call();
+        }
+      },
+      itemBuilder: (_) => [
+        if (onSettings != null)
+          _item('settings', Icons.settings_outlined, t.missionDetail.header.menuSettings),
+        _item('stats', Icons.bar_chart_outlined, t.missionDetail.header.menuStats),
+        if (onExport != null)
+          _item('export', Icons.ios_share_outlined, t.missionDetail.header.menuExport),
+      ],
+    );
+  }
+
+  PopupMenuItem<String> _item(String value, IconData icon, String label) {
+    return PopupMenuItem<String>(
+      value: value,
+      height: 44,
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: sc.textSecondary),
+          const SizedBox(width: 12),
+          Text(label, style: TextStyle(color: sc.textPrimary, fontSize: 14)),
+        ],
+      ),
+    );
   }
 }
 
@@ -416,11 +470,11 @@ Color _categoryColor(GoalCategory cat) => switch (cat) {
     };
 
 String _categoryLabel(GoalCategory cat) => switch (cat) {
-      GoalCategory.learning   => 'Обучение',
-      GoalCategory.health     => 'Здоровье',
-      GoalCategory.project    => 'Проект',
-      GoalCategory.lifestyle  => 'Образ жизни',
-      GoalCategory.discipline => 'Дисциплина',
+      GoalCategory.learning   => t.missionDetail.category.learning,
+      GoalCategory.health     => t.missionDetail.category.health,
+      GoalCategory.project    => t.missionDetail.category.project,
+      GoalCategory.lifestyle  => t.missionDetail.category.lifestyle,
+      GoalCategory.discipline => t.missionDetail.category.discipline,
     };
 
 class _StrategicAdviceCard extends StatelessWidget {
@@ -448,7 +502,7 @@ class _StrategicAdviceCard extends StatelessWidget {
                   color: sc.warning, size: 14),
               const SizedBox(width: 6),
               Text(
-                'СОВЕТ',
+                t.missionDetail.advice.title,
                 style: TextStyle(
                   color: sc.warning,
                   fontSize: 10,
@@ -702,7 +756,7 @@ class _SubGoalsSectionState extends ConsumerState<_SubGoalsSection> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SectionHeader(
-          title: 'ОПЕРАЦИИ',
+          title: t.missionDetail.subGoals.sectionTitle,
           icon: Icons.account_tree_outlined,
           count: goal.subGoals.length,
           sc: sc,
@@ -813,7 +867,7 @@ class _SubGoalTile extends ConsumerWidget {
     final done = _completedTasks(sg);
     final total = _totalTasks(sg);
     final childCount = sg.children.length;
-    final childPart = childCount > 0 ? ' · $childCount эт.' : '';
+    final childPart = childCount > 0 ? t.missionDetail.subGoals.childPart(n: childCount) : '';
     final prog = subGoalProgress(sg);
 
     Widget tile = Container(
@@ -868,7 +922,8 @@ class _SubGoalTile extends ConsumerWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '$done/$total задач$childPart · ${prog.round()}%',
+                          t.missionDetail.subGoals.taskCount(
+                              done: done, total: total, childPart: childPart, progress: prog.round()),
                           style: TextStyle(
                               color: sc.textSecondary, fontSize: 11),
                         ),
@@ -1058,7 +1113,7 @@ class _LockedSubGoalSlot extends StatelessWidget {
             Icon(Icons.lock_outline, color: sc.textSecondary, size: 16),
             const SizedBox(width: 10),
             Text(
-              'ЗАБЛОКИРОВАНО',
+              t.missionDetail.subGoals.locked,
               style: TextStyle(
                 color: sc.textSecondary,
                 fontSize: 11,
@@ -1068,7 +1123,7 @@ class _LockedSubGoalSlot extends StatelessWidget {
             ),
             const Spacer(),
             Text(
-              'Разведать',
+              t.missionDetail.subGoals.scout,
               style: TextStyle(color: sc.accent, fontSize: 11),
             ),
           ],
@@ -1100,11 +1155,11 @@ class _TaskTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = task;
-    final focusSecs = ref.watch(taskFocusSecondsProvider(t.id)).valueOrNull ?? 0;
+    final tk = task;
+    final focusSecs = ref.watch(taskFocusSecondsProvider(tk.id)).valueOrNull ?? 0;
     final byId = tasksById(goal);
-    final blockers = taskBlockers(t, byId);
-    final isBlocked = blockers.isNotEmpty && !t.isCompleted;
+    final blockers = taskBlockers(tk, byId);
+    final isBlocked = blockers.isNotEmpty && !tk.isCompleted;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Opacity(
@@ -1122,15 +1177,15 @@ class _TaskTile extends ConsumerWidget {
             onTap: canEdit
                 ? () => ref
                     .read(planningProvider.notifier)
-                    .toggleTask(t.id, subGoal.id, goal.id)
+                    .toggleTask(tk.id, subGoal.id, goal.id)
                 : null,
             child: Icon(
-              t.isCompleted
+              tk.isCompleted
                   ? Icons.check_circle
                   : isBlocked
                       ? Icons.lock_outline
                       : Icons.radio_button_unchecked,
-              color: t.isCompleted ? goal.color : sc.textSecondary,
+              color: tk.isCompleted ? goal.color : sc.textSecondary,
               size: 20,
             ),
           ),
@@ -1143,39 +1198,39 @@ class _TaskTile extends ConsumerWidget {
                   children: [
                     Flexible(
                       child: Text(
-                        t.name,
+                        tk.name,
                         style: TextStyle(
-                          color: t.isCompleted
+                          color: tk.isCompleted
                               ? sc.textSecondary
                               : sc.textPrimary,
                           fontSize: 14,
-                          decoration: t.isCompleted
+                          decoration: tk.isCompleted
                               ? TextDecoration.lineThrough
                               : null,
                         ),
                       ),
                     ),
-                    if (t.isRecurring) ...[
+                    if (tk.isRecurring) ...[
                       const SizedBox(width: 6),
                       Icon(Icons.repeat, size: 13, color: sc.accentSecondary),
                     ],
                   ],
                 ),
-                if (t.dueDate != null || t.isRecurring || focusSecs > 0)
+                if (tk.dueDate != null || tk.isRecurring || focusSecs > 0)
                   Row(
                     children: [
-                      if (t.dueDate != null || t.isRecurring)
+                      if (tk.dueDate != null || tk.isRecurring)
                         Text(
                           [
-                            if (t.dueDate != null) _formatDate(t.dueDate!),
-                            if (t.isRecurring)
-                              _recurrenceLabel(t.recurrenceRule!),
+                            if (tk.dueDate != null) _formatDate(tk.dueDate!),
+                            if (tk.isRecurring)
+                              _recurrenceLabel(tk.recurrenceRule!),
                           ].join(' · '),
                           style: TextStyle(
                               color: sc.textSecondary, fontSize: 10),
                         ),
                       if (focusSecs > 0) ...[
-                        if (t.dueDate != null || t.isRecurring)
+                        if (tk.dueDate != null || tk.isRecurring)
                           Text(' · ',
                               style: TextStyle(
                                   color: sc.textSecondary, fontSize: 10)),
@@ -1194,7 +1249,8 @@ class _TaskTile extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(
-                      'Ждёт: ${blockers.map((b) => b.name).join(', ')}',
+                      t.missionDetail.task.waitingFor(
+                          names: blockers.map((b) => b.name).join(', ')),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -1204,14 +1260,14 @@ class _TaskTile extends ConsumerWidget {
                     ),
                   ),
                 Builder(builder: (ctx) {
-                  final atts = goal.attachmentsFor(t.id);
+                  final atts = goal.attachmentsFor(tk.id);
                   if (atts.isEmpty && !canEdit) return const SizedBox.shrink();
                   return Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: AttachmentGallery(
                       goalId: goal.id,
                       nodeType: 'task',
-                      nodeId: t.id,
+                      nodeId: tk.id,
                       attachments: atts,
                       canEdit: canEdit,
                       compactMode: true,
@@ -1223,22 +1279,22 @@ class _TaskTile extends ConsumerWidget {
           ),
           if (canEdit) ...[
             GestureDetector(
-              onTap: () => _showDependencySheet(context, ref, t, sc),
+              onTap: () => _showDependencySheet(context, ref, tk, sc),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Icon(
-                  t.hasDependencies
+                  tk.hasDependencies
                       ? Icons.account_tree
                       : Icons.account_tree_outlined,
                   size: 16,
-                  color: t.hasDependencies ? sc.accentSecondary : sc.textSecondary,
+                  color: tk.hasDependencies ? sc.accentSecondary : sc.textSecondary,
                 ),
               ),
             ),
           ],
-          if (!t.isCompleted && !isBlocked) ...[
+          if (!tk.isCompleted && !isBlocked) ...[
             GestureDetector(
-              onTap: () => _startFocusOnTask(context, t, subGoal, goal),
+              onTap: () => _startFocusOnTask(context, tk, subGoal, goal),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Icon(Icons.play_circle_outline,
@@ -1246,10 +1302,10 @@ class _TaskTile extends ConsumerWidget {
               ),
             ),
           ],
-          if (t.isRecurring && canEdit) ...[
+          if (tk.isRecurring && canEdit) ...[
             GestureDetector(
               onTap: () =>
-                  _confirmEndRecurrence(context, ref, t.id, subGoal.id, goal.id, sc),
+                  _confirmEndRecurrence(context, ref, tk.id, subGoal.id, goal.id, sc),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Icon(Icons.stop_circle_outlined,
@@ -1257,20 +1313,20 @@ class _TaskTile extends ConsumerWidget {
               ),
             ),
           ],
-          if (t.assigneeIds.isNotEmpty)
+          if (tk.assigneeIds.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(right: 4),
               child: _AssigneeDot(
-                userId: t.assigneeIds.first,
+                userId: tk.assigneeIds.first,
                 goal: goal,
                 sc: sc,
               ),
             ),
-          _WeightBadge(weight: t.weight, sc: sc),
+          _WeightBadge(weight: tk.weight, sc: sc),
           if (canEdit) ...[
             const SizedBox(width: 6),
             GestureDetector(
-              onTap: () => _confirmDeleteTask(context, ref, t.id, subGoal.id, goal.id, sc),
+              onTap: () => _confirmDeleteTask(context, ref, tk.id, subGoal.id, goal.id, sc),
               child: Icon(Icons.close, size: 14, color: sc.textSecondary),
             ),
           ],
@@ -1330,10 +1386,10 @@ class _DependencySheet extends ConsumerWidget {
             .firstOrNull ??
         goal;
     final byId = tasksById(liveGoal);
-    final t = byId[task.id] ?? task;
+    final tk = byId[task.id] ?? task;
 
     // Candidate predecessors: every other task of the same goal.
-    final candidates = byId.values.where((c) => c.id != t.id).toList()
+    final candidates = byId.values.where((c) => c.id != tk.id).toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
@@ -1352,28 +1408,28 @@ class _DependencySheet extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('ЗАВИСИТ ОТ…',
+          Text(t.missionDetail.dependency.title,
               style: TextStyle(
                   color: sc.textSecondary,
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 2)),
           const SizedBox(height: 4),
-          Text(t.name,
+          Text(tk.name,
               style: TextStyle(
                   color: sc.textPrimary,
                   fontSize: 15,
                   fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
           Text(
-            'Эта задача станет доступной, когда выбранные будут выполнены.',
+            t.missionDetail.dependency.description,
             style: TextStyle(color: sc.textSecondary, fontSize: 12),
           ),
           const SizedBox(height: 12),
           if (candidates.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Text('Нет других задач в этой цели.',
+              child: Text(t.missionDetail.dependency.noOtherTasks,
                   style: TextStyle(color: sc.textSecondary, fontSize: 13)),
             )
           else
@@ -1381,9 +1437,9 @@ class _DependencySheet extends ConsumerWidget {
               child: ListView(
                 shrinkWrap: true,
                 children: candidates.map((cand) {
-                  final selected = t.dependsOn.contains(cand.id);
+                  final selected = tk.dependsOn.contains(cand.id);
                   return InkWell(
-                    onTap: () => _toggle(context, ref, t, cand, selected),
+                    onTap: () => _toggle(context, ref, tk, cand, selected),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       child: Row(
@@ -1424,21 +1480,21 @@ class _DependencySheet extends ConsumerWidget {
     );
   }
 
-  Future<void> _toggle(BuildContext context, WidgetRef ref, PlanningTask t,
+  Future<void> _toggle(BuildContext context, WidgetRef ref, PlanningTask tk,
       PlanningTask cand, bool selected) async {
     final notifier = ref.read(planningProvider.notifier);
     if (selected) {
-      await notifier.removeDependency(goal.id, t.id, cand.id);
+      await notifier.removeDependency(goal.id, tk.id, cand.id);
       return;
     }
-    final result = await notifier.addDependency(goal.id, t.id, cand.id);
+    final result = await notifier.addDependency(goal.id, tk.id, cand.id);
     if (!context.mounted) return;
     if (result != DependencyResult.ok) {
       final msg = switch (result) {
         DependencyResult.cycle =>
-          'Это создаст замкнутый круг зависимостей.',
-        DependencyResult.duplicate => 'Зависимость уже добавлена.',
-        _ => 'Не удалось добавить зависимость.',
+          t.missionDetail.dependency.errorCycle,
+        DependencyResult.duplicate => t.missionDetail.dependency.errorDuplicate,
+        _ => t.missionDetail.dependency.errorGeneric,
       };
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1552,7 +1608,7 @@ class _AddChildSubGoalRow extends ConsumerWidget {
             parentSubGoalId: subGoal.id),
         icon: Icon(Icons.account_tree_outlined, size: 13, color: sc.textSecondary),
         label: Text(
-          'Добавить под-этап',
+          t.missionDetail.subGoals.addChild,
           style: TextStyle(color: sc.textSecondary, fontSize: 12),
         ),
         style: TextButton.styleFrom(padding: const EdgeInsets.all(8)),
@@ -1579,7 +1635,7 @@ class _AddTaskRow extends ConsumerWidget {
         onPressed: () => _showAddTaskSheet(context, ref, subGoal, goal, sc),
         icon: Icon(Icons.add, size: 14, color: sc.accent),
         label: Text(
-          'Добавить задачу',
+          t.missionDetail.subGoals.addTask,
           style: TextStyle(color: sc.accent, fontSize: 13),
         ),
         style: TextButton.styleFrom(padding: const EdgeInsets.all(8)),
@@ -1607,7 +1663,7 @@ class _MilestonesSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SectionHeader(
-          title: 'КОНТРОЛЬНЫЕ ТОЧКИ',
+          title: t.missionDetail.milestones.sectionTitle,
           icon: Icons.flag_outlined,
           count: goal.milestones.length,
           sc: sc,
@@ -1848,7 +1904,7 @@ class _MetricMilestoneTile extends ConsumerWidget {
                           color: sc.accent.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        child: Text('ЗАМЕР',
+                        child: Text(t.missionDetail.milestones.measure,
                             style: TextStyle(
                                 color: sc.accent,
                                 fontSize: 10,
@@ -1947,7 +2003,7 @@ class _LogMeasurementSheetState
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('ВНЕСТИ ЗАМЕР',
+          Text(t.missionDetail.milestones.logTitle,
               style: TextStyle(
                   color: sc.textSecondary,
                   fontSize: 11,
@@ -2021,7 +2077,7 @@ class _LogMeasurementSheetState
                     borderRadius: BorderRadius.circular(12)),
                 elevation: 0,
               ),
-              child: const Text('СОХРАНИТЬ',
+              child: Text(t.missionDetail.milestones.save,
                   style: TextStyle(
                       letterSpacing: 1.5, fontWeight: FontWeight.w600)),
             ),
@@ -2080,7 +2136,7 @@ class _HabitSynergySection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SectionHeader(
-          title: 'СИНЕРГИЯ ПРИВЫЧЕК',
+          title: t.missionDetail.habits.sectionTitle,
           icon: Icons.link,
           count: goal.habitLinks.length,
           sc: sc,
@@ -2209,7 +2265,7 @@ class _QuickEntryBarState extends ConsumerState<_QuickEntryBar> {
           Row(
             children: [
               _ModeChip(
-                label: 'ЭТАП',
+                label: t.missionDetail.quickEntry.stage,
                 mode: _QuickEntryMode.subGoal,
                 selected: _mode == _QuickEntryMode.subGoal,
                 sc: sc,
@@ -2217,7 +2273,7 @@ class _QuickEntryBarState extends ConsumerState<_QuickEntryBar> {
               ),
               const SizedBox(width: 6),
               _ModeChip(
-                label: 'ЗАДАЧА',
+                label: t.missionDetail.quickEntry.task,
                 mode: _QuickEntryMode.task,
                 selected: _mode == _QuickEntryMode.task,
                 sc: sc,
@@ -2225,7 +2281,7 @@ class _QuickEntryBarState extends ConsumerState<_QuickEntryBar> {
               ),
               const SizedBox(width: 6),
               _ModeChip(
-                label: 'ТОЧКА',
+                label: t.missionDetail.quickEntry.point,
                 mode: _QuickEntryMode.milestone,
                 selected: _mode == _QuickEntryMode.milestone,
                 sc: sc,
@@ -2254,9 +2310,9 @@ class _QuickEntryBarState extends ConsumerState<_QuickEntryBar> {
                   onSubmitted: (_) => _submit(),
                   decoration: InputDecoration(
                     hintText: switch (_mode) {
-                      _QuickEntryMode.subGoal => 'Новый этап...',
-                      _QuickEntryMode.task => 'Новая задача...',
-                      _QuickEntryMode.milestone => 'Контрольная точка...',
+                      _QuickEntryMode.subGoal => t.missionDetail.quickEntry.hintSubGoal,
+                      _QuickEntryMode.task => t.missionDetail.quickEntry.hintTask,
+                      _QuickEntryMode.milestone => t.missionDetail.quickEntry.hintMilestone,
                     },
                     border: InputBorder.none,
                     hintStyle: TextStyle(color: sc.textSecondary),
@@ -2435,7 +2491,7 @@ class _SectionHeader extends StatelessWidget {
             GestureDetector(
               onTap: onInfo,
               child: Tooltip(
-                message: 'Туман войны активен',
+                message: t.missionDetail.section.fogActiveTooltip,
                 child: Icon(Icons.info_outline,
                     size: 14, color: sc.accent.withValues(alpha: 0.7)),
               ),
@@ -2464,10 +2520,10 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (status) {
-      'completed' => ('ЗАВЕРШЕНА', const Color(0xFF5AADA0)),
-      'frozen' => ('ЗАМОРОЖЕНА', const Color(0xFF6A8ED8)),
-      'failed' => ('ПРОВАЛЕНА', const Color(0xFFE03050)),
-      _ => ('АКТИВНА', const Color(0xFF5AADA0)),
+      'completed' => (t.missionDetail.status.completed, const Color(0xFF5AADA0)),
+      'frozen' => (t.missionDetail.status.frozen, const Color(0xFF6A8ED8)),
+      'failed' => (t.missionDetail.status.failed, const Color(0xFFE03050)),
+      _ => (t.missionDetail.status.active, const Color(0xFF5AADA0)),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
@@ -2505,8 +2561,8 @@ class _DeadlineChip extends StatelessWidget {
     final color =
         isOverdue ? const Color(0xFFE03050) : const Color(0xFF5AADA0);
     final label = isOverdue
-        ? 'просрочено ${daysLeft.abs()} дн.'
-        : 'через $daysLeft дн.';
+        ? t.missionDetail.deadline.overdue(n: daysLeft.abs())
+        : t.missionDetail.deadline.remaining(n: daysLeft);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -2637,8 +2693,8 @@ void _showSubGoalOptionsSheet(BuildContext context, WidgetRef ref,
         final confirm = await confirmDestructive(
           context,
           ref,
-          title: 'Удалить этап?',
-          message: 'Этап «${sg.name}» и все его задачи будут удалены.',
+          title: t.missionDetail.delete.subGoalTitle,
+          message: t.missionDetail.delete.subGoalMessage(name: sg.name),
         );
         if (confirm) {
           ref
@@ -2655,8 +2711,8 @@ Future<void> _confirmDeleteTask(BuildContext context, WidgetRef ref,
   final confirm = await confirmDestructive(
     context,
     ref,
-    title: 'Удалить задачу?',
-    message: 'Задача будет удалена без возможности восстановления.',
+    title: t.missionDetail.delete.taskTitle,
+    message: t.missionDetail.delete.taskMessage,
   );
   if (confirm) {
     ref.read(planningProvider.notifier).deleteTask(taskId, subGoalId, goalId);
@@ -2668,9 +2724,8 @@ Future<void> _confirmEndRecurrence(BuildContext context, WidgetRef ref,
   final confirm = await confirmDestructive(
     context,
     ref,
-    title: 'Завершить серию?',
-    message:
-        'Текущая задача останется, но новые повторы создаваться не будут.',
+    title: t.missionDetail.delete.endRecurrenceTitle,
+    message: t.missionDetail.delete.endRecurrenceMessage,
   );
   if (confirm) {
     ref
@@ -2685,20 +2740,20 @@ String _recurrenceLabel(String rule) {
   final arg = parts.length > 1 ? parts[1] : '';
   switch (parts[0]) {
     case 'daily':
-      return '↻ ежедневно';
+      return t.missionDetail.recurrence.daily;
     case 'every':
-      return '↻ каждые $arg дн.';
+      return t.missionDetail.recurrence.every(n: int.tryParse(arg) ?? 0);
     case 'monthly':
-      return '↻ ежемесячно ($arg)';
+      return t.missionDetail.recurrence.monthly(day: arg);
     case 'weekly':
-      const names = {
-        '1': 'Пн',
-        '2': 'Вт',
-        '3': 'Ср',
-        '4': 'Чт',
-        '5': 'Пт',
-        '6': 'Сб',
-        '7': 'Вс'
+      final names = {
+        '1': t.missionDetail.recurrence.weekday1,
+        '2': t.missionDetail.recurrence.weekday2,
+        '3': t.missionDetail.recurrence.weekday3,
+        '4': t.missionDetail.recurrence.weekday4,
+        '5': t.missionDetail.recurrence.weekday5,
+        '6': t.missionDetail.recurrence.weekday6,
+        '7': t.missionDetail.recurrence.weekday7,
       };
       final days = arg.split(',').map((d) => names[d.trim()] ?? d).join(',');
       return '↻ $days';
@@ -2712,8 +2767,8 @@ Future<void> _confirmDeleteMilestone(BuildContext context, WidgetRef ref,
   final confirm = await confirmDestructive(
     context,
     ref,
-    title: 'Удалить контрольную точку?',
-    message: 'Контрольная точка будет удалена без возможности восстановления.',
+    title: t.missionDetail.delete.milestoneTitle,
+    message: t.missionDetail.delete.milestoneMessage,
   );
   if (confirm) {
     ref
@@ -2756,12 +2811,12 @@ class _AddSubGoalSheetState extends ConsumerState<_AddSubGoalSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SheetTitle('НОВЫЙ ЭТАП', sc),
+          _SheetTitle(t.missionDetail.addSubGoal.title, sc),
           const SizedBox(height: 12),
-          _SheetTextField('Название этапа', _ctrl, sc),
+          _SheetTextField(t.missionDetail.addSubGoal.nameHint, _ctrl, sc),
           const SizedBox(height: 20),
           _SheetSubmitButton(
-            label: 'СОЗДАТЬ ЭТАП',
+            label: t.missionDetail.addSubGoal.submit,
             sc: sc,
             onTap: () {
               final name = _ctrl.text.trim();
@@ -2891,11 +2946,11 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SheetTitle('НОВАЯ ЗАДАЧА', sc),
+          _SheetTitle(t.missionDetail.addTask.title, sc),
           const SizedBox(height: 12),
-          _SheetTextField('Название задачи', _ctrl, sc, autofocus: true),
+          _SheetTextField(t.missionDetail.addTask.nameHint, _ctrl, sc, autofocus: true),
           const SizedBox(height: 16),
-          Text('СЛОЖНОСТЬ',
+          Text(t.missionDetail.addTask.difficulty,
               style: TextStyle(
                   color: sc.textSecondary,
                   fontSize: 9,
@@ -2905,21 +2960,21 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
           Row(
             children: [
               _WeightButton(
-                  label: 'Лёгкая',
+                  label: t.missionDetail.addTask.easy,
                   value: 1,
                   selected: _weight == 1,
                   sc: sc,
                   onTap: () => setState(() => _weight = 1)),
               const SizedBox(width: 6),
               _WeightButton(
-                  label: 'Средняя',
+                  label: t.missionDetail.addTask.medium,
                   value: 3,
                   selected: _weight == 3,
                   sc: sc,
                   onTap: () => setState(() => _weight = 3)),
               const SizedBox(width: 6),
               _WeightButton(
-                  label: 'Сложная',
+                  label: t.missionDetail.addTask.hard,
                   value: 5,
                   selected: _weight == 5,
                   sc: sc,
@@ -2950,8 +3005,8 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
                 const SizedBox(width: 6),
                 Text(
                   _dueDate != null
-                      ? 'Дедлайн: ${_formatDate(_dueDate!)}'
-                      : 'Добавить дедлайн (необязательно)',
+                      ? t.missionDetail.addTask.deadlineSet(date: _formatDate(_dueDate!))
+                      : t.missionDetail.addTask.deadlineAdd,
                   style: TextStyle(color: sc.accent, fontSize: 13),
                 ),
                 if (_dueDate != null) ...[
@@ -2966,7 +3021,7 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
             ),
           ),
           const SizedBox(height: 16),
-          Text('ПОВТОР',
+          Text(t.missionDetail.addTask.repeat,
               style: TextStyle(
                   color: sc.textSecondary,
                   fontSize: 9,
@@ -2977,15 +3032,15 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
             spacing: 6,
             runSpacing: 6,
             children: [
-              _RecurChip('Нет', 'none', _recur, sc,
+              _RecurChip(t.missionDetail.addTask.recurNone, 'none', _recur, sc,
                   () => setState(() => _recur = 'none')),
-              _RecurChip('Ежедневно', 'daily', _recur, sc,
+              _RecurChip(t.missionDetail.addTask.recurDaily, 'daily', _recur, sc,
                   () => setState(() => _recur = 'daily')),
-              _RecurChip('Еженедельно', 'weekly', _recur, sc,
+              _RecurChip(t.missionDetail.addTask.recurWeekly, 'weekly', _recur, sc,
                   () => setState(() => _recur = 'weekly')),
-              _RecurChip('Ежемесячно', 'monthly', _recur, sc,
+              _RecurChip(t.missionDetail.addTask.recurMonthly, 'monthly', _recur, sc,
                   () => setState(() => _recur = 'monthly')),
-              _RecurChip('Каждые N дней', 'every', _recur, sc,
+              _RecurChip(t.missionDetail.addTask.recurEvery, 'every', _recur, sc,
                   () => setState(() => _recur = 'every')),
             ],
           ),
@@ -2993,7 +3048,7 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
             const SizedBox(height: 10),
             Row(
               children: [
-                Text('Каждые', style: TextStyle(color: sc.textSecondary, fontSize: 13)),
+                Text(t.missionDetail.addTask.everyPrefix, style: TextStyle(color: sc.textSecondary, fontSize: 13)),
                 const SizedBox(width: 10),
                 _StepperButton(
                     icon: Icons.remove,
@@ -3014,7 +3069,7 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
                     onTap: () => setState(
                         () => _everyN = _everyN < 99 ? _everyN + 1 : 99)),
                 const SizedBox(width: 10),
-                Text('дней', style: TextStyle(color: sc.textSecondary, fontSize: 13)),
+                Text(t.missionDetail.addTask.everySuffix, style: TextStyle(color: sc.textSecondary, fontSize: 13)),
               ],
             ),
           ],
@@ -3023,14 +3078,14 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
               padding: const EdgeInsets.only(top: 8),
               child: Text(
                 _recur == 'weekly'
-                    ? 'Повтор в этот день недели (по дате дедлайна)'
-                    : 'Повтор в это число месяца (по дате дедлайна)',
+                    ? t.missionDetail.addTask.weeklyHint
+                    : t.missionDetail.addTask.monthlyHint,
                 style: TextStyle(color: sc.textSecondary, fontSize: 11),
               ),
             ),
           const SizedBox(height: 20),
           _SheetSubmitButton(
-            label: 'ДОБАВИТЬ ЗАДАЧУ',
+            label: t.missionDetail.addTask.submit,
             sc: sc,
             onTap: () {
               final name = _ctrl.text.trim();
@@ -3141,23 +3196,23 @@ class _AddMilestoneSheetState extends ConsumerState<_AddMilestoneSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SheetTitle('КОНТРОЛЬНАЯ ТОЧКА', sc),
+          _SheetTitle(t.missionDetail.addMilestone.title, sc),
           const SizedBox(height: 12),
-          _SheetTextField('Название точки', _nameCtrl, sc, autofocus: true),
+          _SheetTextField(t.missionDetail.addMilestone.nameHint, _nameCtrl, sc, autofocus: true),
           const SizedBox(height: 16),
 
           // Kind selector.
           Row(
             children: [
               _KindChip(
-                label: 'Бинарная',
+                label: t.missionDetail.addMilestone.binary,
                 selected: _kind == 'binary',
                 sc: sc,
                 onTap: () => setState(() => _kind = 'binary'),
               ),
               const SizedBox(width: 8),
               _KindChip(
-                label: 'Метрика',
+                label: t.missionDetail.addMilestone.metric,
                 selected: _kind == 'metric',
                 sc: sc,
                 onTap: () => setState(() => _kind = 'metric'),
@@ -3171,35 +3226,35 @@ class _AddMilestoneSheetState extends ConsumerState<_AddMilestoneSheet> {
             Row(
               children: [
                 Expanded(
-                  child: _SheetTextField('Старт', _startCtrl, sc,
+                  child: _SheetTextField(t.missionDetail.addMilestone.start, _startCtrl, sc,
                       keyboard: const TextInputType.numberWithOptions(decimal: true)),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: _SheetTextField('Цель', _targetCtrl, sc,
+                  child: _SheetTextField(t.missionDetail.addMilestone.target, _targetCtrl, sc,
                       keyboard: const TextInputType.numberWithOptions(decimal: true)),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: _SheetTextField('Ед. (кг, \$, км)', _unitCtrl, sc),
+                  child: _SheetTextField(t.missionDetail.addMilestone.unitHint, _unitCtrl, sc),
                 ),
               ],
             ),
             const SizedBox(height: 12),
             Row(
               children: [
-                Text('Направление:',
+                Text(t.missionDetail.addMilestone.direction,
                     style: TextStyle(color: sc.textSecondary, fontSize: 12)),
                 const SizedBox(width: 12),
                 _KindChip(
-                  label: '↑ Увеличивать',
+                  label: t.missionDetail.addMilestone.increase,
                   selected: _direction == 'up',
                   sc: sc,
                   onTap: () => setState(() => _direction = 'up'),
                 ),
                 const SizedBox(width: 8),
                 _KindChip(
-                  label: '↓ Уменьшать',
+                  label: t.missionDetail.addMilestone.decrease,
                   selected: _direction == 'down',
                   sc: sc,
                   onTap: () => setState(() => _direction = 'down'),
@@ -3232,8 +3287,8 @@ class _AddMilestoneSheetState extends ConsumerState<_AddMilestoneSheet> {
                 const SizedBox(width: 6),
                 Text(
                   _targetDate != null
-                      ? 'Дата: ${_formatDate(_targetDate!)}'
-                      : 'Добавить дату (необязательно)',
+                      ? t.missionDetail.addMilestone.dateSet(date: _formatDate(_targetDate!))
+                      : t.missionDetail.addMilestone.dateAdd,
                   style: TextStyle(color: sc.accent, fontSize: 13),
                 ),
                 if (_targetDate != null) ...[
@@ -3249,7 +3304,7 @@ class _AddMilestoneSheetState extends ConsumerState<_AddMilestoneSheet> {
           ),
           const SizedBox(height: 20),
           _SheetSubmitButton(
-            label: 'ДОБАВИТЬ ТОЧКУ',
+            label: t.missionDetail.addMilestone.submit,
             sc: sc,
             onTap: () {
               final name = _nameCtrl.text.trim();
@@ -3333,14 +3388,14 @@ class _HabitPickerSheet extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SheetTitle('ПРИВЯЗАТЬ ПРИВЫЧКУ', sc),
+          _SheetTitle(t.missionDetail.habits.linkTitle, sc),
           const SizedBox(height: 12),
           if (available.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
               child: Center(
                 child: Text(
-                  'Нет доступных привычек',
+                  t.missionDetail.habits.noHabits,
                   style: TextStyle(color: sc.textSecondary, fontSize: 14),
                 ),
               ),
@@ -3425,20 +3480,20 @@ class _SubGoalOptionsSheet extends StatelessWidget {
           if (!subGoal.isCompleted)
             _OptionTile(
               icon: Icons.check_circle_outline,
-              label: 'Завершить этап',
+              label: t.missionDetail.subGoalOptions.complete,
               color: const Color(0xFF5AADA0),
               onTap: onComplete,
             ),
           if (onUnparent != null)
             _OptionTile(
               icon: Icons.arrow_upward_outlined,
-              label: 'Вынести на уровень выше',
+              label: t.missionDetail.subGoalOptions.unparent,
               color: const Color(0xFF888898),
               onTap: onUnparent!,
             ),
           _OptionTile(
             icon: Icons.delete_outline,
-            label: 'Удалить этап',
+            label: t.missionDetail.subGoalOptions.delete,
             color: const Color(0xFFE03050),
             onTap: onDelete,
           ),
@@ -3525,7 +3580,7 @@ class _FogOfWarInfoSheet extends StatelessWidget {
               Icon(Icons.filter_drama_outlined, color: sc.accent, size: 18),
               const SizedBox(width: 8),
               Text(
-                'ТУМАН ВОЙНЫ',
+                t.missionDetail.fog.title,
                 style: TextStyle(
                   color: sc.textSecondary,
                   fontSize: 10,
@@ -3537,10 +3592,7 @@ class _FogOfWarInfoSheet extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'Режим «Туман войны» скрывает этапы операции до их разблокировки. '
-            'Чтобы увидеть следующий этап, нажми «Разведать» на заблокированном элементе.\n\n'
-            'Этот режим помогает сосредоточиться на текущих задачах, '
-            'постепенно раскрывая план по мере продвижения.',
+            t.missionDetail.fog.body,
             style: TextStyle(color: sc.textSecondary, fontSize: 13, height: 1.5),
           ),
           const SizedBox(height: 16),
@@ -3554,7 +3606,7 @@ class _FogOfWarInfoSheet extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
               ),
-              child: const Text('ПОНЯТНО'),
+              child: Text(t.missionDetail.fog.gotIt),
             ),
           ),
         ],
@@ -3749,7 +3801,7 @@ class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
             padding: EdgeInsets.zero,
           ),
           title: Text(
-            'НАСТРОЙКИ МИССИИ',
+            t.missionDetail.settings.title,
             style: TextStyle(
               color: sc.textSecondary,
               fontSize: 12,
@@ -3778,7 +3830,7 @@ class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Создано: ${_formatDate(goal.createdAt)}',
+                t.missionDetail.settings.createdAt(date: _formatDate(goal.createdAt)),
                 style: TextStyle(color: sc.textSecondary, fontSize: 12),
               ),
               const SizedBox(height: 20),
@@ -3786,7 +3838,7 @@ class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
               const SizedBox(height: 16),
               // Stage 9: the "why" (motivation).
               Text(
-                'ЗАЧЕМ Я ЭТО ДЕЛАЮ',
+                t.missionDetail.settings.whyHeader,
                 style: TextStyle(
                     color: sc.textSecondary,
                     fontSize: 10,
@@ -3806,7 +3858,7 @@ class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
                       why: trimmed.isEmpty ? null : trimmed);
                 },
                 decoration: InputDecoration(
-                  hintText: 'Моя мотивация и смысл этой цели…',
+                  hintText: t.missionDetail.settings.whyHint,
                   hintStyle: TextStyle(color: sc.textSecondary, fontSize: 13),
                   filled: true,
                   fillColor: sc.surface,
@@ -3835,7 +3887,7 @@ class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Туман войны',
+                          t.missionDetail.settings.fogTitle,
                           style: TextStyle(
                               color: sc.textPrimary,
                               fontSize: 14,
@@ -3843,7 +3895,7 @@ class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Скрывает этапы до их разблокировки',
+                          t.missionDetail.settings.fogSubtitle,
                           style: TextStyle(color: sc.textSecondary, fontSize: 11),
                         ),
                       ],
@@ -3863,7 +3915,7 @@ class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Скрыть выполненные задачи',
+                      t.missionDetail.settings.hideCompleted,
                       style: TextStyle(
                           color: sc.textPrimary,
                           fontSize: 14,
@@ -3884,7 +3936,7 @@ class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Напомнить за дней до дедлайна',
+                      t.missionDetail.settings.remindBefore,
                       style: TextStyle(
                           color: sc.textPrimary,
                           fontSize: 14,
@@ -3906,7 +3958,7 @@ class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
               const SizedBox(height: 16),
               // Category picker
               Text(
-                'Категория миссии',
+                t.missionDetail.settings.categoryTitle,
                 style: TextStyle(
                     color: sc.textPrimary,
                     fontSize: 14,
@@ -3918,7 +3970,7 @@ class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
                 runSpacing: 8,
                 children: [
                   _CategoryChip(
-                    label: 'Нет',
+                    label: t.missionDetail.settings.categoryNone,
                     icon: Icons.remove_circle_outline,
                     color: sc.textSecondary,
                     selected: _settings.category == null,
@@ -3943,7 +3995,7 @@ class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
               // Status actions
               _SettingsActionRow(
                 icon: isFrozen ? Icons.play_arrow_outlined : Icons.ac_unit,
-                label: isFrozen ? 'Разморозить миссию' : 'Заморозить миссию',
+                label: isFrozen ? t.missionDetail.settings.unfreeze : t.missionDetail.settings.freeze,
                 color: const Color(0xFF6A8ED8),
                 onTap: () {
                   final newStatus = isFrozen ? 'active' : 'frozen';
@@ -3956,7 +4008,7 @@ class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
               if (goal.status != 'completed')
                 _SettingsActionRow(
                   icon: Icons.check_circle_outline,
-                  label: 'Завершить миссию',
+                  label: t.missionDetail.settings.complete,
                   color: const Color(0xFF5AADA0),
                   onTap: () async {
                     final medal = await ref
@@ -3971,7 +4023,7 @@ class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
                           xpGained: goalCompletionBaseXp(goal) + (medal?.xpBonus ?? 100),
                           dpGained: _categoryDp(goal.settings.category),
                           medal: medal,
-                          subtitle: 'МИССИЯ ЗАВЕРШЕНА',
+                          subtitle: t.missionDetail.settings.completedSubtitle,
                         ),
                       ),
                     );
@@ -4004,9 +4056,9 @@ class _GoalSettingsScreenState extends ConsumerState<GoalSettingsScreen> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text(
-                'ПРИМЕНИТЬ',
-                style: TextStyle(
+              child: Text(
+                t.missionDetail.settings.apply,
+                style: const TextStyle(
                     fontWeight: FontWeight.w700, letterSpacing: 1.5),
               ),
             ),
@@ -4051,7 +4103,7 @@ class _CollaborationSection extends ConsumerWidget {
             Icon(Icons.people_outlined, size: 14, color: sc.textSecondary),
             const SizedBox(width: 6),
             Text(
-              'СОВМЕСТНАЯ РАБОТА',
+              t.missionDetail.collaboration.sectionTitle,
               style: TextStyle(
                   color: sc.textSecondary,
                   fontSize: 11,
@@ -4071,16 +4123,16 @@ class _CollaborationSection extends ConsumerWidget {
                 final ok = await showDialog<bool>(
                   context: context,
                   builder: (_) => AlertDialog(
-                    title: const Text('Удалить участника?'),
+                    title: Text(t.missionDetail.collaboration.removeTitle),
                     content: Text(
-                        'Убрать ${c.profile?.username ?? c.userId} из совместной работы?'),
+                        t.missionDetail.collaboration.removeMessage(name: c.profile?.username ?? c.userId)),
                     actions: [
                       TextButton(
                           onPressed: () => Navigator.pop(context, false),
-                          child: const Text('Отмена')),
+                          child: Text(t.missionDetail.collaboration.cancel)),
                       TextButton(
                           onPressed: () => Navigator.pop(context, true),
-                          child: const Text('Удалить')),
+                          child: Text(t.missionDetail.collaboration.remove)),
                     ],
                   ),
                 );
@@ -4096,7 +4148,7 @@ class _CollaborationSection extends ConsumerWidget {
         if (canInviteMore)
           TextButton.icon(
             icon: Icon(Icons.person_add_outlined, size: 16, color: sc.accent),
-            label: Text('Пригласить друга',
+            label: Text(t.missionDetail.collaboration.invite,
                 style: TextStyle(color: sc.accent, fontSize: 13)),
             onPressed: () => _showCollaboratorPickerSheet(context, ref, liveGoal, sc),
             style: TextButton.styleFrom(
@@ -4186,9 +4238,9 @@ class _CollaboratorRow extends StatelessWidget {
             isDense: true,
             style: TextStyle(color: sc.textSecondary, fontSize: 12),
             dropdownColor: sc.surface,
-            items: const [
-              DropdownMenuItem(value: 'viewer', child: Text('Просмотр')),
-              DropdownMenuItem(value: 'editor', child: Text('Редактор')),
+            items: [
+              DropdownMenuItem(value: 'viewer', child: Text(t.missionDetail.collaboration.roleViewer)),
+              DropdownMenuItem(value: 'editor', child: Text(t.missionDetail.collaboration.roleEditor)),
             ],
             onChanged: (v) {
               if (v != null && v != c.role) onRoleChange(v);
@@ -4237,7 +4289,7 @@ class _PendingCollaboratorRow extends StatelessWidget {
                       text: name,
                       style: TextStyle(color: sc.textPrimary, fontSize: 13)),
                   TextSpan(
-                      text: '  ожидает ответа',
+                      text: t.missionDetail.collaboration.pending,
                       style: TextStyle(
                           color: sc.textSecondary,
                           fontSize: 11,
@@ -4251,7 +4303,7 @@ class _PendingCollaboratorRow extends StatelessWidget {
             style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 minimumSize: Size.zero),
-            child: Text('Отозвать',
+            child: Text(t.missionDetail.collaboration.revoke,
                 style: TextStyle(color: sc.textSecondary, fontSize: 12)),
           ),
         ],
@@ -4339,7 +4391,7 @@ class _CollaboratorPickerSheetState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('ПРИГЛАСИТЬ ДРУГА',
+                  Text(t.missionDetail.collaboration.inviteTitle,
                       style: TextStyle(
                           color: sc.textSecondary,
                           fontSize: 11,
@@ -4348,12 +4400,12 @@ class _CollaboratorPickerSheetState
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      Text('Права:',
+                      Text(t.missionDetail.collaboration.rights,
                           style: TextStyle(
                               color: sc.textPrimary, fontSize: 13)),
                       const SizedBox(width: 12),
                       _RoleChip(
-                        label: 'Просмотр',
+                        label: t.missionDetail.collaboration.rightsViewer,
                         selected: _selectedRole == 'viewer',
                         sc: sc,
                         onTap: () =>
@@ -4361,7 +4413,7 @@ class _CollaboratorPickerSheetState
                       ),
                       const SizedBox(width: 8),
                       _RoleChip(
-                        label: 'Редактор',
+                        label: t.missionDetail.collaboration.rightsEditor,
                         selected: _selectedRole == 'editor',
                         sc: sc,
                         onTap: () =>
@@ -4376,7 +4428,7 @@ class _CollaboratorPickerSheetState
             Expanded(
               child: available.isEmpty
                   ? Center(
-                      child: Text('Нет доступных друзей',
+                      child: Text(t.missionDetail.collaboration.noFriends,
                           style: TextStyle(
                               color: sc.textSecondary, fontSize: 14)),
                     )
@@ -4442,7 +4494,7 @@ class _CollaboratorPickerSheetState
                                       width: 16, height: 16,
                                       child: CircularProgressIndicator(
                                           strokeWidth: 2, color: Colors.white))
-                                  : Text(isPending ? 'Отправлено' : 'Позвать',
+                                  : Text(isPending ? t.missionDetail.collaboration.sent : t.missionDetail.collaboration.invite_action,
                                       style: const TextStyle(fontSize: 12)),
                             ),
                           ),

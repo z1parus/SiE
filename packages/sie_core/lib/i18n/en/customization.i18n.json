@@ -1,0 +1,30 @@
+{
+  "topBar": {
+    "title": "APPEARANCE SETUP",
+    "apply": "APPLY"
+  },
+  "tabs": {
+    "frames": "FRAMES",
+    "backgrounds": "BACKGROUNDS",
+    "styles": "STYLES",
+    "patterns": "PATTERNS"
+  },
+  "snack": {
+    "noConnection": "Check your internet connection",
+    "unlockRequired": "Requires {dp} DP to unlock",
+    "unavailable": "This item is unavailable"
+  },
+  "preview": {
+    "defaultUsername": "OPERATIVE",
+    "level": "LEVEL {level}",
+    "designPoints": "{dp} DP",
+    "xpTotal": "{xp} XP TOTAL",
+    "xpToLevel": "{xp} XP TO LVL {level}",
+    "label": "PREVIEW"
+  },
+  "card": {
+    "active": "ACTIVE",
+    "noPattern": "NO PATTERN",
+    "locked": "Locked"
+  }
+}

@@ -37,7 +37,7 @@ class ReminderSettingsScreen extends ConsumerWidget {
           backgroundColor: Colors.transparent,
           elevation: 0,
           iconTheme: IconThemeData(color: c.textPrimary),
-          title: Text('Напоминания',
+          title: Text(t.reminderSettings.appBarTitle,
               style: TextStyle(
                   color: c.textPrimary,
                   fontSize: 18,
@@ -47,7 +47,8 @@ class ReminderSettingsScreen extends ConsumerWidget {
           loading: () =>
               Center(child: CircularProgressIndicator(color: c.accent)),
           error: (_, _) => Center(
-              child: Text('Ошибка', style: TextStyle(color: c.textSecondary))),
+              child: Text(t.reminderSettings.errorLoading,
+                  style: TextStyle(color: c.textSecondary))),
           data: (s) => ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
@@ -55,9 +56,8 @@ class ReminderSettingsScreen extends ConsumerWidget {
                 c: c,
                 child: _SwitchRow(
                   c: c,
-                  title: 'Напоминания включены',
-                  subtitle:
-                      'Локальные уведомления о задачах, вехах и дедлайнах',
+                  title: t.reminderSettings.master.title,
+                  subtitle: t.reminderSettings.master.subtitle,
                   value: s.remindersEnabled,
                   onChanged: (v) => _toggleMaster(ref, v),
                 ),
@@ -66,7 +66,7 @@ class ReminderSettingsScreen extends ConsumerWidget {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
                   child: Text(
-                    'Включите, чтобы получать напоминания. Потребуется разрешение системы.',
+                    t.reminderSettings.master.disabledHint,
                     style: TextStyle(color: c.textSecondary, fontSize: 12),
                   ),
                 ),
@@ -78,8 +78,8 @@ class ReminderSettingsScreen extends ConsumerWidget {
                     children: [
                       _SwitchRow(
                         c: c,
-                        title: 'Дневная сводка',
-                        subtitle: 'Утренний обзор задач на сегодня',
+                        title: t.reminderSettings.dailyDigest.title,
+                        subtitle: t.reminderSettings.dailyDigest.subtitle,
                         value: s.dailyDigestEnabled,
                         onChanged: (v) async {
                           await ref
@@ -117,9 +117,8 @@ class ReminderSettingsScreen extends ConsumerWidget {
                   c: c,
                   child: _SwitchRow(
                     c: c,
-                    title: 'Подталкивать при застое',
-                    subtitle:
-                        'Уведомлять, если цель не двигалась несколько дней',
+                    title: t.reminderSettings.stagnation.title,
+                    subtitle: t.reminderSettings.stagnation.subtitle,
                     value: s.stagnationNudge,
                     onChanged: (v) async {
                       await ref
@@ -136,9 +135,8 @@ class ReminderSettingsScreen extends ConsumerWidget {
                     children: [
                       _SwitchRow(
                         c: c,
-                        title: 'Обзор недели',
-                        subtitle:
-                            'Еженедельное приглашение подвести итоги',
+                        title: t.reminderSettings.weeklyReview.title,
+                        subtitle: t.reminderSettings.weeklyReview.subtitle,
                         value: s.weeklyReviewEnabled,
                         onChanged: (v) async {
                           await ref
@@ -206,16 +204,15 @@ class _ReviewScheduleRow extends StatelessWidget {
   final VoidCallback onPickTime;
   final ValueChanged<int> onPickDay;
 
-  static const _days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-
   @override
   Widget build(BuildContext context) {
+    final days = t.habitShared.weekdayShort;
     final time =
         '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('День недели',
+        Text(t.reminderSettings.weeklyReview.dayOfWeek,
             style: TextStyle(color: c.textPrimary, fontSize: 14)),
         const SizedBox(height: 8),
         Wrap(
@@ -236,7 +233,7 @@ class _ReviewScheduleRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: sel ? c.accent : c.border),
                 ),
-                child: Text(_days[i],
+                child: Text(days[i],
                     style: TextStyle(
                         color: sel ? c.accent : c.textSecondary,
                         fontSize: 12,
@@ -252,7 +249,7 @@ class _ReviewScheduleRow extends StatelessWidget {
           child: Row(
             children: [
               Expanded(
-                child: Text('Время обзора',
+                child: Text(t.reminderSettings.weeklyReview.reviewTime,
                     style: TextStyle(color: c.textPrimary, fontSize: 15)),
               ),
               Container(
@@ -355,7 +352,7 @@ class _TimeRow extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text('Время сводки',
+            child: Text(t.reminderSettings.dailyDigest.timeLabel,
                 style: TextStyle(color: c.textPrimary, fontSize: 15)),
           ),
           Container(

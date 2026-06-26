@@ -51,7 +51,7 @@ class _GoalExportSheetState extends ConsumerState<GoalExportSheet> {
               Icon(Icons.ios_share_outlined, color: c.accent, size: 20),
               const SizedBox(width: 10),
               Text(
-                'Экспорт цели',
+                t.goalExport.header.title,
                 style: TextStyle(
                   color: c.textPrimary,
                   fontSize: 17,
@@ -83,7 +83,7 @@ class _GoalExportSheetState extends ConsumerState<GoalExportSheet> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Text('Генерирую…',
+                    Text(t.goalExport.status.generating,
                         style: TextStyle(color: c.textSecondary, fontSize: 13)),
                   ],
                 ),
@@ -108,19 +108,18 @@ class _GoalExportSheetState extends ConsumerState<GoalExportSheet> {
             ],
             _ExportOption(
               icon: Icons.description_outlined,
-              title: 'Markdown (.md)',
-              subtitle:
-                  'Структура цели, задачи, вехи — в читаемом формате для Notion, Obsidian, GitHub',
+              title: t.goalExport.markdown.title,
+              subtitle: t.goalExport.markdown.subtitle,
               sc: c,
               onTap: _exportMarkdown,
             ),
             const SizedBox(height: 10),
             _ExportOption(
               icon: Icons.image_outlined,
-              title: 'Снимок карты (PNG)',
+              title: t.goalExport.png.title,
               subtitle: widget.mapMode
-                  ? 'Скриншот тактической карты в высоком разрешении'
-                  : 'Откройте вид карты (переключитель сверху), затем экспортируйте',
+                  ? t.goalExport.png.subtitleAvailable
+                  : t.goalExport.png.subtitleUnavailable,
               sc: c,
               enabled: widget.mapMode && widget.mapRepaintKey != null,
               onTap: _exportPng,
@@ -153,7 +152,7 @@ class _GoalExportSheetState extends ConsumerState<GoalExportSheet> {
       );
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      setState(() => _error = 'Ошибка: $e');
+      setState(() => _error = t.goalExport.errors.generic(error: e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -162,7 +161,7 @@ class _GoalExportSheetState extends ConsumerState<GoalExportSheet> {
   Future<void> _exportPng() async {
     final key = widget.mapRepaintKey;
     if (key == null || key.currentContext == null) {
-      setState(() => _error = 'Карта не отрисована. Переключитесь в режим карты.');
+      setState(() => _error = t.goalExport.errors.mapNotRendered);
       return;
     }
     setState(() {
@@ -173,7 +172,7 @@ class _GoalExportSheetState extends ConsumerState<GoalExportSheet> {
       final boundary = key.currentContext!.findRenderObject()
           as RenderRepaintBoundary?;
       if (boundary == null) {
-        throw 'RepaintBoundary не найден';
+        throw t.goalExport.errors.repaintBoundaryNotFound;
       }
 
       // Clamp pixel ratio to avoid exceeding GPU texture limit
@@ -186,7 +185,7 @@ class _GoalExportSheetState extends ConsumerState<GoalExportSheet> {
       final image = await boundary.toImage(pixelRatio: pixelRatio);
       final byteData =
           await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) throw 'Не удалось сохранить изображение';
+      if (byteData == null) throw t.goalExport.errors.imageSaveFailed;
 
       final pngBytes = byteData.buffer.asUint8List();
       final dir = await getTemporaryDirectory();
@@ -205,7 +204,7 @@ class _GoalExportSheetState extends ConsumerState<GoalExportSheet> {
       );
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      setState(() => _error = 'Ошибка: $e');
+      setState(() => _error = t.goalExport.errors.generic(error: e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

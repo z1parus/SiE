@@ -1,0 +1,39 @@
+{
+  "topBar": {
+    "title": "PERSONNEL FILE"
+  },
+  "nav": {
+    "progressHub": "PROGRESS HUB",
+    "knowledgeBase": "KNOWLEDGE BASE",
+    "appearance": "APPEARANCE",
+    "devStudio": "DEV STUDIO",
+    "myWidgets": "MY WIDGETS"
+  },
+  "stats": {
+    "level": "LVL {level}",
+    "levelLabel": "LEVEL",
+    "xpTotal": "XP TOTAL",
+    "dp": "DP"
+  },
+  "awards": {
+    "title": "AWARDS"
+  },
+  "achievements": {
+    "loadError": "NO ACHIEVEMENTS DEFINED IN DATABASE",
+    "empty": "NO ACHIEVEMENTS YET"
+  },
+  "medals": {
+    "vaultTitle": "MEDALS VAULT",
+    "vaultSubtitle": "EARNED COMMENDATIONS & COMBAT DECORATIONS",
+    "loadError": "MEDALS FAILED TO LOAD",
+    "empty": "NO MEDALS YET — COMPLETE MISSIONS TO EARN COMMENDATIONS",
+    "count(plural)": {
+      "one": "{n} medal",
+      "other": "{n} medals"
+    },
+    "completed": "Completed: {date}",
+    "weight": "Weight: {weight}",
+    "duration": "{n} d."
+  },
+  "noConnection": "No internet connection"
+}

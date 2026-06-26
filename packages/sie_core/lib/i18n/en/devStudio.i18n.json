@@ -1,0 +1,99 @@
+{
+  "title": "Dev Studio",
+  "tabs": {
+    "backgrounds": "BACKGROUNDS",
+    "dp": "DP",
+    "tips": "TIPS"
+  },
+  "validation": {
+    "nameRequired": "Enter a name",
+    "slugRequired": "Enter a slug",
+    "priceMustBeNumber": "DP price must be a number",
+    "sortMustBeNumber": "Order must be a number",
+    "styleConfigInvalidJson": "style_config — invalid JSON",
+    "selectBackgroundFile": "Select a background file",
+    "thumbRequired": "An animated background needs a static preview"
+  },
+  "backgrounds": {
+    "sectionNew": "NEW BACKGROUND",
+    "fieldName": "Name",
+    "fieldSlug": "Slug",
+    "fieldPrice": "DP Price",
+    "fieldSort": "Order",
+    "publishedTitle": "Published",
+    "publishedSubtitle": "Visible to everyone in the store",
+    "fieldStyleConfig": "style_config (JSON)",
+    "fileBackground": "Background file",
+    "thumbRequired": "Preview (required)",
+    "thumbOptional": "Preview (optional)",
+    "overlay": "Darkening: {percent}%",
+    "overlayActive": "ACTIVE",
+    "overlayPreview": "Darkening preview",
+    "publishButton": "PUBLISH",
+    "sectionExisting": "EXISTING BACKGROUNDS",
+    "published": "Background published",
+    "deleted": "Background deleted",
+    "error": "Error: {message}",
+    "deleteTitle": "Delete background?",
+    "deleteBody": "«{name}» will be removed from the catalog.",
+    "rowSubtitle": "{kind} · {rarity} · {price} DP"
+  },
+  "kind": {
+    "label": "Type",
+    "gradient": "Gradient",
+    "image": "Image",
+    "animatedWebp": "Animated WebP",
+    "lottie": "Lottie"
+  },
+  "rarity": {
+    "label": "Rarity",
+    "common": "Common",
+    "rare": "Rare",
+    "epic": "Epic",
+    "legendary": "Legendary"
+  },
+  "dp": {
+    "sectionSearch": "USER SEARCH",
+    "fieldUsername": "Username",
+    "searchButton": "FIND",
+    "userNotFound": "User «{username}» not found",
+    "searchError": "Search error: {error}",
+    "sectionFound": "FOUND USER",
+    "currentBalance": "Current balance: {dp} DP",
+    "sectionSetBalance": "SET NEW BALANCE",
+    "fieldNewDp": "New DP value",
+    "applyButton": "APPLY",
+    "dpUpdated": "DP updated: {dp}",
+    "error": "Error: {message}"
+  },
+  "tips": {
+    "sectionEdit": "EDIT TIP",
+    "sectionNew": "NEW TIP",
+    "fieldTitle": "Title",
+    "fieldDescription": "Description",
+    "saveButton": "SAVE",
+    "publishButton": "PUBLISH",
+    "cancelButton": "CANCEL",
+    "sectionExisting": "EXISTING TIPS",
+    "empty": "No tips yet",
+    "fillTitleAndDescription": "Fill in the title and description",
+    "updated": "Tip updated",
+    "created": "Tip created",
+    "deleted": "Tip deleted",
+    "deleteTitle": "Delete tip?",
+    "deleteBody": "«{title}» will be deleted permanently.",
+    "error": "Error: {message}"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "loadError": "Loading error: {error}"
+  },
+  "crop": {
+    "title": "CROPPING",
+    "instruction": "Use gestures to position",
+    "hint": "Result — card area only",
+    "cancel": "CANCEL",
+    "crop": "CROP"
+  }
+}

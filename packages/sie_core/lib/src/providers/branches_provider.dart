@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/branch.dart';
 import '../supabase_service.dart';
+import 'connectivity_provider.dart';
 
 // Fallback branch list shown when Supabase is unreachable.
 // Slugs must match the navigation logic in operations_control_screen.dart.
@@ -21,9 +22,24 @@ const _fallbackBranches = [
     slug: 'focus_protocol',
     name: 'Focus Protocol',
   ),
+  Branch(
+    id: 'offline-planning',
+    slug: 'planning',
+    name: 'Planning',
+  ),
+  Branch(
+    id: 'offline-meditation',
+    slug: 'meditation',
+    name: 'Meditation',
+  ),
 ];
 
 final branchesProvider = FutureProvider<List<Branch>>((ref) async {
+  // Fast offline path: skip the network call entirely and return the local
+  // fallback immediately so the module carousel appears without waiting for the
+  // OS-level TCP timeout (which can be 60+ seconds when there is no internet).
+  if (!isOnlineSync(ref)) return _fallbackBranches;
+
   try {
     final data = await SupabaseService.client
         .from('branches')

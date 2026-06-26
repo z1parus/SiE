@@ -165,7 +165,7 @@ class _Header extends ConsumerWidget {
                   text: TextSpan(
                     children: [
                       TextSpan(
-                        text: 'HALL ',
+                        text: t.leaderboard.header.titlePrimary,
                         style: TextStyle(
                           color: c.accent,
                           fontSize: 22,
@@ -180,7 +180,7 @@ class _Header extends ConsumerWidget {
                         ),
                       ),
                       TextSpan(
-                        text: 'OF FAME',
+                        text: t.leaderboard.header.titleSecondary,
                         style: Theme.of(context)
                             .textTheme
                             .headlineLarge
@@ -196,7 +196,7 @@ class _Header extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'СУТОЧНЫЙ АВАНГАРД · РЕЙТИНГ АКТИВНОСТИ',
+                  t.leaderboard.header.subtitle,
                   style: TextStyle(
                     color: c.textSecondary,
                     fontSize: 10,
@@ -264,7 +264,7 @@ class _CountdownPanel extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'ДО ЗАВЕРШЕНИЯ ЦИКЛА',
+                    t.leaderboard.countdown.label,
                     style: TextStyle(
                       color: timerColor.withValues(alpha: 0.75),
                       fontSize: 10,
@@ -274,7 +274,7 @@ class _CountdownPanel extends ConsumerWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'DAILY RESET',
+                    t.leaderboard.countdown.dailyReset,
                     style: TextStyle(
                       color: c.textSecondary,
                       fontSize: 9,
@@ -475,7 +475,7 @@ class _LeaderRow extends ConsumerWidget {
                             children: [
                               Flexible(
                                 child: Text(
-                                  (entry.username ?? 'OPERATIVE')
+                                  (entry.username ?? t.leaderboard.row.operative)
                                       .toUpperCase(),
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -517,7 +517,7 @@ class _LeaderRow extends ConsumerWidget {
                                     borderRadius: BorderRadius.circular(2),
                                   ),
                                   child: Text(
-                                    'YOU',
+                                    t.leaderboard.row.you,
                                     style: TextStyle(
                                       color: c.accent,
                                       fontSize: 8,
@@ -531,7 +531,7 @@ class _LeaderRow extends ConsumerWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'LVL ${(entry.totalXp ~/ 1000) + 1}',
+                            t.leaderboard.row.level(level: (entry.totalXp ~/ 1000) + 1),
                             style: TextStyle(
                               color: c.textSecondary,
                               fontSize: 10,
@@ -570,7 +570,7 @@ class _LeaderRow extends ConsumerWidget {
                           ),
                         ),
                         Text(
-                          'XP TODAY',
+                          t.leaderboard.row.xpToday,
                           style: TextStyle(
                             color: c.textSecondary,
                             fontSize: 8,
@@ -690,6 +690,8 @@ class _Avatar extends ConsumerWidget {
         child: avatarUrl != null && avatarUrl!.isNotEmpty
             ? Image.network(
                 avatarUrl!,
+                width: size,
+                height: size,
                 fit: BoxFit.cover,
                 cacheWidth: 76,
                 cacheHeight: 76,
@@ -731,7 +733,7 @@ class _NoConnectionMessage extends ConsumerWidget {
         Icon(Icons.wifi_off_outlined, color: c.iconMuted, size: 36),
         const SizedBox(height: 12),
         Text(
-          'Подключение к интернету отсутствует',
+          t.leaderboard.noConnection,
           textAlign: TextAlign.center,
           style: TextStyle(
             color: c.iconMuted,
@@ -761,11 +763,25 @@ class _VanguardSummarySheet extends ConsumerWidget {
   });
 
   static String _fmtDate(DateTime d) {
-    const months = [
-      '', 'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-      'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
-    ];
-    return '${d.day} ${months[d.month]} ${d.year}';
+    final months = <int, String>{
+      1: t.leaderboard.dateMonths.m1,
+      2: t.leaderboard.dateMonths.m2,
+      3: t.leaderboard.dateMonths.m3,
+      4: t.leaderboard.dateMonths.m4,
+      5: t.leaderboard.dateMonths.m5,
+      6: t.leaderboard.dateMonths.m6,
+      7: t.leaderboard.dateMonths.m7,
+      8: t.leaderboard.dateMonths.m8,
+      9: t.leaderboard.dateMonths.m9,
+      10: t.leaderboard.dateMonths.m10,
+      11: t.leaderboard.dateMonths.m11,
+      12: t.leaderboard.dateMonths.m12,
+    };
+    return t.leaderboard.dateFormat(
+      day: d.day,
+      month: months[d.month] ?? '',
+      year: d.year,
+    );
   }
 
   @override
@@ -773,7 +789,7 @@ class _VanguardSummarySheet extends ConsumerWidget {
     final c = ref.watch(sieColorsProvider);
 
     final isWinner = results.any((r) => r.userId == currentUserId);
-    final myUsername = currentUsername ?? 'Оперативник';
+    final myUsername = currentUsername ?? t.leaderboard.vanguard.defaultUsername;
 
     final sheetBg = c.isLightMode
         ? const Color(0xFFF5F7FA)
@@ -823,7 +839,7 @@ class _VanguardSummarySheet extends ConsumerWidget {
 
           // Title
           Text(
-            'ИТОГИ АВАНГАРДА',
+            t.leaderboard.vanguard.title,
             style: TextStyle(
               color: c.rankGold,
               fontSize: 18,
@@ -864,7 +880,7 @@ class _VanguardSummarySheet extends ConsumerWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Так держать, $myUsername! Сегодня вы вошли в тройку лучших оперативников!',
+                      t.leaderboard.vanguard.congrats(username: myUsername),
                       style: TextStyle(
                         color: c.textPrimary,
                         fontSize: 13,
@@ -893,9 +909,9 @@ class _VanguardSummarySheet extends ConsumerWidget {
                 ),
                 elevation: 0,
               ),
-              child: const Text(
-                'НАЧАТЬ СЛЕДУЮЩИЙ АВАНГАРД',
-                style: TextStyle(
+              child: Text(
+                t.leaderboard.vanguard.startNext,
+                style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 1.5,
@@ -981,7 +997,7 @@ class _WinnerRow extends StatelessWidget {
             // Username
             Expanded(
               child: Text(
-                (result.username ?? 'OPERATIVE').toUpperCase(),
+                (result.username ?? t.leaderboard.row.operative).toUpperCase(),
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: color,
@@ -1008,7 +1024,7 @@ class _WinnerRow extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'DP',
+                  t.leaderboard.vanguard.dp,
                   style: TextStyle(
                     color: c.textSecondary,
                     fontSize: 9,

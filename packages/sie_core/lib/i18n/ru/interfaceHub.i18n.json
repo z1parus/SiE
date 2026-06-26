@@ -1,0 +1,34 @@
+{
+  "topBar": {
+    "title": "ИНТЕРФЕЙС-ХАБ",
+    "dp": "{dp} DP"
+  },
+  "tabs": {
+    "frames": "РАМКИ",
+    "backgrounds": "ФОНЫ",
+    "styles": "СТИЛИ",
+    "patterns": "УЗОРЫ"
+  },
+  "snack": {
+    "purchaseSuccess": "ПРОТОКОЛ ВИЗУАЛИЗАЦИИ УСПЕШНО ПРИОБРЕТЁН",
+    "insufficientDp": "Недостаточно DP. Зарабатывайте их, выполняя задания и миссии.",
+    "transactionError": "ОШИБКА ТРАНЗАКЦИИ",
+    "equipApplied": "ОСНАЩЕНИЕ ПРИМЕНЕНО",
+    "equipError": "ОШИБКА: {error}"
+  },
+  "card": {
+    "active": "АКТИВНО",
+    "purchased": "КУПЛЕНО",
+    "price": "{price} DP",
+    "equipped": "ЭКИПИРОВАНО",
+    "select": "ВЫБРАТЬ",
+    "get": "ПОЛУЧИТЬ",
+    "buy": "КУПИТЬ"
+  },
+  "preview": {
+    "title": "ПРЕДПРОСМОТР",
+    "operative": "OPERATIVE",
+    "stat": "LVL {level}  ·  {xp} XP",
+    "watermark": "ПРЕДПРОСМОТР"
+  }
+}

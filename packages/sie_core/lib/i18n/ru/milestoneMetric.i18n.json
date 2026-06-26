@@ -1,0 +1,27 @@
+{
+  "loadError": "Ошибка загрузки",
+  "summary": {
+    "now": "СЕЙЧАС",
+    "target": "ЦЕЛЬ",
+    "progress": "ПРОГРЕСС",
+    "goalReached": "Цель достигнута!"
+  },
+  "chart": {
+    "title": "ДИНАМИКА"
+  },
+  "history": {
+    "title": "ИСТОРИЯ ЗАМЕРОВ",
+    "addMeasurement": "ЗАМЕР",
+    "empty": "Нет замеров"
+  },
+  "delete": {
+    "title": "Удалить замер?",
+    "message": "Замер {value} будет удалён.",
+    "cancel": "ОТМЕНА",
+    "confirm": "УДАЛИТЬ"
+  },
+  "sheet": {
+    "title": "ВНЕСТИ ЗАМЕР",
+    "save": "СОХРАНИТЬ"
+  }
+}

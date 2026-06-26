@@ -1,0 +1,52 @@
+{
+  "appBar": {
+    "title": "SESSION SETUP"
+  },
+  "launch": "START SESSION",
+  "confirmLeave": {
+    "title": "Leave without starting?",
+    "message": "Changed session settings won't be saved.",
+    "confirm": "Leave"
+  },
+  "sections": {
+    "structure": "Session structure",
+    "breathing": "Breathing",
+    "meditation": "Meditation",
+    "audio": "Audio",
+    "affirmations": "Affirmations"
+  },
+  "chain": {
+    "meditationOnly": "Meditation only",
+    "breathingAndMeditation": "Breathing + Meditation"
+  },
+  "duration": {
+    "label": "Duration",
+    "value": "{value} min"
+  },
+  "audio": {
+    "music": "MUSIC",
+    "ambient": "AMBIENT",
+    "voice": "VOICE",
+    "volume": "{percent}%"
+  },
+  "patterns": {
+    "box": {
+      "name": "Box 4×4",
+      "description": "Inhale 4 · hold 4 · exhale 4 · pause 4 sec"
+    },
+    "pattern478": {
+      "name": "4-7-8",
+      "description": "Inhale 4 · hold 7 · exhale 8 sec"
+    },
+    "coherence": {
+      "name": "Coherence",
+      "description": "Inhale 5 · exhale 5 sec — nervous system balance"
+    }
+  },
+  "affirmations": {
+    "packLabel": "Affirmation pack",
+    "noPack": "No affirmations",
+    "interval": "Interval:",
+    "intervalValue": "{secs}s"
+  }
+}

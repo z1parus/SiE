@@ -1,0 +1,99 @@
+{
+  "title": "Dev Studio",
+  "tabs": {
+    "backgrounds": "ФОНЫ",
+    "dp": "DP",
+    "tips": "ПОДСКАЗКИ"
+  },
+  "validation": {
+    "nameRequired": "Укажите название",
+    "slugRequired": "Укажите slug",
+    "priceMustBeNumber": "Цена DP должна быть числом",
+    "sortMustBeNumber": "Порядок должен быть числом",
+    "styleConfigInvalidJson": "style_config — некорректный JSON",
+    "selectBackgroundFile": "Выберите файл фона",
+    "thumbRequired": "Для анимированного фона нужна статичная превью"
+  },
+  "backgrounds": {
+    "sectionNew": "НОВЫЙ ФОН",
+    "fieldName": "Название",
+    "fieldSlug": "Slug",
+    "fieldPrice": "Цена DP",
+    "fieldSort": "Порядок",
+    "publishedTitle": "Опубликован",
+    "publishedSubtitle": "Виден всем в магазине",
+    "fieldStyleConfig": "style_config (JSON)",
+    "fileBackground": "Файл фона",
+    "thumbRequired": "Превью (обязательно)",
+    "thumbOptional": "Превью (опц.)",
+    "overlay": "Затемнение: {percent}%",
+    "overlayActive": "АКТИВНО",
+    "overlayPreview": "Предпросмотр затемнения",
+    "publishButton": "ОПУБЛИКОВАТЬ",
+    "sectionExisting": "СУЩЕСТВУЮЩИЕ ФОНЫ",
+    "published": "Фон опубликован",
+    "deleted": "Фон удалён",
+    "error": "Ошибка: {message}",
+    "deleteTitle": "Удалить фон?",
+    "deleteBody": "«{name}» будет удалён из каталога.",
+    "rowSubtitle": "{kind} · {rarity} · {price} DP"
+  },
+  "kind": {
+    "label": "Тип",
+    "gradient": "Градиент",
+    "image": "Картинка",
+    "animatedWebp": "Анимированный WebP",
+    "lottie": "Lottie"
+  },
+  "rarity": {
+    "label": "Редкость",
+    "common": "Common",
+    "rare": "Rare",
+    "epic": "Epic",
+    "legendary": "Legendary"
+  },
+  "dp": {
+    "sectionSearch": "ПОИСК ПОЛЬЗОВАТЕЛЯ",
+    "fieldUsername": "Имя пользователя",
+    "searchButton": "НАЙТИ",
+    "userNotFound": "Пользователь «{username}» не найден",
+    "searchError": "Ошибка поиска: {error}",
+    "sectionFound": "НАЙДЕННЫЙ ПОЛЬЗОВАТЕЛЬ",
+    "currentBalance": "Текущий баланс: {dp} DP",
+    "sectionSetBalance": "УСТАНОВИТЬ НОВЫЙ БАЛАНС",
+    "fieldNewDp": "Новое значение DP",
+    "applyButton": "ПРИМЕНИТЬ",
+    "dpUpdated": "DP обновлено: {dp}",
+    "error": "Ошибка: {message}"
+  },
+  "tips": {
+    "sectionEdit": "РЕДАКТИРОВАТЬ ПОДСКАЗКУ",
+    "sectionNew": "НОВАЯ ПОДСКАЗКА",
+    "fieldTitle": "Заголовок",
+    "fieldDescription": "Описание",
+    "saveButton": "СОХРАНИТЬ",
+    "publishButton": "ОПУБЛИКОВАТЬ",
+    "cancelButton": "ОТМЕНА",
+    "sectionExisting": "СУЩЕСТВУЮЩИЕ ПОДСКАЗКИ",
+    "empty": "Пока нет ни одной подсказки",
+    "fillTitleAndDescription": "Заполните заголовок и описание",
+    "updated": "Подсказка обновлена",
+    "created": "Подсказка создана",
+    "deleted": "Подсказка удалена",
+    "deleteTitle": "Удалить подсказку?",
+    "deleteBody": "«{title}» будет удалена безвозвратно.",
+    "error": "Ошибка: {message}"
+  },
+  "common": {
+    "cancel": "Отмена",
+    "delete": "Удалить",
+    "loadError": "Ошибка загрузки: {error}"
+  },
+  "crop": {
+    "title": "КАДРИРОВАНИЕ",
+    "instruction": "Используйте жесты для позиционирования",
+    "hint": "Результат — только область карточки",
+    "cancel": "ОТМЕНА",
+    "crop": "ОБРЕЗАТЬ"
+  }
+}

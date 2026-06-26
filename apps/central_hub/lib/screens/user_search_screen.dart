@@ -215,7 +215,7 @@ class _TopBarState extends ConsumerState<_TopBar> {
               isDense: true,
               contentPadding: EdgeInsets.zero,
               border: InputBorder.none,
-              hintText: 'ПОИСК ОПЕРАТИВНИКА...',
+              hintText: t.userSearch.search.hint,
               hintStyle: TextStyle(
                 color: _focused ? c.textSecondary : c.iconMuted,
                 fontSize: 12,
@@ -259,10 +259,10 @@ class _Body extends ConsumerWidget {
       if (history.isNotEmpty) {
         return _HistoryList(history: history, onTap: onHistoryTap);
       }
-      return const _StatusMessage(
+      return _StatusMessage(
         icon: Icons.radar,
-        text: 'ВВЕДИТЕ ИМЯ ДЛЯ ПОИСКА',
-        sub: 'Минимум 2 символа',
+        text: t.userSearch.prompt.text,
+        sub: t.userSearch.prompt.sub,
       );
     }
 
@@ -274,15 +274,15 @@ class _Body extends ConsumerWidget {
       ),
       error: (e, _) => _StatusMessage(
         icon: Icons.error_outline,
-        text: 'ОШИБКА СОЕДИНЕНИЯ',
+        text: t.userSearch.error.text,
         sub: e.toString(),
       ),
       data: (results) {
         if (results.isEmpty) {
-          return const _StatusMessage(
+          return _StatusMessage(
             icon: Icons.person_off_outlined,
-            text: 'ОПЕРАТИВНИК НЕ НАЙДЕН',
-            sub: 'Попробуйте другой запрос',
+            text: t.userSearch.empty.text,
+            sub: t.userSearch.empty.sub,
           );
         }
         return RefreshIndicator(
@@ -321,7 +321,7 @@ class _HistoryList extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
       children: [
         Text(
-          'НЕДАВНИЕ ЗАПРОСЫ',
+          t.userSearch.history.title,
           style: TextStyle(
             color: c.textSecondary,
             fontSize: 10,
@@ -496,7 +496,8 @@ class _UserTileState extends ConsumerState<_UserTile>
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  'LEVEL ${widget.profile.level}  ·  ${widget.profile.totalXp} XP',
+                  t.userSearch.tile.levelBadge(
+                      level: widget.profile.level, xp: widget.profile.totalXp),
                   style: TextStyle(
                     color: c.accent,
                     fontSize: 9,

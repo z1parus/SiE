@@ -89,6 +89,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
             step: Value(h.step),
             area: Value(h.area?.name),
             polarity: Value(h.polarity),
+            avoidStartMs: Value(h.avoidStartDate?.millisecondsSinceEpoch),
             createdAtMs: Value(h.createdAt.millisecondsSinceEpoch),
             synced: const Value(true),
           ));
@@ -115,8 +116,9 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
               lapseDates.putIfAbsent(hId, () => {}).add(date);
             } else {
               final habit = habitById[hId];
-              // Only count as "done" if the daily goal is met.
-              if (habit == null || habit.isMetByValue(value)) {
+              // Only count as "done" if the daily goal is met and habit is not avoid-type.
+              if (!(habit?.isAvoid ?? false) &&
+                  (habit == null || habit.isMetByValue(value))) {
                 logDates.putIfAbsent(hId, () => {}).add(date);
               }
             }
@@ -185,6 +187,9 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
               reminderTime: h.reminderTime,
               area: LifeAreaX.fromString(h.area),
               polarity: h.polarity,
+              avoidStartDate: h.avoidStartMs != null
+                  ? DateTime.fromMillisecondsSinceEpoch(h.avoidStartMs!)
+                  : null,
               createdAt:
                   DateTime.fromMillisecondsSinceEpoch(h.createdAtMs),
             ))
@@ -210,7 +215,9 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         lapseDates.putIfAbsent(log.habitId, () => {}).add(log.completedAt);
       } else {
         final habit = habitById[log.habitId];
-        if (habit == null || habit.isMetByValue(value)) {
+        // Only count as "done" if the daily goal is met and habit is not avoid-type.
+        if (!(habit?.isAvoid ?? false) &&
+            (habit == null || habit.isMetByValue(value))) {
           logDates.putIfAbsent(log.habitId, () => {}).add(log.completedAt);
         }
       }
@@ -567,6 +574,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       reminderTime: Value(resolvedReminder),
       area: Value(resolvedArea?.name),
       polarity: Value(resolvedPolarity),
+      avoidStartMs: Value(prev.habits[idx].avoidStartDate?.millisecondsSinceEpoch),
       createdAtMs: Value(prev.habits[idx].createdAt.millisecondsSinceEpoch),
       synced: Value(isOnline),
     ));
@@ -717,6 +725,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       color: Value(prev.habits[idx].color),
       icon: Value(prev.habits[idx].icon),
       isPinned: Value(newPinned),
+      avoidStartMs: Value(prev.habits[idx].avoidStartDate?.millisecondsSinceEpoch),
       createdAtMs:
           Value(prev.habits[idx].createdAt.millisecondsSinceEpoch),
       synced: Value(isOnline),
@@ -757,11 +766,20 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       return;
     }
 
-    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     final db = ref.read(appDatabaseProvider);
     final isDone = prev.logDates[habitId]?.contains(dateStr) ?? false;
 
-    // Write to local DB first to prevent race condition on rapid double-tap.
+    // A metric (count/duration) habit only counts as "done" for a day once its
+    // value reaches the daily target — so marking it done must store the FULL
+    // target. Storing the binary default (1) would make a reload (which
+    // re-checks isMetByValue) silently drop the day. Binary habits use 1.
+    final habit = prev.habits.cast<Habit?>()
+        .firstWhere((h) => h?.id == habitId, orElse: () => null);
+    final markValue = habit?.effectiveTarget ?? 1.0;
+
+    // ── 1. Local DB first — the offline-first source of truth. Written before
+    // any network call so a rapid double-tap and an offline tap behave the
+    // same. `synced: false` until the remote write is confirmed. ────────────
     if (isDone) {
       await db.deleteHabitLog(habitId, userId, dateStr);
     } else {
@@ -769,32 +787,39 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
         habitId: Value(habitId),
         userId: Value(userId),
         completedAt: Value(dateStr),
+        value: Value(markValue),
         note: const Value(null),
         emoji: const Value(null),
-        synced: Value(isOnline),
+        synced: const Value(false),
       ));
     }
 
-    // Optimistic UI update (now consistent with local DB).
+    // ── 2. Optimistic UI update — kept consistent with the local DB (incl. the
+    // stored value, so a reload computes the same logDates). ────────────────
     final newLogDates = {
-      for (final e in prev.logDates.entries)
-        e.key: Set<String>.from(e.value),
+      for (final e in prev.logDates.entries) e.key: Set<String>.from(e.value),
     };
     final habitDates = newLogDates.putIfAbsent(habitId, () => {});
-
     final newLogEntries = {
       for (final e in prev.logEntries.entries)
         e.key: List<HabitLogEntry>.from(e.value),
     };
+    final newLogValues = {
+      for (final e in prev.logValues.entries)
+        e.key: Map<String, double>.from(e.value),
+    };
     if (isDone) {
       habitDates.remove(dateStr);
       newLogEntries[habitId]?.removeWhere((e) => e.completedAt == dateStr);
+      newLogValues[habitId]?.remove(dateStr);
     } else {
       habitDates.add(dateStr);
-      newLogEntries
-          .putIfAbsent(habitId, () => [])
-          .add(HabitLogEntry(
-              habitId: habitId, userId: userId, completedAt: dateStr));
+      newLogEntries.putIfAbsent(habitId, () => []).add(HabitLogEntry(
+          habitId: habitId,
+          userId: userId,
+          completedAt: dateStr,
+          value: markValue));
+      newLogValues.putIfAbsent(habitId, () => {})[dateStr] = markValue;
     }
 
     state = AsyncData(HabitsState(
@@ -802,78 +827,126 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       logDates: newLogDates,
       streaks: {...prev.streaks, habitId: _streakById(habitId, habitDates)},
       logEntries: newLogEntries,
-      logValues: prev.logValues,
+      logValues: newLogValues,
       restDates: prev.restDates,
       freezesAvailable: prev.freezesAvailable,
       lapseDates: prev.lapseDates,
     ));
 
-    try {
-      if (isDone) {
-        if (isOnline) {
-          await client
-              .from('habit_logs')
-              .delete()
-              .eq('habit_id', habitId)
-              .eq('user_id', userId)
-              .eq('completed_at', dateStr);
-        } else {
-          await db.enqueueSyncOp('delete_habit_log', jsonEncode({
-            'habit_id': habitId,
-            'user_id': userId,
-            'completed_at': dateStr,
-          }));
-        }
-      } else {
-        if (isOnline) {
-          try {
-            await client.from('habit_logs').insert({
-              'habit_id': habitId,
-              'user_id': userId,
-              'completed_at': dateStr,
-              'xp_awarded': 50,
-            });
-          } on PostgrestException catch (e) {
-            // 23505 = unique_violation: log already exists, treat as no-op.
-            if (e.code != '23505') rethrow;
-            _inProgress.remove(toggleKey);
-            return;
-          }
+    // ── 3. Persist remotely. Offline-first: a transient network failure must
+    // NEVER discard the action — it is already safe in the local DB, so we
+    // fall back to the sync queue instead of rolling the UI back. ───────────
+    if (isDone) {
+      await _persistLogDeletion(habitId, userId, dateStr);
+    } else {
+      await _persistLogCompletion(habitId, userId, dateStr, markValue);
+    }
+
+    _inProgress.remove(toggleKey);
+    _refreshHomeWidgets();
+  }
+
+  /// Removes a habit-log entry remotely, queuing the delete for later if the
+  /// network call fails or we're offline. Never throws — the local DB has
+  /// already recorded the removal.
+  Future<void> _persistLogDeletion(
+      String habitId, String userId, String dateStr) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+
+    if (isOnline) {
+      try {
+        await client
+            .from('habit_logs')
+            .delete()
+            .eq('habit_id', habitId)
+            .eq('user_id', userId)
+            .eq('completed_at', dateStr);
+        return;
+      } catch (e) {
+        debugPrint('SiE toggleHabit: remote delete failed, queuing — $e');
+      }
+    }
+    await db.enqueueSyncOp('delete_habit_log', jsonEncode({
+      'habit_id': habitId,
+      'user_id': userId,
+      'completed_at': dateStr,
+    }));
+  }
+
+  /// Persists a habit-log completion remotely and awards XP. The completion is
+  /// already in the local DB, so this never rolls back the UI: on a network
+  /// failure (or offline) it queues the log for later sync. XP RPCs and the
+  /// habit-synergy boost are best-effort side-effects — a failure in either
+  /// can't undo the (already persisted) completion. Never throws.
+  Future<void> _persistLogCompletion(
+      String habitId, String userId, String dateStr, double value) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+
+    var persistedRemotely = false;
+    if (isOnline) {
+      try {
+        // Upsert (not insert) so re-marking a day that already has a row — e.g.
+        // a metric day logged below target — succeeds instead of hitting a
+        // unique-violation, and preserves any existing note/emoji.
+        await client.from('habit_logs').upsert({
+          'habit_id': habitId,
+          'user_id': userId,
+          'completed_at': dateStr,
+          'value': value,
+          'xp_awarded': 50,
+        }, onConflict: 'user_id,habit_id,completed_at');
+        await db.markHabitLogSynced(habitId, userId, dateStr);
+        persistedRemotely = true;
+        try {
           await Future.wait([
             client.rpc('increment_xp',
                 params: {'p_user_id': userId, 'p_amount': 50}),
             client.rpc('add_design_points', params: {'p_amount': 10}),
           ]);
-        } else {
-          await db.enqueueSyncOp('insert_habit_log', jsonEncode({
-            'habit_id': habitId,
-            'user_id': userId,
-            'completed_at': dateStr,
-          }));
+        } catch (e) {
+          debugPrint('SiE toggleHabit: XP rpc failed — $e');
         }
-        // Always update local XP immediately (online: mirrors server;
-        // offline: accumulates pending delta for later sync).
-        await ref
-            .read(userProfileProvider.notifier)
-            .applyLocalXpDelta(50, 10);
-        // Habit Synergy: boost linked goals
-        final links = await db.habitLinksForHabit(habitId);
-        if (links.isNotEmpty) {
-          final planning = ref.read(planningProvider.notifier);
-          final streak = state.valueOrNull?.streaks[habitId] ?? 0;
-          for (final link in links) {
-            final boost = streak > 7 ? 1.0 : link.boostValue;
-            await planning.applyHabitBoost(link.goalId, boost);
-          }
+      } catch (e) {
+        debugPrint('SiE toggleHabit: remote insert failed, queuing — $e');
+      }
+    }
+
+    if (!persistedRemotely) {
+      // Offline, or the remote write failed — queue the log (the sync op also
+      // stamps xp_awarded) so it lands on the next sync.
+      await db.enqueueSyncOp('insert_habit_log', jsonEncode({
+        'habit_id': habitId,
+        'user_id': userId,
+        'completed_at': dateStr,
+        'value': value,
+      }));
+    }
+
+    // Mirror the XP locally in every case so the bar updates instantly.
+    try {
+      await ref.read(userProfileProvider.notifier).applyLocalXpDelta(50, 10);
+    } catch (e) {
+      debugPrint('SiE toggleHabit: local XP delta failed — $e');
+    }
+
+    // Habit Synergy: boost linked goals (best-effort).
+    try {
+      final links = await db.habitLinksForHabit(habitId);
+      if (links.isNotEmpty) {
+        final planning = ref.read(planningProvider.notifier);
+        final streak = state.valueOrNull?.streaks[habitId] ?? 0;
+        for (final link in links) {
+          final boost = streak > 7 ? 1.0 : link.boostValue;
+          await planning.applyHabitBoost(link.goalId, boost);
         }
       }
-    } catch (e, st) {
-      state = AsyncData(prev);
-      _inProgress.remove(toggleKey);
-      Error.throwWithStackTrace(e, st);
+    } catch (e) {
+      debugPrint('SiE toggleHabit: synergy boost failed — $e');
     }
-    _inProgress.remove(toggleKey);
-    _refreshHomeWidgets();
   }
 
   /// Event-driven home-screen widget refresh. Fire-and-forget: never blocks or
@@ -1096,6 +1169,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       icon: Value(habit.icon),
       isPinned: Value(habit.isPinned),
       isArchived: const Value(true),
+      avoidStartMs: Value(habit.avoidStartDate?.millisecondsSinceEpoch),
       createdAtMs: Value(habit.createdAt.millisecondsSinceEpoch),
       synced: Value(isOnline),
     ));
@@ -1154,20 +1228,24 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       list.add(updated);
     }
 
-    // If this is a brand-new entry (e.g. toggleHabit failed remotely but wrote
-    // to local DB), also mark the date in logDates so the card shows completed.
+    // If this is a brand-new entry for a non-avoid habit, also mark the date in
+    // logDates so the card shows completed. Avoid-habit notes are independent
+    // of the abstinence counter and must not touch logDates.
+    final entryHabit = prev.habits.cast<Habit?>()
+        .firstWhere((h) => h?.id == habitId, orElse: () => null);
+    final isAvoidHabit = entryHabit?.isAvoid ?? false;
     final updatedLogDates = {
       for (final e in prev.logDates.entries)
         e.key: Set<String>.from(e.value),
     };
-    if (idx < 0) {
+    if (idx < 0 && !isAvoidHabit) {
       updatedLogDates.putIfAbsent(habitId, () => {}).add(dateStr);
     }
 
     state = AsyncData(HabitsState(
       habits: prev.habits,
       logDates: updatedLogDates,
-      streaks: idx < 0
+      streaks: idx < 0 && !isAvoidHabit
           ? {...prev.streaks, habitId: _streakById(habitId, updatedLogDates[habitId] ?? {})}
           : prev.streaks,
       logEntries: updatedEntries,
@@ -1438,6 +1516,78 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     }
   }
 
+  /// Set (or clear) the custom start date for an avoid habit.
+  /// Passing null resets to the default (habit creation date).
+  Future<void> setAvoidStartDate(String habitId, DateTime? date) async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final db = ref.read(appDatabaseProvider);
+    final prev = state.valueOrNull;
+    if (prev == null) return;
+
+    final idx = prev.habits.indexWhere((h) => h.id == habitId);
+    if (idx == -1) return;
+
+    final habit = prev.habits[idx];
+    final updated = habit.copyWith(avoidStartDate: date);
+    final newHabits = [...prev.habits]..[idx] = updated;
+
+    state = AsyncData(HabitsState(
+      habits: newHabits,
+      logDates: prev.logDates,
+      streaks: {
+        ...prev.streaks,
+        habitId: abstinenceStreak(updated, prev.lapseDates[habitId] ?? const {}),
+      },
+      logEntries: prev.logEntries,
+      logValues: prev.logValues,
+      restDates: prev.restDates,
+      freezesAvailable: prev.freezesAvailable,
+      lapseDates: prev.lapseDates,
+    ));
+
+    await db.upsertHabit(LocalHabitsCompanion(
+      id: Value(habitId),
+      userId: Value(userId),
+      title: Value(habit.title),
+      description: Value(habit.description),
+      color: Value(habit.color),
+      icon: Value(habit.icon),
+      isPinned: Value(habit.isPinned),
+      isArchived: Value(habit.isArchived),
+      schedule: Value(habit.schedule),
+      kind: Value(habit.kind),
+      targetValue: Value(habit.targetValue),
+      unit: Value(habit.unit),
+      step: Value(habit.step),
+      reminderTime: Value(habit.reminderTime),
+      area: Value(habit.area?.name),
+      polarity: Value(habit.polarity),
+      avoidStartMs: Value(date?.millisecondsSinceEpoch),
+      createdAtMs: Value(habit.createdAt.millisecondsSinceEpoch),
+      synced: Value(isOnline),
+    ));
+
+    try {
+      if (isOnline) {
+        await client.from('habits').update({
+          'avoid_start_date': date?.toIso8601String(),
+        }).eq('id', habitId).eq('user_id', userId);
+      } else {
+        await db.enqueueSyncOp('update_avoid_start', jsonEncode({
+          'habit_id': habitId,
+          'avoid_start_date': date?.toIso8601String(),
+        }));
+      }
+    } catch (e) {
+      state = AsyncData(prev);
+      debugPrint('SiE setAvoidStartDate: sync failed — $e');
+    }
+  }
+
   Future<void> restoreHabit(Habit habit) async {
     if (_inProgressRestore.contains(habit.id)) return;
     _inProgressRestore.add(habit.id);
@@ -1478,6 +1628,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
       icon: Value(habit.icon),
       isPinned: Value(habit.isPinned),
       isArchived: const Value(false),
+      avoidStartMs: Value(habit.avoidStartDate?.millisecondsSinceEpoch),
       createdAtMs: Value(habit.createdAt.millisecondsSinceEpoch),
       synced: Value(isOnline),
     ));

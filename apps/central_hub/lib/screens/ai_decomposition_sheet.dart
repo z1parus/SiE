@@ -53,7 +53,7 @@ class _PrivacyDialog extends ConsumerWidget {
           Icon(Icons.auto_awesome_outlined, color: sc.accent, size: 18),
           const SizedBox(width: 8),
           Text(
-            'AI-СТРАТЕГ',
+            t.aiDecomposition.privacy.title,
             style: TextStyle(
               color: sc.textPrimary,
               fontSize: 14,
@@ -64,18 +64,18 @@ class _PrivacyDialog extends ConsumerWidget {
         ],
       ),
       content: Text(
-        'Название и описание цели будут отправлены в Groq AI для генерации плана.\n\nДанные используются только для этого запроса и не сохраняются сервисом.',
+        t.aiDecomposition.privacy.body,
         style: TextStyle(color: sc.textSecondary, fontSize: 13, height: 1.5),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: Text('ОТМЕНА',
+          child: Text(t.aiDecomposition.privacy.cancel,
               style: TextStyle(color: sc.textSecondary, fontSize: 12)),
         ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(true),
-          child: Text('ПРОДОЛЖИТЬ',
+          child: Text(t.aiDecomposition.privacy.continueBtn,
               style: TextStyle(
                   color: sc.accent,
                   fontSize: 12,
@@ -151,18 +151,18 @@ class _AiDecompositionSheetState
   String _formatError(Object e) {
     final msg = e.toString().toLowerCase();
     if (msg.contains('socketexception') || msg.contains('network') || msg.contains('connection refused')) {
-      return 'Нет подключения к сети. Проверь интернет и повтори.';
+      return t.aiDecomposition.error.network;
     }
     if (msg.contains('401') || msg.contains('api_key') || msg.contains('unauthorized')) {
-      return 'Ошибка авторизации API. Обратись к разработчику.';
+      return t.aiDecomposition.error.auth;
     }
     if (msg.contains('429') || msg.contains('rate_limit') || msg.contains('too many')) {
-      return 'Слишком много запросов. Подожди немного и повтори.';
+      return t.aiDecomposition.error.rateLimit;
     }
     if (msg.contains('timeout') || msg.contains('timed out')) {
-      return 'Сервер не ответил вовремя. Повтори попытку.';
+      return t.aiDecomposition.error.timeout;
     }
-    return 'Не удалось получить план. Повтори попытку.';
+    return t.aiDecomposition.error.generic;
   }
 
   Future<void> _apply() async {
@@ -178,7 +178,7 @@ class _AiDecompositionSheetState
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = 'Ошибка сохранения: $e';
+        _errorMessage = t.aiDecomposition.error.saveFailed(error: e);
         _stage = _SheetStage.error;
       });
     }
@@ -235,7 +235,7 @@ class _AiDecompositionSheetState
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'AI СТРАТЕГ',
+                    t.aiDecomposition.header.title,
                     style: TextStyle(
                       color: c.accent,
                       fontSize: 11,
@@ -296,7 +296,7 @@ class _AiDecompositionSheetState
             ),
             const SizedBox(height: 20),
             Text(
-              'AI СТРАТЕГ АНАЛИЗИРУЕТ ЦЕЛЬ...',
+              t.aiDecomposition.loading.analyzing,
               style: TextStyle(
                 color: c.textSecondary,
                 fontSize: 11,
@@ -305,7 +305,7 @@ class _AiDecompositionSheetState
             ),
             const SizedBox(height: 8),
             Text(
-              'Обычно занимает 3–5 секунд',
+              t.aiDecomposition.loading.estimate,
               style: TextStyle(color: c.iconMuted, fontSize: 11),
             ),
           ],
@@ -319,7 +319,7 @@ class _AiDecompositionSheetState
             CircularProgressIndicator(color: c.accent, strokeWidth: 1.5),
             const SizedBox(height: 20),
             Text(
-              'СОХРАНЕНИЕ ПЛАНА...',
+              t.aiDecomposition.applying.saving,
               style: TextStyle(
                   color: c.textSecondary, fontSize: 11, letterSpacing: 1.5),
             ),
@@ -335,7 +335,7 @@ class _AiDecompositionSheetState
             Icon(Icons.error_outline, color: c.danger, size: 40),
             const SizedBox(height: 16),
             Text(
-              'ОШИБКА ГЕНЕРАЦИИ',
+              t.aiDecomposition.error.title,
               style: TextStyle(
                 color: c.textPrimary,
                 fontSize: 13,
@@ -345,7 +345,7 @@ class _AiDecompositionSheetState
             ),
             const SizedBox(height: 8),
             Text(
-              _errorMessage ?? 'Неизвестная ошибка',
+              _errorMessage ?? t.aiDecomposition.error.unknown,
               style: TextStyle(color: c.textSecondary, fontSize: 12, height: 1.5),
               textAlign: TextAlign.center,
             ),
@@ -361,7 +361,7 @@ class _AiDecompositionSheetState
                     textStyle:
                         const TextStyle(fontSize: 11, letterSpacing: 1),
                   ),
-                  child: const Text('ЗАКРЫТЬ'),
+                  child: Text(t.aiDecomposition.error.close),
                 ),
                 const SizedBox(width: 12),
                 ElevatedButton(
@@ -372,7 +372,7 @@ class _AiDecompositionSheetState
                     textStyle:
                         const TextStyle(fontSize: 11, letterSpacing: 1),
                   ),
-                  child: const Text('ПОВТОРИТЬ'),
+                  child: Text(t.aiDecomposition.error.retry),
                 ),
               ],
             ),
@@ -417,7 +417,11 @@ class _AiDecompositionSheetState
             Icon(Icons.check_circle_outline, color: c.accent, size: 14),
             const SizedBox(width: 8),
             Text(
-              '${result.subGoals.length} этапа · ${result.totalTasks} задач · ${result.milestones.length} чекпоинта',
+              t.aiDecomposition.summary.chip(
+                stages: result.subGoals.length,
+                tasks: result.totalTasks,
+                milestones: result.milestones.length,
+              ),
               style: TextStyle(
                 color: c.accent,
                 fontSize: 12,
@@ -439,7 +443,7 @@ class _AiDecompositionSheetState
                 Icon(Icons.flag_outlined, size: 14, color: c.textSecondary),
                 const SizedBox(width: 6),
                 Text(
-                  'КОНТРОЛЬНЫЕ ТОЧКИ',
+                  t.aiDecomposition.milestones.title,
                   style: TextStyle(
                     color: c.textSecondary,
                     fontSize: 10,
@@ -488,13 +492,13 @@ class _AiDecompositionSheetState
                 textStyle: const TextStyle(fontSize: 11, letterSpacing: 1),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               ),
-              child: const Text('ОТМЕНА'),
+              child: Text(t.aiDecomposition.actions.cancel),
             ),
             const SizedBox(width: 8),
             OutlinedButton.icon(
               onPressed: _stage == _SheetStage.applying ? null : _startGeneration,
               icon: const Icon(Icons.refresh, size: 14),
-              label: const Text('ПЕРЕГЕНЕРИРОВАТЬ'),
+              label: Text(t.aiDecomposition.actions.regenerate),
               style: OutlinedButton.styleFrom(
                 side: BorderSide(color: c.accent.withValues(alpha: 0.5)),
                 foregroundColor: c.accent,
@@ -506,7 +510,7 @@ class _AiDecompositionSheetState
             ElevatedButton.icon(
               onPressed: _stage == _SheetStage.applying ? null : _apply,
               icon: const Icon(Icons.check, size: 14),
-              label: const Text('ПРИНЯТЬ'),
+              label: Text(t.aiDecomposition.actions.accept),
               style: ElevatedButton.styleFrom(
                 backgroundColor: c.accent,
                 foregroundColor: Colors.white,
@@ -599,7 +603,8 @@ class _SubGoalTileState extends State<_SubGoalTile> {
                     ),
                   ),
                   Text(
-                    '${widget.sg.tasks.length} задач',
+                    t.aiDecomposition.subGoal.tasksCount(
+                        n: widget.sg.tasks.length),
                     style: TextStyle(color: c.textSecondary, fontSize: 11),
                   ),
                   const SizedBox(width: 6),
@@ -616,7 +621,7 @@ class _SubGoalTileState extends State<_SubGoalTile> {
           ),
           if (_expanded)
             Column(
-              children: widget.sg.tasks.map((t) {
+              children: widget.sg.tasks.map((task) {
                 return Padding(
                   padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
                   child: Row(
@@ -627,22 +632,22 @@ class _SubGoalTileState extends State<_SubGoalTile> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          t.name,
+                          task.name,
                           style:
                               TextStyle(color: c.textSecondary, fontSize: 12),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Tooltip(
-                        message: switch (t.weight) {
-                          1 => 'Лёгкая задача',
-                          3 => 'Средняя задача',
-                          _ => 'Тяжёлая задача',
+                        message: switch (task.weight) {
+                          1 => t.aiDecomposition.weight.light,
+                          3 => t.aiDecomposition.weight.medium,
+                          _ => t.aiDecomposition.weight.heavy,
                         },
                         child: Text(
-                          _weightLabel(t.weight),
+                          _weightLabel(task.weight),
                           style: TextStyle(
-                            color: _weightColor(t.weight),
+                            color: _weightColor(task.weight),
                             fontSize: 8,
                             letterSpacing: 1,
                           ),

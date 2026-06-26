@@ -1,0 +1,24 @@
+{
+  "language": "Язык",
+  "operativeFallback": "ОПЕРАТИВНИК",
+  "cancel": "Отмена",
+  "settings": "НАСТРОЙКИ",
+  "darkTheme": "Тёмная тема",
+  "notifications": "Уведомления и напоминания",
+  "logout": {
+    "action": "Выйти",
+    "confirmTitle": "Выйти из системы?",
+    "confirmMessage": "Сессия будет завершена. Несинхронизированные данные сохранятся локально. Повторный вход требует подключения к интернету."
+  },
+  "offline": {
+    "badge": "ОФЛАЙН-РЕЖИМ",
+    "terminal": "ЛИЧНЫЙ ТЕРМИНАЛ",
+    "level": "УРОВЕНЬ {n}",
+    "xp": "ОПЫТ (XP)",
+    "designPoints": "DESIGN POINTS",
+    "connect": "ПОДКЛЮЧИТЬСЯ",
+    "connectFailed": "Связь с сервером не восстановлена",
+    "tabModules": "Модули",
+    "tabHub": "Hub"
+  }
+}

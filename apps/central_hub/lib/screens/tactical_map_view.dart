@@ -484,8 +484,8 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
         );
     if (id == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Достигнут лимит элементов на карте')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(t.tacticalMap.limits.maxElements)));
       }
       return;
     }
@@ -606,7 +606,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                   color: c.border, borderRadius: BorderRadius.circular(2)),
             ),
             _ActionBtn(
-              label: 'Выбрать из галереи',
+              label: t.tacticalMap.imagePicker.fromGallery,
               icon: Icons.photo_library_outlined,
               color: c.accent,
               sc: c,
@@ -617,7 +617,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
             ),
             const SizedBox(height: 10),
             _ActionBtn(
-              label: 'Вставить ссылку / URL',
+              label: t.tacticalMap.imagePicker.pasteUrl,
               icon: Icons.link,
               color: c.accentSecondary,
               sc: c,
@@ -672,7 +672,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
             side: BorderSide(color: c.border)),
-        title: Text('URL изображения',
+        title: Text(t.tacticalMap.imagePicker.urlTitle,
             style: TextStyle(color: c.textPrimary, fontSize: 16)),
         content: TextField(
           controller: ctrl,
@@ -693,7 +693,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dctx),
-            child: Text('Отмена',
+            child: Text(t.tacticalMap.imagePicker.cancel,
                 style: TextStyle(color: c.textSecondary)),
           ),
           TextButton(
@@ -704,7 +704,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                 _placeImageCardFromUrl(goal: goal, mediaUrl: url);
               }
             },
-            child: Text('Добавить',
+            child: Text(t.tacticalMap.imagePicker.add,
                 style: TextStyle(color: c.accent, fontWeight: FontWeight.w700)),
           ),
         ],
@@ -749,7 +749,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     if (url == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Ошибка загрузки изображения')));
+            SnackBar(content: Text(t.tacticalMap.limits.imageUploadError)));
       }
       return;
     }
@@ -790,8 +790,8 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
         );
     if (id == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Достигнут лимит элементов на карте')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(t.tacticalMap.limits.maxElements)));
       }
       return;
     }
@@ -1264,10 +1264,10 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     HapticFeedback.mediumImpact();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Карта перестроена'),
+        content: Text(t.tacticalMap.rebuild.done),
         duration: const Duration(seconds: 4),
         action: SnackBarAction(
-          label: 'Отменить',
+          label: t.tacticalMap.rebuild.undo,
           onPressed: () {
             _positions
               ..clear()
@@ -1418,7 +1418,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
     final map = <String, ({Color color, String name})>{};
     map[goal.userId] = (
       color: memberColor(goal.userId, c),
-      name: goal.ownerProfile?.username ?? 'Владелец',
+      name: goal.ownerProfile?.username ?? t.tacticalMap.owner,
     );
     for (final co in goal.collaborators.where((co) => co.status == 'accepted')) {
       map[co.userId] = (
@@ -2161,7 +2161,7 @@ class _TacticalMapViewState extends ConsumerState<TacticalMapView>
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    'Выберите цель стрелки',
+                    t.tacticalMap.connector.pickTarget,
                     style: TextStyle(
                       color: c.background,
                       fontSize: 12,
@@ -3101,17 +3101,17 @@ class _AddNodeSheetState extends ConsumerState<_AddNodeSheet> {
           ],
           Row(
             children: [
-              _Chip(label: 'Под-цель', selected: _mode == 'subgoal', sc: c,
+              _Chip(label: t.tacticalMap.addSheet.subGoal, selected: _mode == 'subgoal', sc: c,
                   onTap: () => setState(() => _mode = 'subgoal')),
               const SizedBox(width: 8),
-              _Chip(label: 'Чекпоинт', selected: _mode == 'milestone', sc: c,
+              _Chip(label: t.tacticalMap.addSheet.milestone, selected: _mode == 'milestone', sc: c,
                   onTap: () => setState(() => _mode = 'milestone')),
             ],
           ),
           const SizedBox(height: 14),
           _StyledTextField(
             ctrl: _ctrl,
-            hint: _mode == 'subgoal' ? 'Название под-цели' : 'Название чекпоинта',
+            hint: _mode == 'subgoal' ? t.tacticalMap.addSheet.subGoalNameHint : t.tacticalMap.addSheet.milestoneNameHint,
             sc: c,
             onSubmit: _submit,
           ),
@@ -3126,7 +3126,7 @@ class _AddNodeSheetState extends ConsumerState<_AddNodeSheet> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 padding: const EdgeInsets.symmetric(vertical: 13),
               ),
-              child: const Text('Добавить', style: TextStyle(fontWeight: FontWeight.w600)),
+              child: Text(t.tacticalMap.addSheet.add, style: const TextStyle(fontWeight: FontWeight.w600)),
             ),
           ),
         ],
@@ -3259,7 +3259,7 @@ class _SubGoalSheetState extends ConsumerState<_SubGoalSheet> {
           if (!_adding && !_addingSubGoal) ...[
             if (widget.onComplete != null) ...[
               _ActionBtn(
-                  label: 'Завершить',
+                  label: t.tacticalMap.task.complete,
                   icon: Icons.check_circle_outline,
                   color: c.accent,
                   sc: c,
@@ -3268,7 +3268,7 @@ class _SubGoalSheetState extends ConsumerState<_SubGoalSheet> {
             ],
             if (widget.onAddTask != null) ...[
               _ActionBtn(
-                  label: 'Добавить задачу',
+                  label: t.tacticalMap.task.addTask,
                   icon: Icons.add_task,
                   color: c.accent,
                   sc: c,
@@ -3277,7 +3277,7 @@ class _SubGoalSheetState extends ConsumerState<_SubGoalSheet> {
             ],
             if (widget.onAddSubGoal != null) ...[
               _ActionBtn(
-                  label: 'Добавить под-этап',
+                  label: t.tacticalMap.task.addSubStage,
                   icon: Icons.account_tree_outlined,
                   color: c.accent,
                   sc: c,
@@ -3286,7 +3286,7 @@ class _SubGoalSheetState extends ConsumerState<_SubGoalSheet> {
             ],
             if (widget.onUnparent != null) ...[
               _ActionBtn(
-                  label: 'Вынести на уровень выше',
+                  label: t.tacticalMap.task.unparent,
                   icon: Icons.arrow_upward_outlined,
                   color: c.textSecondary,
                   sc: c,
@@ -3295,13 +3295,13 @@ class _SubGoalSheetState extends ConsumerState<_SubGoalSheet> {
             ],
             if (widget.onDelete != null)
               _ActionBtn(
-                  label: 'Удалить',
+                  label: t.tacticalMap.task.delete,
                   icon: Icons.delete_outline,
                   color: const Color(0xFFE03050),
                   sc: c,
                   onTap: widget.onDelete!),
           ] else if (_addingSubGoal) ...[
-            _StyledTextField(ctrl: _sgCtrl, hint: 'Название под-этапа', sc: c,
+            _StyledTextField(ctrl: _sgCtrl, hint: t.tacticalMap.task.subStageNameHint, sc: c,
                 onSubmit: _submitSubGoal),
             const SizedBox(height: 12),
             Row(
@@ -3314,7 +3314,7 @@ class _SubGoalSheetState extends ConsumerState<_SubGoalSheet> {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: Text('Отмена', style: TextStyle(color: c.textSecondary)),
+                    child: Text(t.tacticalMap.task.cancel, style: TextStyle(color: c.textSecondary)),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -3327,17 +3327,17 @@ class _SubGoalSheetState extends ConsumerState<_SubGoalSheet> {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text('Добавить'),
+                    child: Text(t.tacticalMap.task.add),
                   ),
                 ),
               ],
             ),
           ] else ...[
-            _StyledTextField(ctrl: _ctrl, hint: 'Название задачи', sc: c, onSubmit: _submitTask),
+            _StyledTextField(ctrl: _ctrl, hint: t.tacticalMap.task.taskNameHint, sc: c, onSubmit: _submitTask),
             const SizedBox(height: 10),
             Row(
               children: [
-                Text('Вес:', style: TextStyle(color: c.textSecondary, fontSize: 13)),
+                Text(t.tacticalMap.task.weight, style: TextStyle(color: c.textSecondary, fontSize: 13)),
                 const SizedBox(width: 8),
                 for (final w in [1, 3, 5])
                   Padding(
@@ -3373,7 +3373,7 @@ class _SubGoalSheetState extends ConsumerState<_SubGoalSheet> {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: Text('Отмена', style: TextStyle(color: c.textSecondary)),
+                    child: Text(t.tacticalMap.task.cancel, style: TextStyle(color: c.textSecondary)),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -3386,7 +3386,7 @@ class _SubGoalSheetState extends ConsumerState<_SubGoalSheet> {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text('Добавить'),
+                    child: Text(t.tacticalMap.task.add),
                   ),
                 ),
               ],
@@ -3511,7 +3511,7 @@ class _TaskSheet extends ConsumerWidget {
           const SizedBox(height: 12),
           if (onToggle != null) ...[
             _ActionBtn(
-              label: task.isCompleted ? 'Отметить невыполненной' : 'Выполнено',
+              label: task.isCompleted ? t.tacticalMap.task.markIncomplete : t.tacticalMap.task.markComplete,
               icon: task.isCompleted ? Icons.radio_button_unchecked : Icons.check_circle_outline,
               color: c.accent,
               sc: c,
@@ -3521,7 +3521,7 @@ class _TaskSheet extends ConsumerWidget {
           ],
           if (onDelete != null)
             _ActionBtn(
-                label: 'Удалить',
+                label: t.tacticalMap.task.delete,
                 icon: Icons.delete_outline,
                 color: const Color(0xFFE03050),
                 sc: c,
@@ -3577,7 +3577,7 @@ class _MilestoneSheet extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.only(top: 6, left: 4),
               child: Text(
-                'Цель: ${ms.targetDate!.day}.${ms.targetDate!.month.toString().padLeft(2, '0')}.${ms.targetDate!.year}',
+                t.tacticalMap.milestone.targetDate(date: '${ms.targetDate!.day}.${ms.targetDate!.month.toString().padLeft(2, '0')}.${ms.targetDate!.year}'),
                 style: TextStyle(color: c.textSecondary, fontSize: 12),
               ),
             ),
@@ -3593,7 +3593,7 @@ class _MilestoneSheet extends ConsumerWidget {
           const SizedBox(height: 12),
           if (onComplete != null) ...[
             _ActionBtn(
-                label: 'Достигнут',
+                label: t.tacticalMap.milestone.reached,
                 icon: Icons.flag,
                 color: c.accentSecondary,
                 sc: c,
@@ -3602,7 +3602,7 @@ class _MilestoneSheet extends ConsumerWidget {
           ],
           if (onDelete != null)
             _ActionBtn(
-                label: 'Удалить',
+                label: t.tacticalMap.milestone.delete,
                 icon: Icons.delete_outline,
                 color: const Color(0xFFE03050),
                 sc: c,
@@ -3631,10 +3631,10 @@ class _HabitLinkSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SheetHeader(title: 'Связанная привычка', icon: Icons.link, sc: c, iconColor: c.dp),
+          _SheetHeader(title: t.tacticalMap.habitLink.title, icon: Icons.link, sc: c, iconColor: c.dp),
           const SizedBox(height: 16),
           _ActionBtn(
-              label: 'Отвязать привычку',
+              label: t.tacticalMap.habitLink.unlink,
               icon: Icons.link_off,
               color: const Color(0xFFE03050),
               sc: c,
@@ -3802,7 +3802,7 @@ class _EditingBadge extends StatelessWidget {
           const Icon(Icons.lock, size: 9, color: Colors.white),
           const SizedBox(width: 3),
           Text(
-            '$name редактирует',
+            t.tacticalMap.members.editingBadge(name: name),
             style: const TextStyle(
                 color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600),
           ),
@@ -3838,7 +3838,7 @@ class _MemberLegendOverlay extends ConsumerWidget {
     members.add((
       userId: goal.userId,
       avatarUrl: goal.ownerProfile?.avatarUrl,
-      label: goal.ownerProfile?.username ?? 'Владелец',
+      label: goal.ownerProfile?.username ?? t.tacticalMap.owner,
     ));
     for (final co in goal.collaborators.where((co) => co.status == 'accepted')) {
       members.add((
@@ -3859,7 +3859,7 @@ class _MemberLegendOverlay extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Участники',
+          Text(t.tacticalMap.members.title,
               style: TextStyle(
                   color: c.textSecondary,
                   fontSize: 9,
@@ -3970,7 +3970,7 @@ class _AssigneeRow extends ConsumerWidget {
       (
         userId: ownerId,
         avatarUrl: ownerProfile?.avatarUrl,
-        label: ownerProfile?.username ?? 'Владелец',
+        label: ownerProfile?.username ?? t.tacticalMap.owner,
       ),
       for (final co in collabs)
         (
@@ -3984,11 +3984,11 @@ class _AssigneeRow extends ConsumerWidget {
       children: [
         Icon(Icons.person_outline, size: 14, color: c.textSecondary),
         const SizedBox(width: 6),
-        Text('Исполнитель',
+        Text(t.tacticalMap.assignee.title,
             style: TextStyle(color: c.textSecondary, fontSize: 12)),
         const SizedBox(width: 8),
         if (assigneeIds.isEmpty)
-          Text('не назначен',
+          Text(t.tacticalMap.assignee.notAssigned,
               style: TextStyle(
                   color: c.textSecondary.withValues(alpha: 0.6), fontSize: 11))
         else
@@ -4016,7 +4016,7 @@ class _AssigneeRow extends ConsumerWidget {
                 color: c.accent.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Text('Изменить',
+              child: Text(t.tacticalMap.assignee.change,
                   style: TextStyle(
                       color: c.accent,
                       fontSize: 11,
@@ -4045,7 +4045,7 @@ class _AssigneeRow extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Назначить исполнителя',
+            Text(t.tacticalMap.assignee.pickerTitle,
                 style: TextStyle(
                     color: c.textPrimary,
                     fontSize: 16,
@@ -4518,7 +4518,7 @@ class _SearchPanel extends StatelessWidget {
                     decoration: InputDecoration(
                       isDense: true,
                       border: InputBorder.none,
-                      hintText: 'Поиск по карте…',
+                      hintText: t.tacticalMap.search.hint,
                       hintStyle: TextStyle(color: c.textSecondary, fontSize: 14),
                     ),
                   ),
@@ -4639,7 +4639,7 @@ class _EditModeButton extends StatelessWidget {
                 size: 15, color: active ? sc.accent : sc.textSecondary),
             const SizedBox(width: 7),
             Text(
-              active ? 'ГОТОВО' : 'РЕДАКТ.',
+              active ? t.tacticalMap.editMode.done : t.tacticalMap.editMode.edit,
               style: TextStyle(
                 color: active ? sc.accent : sc.textSecondary,
                 fontSize: 11,
@@ -4691,7 +4691,7 @@ class _MapToolPalette extends StatelessWidget {
               children: [
                 _MapToolChip(
                   icon: Icons.sticky_note_2_outlined,
-                  label: 'Заметка',
+                  label: t.tacticalMap.tools.note,
                   selected: tool == _MapTool.note,
                   sc: sc,
                   onTap: () => onPick(_MapTool.note),
@@ -4699,7 +4699,7 @@ class _MapToolPalette extends StatelessWidget {
                 const SizedBox(width: 8),
                 _MapToolChip(
                   icon: Icons.text_fields,
-                  label: 'Метка',
+                  label: t.tacticalMap.tools.label,
                   selected: tool == _MapTool.label,
                   sc: sc,
                   onTap: () => onPick(_MapTool.label),
@@ -4707,7 +4707,7 @@ class _MapToolPalette extends StatelessWidget {
                 const SizedBox(width: 8),
                 _MapToolChip(
                   icon: Icons.arrow_forward,
-                  label: 'Связь',
+                  label: t.tacticalMap.tools.connector,
                   selected: tool == _MapTool.connector,
                   sc: sc,
                   onTap: () => onPick(_MapTool.connector),
@@ -4715,7 +4715,7 @@ class _MapToolPalette extends StatelessWidget {
                 const SizedBox(width: 8),
                 _MapToolChip(
                   icon: Icons.image_outlined,
-                  label: 'Изобр.',
+                  label: t.tacticalMap.tools.image,
                   selected: false,
                   sc: sc,
                   onTap: () => onPick(_MapTool.image),
@@ -4830,13 +4830,13 @@ class _NoteElement extends StatelessWidget {
                   decoration: InputDecoration(
                     isDense: true,
                     border: InputBorder.none,
-                    hintText: 'Заметка…',
+                    hintText: t.tacticalMap.noteElement.hint,
                     hintStyle: TextStyle(color: sc.textSecondary, fontSize: 13),
                   ),
                   onTapOutside: (_) => onSubmit(),
                 )
               : Text(
-                  text.isEmpty ? 'Заметка…' : text,
+                  text.isEmpty ? t.tacticalMap.noteElement.hint : text,
                   style: TextStyle(
                     color: text.isEmpty ? sc.textSecondary : sc.textPrimary,
                     fontSize: 13,
@@ -4901,14 +4901,14 @@ class _LabelElement extends StatelessWidget {
               decoration: InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
-                hintText: 'Метка…',
+                hintText: t.tacticalMap.labelElement.hint,
                 hintStyle: TextStyle(color: sc.textSecondary, fontSize: 16),
               ),
               onTapOutside: (_) => onSubmit(),
               onSubmitted: (_) => onSubmit(),
             )
           : Text(
-              text.isEmpty ? 'Метка…' : text,
+              text.isEmpty ? t.tacticalMap.labelElement.hint : text,
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -4969,7 +4969,7 @@ class _ElementActionsSheet extends StatelessWidget {
             ),
           ),
           Text(
-            element.kind == MapElementKind.note ? 'ЗАМЕТКА' : 'МЕТКА',
+            element.kind == MapElementKind.note ? t.tacticalMap.elementActions.noteHeader : t.tacticalMap.elementActions.labelHeader,
             style: TextStyle(
                 color: sc.textSecondary,
                 fontSize: 11,
@@ -4977,7 +4977,7 @@ class _ElementActionsSheet extends StatelessWidget {
                 letterSpacing: 1.5),
           ),
           const SizedBox(height: 14),
-          Text('Цвет',
+          Text(t.tacticalMap.elementActions.color,
               style: TextStyle(color: sc.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 10),
           Row(
@@ -5004,7 +5004,7 @@ class _ElementActionsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           _ActionBtn(
-            label: 'Изменить текст',
+            label: t.tacticalMap.elementActions.editText,
             icon: Icons.edit_outlined,
             color: sc.accent,
             sc: sc,
@@ -5012,7 +5012,7 @@ class _ElementActionsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _ActionBtn(
-            label: 'Удалить',
+            label: t.tacticalMap.elementActions.delete,
             icon: Icons.delete_outline,
             color: sc.danger,
             sc: sc,
@@ -5260,14 +5260,14 @@ class _ConnectorActionsSheetState extends State<_ConnectorActionsSheet> {
                   color: c.border, borderRadius: BorderRadius.circular(2)),
             ),
           ),
-          Text('СВЯЗЬ',
+          Text(t.tacticalMap.connectorActions.header,
               style: TextStyle(
                   color: c.textSecondary,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.5)),
           const SizedBox(height: 14),
-          Text('Подпись',
+          Text(t.tacticalMap.connectorActions.caption,
               style: TextStyle(
                   color: c.textPrimary,
                   fontSize: 13,
@@ -5281,7 +5281,7 @@ class _ConnectorActionsSheetState extends State<_ConnectorActionsSheet> {
                 onSubmitted: widget.onEditLabel,
                 decoration: InputDecoration(
                   isDense: true,
-                  hintText: 'Без подписи…',
+                  hintText: t.tacticalMap.connectorActions.captionHint,
                   hintStyle: TextStyle(color: c.textSecondary, fontSize: 13),
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -5305,7 +5305,7 @@ class _ConnectorActionsSheetState extends State<_ConnectorActionsSheet> {
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                 decoration: BoxDecoration(
                     color: c.accent, borderRadius: BorderRadius.circular(10)),
-                child: Text('OK',
+                child: Text(t.tacticalMap.connectorActions.ok,
                     style: TextStyle(
                         color: c.background, fontWeight: FontWeight.w700)),
               ),
@@ -5313,14 +5313,14 @@ class _ConnectorActionsSheetState extends State<_ConnectorActionsSheet> {
           ]),
           const SizedBox(height: 10),
           _ActionBtn(
-            label: isDashed ? 'Сделать сплошной' : 'Сделать пунктирной',
+            label: isDashed ? t.tacticalMap.connectorActions.makeSolid : t.tacticalMap.connectorActions.makeDashed,
             icon: isDashed ? Icons.horizontal_rule : Icons.more_horiz,
             color: c.accent,
             sc: c,
             onTap: widget.onToggleDash,
           ),
           const SizedBox(height: 14),
-          Text('Цвет',
+          Text(t.tacticalMap.connectorActions.color,
               style: TextStyle(
                   color: c.textPrimary,
                   fontSize: 13,
@@ -5352,7 +5352,7 @@ class _ConnectorActionsSheetState extends State<_ConnectorActionsSheet> {
           ),
           const SizedBox(height: 18),
           _ActionBtn(
-            label: 'Удалить',
+            label: t.tacticalMap.connectorActions.delete,
             icon: Icons.delete_outline,
             color: const Color(0xFFE03050),
             sc: c,
@@ -5525,7 +5525,7 @@ class _ImagePreviewDialogState extends State<_ImagePreviewDialog> {
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
               child: Row(
                 children: [
-                  Text('Предпросмотр',
+                  Text(t.tacticalMap.preview.title,
                       style: TextStyle(
                           color: c.textPrimary,
                           fontSize: 15,
@@ -5533,13 +5533,13 @@ class _ImagePreviewDialogState extends State<_ImagePreviewDialog> {
                   const Spacer(),
                   IconButton(
                     icon: Icon(Icons.rotate_left, color: c.textSecondary),
-                    tooltip: 'Повернуть влево',
+                    tooltip: t.tacticalMap.preview.rotateLeft,
                     onPressed: () => setState(
                         () => _quarterTurns = (_quarterTurns - 1 + 4) % 4),
                   ),
                   IconButton(
                     icon: Icon(Icons.rotate_right, color: c.textSecondary),
-                    tooltip: 'Повернуть вправо',
+                    tooltip: t.tacticalMap.preview.rotateRight,
                     onPressed: () =>
                         setState(() => _quarterTurns = (_quarterTurns + 1) % 4),
                   ),
@@ -5576,7 +5576,7 @@ class _ImagePreviewDialogState extends State<_ImagePreviewDialog> {
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: c.border),
                         ),
-                        child: Text('Отмена',
+                        child: Text(t.tacticalMap.preview.cancel,
                             textAlign: TextAlign.center,
                             style: TextStyle(
                                 color: c.textSecondary,
@@ -5602,7 +5602,7 @@ class _ImagePreviewDialogState extends State<_ImagePreviewDialog> {
                           color: c.accent,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Text('Разместить',
+                        child: Text(t.tacticalMap.preview.place,
                             textAlign: TextAlign.center,
                             style: TextStyle(
                                 color: c.background,
@@ -5674,7 +5674,7 @@ class _ImageCardActionsSheetState extends State<_ImageCardActionsSheet> {
               ),
             ),
             Text(
-              'ИЗОБРАЖЕНИЕ',
+              t.tacticalMap.imageActions.header,
               style: TextStyle(
                   color: c.textSecondary,
                   fontSize: 11,
@@ -5682,7 +5682,7 @@ class _ImageCardActionsSheetState extends State<_ImageCardActionsSheet> {
                   letterSpacing: 1.5),
             ),
             const SizedBox(height: 14),
-            Text('Подпись',
+            Text(t.tacticalMap.imageActions.caption,
                 style: TextStyle(
                     color: c.textPrimary,
                     fontSize: 13,
@@ -5695,7 +5695,7 @@ class _ImageCardActionsSheetState extends State<_ImageCardActionsSheet> {
                     controller: _ctrl,
                     style: TextStyle(color: c.textPrimary, fontSize: 14),
                     decoration: InputDecoration(
-                      hintText: 'Добавить подпись…',
+                      hintText: t.tacticalMap.imageActions.captionHint,
                       hintStyle: TextStyle(color: c.textSecondary),
                       isDense: true,
                       contentPadding: const EdgeInsets.symmetric(
@@ -5728,7 +5728,7 @@ class _ImageCardActionsSheetState extends State<_ImageCardActionsSheet> {
             ),
             const SizedBox(height: 18),
             _ActionBtn(
-              label: 'Удалить',
+              label: t.tacticalMap.imageActions.delete,
               icon: Icons.delete_outline,
               color: const Color(0xFFE03050),
               sc: c,

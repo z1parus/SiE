@@ -1,0 +1,40 @@
+{
+  "category": {
+    "learning": "Обучение",
+    "health": "Здоровье",
+    "project": "Проект",
+    "lifestyle": "Образ жизни",
+    "discipline": "Дисциплина",
+    "other": "Прочее"
+  },
+  "title": "Шаблоны миссий",
+  "loadError": "Не удалось загрузить шаблоны",
+  "empty": "Пока нет доступных шаблонов",
+  "myTemplates": "МОИ ШАБЛОНЫ",
+  "card": {
+    "stages": "{n} этапов",
+    "tasks": "{n} задач",
+    "milestones": "{n} вех",
+    "stagesTasks": "{stages} этапов · {tasks} задач",
+    "milestonesSuffix": " · {n} вех"
+  },
+  "delete": {
+    "title": "Удалить шаблон?",
+    "message": "«{name}» будет удалён из ваших шаблонов.",
+    "cancel": "Отмена",
+    "confirm": "Удалить"
+  },
+  "preview": {
+    "structure": "СТРУКТУРА",
+    "milestones": "КОНТРОЛЬНЫЕ ТОЧКИ",
+    "metricTarget": "{name} (цель: {value}{unit})",
+    "create": "СОЗДАТЬ МИССИЮ"
+  },
+  "createSheet": {
+    "header": "СОЗДАТЬ ИЗ ШАБЛОНА",
+    "nameHint": "Название миссии",
+    "deadlineSet": "Дедлайн: {date}",
+    "deadlineEmpty": "Установить дедлайн (необязательно)",
+    "submit": "РАЗВЕРНУТЬ МИССИЮ"
+  }
+}

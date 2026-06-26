@@ -1,0 +1,42 @@
+{
+  "header": {
+    "title": "OPERATIVE\nAUTHENTICATION",
+    "subtitleLogin": "ENTER CLEARANCE CREDENTIALS",
+    "subtitleRegister": "REGISTER NEW OPERATIVE"
+  },
+  "fields": {
+    "emailLabel": "EMAIL ADDRESS",
+    "emailHint": "operative@sie.dev",
+    "emailInvalid": "INVALID EMAIL FORMAT",
+    "passwordLabel": "PASSPHRASE",
+    "passwordTooShort": "MIN 6 CHARACTERS REQUIRED",
+    "usernameLabel": "OPERATIVE ID",
+    "usernameHint": "codename",
+    "usernameRequired": "OPERATIVE ID REQUIRED"
+  },
+  "actions": {
+    "forgotPassword": "FORGOT PASSWORD?",
+    "submitLogin": "ACCESS GRANTED",
+    "submitRegister": "REGISTER OPERATIVE",
+    "toggleToRegister": "NO CLEARANCE?  REGISTER →",
+    "toggleToLogin": "ALREADY CLEARED?  SIGN IN →"
+  },
+  "password": {
+    "show": "Show password",
+    "hide": "Hide password"
+  },
+  "errors": {
+    "connection": "CONNECTION ERROR",
+    "enterEmailFirst": "ENTER EMAIL FIRST"
+  },
+  "reset": {
+    "emailSent": "A password reset email has been sent to {email}"
+  },
+  "pending": {
+    "confirmationRequired": "CONFIRMATION REQUIRED",
+    "confirmBody": "Confirm your email to activate operative access. Open the email and follow the link.",
+    "localDevHint": "Local dev — check Mailpit:",
+    "title": "REGISTRATION\nINITIATED",
+    "proceed": "PROCEED TO SIGN IN"
+  }
+}

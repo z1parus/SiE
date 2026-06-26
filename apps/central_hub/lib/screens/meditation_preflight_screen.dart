@@ -31,9 +31,9 @@ class _MeditationPreflightScreenState
       final leave = await confirmDestructive(
         context,
         ref,
-        title: 'Выйти без запуска?',
-        message: 'Изменённые настройки сессии не сохранятся.',
-        confirmLabel: 'Выйти',
+        title: t.meditationPreflight.confirmLeave.title,
+        message: t.meditationPreflight.confirmLeave.message,
+        confirmLabel: t.meditationPreflight.confirmLeave.confirm,
       );
       if (!leave) return;
     }
@@ -66,7 +66,7 @@ class _MeditationPreflightScreenState
             onPressed: _handleBack,
           ),
           title: Text(
-            'НАСТРОЙКА СЕССИИ',
+            t.meditationPreflight.appBar.title,
             style: TextStyle(
               color: c.accent,
               fontSize: 13,
@@ -88,9 +88,9 @@ class _MeditationPreflightScreenState
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text(
-                'ЗАПУСТИТЬ СЕССИЮ',
-                style: TextStyle(
+              child: Text(
+                t.meditationPreflight.launch,
+                style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 2),
@@ -119,7 +119,7 @@ class _MeditationPreflightScreenState
               ],
               const SizedBox(height: 24),
 
-              _SectionLabel('Структура сессии', c),
+              _SectionLabel(t.meditationPreflight.sections.structure, c),
               const SizedBox(height: 10),
               _ChainSelector(
                 hasBreathing: _current.hasBreathing,
@@ -130,10 +130,10 @@ class _MeditationPreflightScreenState
               const SizedBox(height: 16),
 
               if (_current.hasBreathing) ...[
-                _SectionLabel('Дыхание', c),
+                _SectionLabel(t.meditationPreflight.sections.breathing, c),
                 const SizedBox(height: 10),
                 _DurationPicker(
-                  label: 'Длительность',
+                  label: t.meditationPreflight.duration.label,
                   value: _current.breathingDurationMin,
                   min: 1,
                   max: 30,
@@ -151,10 +151,10 @@ class _MeditationPreflightScreenState
                 const SizedBox(height: 16),
               ],
 
-              _SectionLabel('Медитация', c),
+              _SectionLabel(t.meditationPreflight.sections.meditation, c),
               const SizedBox(height: 10),
               _DurationPicker(
-                label: 'Длительность',
+                label: t.meditationPreflight.duration.label,
                 value: _current.meditationDurationMin,
                 min: 1,
                 max: 120,
@@ -164,10 +164,10 @@ class _MeditationPreflightScreenState
               ),
               const SizedBox(height: 16),
 
-              _SectionLabel('Аудио', c),
+              _SectionLabel(t.meditationPreflight.sections.audio, c),
               const SizedBox(height: 10),
               _VolumeSlider(
-                label: 'МУЗЫКА',
+                label: t.meditationPreflight.audio.music,
                 value: _current.baseVolume,
                 onChanged: (v) => setState(
                     () => _current = _current.copyWith(baseVolume: v)),
@@ -175,7 +175,7 @@ class _MeditationPreflightScreenState
               ),
               const SizedBox(height: 6),
               _VolumeSlider(
-                label: 'AMBIENT',
+                label: t.meditationPreflight.audio.ambient,
                 value: _current.ambientVolume,
                 onChanged: (v) => setState(
                     () => _current = _current.copyWith(ambientVolume: v)),
@@ -183,7 +183,7 @@ class _MeditationPreflightScreenState
               ),
               const SizedBox(height: 6),
               _VolumeSlider(
-                label: 'ГОЛОС',
+                label: t.meditationPreflight.audio.voice,
                 value: _current.voiceVolume,
                 onChanged: (v) => setState(
                     () => _current = _current.copyWith(voiceVolume: v)),
@@ -192,7 +192,7 @@ class _MeditationPreflightScreenState
               const SizedBox(height: 16),
 
               if (packs.isNotEmpty) ...[
-                _SectionLabel('Аффирмации', c),
+                _SectionLabel(t.meditationPreflight.sections.affirmations, c),
                 const SizedBox(height: 10),
                 _AffirmationSection(
                   packs: packs,
@@ -251,7 +251,7 @@ class _ChainSelector extends StatelessWidget {
     return Row(
       children: [
         _Option(
-          label: 'Только медитация',
+          label: t.meditationPreflight.chain.meditationOnly,
           icon: Icons.self_improvement_rounded,
           selected: !hasBreathing,
           onTap: () => onChanged(false),
@@ -259,7 +259,7 @@ class _ChainSelector extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         _Option(
-          label: 'Дыхание + Медитация',
+          label: t.meditationPreflight.chain.breathingAndMeditation,
           icon: Icons.air_rounded,
           selected: hasBreathing,
           onTap: () => onChanged(true),
@@ -359,7 +359,7 @@ class _DurationPicker extends StatelessWidget {
         SizedBox(
           width: 52,
           child: Text(
-            '$value мин',
+            t.meditationPreflight.duration.value(value: value),
             textAlign: TextAlign.center,
             style: TextStyle(
                 color: c.textPrimary,
@@ -391,24 +391,24 @@ class _PatternChips extends StatelessWidget {
     required this.c,
   });
 
-  static const _patterns = [
-    ('box', 'Box 4×4', '4-4-4-4',
-        'Вдох 4 · задержка 4 · выдох 4 · пауза 4 сек'),
-    ('4-7-8', '4-7-8', '4-7-8', 'Вдох 4 · задержка 7 · выдох 8 сек'),
-    ('coherence', 'Coherence', '5-5',
-        'Вдох 5 · выдох 5 сек — баланс нервной системы'),
-  ];
-
   @override
   Widget build(BuildContext context) {
-    final desc = _patterns
-        .firstWhere((p) => p.$1 == selected, orElse: () => _patterns[0])
+    final patterns = [
+      ('box', t.meditationPreflight.patterns.box.name, '4-4-4-4',
+          t.meditationPreflight.patterns.box.description),
+      ('4-7-8', t.meditationPreflight.patterns.pattern478.name, '4-7-8',
+          t.meditationPreflight.patterns.pattern478.description),
+      ('coherence', t.meditationPreflight.patterns.coherence.name, '5-5',
+          t.meditationPreflight.patterns.coherence.description),
+    ];
+    final desc = patterns
+        .firstWhere((p) => p.$1 == selected, orElse: () => patterns[0])
         .$4;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          children: _patterns.map((rec) {
+          children: patterns.map((rec) {
             final (id, name, timing, _) = rec;
             final isSelected = selected == id;
             return Expanded(
@@ -504,7 +504,7 @@ class _VolumeSlider extends StatelessWidget {
         SizedBox(
           width: 36,
           child: Text(
-            '${(value * 100).round()}%',
+            t.meditationPreflight.audio.volume(percent: (value * 100).round()),
             textAlign: TextAlign.end,
             style:
                 TextStyle(color: c.textSecondary, fontSize: 11),
@@ -542,7 +542,7 @@ class _AffirmationSection extends StatelessWidget {
           dropdownColor: c.surface,
           style: TextStyle(color: c.textPrimary, fontSize: 13),
           decoration: InputDecoration(
-            labelText: 'Пак аффирмаций',
+            labelText: t.meditationPreflight.affirmations.packLabel,
             labelStyle:
                 TextStyle(color: c.textSecondary, fontSize: 12),
             enabledBorder: OutlineInputBorder(
@@ -559,7 +559,7 @@ class _AffirmationSection extends StatelessWidget {
           items: [
             DropdownMenuItem<String?>(
               value: null,
-              child: Text('Без аффирмаций',
+              child: Text(t.meditationPreflight.affirmations.noPack,
                   style: TextStyle(
                       color: c.textSecondary, fontSize: 13)),
             ),
@@ -574,7 +574,7 @@ class _AffirmationSection extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              Text('Интервал:',
+              Text(t.meditationPreflight.affirmations.interval,
                   style: TextStyle(
                       color: c.textSecondary, fontSize: 13)),
               const Spacer(),
@@ -591,7 +591,8 @@ class _AffirmationSection extends StatelessWidget {
               SizedBox(
                 width: 60,
                 child: Text(
-                  '${intervalSecs}с',
+                  t.meditationPreflight.affirmations
+                      .intervalValue(secs: intervalSecs),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       color: c.textPrimary,

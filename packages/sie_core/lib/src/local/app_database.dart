@@ -41,6 +41,8 @@ class LocalHabits extends Table {
   // Stage 7: highest abstinence milestone (days) already rewarded; resets on lapse.
   IntColumn get lastAbstinenceMilestone =>
       integer().withDefault(const Constant(0))();
+  // Stage 7: custom counter start for avoid habits (ms since epoch). Null = use createdAt.
+  IntColumn get avoidStartMs => integer().nullable()();
   BoolColumn get deletedLocally =>
       boolean().withDefault(const Constant(false))();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
@@ -91,6 +93,17 @@ class LocalBreathingSessions extends Table {
   IntColumn get completedAtMs => integer()();
   IntColumn get xpAwarded => integer()();
   IntColumn get dpAwarded => integer()();
+  // Practice metrics (added in schema v38).
+  IntColumn get breaths => integer().withDefault(const Constant(0))();
+  IntColumn get rounds => integer().withDefault(const Constant(0))();
+  IntColumn get longestHoldSeconds =>
+      integer().withDefault(const Constant(0))();
+  IntColumn get totalHoldSeconds =>
+      integer().withDefault(const Constant(0))();
+  // Post-practice reflection (all nullable — the user may skip it).
+  TextColumn get moodEmoji => text().nullable()();
+  IntColumn get calmness => integer().nullable()();
+  IntColumn get confidence => integer().nullable()();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
 
   @override
@@ -454,6 +467,33 @@ class LocalNodeAttachments extends Table {
   @override Set<Column> get primaryKey => {id};
 }
 
+@DataClassName('LocalGoalNote')
+class LocalGoalNotes extends Table {
+  TextColumn get id            => text()();
+  TextColumn get goalId        => text()();
+  TextColumn get userId        => text()();      // author
+  TextColumn get title         => text().nullable()();
+  TextColumn get body          => text().withDefault(const Constant(''))();
+  IntColumn  get createdAtMs   => integer()();
+  IntColumn  get updatedAtMs   => integer()();
+  BoolColumn get synced          => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally  => boolean().withDefault(const Constant(false))();
+  @override Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('LocalBreathingSequence')
+class LocalBreathingSequences extends Table {
+  TextColumn get id            => text()();
+  TextColumn get userId        => text()();
+  TextColumn get name          => text()();
+  TextColumn get roundsJson    => text().withDefault(const Constant('[]'))();
+  IntColumn  get createdAtMs   => integer()();
+  IntColumn  get updatedAtMs   => integer()();
+  BoolColumn get synced          => boolean().withDefault(const Constant(false))();
+  BoolColumn get deletedLocally  => boolean().withDefault(const Constant(false))();
+  @override Set<Column> get primaryKey => {id};
+}
+
 // ── Database ───────────────────────────────────────────────────────────────
 
 @DriftDatabase(tables: [
@@ -483,12 +523,14 @@ class LocalNodeAttachments extends Table {
   LocalNodeAttachments,
   LocalTaskAssignees,
   LocalSubGoalAssignees,
+  LocalGoalNotes,
+  LocalBreathingSequences,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 35;
+  int get schemaVersion => 39;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -710,6 +752,37 @@ class AppDatabase extends _$AppDatabase {
             'CREATE INDEX IF NOT EXISTS idx_sub_goal_assignees_goal '
             'ON local_sub_goal_assignees(goal_id)',
             const []);
+      }
+      if (from < 36) {
+        await m.createTable(localGoalNotes);
+        await m.issueCustomQuery(
+            'CREATE INDEX IF NOT EXISTS idx_goal_notes_goal '
+            'ON local_goal_notes(goal_id)',
+            const []);
+      }
+      if (from < 37) {
+        await m.createTable(localBreathingSequences);
+        await m.issueCustomQuery(
+            'CREATE INDEX IF NOT EXISTS idx_breathing_sequences_user '
+            'ON local_breathing_sequences(user_id)',
+            const []);
+      }
+      if (from < 38) {
+        await m.addColumn(localBreathingSessions, localBreathingSessions.breaths);
+        await m.addColumn(localBreathingSessions, localBreathingSessions.rounds);
+        await m.addColumn(
+            localBreathingSessions, localBreathingSessions.longestHoldSeconds);
+        await m.addColumn(
+            localBreathingSessions, localBreathingSessions.totalHoldSeconds);
+        await m.addColumn(
+            localBreathingSessions, localBreathingSessions.moodEmoji);
+        await m.addColumn(
+            localBreathingSessions, localBreathingSessions.calmness);
+        await m.addColumn(
+            localBreathingSessions, localBreathingSessions.confidence);
+      }
+      if (from < 39) {
+        await m.addColumn(localHabits, localHabits.avoidStartMs);
       }
       } catch (e) {
         // Migration failed (e.g. table/column already exists from a dev build
@@ -940,6 +1013,17 @@ class AppDatabase extends _$AppDatabase {
       (update(localBreathingSessions)..where((t) => t.id.equals(id)))
           .write(
               const LocalBreathingSessionsCompanion(synced: Value(true)));
+
+  /// All breathing sessions for [userId], newest first — backs the journal and
+  /// stats screens when offline (and mirrors the Supabase rows when online).
+  Future<List<LocalBreathingSession>> breathingSessionsForUser(String userId) =>
+      (select(localBreathingSessions)
+            ..where((t) => t.userId.equals(userId))
+            ..orderBy([
+              (t) => OrderingTerm(
+                  expression: t.completedAtMs, mode: OrderingMode.desc)
+            ]))
+          .get();
 
   // ── Bootcamp Activity Queries ─────────────────────────────────────────────
 
@@ -1217,6 +1301,63 @@ class AppDatabase extends _$AppDatabase {
       (update(localNodeAttachments)..where((t) => t.id.equals(id)))
           .write(LocalNodeAttachmentsCompanion(
               storagePath: Value(path), synced: const Value(false)));
+
+  // ── Goal notes (journal) ──────────────────────────────────────────────────
+
+  Future<List<LocalGoalNote>> notesForGoal(String goalId) =>
+      (select(localGoalNotes)
+            ..where((t) =>
+                t.goalId.equals(goalId) & t.deletedLocally.equals(false))
+            ..orderBy([(t) => OrderingTerm.desc(t.updatedAtMs)]))
+          .get();
+
+  Future<List<LocalGoalNote>> unsyncedNotes() =>
+      (select(localGoalNotes)..where((t) => t.synced.equals(false))).get();
+
+  Future<void> upsertGoalNote(LocalGoalNotesCompanion row) =>
+      into(localGoalNotes).insertOnConflictUpdate(row);
+
+  Future<void> deleteGoalNoteLocally(String id) =>
+      (update(localGoalNotes)..where((t) => t.id.equals(id)))
+          .write(const LocalGoalNotesCompanion(
+              deletedLocally: Value(true), synced: Value(false)));
+
+  Future<void> purgeGoalNote(String id) =>
+      (delete(localGoalNotes)..where((t) => t.id.equals(id))).go();
+
+  Future<void> markGoalNoteSynced(String id) =>
+      (update(localGoalNotes)..where((t) => t.id.equals(id)))
+          .write(const LocalGoalNotesCompanion(synced: Value(true)));
+
+  // ── Breathing sequences ───────────────────────────────────────────────────
+
+  Future<List<LocalBreathingSequence>> breathingSequencesForUser(
+          String userId) =>
+      (select(localBreathingSequences)
+            ..where((t) =>
+                t.userId.equals(userId) & t.deletedLocally.equals(false))
+            ..orderBy([(t) => OrderingTerm.desc(t.updatedAtMs)]))
+          .get();
+
+  Future<List<LocalBreathingSequence>> unsyncedBreathingSequences() =>
+      (select(localBreathingSequences)..where((t) => t.synced.equals(false)))
+          .get();
+
+  Future<void> upsertBreathingSequence(
+          LocalBreathingSequencesCompanion row) =>
+      into(localBreathingSequences).insertOnConflictUpdate(row);
+
+  Future<void> deleteBreathingSequenceLocally(String id) =>
+      (update(localBreathingSequences)..where((t) => t.id.equals(id)))
+          .write(const LocalBreathingSequencesCompanion(
+              deletedLocally: Value(true), synced: Value(false)));
+
+  Future<void> purgeBreathingSequence(String id) =>
+      (delete(localBreathingSequences)..where((t) => t.id.equals(id))).go();
+
+  Future<void> markBreathingSequenceSynced(String id) =>
+      (update(localBreathingSequences)..where((t) => t.id.equals(id)))
+          .write(const LocalBreathingSequencesCompanion(synced: Value(true)));
 
   // ── Node assignees (Stage 5) ──────────────────────────────────────────────
 

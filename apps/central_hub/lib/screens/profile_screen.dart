@@ -79,7 +79,7 @@ class _TopBar extends StatelessWidget {
             const SizedBox(width: 36),
           Expanded(
             child: Text(
-              'PERSONNEL FILE',
+              t.profile.topBar.title,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     letterSpacing: 2,
@@ -218,7 +218,7 @@ class _ProfileContent extends ConsumerWidget {
                       Expanded(
                         child: _SquareNavButton(
                           icon: Icons.analytics_outlined,
-                          label: 'PROGRESS HUB',
+                          label: t.profile.nav.progressHub,
                           iconColor: c.accent,
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute(builder: (_) => const ProgressAnalyticsScreen()),
@@ -229,7 +229,7 @@ class _ProfileContent extends ConsumerWidget {
                       Expanded(
                         child: _SquareNavButton(
                           icon: Icons.menu_book_rounded,
-                          label: 'БАЗА ЗНАНИЙ',
+                          label: t.profile.nav.knowledgeBase,
                           iconColor: c.accent,
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute(builder: (_) => const KnowledgeBaseScreen()),
@@ -241,7 +241,7 @@ class _ProfileContent extends ConsumerWidget {
                         Expanded(
                           child: _SquareNavButton(
                             icon: Icons.palette_outlined,
-                            label: 'ОБЛИК',
+                            label: t.profile.nav.appearance,
                             iconColor: c.accent,
                             onTap: () => Navigator.of(context).push(
                               MaterialPageRoute(
@@ -280,7 +280,7 @@ class _ProfileContent extends ConsumerWidget {
                             ),
                             const SizedBox(width: 14),
                             Text(
-                              'DEV STUDIO',
+                              t.profile.nav.devStudio,
                               style: TextStyle(
                                 color: c.textPrimary,
                                 fontSize: 12,
@@ -320,7 +320,7 @@ class _ProfileContent extends ConsumerWidget {
                           ),
                           const SizedBox(width: 14),
                           Text(
-                            'МОИ ВИДЖЕТЫ',
+                            t.profile.nav.myWidgets,
                             style: TextStyle(
                               color: c.textPrimary,
                               fontSize: 12,
@@ -340,10 +340,10 @@ class _ProfileContent extends ConsumerWidget {
                   const SizedBox(height: 16),
                   const _AchievementsGrid(),
                   const SizedBox(height: 28),
-                  const SectionHeader(title: 'MEDALS VAULT'),
+                  SectionHeader(title: t.profile.medals.vaultTitle),
                 const SizedBox(height: 4),
                 Text(
-                  'EARNED COMMENDATIONS & COMBAT DECORATIONS',
+                  t.profile.medals.vaultSubtitle,
                   style: TextStyle(
                     color: c.textSecondary.withValues(alpha: 0.55),
                     fontSize: 9,
@@ -386,8 +386,8 @@ class _StatsStrip extends ConsumerWidget {
         Expanded(
           child: _StatCell(
             icon: Icons.military_tech_outlined,
-            value: 'LVL $level',
-            label: 'УРОВЕНЬ',
+            value: t.profile.stats.level(level: level),
+            label: t.profile.stats.levelLabel,
             statStyle: statStyle,
             c: c,
           ),
@@ -397,7 +397,7 @@ class _StatsStrip extends ConsumerWidget {
           child: _StatCell(
             icon: Icons.bolt,
             value: '$xp',
-            label: 'XP ВСЕГО',
+            label: t.profile.stats.xpTotal,
             statStyle: statStyle,
             c: c,
           ),
@@ -407,7 +407,7 @@ class _StatsStrip extends ConsumerWidget {
           child: _StatCell(
             icon: Icons.palette_outlined,
             value: '$dp',
-            label: 'DP',
+            label: t.profile.stats.dp,
             statStyle: statStyle,
             c: c,
           ),
@@ -540,7 +540,7 @@ class _AwardsHeader extends ConsumerWidget {
 
     return Row(
       children: [
-        const SectionHeader(title: 'AWARDS'),
+        SectionHeader(title: t.profile.awards.title),
         const Spacer(),
         if (ach != null && ach.isNotEmpty)
           Text(
@@ -571,13 +571,13 @@ class _AchievementsGrid extends ConsumerWidget {
     return achievementsAsync.when(
       loading: () => const SieSkeletonGrid(columns: 3, count: 6),
       error: (_, _) => Text(
-        'NO ACHIEVEMENTS DEFINED IN DATABASE',
+        t.profile.achievements.loadError,
         style: TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),
       ),
       data: (achievements) {
         if (achievements.isEmpty) {
           return Text(
-            'NO ACHIEVEMENTS YET',
+            t.profile.achievements.empty,
             style: TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),
           );
         }
@@ -612,13 +612,13 @@ class _MedalsVault extends ConsumerWidget {
     return medalsAsync.when(
       loading: () => const SieSkeletonGrid(columns: 3, count: 3),
       error: (_, _) => Text(
-        'ОШИБКА ЗАГРУЗКИ МЕДАЛЕЙ',
+        t.profile.medals.loadError,
         style: TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),
       ),
       data: (medals) {
         if (medals.isEmpty) {
           return Text(
-            'NO MEDALS YET — COMPLETE MISSIONS TO EARN COMMENDATIONS',
+            t.profile.medals.empty,
             style:
                 TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),
           );
@@ -747,7 +747,7 @@ class _MedalGroupSheet extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '${medals.length} медал${_medalSuffix(medals.length)}',
+            t.profile.medals.count(n: medals.length),
             style: TextStyle(color: c.textSecondary, fontSize: 12),
           ),
           const SizedBox(height: 12),
@@ -781,13 +781,6 @@ class _MedalGroupSheet extends StatelessWidget {
     );
   }
 
-  static String _medalSuffix(int n) {
-    if (n % 10 == 1 && n % 100 != 11) return 'ь';
-    if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) {
-      return 'и';
-    }
-    return 'ей';
-  }
 }
 
 class _MedalGroupRow extends StatelessWidget {
@@ -830,7 +823,7 @@ class _MedalGroupRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Завершено: $dateStr',
+                    t.profile.medals.completed(date: dateStr),
                     style:
                         TextStyle(color: c.textSecondary, fontSize: 11),
                   ),
@@ -907,13 +900,11 @@ class _MedalDetailSheet extends StatelessWidget {
                   color: c.textPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.w600),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 6),
           ],
           Text(
-            'Завершено: $dateStr',
+            t.profile.medals.completed(date: dateStr),
             style: TextStyle(color: c.textSecondary, fontSize: 12),
           ),
           const SizedBox(height: 16),
@@ -922,11 +913,11 @@ class _MedalDetailSheet extends StatelessWidget {
             children: [
               _StatChip(
                   icon: Icons.fitness_center,
-                  label: 'Вес: ${medal.totalTaskWeight}',
+                  label: t.profile.medals.weight(weight: medal.totalTaskWeight),
                   c: c),
               _StatChip(
                   icon: Icons.calendar_today_outlined,
-                  label: '${medal.durationDays} дн.',
+                  label: t.profile.medals.duration(n: medal.durationDays),
                   c: c),
             ],
           ),
@@ -969,7 +960,7 @@ class _NoConnectionMessage extends ConsumerWidget {
         Icon(Icons.wifi_off_outlined, color: c.iconMuted, size: 36),
         const SizedBox(height: 12),
         Text(
-          'Подключение к интернету отсутствует',
+          t.profile.noConnection,
           textAlign: TextAlign.center,
           style: TextStyle(
             color: c.iconMuted,

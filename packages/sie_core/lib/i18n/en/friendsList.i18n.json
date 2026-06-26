@@ -1,0 +1,25 @@
+{
+  "header": {
+    "title": "MY FRIENDS"
+  },
+  "tabs": {
+    "friends": "FRIENDS",
+    "sent": "OUTGOING",
+    "received": "INCOMING"
+  },
+  "loadError": "Failed to load",
+  "empty": {
+    "friends": "No friends yet",
+    "sent": "No outgoing requests",
+    "received": "No incoming requests"
+  },
+  "tile": {
+    "levelXp": "LEVEL {level} · {xp} XP"
+  },
+  "remove": {
+    "fallbackName": "the user",
+    "title": "Remove from friends?",
+    "message": "{name} will be removed from your friends list.",
+    "confirm": "Remove"
+  }
+}

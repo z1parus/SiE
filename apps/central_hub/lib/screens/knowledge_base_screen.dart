@@ -27,13 +27,13 @@ class KnowledgeBaseScreen extends ConsumerWidget {
                   children: [
                     const _SystemHeader(),
                     const SizedBox(height: 28),
-                    const _NeonSectionLabel(label: 'МОДУЛИ СИСТЕМЫ'),
+                    _NeonSectionLabel(label: t.knowledgeBase.sections.systemModules),
                     const SizedBox(height: 14),
                     _KbEntry(
                       moduleTag: 'M-01',
-                      label: 'BREATHING',
-                      subtitle: 'Сброс нервной системы',
-                      body: _breathingBody,
+                      label: t.knowledgeBase.entries.breathing.label,
+                      subtitle: t.knowledgeBase.entries.breathing.subtitle,
+                      body: t.knowledgeBase.bodies.breathing,
                       onOpen: () => Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (_) => const BreathingExerciseScreen(
@@ -44,9 +44,9 @@ class KnowledgeBaseScreen extends ConsumerWidget {
                     const SizedBox(height: 10),
                     _KbEntry(
                       moduleTag: 'M-02',
-                      label: 'HABIT ARCHIVE',
-                      subtitle: 'Архив нейронных связей',
-                      body: _habitsBody,
+                      label: t.knowledgeBase.entries.habits.label,
+                      subtitle: t.knowledgeBase.entries.habits.subtitle,
+                      body: t.knowledgeBase.bodies.habits,
                       onOpen: () => Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (_) => const HabitTrackerScreen(),
@@ -56,9 +56,9 @@ class KnowledgeBaseScreen extends ConsumerWidget {
                     const SizedBox(height: 10),
                     _KbEntry(
                       moduleTag: 'M-03',
-                      label: 'FOCUS PROTOCOL',
-                      subtitle: 'Протокол глубокой работы',
-                      body: _focusBody,
+                      label: t.knowledgeBase.entries.focus.label,
+                      subtitle: t.knowledgeBase.entries.focus.subtitle,
+                      body: t.knowledgeBase.bodies.focus,
                       onOpen: () => Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (_) =>
@@ -67,11 +67,11 @@ class KnowledgeBaseScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 28),
-                    const _NeonSectionLabel(label: 'ТАБЛИЦА ПРОГРЕССА'),
+                    _NeonSectionLabel(label: t.knowledgeBase.sections.progressTable),
                     const SizedBox(height: 14),
                     const _XpTable(),
                     const SizedBox(height: 28),
-                    const _NeonSectionLabel(label: 'КОРПОРАТИВНАЯ ЭТИКА'),
+                    _NeonSectionLabel(label: t.knowledgeBase.sections.corporateEthics),
                     const SizedBox(height: 14),
                     const _EthicsSection(),
                   ],
@@ -110,7 +110,7 @@ class _TopBar extends ConsumerWidget {
           ),
           Expanded(
             child: Text(
-              'БАЗА ЗНАНИЙ',
+              t.knowledgeBase.topBar.title,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     color: c.textPrimary,
                     letterSpacing: 3,
@@ -184,7 +184,7 @@ class _SystemHeader extends ConsumerWidget {
               ),
               const SizedBox(width: 10),
               Text(
-                'SiE KNOWLEDGE MATRIX v1.0',
+                t.knowledgeBase.header.matrixVersion,
                 style: TextStyle(
                   color: c.accent,
                   fontSize: 11,
@@ -197,11 +197,7 @@ class _SystemHeader extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'Корпорация SiE — это экосистема саморазвития, построенная на '
-            'научных протоколах. Каждый модуль системы воздействует на '
-            'конкретные нейронные и физиологические механизмы. Изучи базу '
-            'знаний, чтобы понять, как именно работает каждый инструмент и '
-            'как максимизировать свой прогресс.',
+            t.knowledgeBase.header.intro,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   height: 1.6,
                   fontSize: 13,
@@ -424,7 +420,7 @@ class _KbEntryState extends ConsumerState<_KbEntry>
                                   alignment: Alignment.centerLeft,
                                   child: Semantics(
                                     button: true,
-                                    label: 'Открыть модуль',
+                                    label: t.knowledgeBase.entries.openModuleSemantics,
                                     child: GestureDetector(
                                       behavior: HitTestBehavior.opaque,
                                       onTap: () {
@@ -444,7 +440,7 @@ class _KbEntryState extends ConsumerState<_KbEntry>
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Text(
-                                              'ОТКРЫТЬ МОДУЛЬ',
+                                              t.knowledgeBase.entries.openModule,
                                               style: TextStyle(
                                                 color: c.accent,
                                                 fontSize: 11,
@@ -483,14 +479,28 @@ class _XpTable extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
-    const rows = [
-      _XpRow('Завершение дыхательной сессии', '100 XP', 'Breathing'),
-      _XpRow('Выход из дыхания ≥ 30 сек', '10–80 XP', 'Breathing'),
-      _XpRow('Отметка привычки за день', '15 XP', 'Habits'),
-      _XpRow('Создание первой привычки', '25 XP', 'Habits'),
-      _XpRow('Страйк привычки 7 дней', '50 XP', 'Habits'),
-      _XpRow('Завершение фокус-сессии', '30 XP', 'Focus'),
-      _XpRow('Завершение блока отдыха', '5 XP', 'Focus'),
+    final rows = [
+      _XpRow(t.knowledgeBase.xpTable.rows.breathingSession,
+          t.knowledgeBase.xpTable.rewards.breathingSession,
+          t.knowledgeBase.xpTable.modules.breathing),
+      _XpRow(t.knowledgeBase.xpTable.rows.breathingHold,
+          t.knowledgeBase.xpTable.rewards.breathingHold,
+          t.knowledgeBase.xpTable.modules.breathing),
+      _XpRow(t.knowledgeBase.xpTable.rows.habitDailyMark,
+          t.knowledgeBase.xpTable.rewards.habitDailyMark,
+          t.knowledgeBase.xpTable.modules.habits),
+      _XpRow(t.knowledgeBase.xpTable.rows.habitFirstCreated,
+          t.knowledgeBase.xpTable.rewards.habitFirstCreated,
+          t.knowledgeBase.xpTable.modules.habits),
+      _XpRow(t.knowledgeBase.xpTable.rows.habitStreak7,
+          t.knowledgeBase.xpTable.rewards.habitStreak7,
+          t.knowledgeBase.xpTable.modules.habits),
+      _XpRow(t.knowledgeBase.xpTable.rows.focusSession,
+          t.knowledgeBase.xpTable.rewards.focusSession,
+          t.knowledgeBase.xpTable.modules.focus),
+      _XpRow(t.knowledgeBase.xpTable.rows.focusBreak,
+          t.knowledgeBase.xpTable.rewards.focusBreak,
+          t.knowledgeBase.xpTable.modules.focus),
     ];
 
     return SieGlassCard(
@@ -509,7 +519,7 @@ class _XpTable extends ConsumerWidget {
                 Expanded(
                   flex: 4,
                   child: Text(
-                    'АКТИВНОСТЬ',
+                    t.knowledgeBase.xpTable.headerActivity,
                     style: TextStyle(
                       color: c.accent.withValues(alpha: 0.6),
                       fontSize: 10,
@@ -519,7 +529,7 @@ class _XpTable extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'НАГРАДА',
+                  t.knowledgeBase.xpTable.headerReward,
                   style: TextStyle(
                     color: c.accent.withValues(alpha: 0.6),
                     fontSize: 9,
@@ -530,7 +540,7 @@ class _XpTable extends ConsumerWidget {
                 SizedBox(
                   width: 62,
                   child: Text(
-                    'МОДУЛЬ',
+                    t.knowledgeBase.xpTable.headerModule,
                     style: TextStyle(
                       color: c.accent.withValues(alpha: 0.6),
                       fontSize: 10,
@@ -548,7 +558,7 @@ class _XpTable extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.all(12),
             child: Text(
-              '1000 XP = LEVEL UP  ·  Уровень определяет ранг оперативника в иерархии SiE',
+              t.knowledgeBase.xpTable.footer,
               style: TextStyle(
                 color: c.textSecondary.withValues(alpha: 0.7),
                 fontSize: 11,
@@ -635,11 +645,11 @@ class _EthicsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
-    const paragraphs = [
-      'SiE — Self-improvement Ecosystem — не приложение, это операционная система личного роста. Каждое действие здесь является вкладом в долгосрочную архитектуру твоей эффективности.',
-      'Мы верим в науку, а не в мотивацию. Мотивация нестабильна — системы и протоколы постоянны. Каждый модуль SiE построен на верифицированных механиках: нейробиологии дыхания, психологии формирования привычек и когнитивной науке концентрации.',
-      'Оперативник SiE принимает ответственность за свой прогресс. XP — это не игровая механика, это количественная мера вложенных усилий. Уровень — это ранг в иерархии тех, кто выбрал системный подход к себе.',
-      'Корпоративный девиз: "Дисциплина — это форма уважения к своему будущему я."',
+    final paragraphs = [
+      t.knowledgeBase.ethics.paragraph1,
+      t.knowledgeBase.ethics.paragraph2,
+      t.knowledgeBase.ethics.paragraph3,
+      t.knowledgeBase.ethics.paragraph4,
     ];
 
     return SieGlassCard(
@@ -669,47 +679,3 @@ class _EthicsSection extends ConsumerWidget {
     );
   }
 }
-
-// ── KB Content Strings ────────────────────────────────────────
-
-const _breathingBody =
-    'Дыхательные практики модуля SiE основаны на методе Вима Хофа — '
-    'технике гипервентиляции с последующей задержкой дыхания.\n\n'
-    'Физиологически: серия быстрых вдохов снижает уровень CO₂ в крови, '
-    'повышает pH (алкалоз). Задержка дыхания на выдохе вызывает управляемый '
-    'гипоксический стресс, стимулируя митохондриальные адаптации и выброс '
-    'адреналина из надпочечников.\n\n'
-    'Доказанные эффекты (рандомизированные исследования):\n'
-    '→ Снижение субъективного стресса до 30% уже после одной сессии\n'
-    '→ Повышение болевого порога и иммунного ответа\n'
-    '→ Улучшение энергетического тонуса за счёт насыщения тканей кислородом\n\n'
-    'Рекомендованный протокол: 3 раунда по 30 циклов. Минимальная '
-    'эффективная сессия — 30 секунд активной практики.';
-
-const _habitsBody =
-    'Привычка — это поведение, перенесённое в базальные ганглии: нейронную '
-    'структуру, отвечающую за автоматизацию действий. Когда привычка '
-    'сформирована, она не требует волевых ресурсов.\n\n'
-    'Механика формирования (модель Ч. Дахигга):\n'
-    '→ Триггер → Рутина → Награда\n\n'
-    'Для образования устойчивой нейронной связи требуется в среднем '
-    '66 дней регулярного выполнения (исследование Lally et al., UCL). '
-    'Ключевой показатель — стрик: непрерывная серия отметок.\n\n'
-    'Стратегия SiE: начинай с микро-привычек (2-минутное правило). Малые '
-    'победы накапливают поведенческий импульс. Система трекинга и пины для '
-    'приоритетных протоколов помогают управлять вниманием.';
-
-const _focusBody =
-    'Метод Помодоро (Франческо Чирилло, 1980-е) использует временны́е блоки '
-    'для защиты состояния глубокого потока от прерываний.\n\n'
-    'Нейробиология: в течение 25-минутного блока мозг входит в '
-    'состояние устойчивой активации префронтальной коры. Периоды отдыха '
-    'необходимы для консолидации рабочей памяти и предотвращения '
-    'когнитивного истощения.\n\n'
-    'Настройки протокола SiE:\n'
-    '→ Рабочий блок: 15–60 минут (по умолчанию 25)\n'
-    '→ Короткий отдых: 5–15 минут (по умолчанию 5)\n'
-    '→ Длинный отдых: 15–30 минут через каждые 4 сессии\n\n'
-    'Исследования показывают: 4 завершённые помодоро в день коррелируют '
-    'с 2× продуктивностью по сравнению с непрерывной работой того же '
-    'суммарного времени.';

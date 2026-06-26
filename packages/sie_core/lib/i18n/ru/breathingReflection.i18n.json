@@ -1,0 +1,15 @@
+{
+  "header": "ПРАКТИКА ЗАВЕРШЕНА",
+  "moodQuestion": "Как вы себя чувствуете?",
+  "save": "СОХРАНИТЬ",
+  "skip": "Пропустить",
+  "summary": {
+    "timeLabel": "время",
+    "holdLabel": "задержка"
+  },
+  "level": {
+    "calmness": "СПОКОЙСТВИЕ",
+    "confidence": "УВЕРЕННОСТЬ",
+    "value": "{value} / 10"
+  }
+}

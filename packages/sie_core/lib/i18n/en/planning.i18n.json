@@ -1,0 +1,88 @@
+{
+  "category": {
+    "learning": "Learning",
+    "health": "Health",
+    "project": "Project",
+    "lifestyle": "Lifestyle",
+    "discipline": "Discipline"
+  },
+  "header": {
+    "missionControl": "MISSION CONTROL",
+    "archiveTitle": "Mission archive",
+    "activeTitle": "Active missions"
+  },
+  "modeSwitch": {
+    "agenda": "Agenda",
+    "goals": "Goals"
+  },
+  "loadError": "Loading error",
+  "card": {
+    "stagnation": "STAGNATION",
+    "collaborative": "COLLABORATIVE",
+    "owner": "Owner: {name}",
+    "unknownOwner": "Unknown",
+    "progress": "progress",
+    "stages": "{done}/{total} stages",
+    "habits": "{n} habits",
+    "tasks": "{done}/{total} tasks"
+  },
+  "status": {
+    "completed": "COMPLETED",
+    "frozen": "FROZEN",
+    "failed": "FAILED",
+    "active": "ACTIVE"
+  },
+  "deadline": {
+    "overdue": "overdue by {n} d.",
+    "inDays": "in {n} d."
+  },
+  "empty": {
+    "archiveEmpty": "Archive is empty",
+    "noActiveMissions": "No active missions",
+    "createMission": "CREATE MISSION"
+  },
+  "createChooser": {
+    "newMission": "NEW MISSION",
+    "emptyGoal": "Empty goal",
+    "fromTemplate": "From template",
+    "aiDecomposition": "AI decomposition"
+  },
+  "options": {
+    "stats": "Mission statistics",
+    "unpin": "Unpin mission",
+    "pin": "Pin mission",
+    "unfreeze": "Unfreeze mission",
+    "freeze": "Freeze mission",
+    "complete": "Complete mission",
+    "saveAsTemplate": "Save as template",
+    "leave": "Leave mission",
+    "delete": "Delete mission"
+  },
+  "delete": {
+    "title": "Delete mission?",
+    "message": "All data of goal «{name}» will be deleted.",
+    "cancel": "Cancel",
+    "confirm": "Delete"
+  },
+  "saveTemplate": {
+    "title": "Save as template",
+    "description": "The structure (stages, tasks and milestones) will be saved without dates and progress.",
+    "hint": "Template name",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saved": "Template «{name}» saved"
+  },
+  "addGoal": {
+    "newMission": "NEW MISSION",
+    "nameHint": "Mission name",
+    "priority": "PRIORITY",
+    "priorityLow": "Low",
+    "priorityMedium": "Medium",
+    "priorityHigh": "High",
+    "priorityCritical": "Crit.",
+    "missionColor": "MISSION COLOR",
+    "deadlineSet": "Deadline: {date}",
+    "deadlineEmpty": "Set deadline (optional)",
+    "submit": "CREATE MISSION"
+  }
+}

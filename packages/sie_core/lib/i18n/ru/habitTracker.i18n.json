@@ -1,0 +1,235 @@
+{
+  "list": {
+    "noHabitsToday": "На сегодня привычек не запланировано",
+    "notTodayHeader": "НЕ СЕГОДНЯ · {count}",
+    "moduleLabel": "ПРИВЫЧКИ",
+    "archiveDescription": "Архив нейронных связей.",
+    "archiveBody": "Автоматизация успеха через микро-действия и систематическую дисциплину. Формирование нейронных паттернов, не требующих волевых ресурсов."
+  },
+  "firstProtocol": {
+    "title": "ПЕРВЫЙ ПРОТОКОЛ ДИСЦИПЛИНЫ",
+    "xpEarned": "+25 XP получено"
+  },
+  "createStack": {
+    "saveLabel": "СОЗДАТЬ"
+  },
+  "addMenu": {
+    "customHabit": "СВОЯ ПРИВЫЧКА",
+    "fromLibrary": "ИЗ БИБЛИОТЕКИ"
+  },
+  "header": {
+    "habit": "HABIT ",
+    "matrix": "MATRIX",
+    "subtitle": "НЕЙРОННАЯ МАТРИЦА · АРХИВ ДИСЦИПЛИНЫ",
+    "help": "Справка",
+    "habitsOverview": "Обзор привычек",
+    "groupByArea": "Группировка по сферам",
+    "habitArchive": "Архив привычек"
+  },
+  "viewMode": {
+    "today": "СЕГОДНЯ",
+    "week": "НЕДЕЛЯ",
+    "allTime": "ВСЁ ВРЕМЯ"
+  },
+  "valueLabel": {
+    "durationProgress": "{cur} / {tgt} мин"
+  },
+  "checkAction": {
+    "uncheckFor": "Отменить отметку за {day}",
+    "checkFor": "Отметить выполнение за {day}"
+  },
+  "streak": {
+    "label": "STREAK: {streak}"
+  },
+  "empty": {
+    "noProtocols": "NO PROTOCOLS ACTIVE",
+    "tapToInit": "TAP + TO INITIALISE A HABIT"
+  },
+  "editor": {
+    "editPrefix": "EDIT ",
+    "newPrefix": "NEW ",
+    "protocol": "PROTOCOL",
+    "title": "TITLE",
+    "description": "DESCRIPTION (OPTIONAL)",
+    "polarity": "ПОЛЯРНОСТЬ",
+    "polarityBuild": "Развивать",
+    "polarityAvoid": "Избавиться",
+    "avoidHint": "Успех — это день без срыва. Счётчик «N дней без…» растёт сам; кнопка на карточке — «Был срыв».",
+    "type": "ТИП",
+    "color": "COLOR",
+    "icon": "ICON",
+    "schedule": "SCHEDULE",
+    "reminder": "REMINDER",
+    "reminderOff": "Выкл.",
+    "area": "СФЕРА",
+    "cancel": "CANCEL",
+    "save": "SAVE",
+    "deploy": "DEPLOY"
+  },
+  "typeEditor": {
+    "binary": "Да / Нет",
+    "count": "Количество",
+    "duration": "Время",
+    "durationValue": "{mins} мин",
+    "stepValue": "+{mins} мин",
+    "targetMin": "Цель (мин)",
+    "target": "Цель",
+    "suffixMin": "мин",
+    "unitLabel": "ЕДИНИЦА (стак., стр., раз…)",
+    "stepLabel": "Шаг «+»"
+  },
+  "notToday": {
+    "header": "НЕ СЕГОДНЯ · {count}"
+  },
+  "scheduleEditor": {
+    "daily": "Каждый день",
+    "weekdays": "По дням",
+    "weekly": "N раз в неделю",
+    "interval": "Каждые N дней",
+    "perWeek": "Раз в неделю",
+    "intervalLabel": "Интервал",
+    "intervalSuffix": "дн.",
+    "countFromFirst": "Отсчёт — от первого выполнения",
+    "timesWord(plural)": {
+      "one": "раз",
+      "few": "раза",
+      "many": "раз",
+      "other": "раз"
+    }
+  },
+  "noteSheet": {
+    "hint": "Как всё прошло? Оставьте заметку...",
+    "updateEntry": "UPDATE JOURNAL ENTRY",
+    "addReflection": "ADD REFLECTION",
+    "mood": "MOOD",
+    "note": "NOTE",
+    "removeNote": "REMOVE NOTE",
+    "cancel": "CANCEL",
+    "update": "UPDATE",
+    "save": "SAVE"
+  },
+  "archive": {
+    "headerPrefix": "HABIT ",
+    "headerSuffix": "ARCHIVE",
+    "completedProtocols": "ЗАВЕРШЁННЫЕ НЕЙРОННЫЕ ПРОТОКОЛЫ",
+    "empty": "АРХИВ ПУСТ",
+    "emptyBody": "Архивируйте выполненные привычки,\nчтобы увидеть их здесь",
+    "restoring": "ВОССТАНОВЛЕНИЕ...",
+    "restore": "ВОССТАНОВИТЬ"
+  },
+  "errorState": {
+    "noConnection": "Подключение к интернету отсутствует",
+    "loadFailed": "Не удалось загрузить данные"
+  },
+  "routine": {
+    "editMorning": "ИЗМЕНИТЬ УТРЕННЮЮ РУТИНУ",
+    "editEvening": "ИЗМЕНИТЬ ВЕЧЕРНЮЮ РУТИНУ",
+    "deleteMorning": "УДАЛИТЬ УТРЕННЮЮ РУТИНУ",
+    "deleteEvening": "УДАЛИТЬ ВЕЧЕРНЮЮ РУТИНУ",
+    "morning": "УТРЕННЯЯ РУТИНА",
+    "evening": "ВЕЧЕРНЯЯ РУТИНА",
+    "startMorning": "НАЧАТЬ УТРЕННЮЮ РУТИНУ",
+    "startEvening": "НАЧАТЬ ВЕЧЕРНЮЮ РУТИНУ",
+    "addHabits": "ДОБАВИТЬ ПРИВЫЧКИ",
+    "routineDone": "РУТИНА ВЫПОЛНЕНА ✓",
+    "done": "ВЫПОЛНЕНО ✓",
+    "doneShort": "ВЫПОЛНЕНО",
+    "finishPrevious": "ЗАВЕРШИТЕ ПРЕДЫДУЩЕЕ",
+    "addHabit": "ДОБАВИТЬ ПРИВЫЧКУ"
+  },
+  "detail": {
+    "editProtocol": "EDIT PROTOCOL",
+    "archiveProtocol": "ARCHIVE PROTOCOL",
+    "deleteProtocol": "DELETE PROTOCOL",
+    "archiveConfirmTitle": "Архивировать привычку?",
+    "archiveConfirmMessage": "Привычка скроется из активного списка. Её можно восстановить из Архива в любой момент.",
+    "archiveConfirmLabel": "В архив",
+    "confirmDeletion": "CONFIRM DELETION",
+    "deleteMessage": "Delete \"{title}\"? All log history will be erased.",
+    "cancel": "CANCEL",
+    "delete": "DELETE",
+    "headerPrefix": "HABIT ",
+    "headerSuffix": "DETAIL",
+    "habitSettings": "Настройки привычки"
+  },
+  "avoidCard": {
+    "daysWithoutSlip": "ДНЕЙ БЕЗ СРЫВА",
+    "record": "РЕКОРД",
+    "slips": "СРЫВОВ",
+    "recordValue": "рек. {record}",
+    "streak": "STREAK",
+    "today": "СЕГОДНЯ",
+    "yes": "ДА",
+    "no": "НЕТ",
+    "freezes": "❄️ ФРИЗЫ",
+    "total": "ВСЕГО",
+    "lapsedMessage": "Сегодня был срыв. Это часть пути — завтра начинаем заново.",
+    "holdingMessage": "Держишься {streak} {daysWord}. Продолжай в том же духе.",
+    "snapSlip": "СНЯТЬ СРЫВ",
+    "wasSlip": "БЫЛ СРЫВ",
+    "cancelMark": "ОТМЕНИТЬ",
+    "mark": "ОТМЕТИТЬ",
+    "restDone": "❄️ ОТДЫХ ✓",
+    "rest": "❄️ ОТДЫХ",
+    "noteEdit": "ЗАМЕТКА ✎",
+    "noteAdd": "+ ЗАМЕТКА",
+    "markFirst": "Сначала отметьте выполнение, затем добавьте заметку",
+    "journal": "ЖУРНАЛ",
+    "loadError": "ОШИБКА ЗАГРУЗКИ",
+    "confirmCancelSlip": "ОТМЕНИТЬ СРЫВ?",
+    "confirmMarkSlip": "ОТМЕТИТЬ СРЫВ?",
+    "cancelSlipMessage": "Сегодняшний срыв будет снят, счётчик восстановится.",
+    "markSlipMessage": "Срыв — часть пути. Твой рекорд {record} {daysWord}. Счётчик обнулится, и мы продолжаем дальше.",
+    "cancelBtn": "ОТМЕНА",
+    "snap": "СНЯТЬ",
+    "wasSlipBtn": "БЫЛ СРЫВ",
+    "withoutSlipSuffix": "{daysWord} без срыва",
+    "recordLine": "рекорд: {record} {daysWord}",
+    "slipDone": "СРЫВ ✓",
+    "slip": "СРЫВ",
+    "setStartDate": "УСТАНОВИТЬ ДАТУ НАЧАЛА",
+    "startDateSince": "НАЧАЛО: с {date}",
+    "resetStartDate": "СБРОСИТЬ",
+    "startDatePickerTitle": "НАЧАЛО ОТСЧЁТА"
+  },
+  "journal": {
+    "empty": "ЖУРНАЛ ПУСТ",
+    "emptyBody": "Отметьте выполнение и добавьте\nзаметку через кнопку \"+ ЗАМЕТКА\""
+  },
+  "analytics": {
+    "noWeekday": "—",
+    "title": "АНАЛИТИКА",
+    "showWeeks": "← 16 НЕД.",
+    "showYear": "ГОД →",
+    "collectingData": "Копим данные — статистика появится через несколько дней",
+    "days7": "7 дней",
+    "days30": "30 дней",
+    "record": "Рекорд",
+    "bestDay": "Лучший день",
+    "worstDay": "Слабый день",
+    "trend7d": "Тренд 7 дн."
+  },
+  "areaChip": {
+    "none": "—"
+  },
+  "areaSection": {
+    "noArea": "— БЕЗ СФЕРЫ"
+  },
+  "stackCard": {
+    "tapToAdd": "Нажмите, чтобы добавить привычки в стэк",
+    "create": "СОЗДАТЬ СТЭК"
+  },
+  "edit": "EDIT",
+  "days(plural)": {
+    "one": "{n} день",
+    "few": "{n} дня",
+    "many": "{n} дней",
+    "other": "{n} дней"
+  },
+  "daysWord(plural)": {
+    "one": "день",
+    "few": "дня",
+    "many": "дней",
+    "other": "дней"
+  }
+}

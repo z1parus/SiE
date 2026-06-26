@@ -1,0 +1,85 @@
+{
+  "confirmAbort": {
+    "title": "Abort session?",
+    "message": "If you held on longer than 30 seconds, progress will be saved partially.",
+    "confirmLabel": "Abort"
+  },
+  "onboarding": {
+    "moduleLabel": "BREATHING",
+    "description": "Nervous-system reset and oxygen saturation.",
+    "benefit": "Instant stress relief, controlled adrenaline release and mental clarity through hyperventilation with breath retention."
+  },
+  "idle": {
+    "defaultTitle": "WIM HOF METHOD",
+    "roundsAndCycles": "{rounds} ROUNDS  ·  {cycles} CYCLES",
+    "tapToStart": "TAP SPHERE TO START",
+    "initiateProtocol": "INITIATE PROTOCOL"
+  },
+  "countdown": {
+    "getReady": "GET READY",
+    "forPractice": "FOR THE PRACTICE"
+  },
+  "active": {
+    "inhale": "INHALE",
+    "exhale": "EXHALE",
+    "cycle": "CYCLE {current} / {total}"
+  },
+  "exhalePause": {
+    "title": "EXHALE",
+    "subtitle": "BEFORE THE HOLD",
+    "seconds": "{secs}s"
+  },
+  "retention": {
+    "hold": "HOLD",
+    "max": "MAX {time}",
+    "release": "RELEASE"
+  },
+  "inhalePause": {
+    "title": "INHALE",
+    "subtitle": "BEFORE THE HOLD",
+    "seconds": "{secs}s"
+  },
+  "recovery": {
+    "holdYourBreath": "HOLD YOUR BREATH",
+    "inhale": "(INHALE)",
+    "seconds": "{secs}s"
+  },
+  "roundTransition": {
+    "exhale": "EXHALE",
+    "prepareForThe": "PREPARE FOR THE",
+    "nextRound": "NEXT ROUND",
+    "seconds": "{secs}s"
+  },
+  "topBar": {
+    "round": "ROUND {round} / {total}"
+  },
+  "buttons": {
+    "protocolSettings": "PROTOCOL SETTINGS",
+    "mySequences": "MY SEQUENCES",
+    "restart": "START OVER"
+  },
+  "settings": {
+    "title": "PROTOCOL SETTINGS",
+    "sectionProtocol": "PROTOCOL",
+    "protocolLockedHint": "The protocol is defined by your custom sequence and can't be changed here.",
+    "sectionSoundToggles": "SOUND TOGGLES",
+    "sectionVolume": "VOLUME",
+    "sectionPresets": "PRESETS",
+    "rounds": "ROUNDS",
+    "cyclesPerRound": "CYCLES / ROUND",
+    "inhaleSec": "INHALE  (SEC)",
+    "exhaleSec": "EXHALE  (SEC)",
+    "exhaleRetentionSec": "EXHALE RETENTION (SEC)",
+    "recoveryHoldSec": "RECOVERY HOLD (SEC)",
+    "ambientMusic": "AMBIENT MUSIC",
+    "breathingSounds": "BREATHING SOUNDS",
+    "heartbeat": "HEARTBEAT",
+    "clockTicks": "CLOCK TICKS",
+    "volumeBreathing": "BREATHING",
+    "volumeHum": "HUM (HOLD)",
+    "presetEmpty": "EMPTY",
+    "presetLabel": "{rounds}r · {cycles}c · {retention}s",
+    "load": "LOAD",
+    "save": "SAVE"
+  }
+}

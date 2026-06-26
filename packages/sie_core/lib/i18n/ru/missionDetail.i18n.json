@@ -1,0 +1,184 @@
+{
+  "header": {
+    "aiPlanTooltip": "AI-план",
+    "journalTooltip": "Журнал заметок",
+    "moreTooltip": "Ещё",
+    "menuSettings": "Настройки",
+    "menuStats": "Статистика",
+    "menuExport": "Экспорт"
+  },
+  "advice": {
+    "title": "СОВЕТ",
+    "stale": "Цель не обновлялась {n} дн. Выполни хотя бы одну задачу.",
+    "overdue": "{n} задач просрочено. Расставь приоритеты.",
+    "deadline": "До дедлайна {days} дн., прогресс {progress}%. Ускоряйся!"
+  },
+  "category": {
+    "learning": "Обучение",
+    "health": "Здоровье",
+    "project": "Проект",
+    "lifestyle": "Образ жизни",
+    "discipline": "Дисциплина"
+  },
+  "subGoals": {
+    "sectionTitle": "ОПЕРАЦИИ",
+    "locked": "ЗАБЛОКИРОВАНО",
+    "scout": "Разведать",
+    "taskCount": "{done}/{total} задач{childPart} · {progress}%",
+    "childPart": " · {n} эт.",
+    "addChild": "Добавить под-этап",
+    "addTask": "Добавить задачу"
+  },
+  "task": {
+    "waitingFor": "Ждёт: {names}"
+  },
+  "dependency": {
+    "title": "ЗАВИСИТ ОТ…",
+    "description": "Эта задача станет доступной, когда выбранные будут выполнены.",
+    "noOtherTasks": "Нет других задач в этой цели.",
+    "errorCycle": "Это создаст замкнутый круг зависимостей.",
+    "errorDuplicate": "Зависимость уже добавлена.",
+    "errorGeneric": "Не удалось добавить зависимость."
+  },
+  "milestones": {
+    "sectionTitle": "КОНТРОЛЬНЫЕ ТОЧКИ",
+    "measure": "ЗАМЕР",
+    "logTitle": "ВНЕСТИ ЗАМЕР",
+    "save": "СОХРАНИТЬ"
+  },
+  "habits": {
+    "sectionTitle": "СИНЕРГИЯ ПРИВЫЧЕК",
+    "linkTitle": "ПРИВЯЗАТЬ ПРИВЫЧКУ",
+    "noHabits": "Нет доступных привычек"
+  },
+  "quickEntry": {
+    "stage": "ЭТАП",
+    "task": "ЗАДАЧА",
+    "point": "ТОЧКА",
+    "hintSubGoal": "Новый этап...",
+    "hintTask": "Новая задача...",
+    "hintMilestone": "Контрольная точка..."
+  },
+  "section": {
+    "fogActiveTooltip": "Туман войны активен"
+  },
+  "status": {
+    "completed": "ЗАВЕРШЕНА",
+    "frozen": "ЗАМОРОЖЕНА",
+    "failed": "ПРОВАЛЕНА",
+    "active": "АКТИВНА"
+  },
+  "deadline": {
+    "overdue": "просрочено {n} дн.",
+    "remaining": "через {n} дн."
+  },
+  "delete": {
+    "subGoalTitle": "Удалить этап?",
+    "subGoalMessage": "Этап «{name}» и все его задачи будут удалены.",
+    "taskTitle": "Удалить задачу?",
+    "taskMessage": "Задача будет удалена без возможности восстановления.",
+    "endRecurrenceTitle": "Завершить серию?",
+    "endRecurrenceMessage": "Текущая задача останется, но новые повторы создаваться не будут.",
+    "milestoneTitle": "Удалить контрольную точку?",
+    "milestoneMessage": "Контрольная точка будет удалена без возможности восстановления."
+  },
+  "recurrence": {
+    "daily": "↻ ежедневно",
+    "every": "↻ каждые {n} дн.",
+    "monthly": "↻ ежемесячно ({day})",
+    "weekday1": "Пн",
+    "weekday2": "Вт",
+    "weekday3": "Ср",
+    "weekday4": "Чт",
+    "weekday5": "Пт",
+    "weekday6": "Сб",
+    "weekday7": "Вс"
+  },
+  "addSubGoal": {
+    "title": "НОВЫЙ ЭТАП",
+    "nameHint": "Название этапа",
+    "submit": "СОЗДАТЬ ЭТАП"
+  },
+  "addTask": {
+    "title": "НОВАЯ ЗАДАЧА",
+    "nameHint": "Название задачи",
+    "difficulty": "СЛОЖНОСТЬ",
+    "easy": "Лёгкая",
+    "medium": "Средняя",
+    "hard": "Сложная",
+    "deadlineSet": "Дедлайн: {date}",
+    "deadlineAdd": "Добавить дедлайн (необязательно)",
+    "repeat": "ПОВТОР",
+    "recurNone": "Нет",
+    "recurDaily": "Ежедневно",
+    "recurWeekly": "Еженедельно",
+    "recurMonthly": "Ежемесячно",
+    "recurEvery": "Каждые N дней",
+    "everyPrefix": "Каждые",
+    "everySuffix": "дней",
+    "weeklyHint": "Повтор в этот день недели (по дате дедлайна)",
+    "monthlyHint": "Повтор в это число месяца (по дате дедлайна)",
+    "submit": "ДОБАВИТЬ ЗАДАЧУ"
+  },
+  "addMilestone": {
+    "title": "КОНТРОЛЬНАЯ ТОЧКА",
+    "nameHint": "Название точки",
+    "binary": "Бинарная",
+    "metric": "Метрика",
+    "start": "Старт",
+    "target": "Цель",
+    "unitHint": "Ед. (кг, $, км)",
+    "direction": "Направление:",
+    "increase": "↑ Увеличивать",
+    "decrease": "↓ Уменьшать",
+    "dateSet": "Дата: {date}",
+    "dateAdd": "Добавить дату (необязательно)",
+    "submit": "ДОБАВИТЬ ТОЧКУ"
+  },
+  "subGoalOptions": {
+    "complete": "Завершить этап",
+    "unparent": "Вынести на уровень выше",
+    "delete": "Удалить этап"
+  },
+  "fog": {
+    "title": "ТУМАН ВОЙНЫ",
+    "body": "Режим «Туман войны» скрывает этапы операции до их разблокировки. Чтобы увидеть следующий этап, нажми «Разведать» на заблокированном элементе.\n\nЭтот режим помогает сосредоточиться на текущих задачах, постепенно раскрывая план по мере продвижения.",
+    "gotIt": "ПОНЯТНО"
+  },
+  "settings": {
+    "title": "НАСТРОЙКИ МИССИИ",
+    "createdAt": "Создано: {date}",
+    "whyHeader": "ЗАЧЕМ Я ЭТО ДЕЛАЮ",
+    "whyHint": "Моя мотивация и смысл этой цели…",
+    "fogTitle": "Туман войны",
+    "fogSubtitle": "Скрывает этапы до их разблокировки",
+    "hideCompleted": "Скрыть выполненные задачи",
+    "remindBefore": "Напомнить за дней до дедлайна",
+    "categoryTitle": "Категория миссии",
+    "categoryNone": "Нет",
+    "unfreeze": "Разморозить миссию",
+    "freeze": "Заморозить миссию",
+    "complete": "Завершить миссию",
+    "completedSubtitle": "МИССИЯ ЗАВЕРШЕНА",
+    "apply": "ПРИМЕНИТЬ"
+  },
+  "collaboration": {
+    "sectionTitle": "СОВМЕСТНАЯ РАБОТА",
+    "removeTitle": "Удалить участника?",
+    "removeMessage": "Убрать {name} из совместной работы?",
+    "cancel": "Отмена",
+    "remove": "Удалить",
+    "invite": "Пригласить друга",
+    "roleViewer": "Просмотр",
+    "roleEditor": "Редактор",
+    "pending": "  ожидает ответа",
+    "revoke": "Отозвать",
+    "inviteTitle": "ПРИГЛАСИТЬ ДРУГА",
+    "rights": "Права:",
+    "rightsViewer": "Просмотр",
+    "rightsEditor": "Редактор",
+    "noFriends": "Нет доступных друзей",
+    "sent": "Отправлено",
+    "invite_action": "Позвать"
+  }
+}

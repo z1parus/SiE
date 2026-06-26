@@ -1,0 +1,52 @@
+{
+  "appBar": {
+    "title": "НАСТРОЙКА СЕССИИ"
+  },
+  "launch": "ЗАПУСТИТЬ СЕССИЮ",
+  "confirmLeave": {
+    "title": "Выйти без запуска?",
+    "message": "Изменённые настройки сессии не сохранятся.",
+    "confirm": "Выйти"
+  },
+  "sections": {
+    "structure": "Структура сессии",
+    "breathing": "Дыхание",
+    "meditation": "Медитация",
+    "audio": "Аудио",
+    "affirmations": "Аффирмации"
+  },
+  "chain": {
+    "meditationOnly": "Только медитация",
+    "breathingAndMeditation": "Дыхание + Медитация"
+  },
+  "duration": {
+    "label": "Длительность",
+    "value": "{value} мин"
+  },
+  "audio": {
+    "music": "МУЗЫКА",
+    "ambient": "AMBIENT",
+    "voice": "ГОЛОС",
+    "volume": "{percent}%"
+  },
+  "patterns": {
+    "box": {
+      "name": "Box 4×4",
+      "description": "Вдох 4 · задержка 4 · выдох 4 · пауза 4 сек"
+    },
+    "pattern478": {
+      "name": "4-7-8",
+      "description": "Вдох 4 · задержка 7 · выдох 8 сек"
+    },
+    "coherence": {
+      "name": "Coherence",
+      "description": "Вдох 5 · выдох 5 сек — баланс нервной системы"
+    }
+  },
+  "affirmations": {
+    "packLabel": "Пак аффирмаций",
+    "noPack": "Без аффирмаций",
+    "interval": "Интервал:",
+    "intervalValue": "{secs}с"
+  }
+}

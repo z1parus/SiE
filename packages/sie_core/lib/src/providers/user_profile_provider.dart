@@ -8,6 +8,7 @@ import '../local/app_database.dart';
 import '../models/profile.dart';
 import '../supabase_service.dart';
 import 'auth_state_provider.dart';
+import 'connectivity_provider.dart';
 
 class UserProfileNotifier extends AsyncNotifier<Profile?> {
   @override
@@ -24,6 +25,35 @@ class UserProfileNotifier extends AsyncNotifier<Profile?> {
     if (user == null) {
       debugPrint('SiE Profile: currentUser is null — skipping fetch');
       return null;
+    }
+
+    // Fast offline path: skip Supabase and load from local cache immediately.
+    // Without this the provider would stay in loading state for 60+ seconds
+    // while waiting for the OS-level TCP timeout to expire.
+    if (!isOnlineSync(ref)) {
+      debugPrint('SiE Profile: offline — loading from local cache');
+      try {
+        final db = ref.read(appDatabaseProvider);
+        final local = await db.getProfile(user.id);
+        if (local == null) return null;
+        if (local.cachedJson != null) {
+          final json = jsonDecode(local.cachedJson!) as Map<String, dynamic>;
+          return Profile.fromJson({
+            ...json,
+            'total_xp': local.totalXp,
+            'design_points': local.designPoints,
+          });
+        }
+        return Profile(
+          id: user.id,
+          totalXp: local.totalXp,
+          designPoints: local.designPoints,
+          isLabMember: false,
+        );
+      } catch (e) {
+        debugPrint('SiE Profile: local cache read failed offline — $e');
+        return null;
+      }
     }
 
     // ── Step 1: Fetch from Supabase ───────────────────────────────────────────

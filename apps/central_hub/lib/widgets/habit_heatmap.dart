@@ -1,4 +1,3 @@
-import 'dart:math' show pi;
 import 'package:flutter/material.dart';
 import 'package:sie_core/sie_core.dart';
 
@@ -131,7 +130,15 @@ class _HeatmapPainter extends CustomPainter {
     }
 
     // Weekday labels (Mo/Вт/Чт/Сб — even rows only).
-    const labels = ['Пн', '', 'Ср', '', 'Пт', '', 'Вс'];
+    final labels = [
+      t.habitShared.weekdayShort[0],
+      '',
+      t.habitShared.weekdayShort[2],
+      '',
+      t.habitShared.weekdayShort[4],
+      '',
+      t.habitShared.weekdayShort[6],
+    ];
     final textStyle = TextStyle(
       color: emptyColor.withValues(alpha: 0.9),
       fontSize: 8,

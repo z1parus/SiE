@@ -1,0 +1,41 @@
+{
+  "topBar": {
+    "title": "PERSONNEL FILE"
+  },
+  "nav": {
+    "progressHub": "PROGRESS HUB",
+    "knowledgeBase": "БАЗА ЗНАНИЙ",
+    "appearance": "ОБЛИК",
+    "devStudio": "DEV STUDIO",
+    "myWidgets": "МОИ ВИДЖЕТЫ"
+  },
+  "stats": {
+    "level": "LVL {level}",
+    "levelLabel": "УРОВЕНЬ",
+    "xpTotal": "XP ВСЕГО",
+    "dp": "DP"
+  },
+  "awards": {
+    "title": "AWARDS"
+  },
+  "achievements": {
+    "loadError": "NO ACHIEVEMENTS DEFINED IN DATABASE",
+    "empty": "NO ACHIEVEMENTS YET"
+  },
+  "medals": {
+    "vaultTitle": "MEDALS VAULT",
+    "vaultSubtitle": "EARNED COMMENDATIONS & COMBAT DECORATIONS",
+    "loadError": "ОШИБКА ЗАГРУЗКИ МЕДАЛЕЙ",
+    "empty": "NO MEDALS YET — COMPLETE MISSIONS TO EARN COMMENDATIONS",
+    "count(plural)": {
+      "one": "{n} медаль",
+      "few": "{n} медали",
+      "many": "{n} медалей",
+      "other": "{n} медалей"
+    },
+    "completed": "Завершено: {date}",
+    "weight": "Вес: {weight}",
+    "duration": "{n} дн."
+  },
+  "noConnection": "Подключение к интернету отсутствует"
+}

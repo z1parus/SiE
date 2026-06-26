@@ -61,13 +61,13 @@ class _WidgetStudioScreenState extends ConsumerState<WidgetStudioScreen> {
       await WidgetRenderService.refresh(_cfg.appWidgetId, db);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Виджет сохранён')),
+        SnackBar(content: Text(t.widgetStudio.snackBar.saved)),
       );
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+        SnackBar(content: Text(t.widgetStudio.snackBar.error(error: e))),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -86,7 +86,7 @@ class _WidgetStudioScreenState extends ConsumerState<WidgetStudioScreen> {
         foregroundColor: c.textPrimary,
         elevation: 0,
         title: Text(
-          provider?.displayName ?? 'Виджет',
+          provider?.displayName ?? t.widgetStudio.appBar.fallbackTitle,
           style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.w600),
         ),
         actions: [
@@ -101,14 +101,14 @@ class _WidgetStudioScreenState extends ConsumerState<WidgetStudioScreen> {
                 )
               : TextButton(
                   onPressed: _save,
-                  child: Text('Сохранить',
+                  child: Text(t.widgetStudio.appBar.save,
                       style: TextStyle(color: c.accent, fontWeight: FontWeight.w600)),
                 ),
         ],
       ),
       body: provider == null
           ? Center(
-              child: Text('Модуль не найден', style: TextStyle(color: c.textSecondary)),
+              child: Text(t.widgetStudio.appBar.moduleNotFound, style: TextStyle(color: c.textSecondary)),
             )
           : ListView(
               padding: const EdgeInsets.all(16),
@@ -118,23 +118,23 @@ class _WidgetStudioScreenState extends ConsumerState<WidgetStudioScreen> {
                 const SizedBox(height: 24),
 
                 // ── Size (fixed by the placed widget) ─────────────────────────
-                _SectionHeader(label: 'Размер', c: c),
+                _SectionHeader(label: t.widgetStudio.section.size, c: c),
                 const SizedBox(height: 8),
                 _SizeInfo(current: _cfg.sizeBucket, c: c),
                 const SizedBox(height: 20),
 
                 // ── Theme picker ──────────────────────────────────────────────
-                _SectionHeader(label: 'Тема', c: c),
+                _SectionHeader(label: t.widgetStudio.section.theme, c: c),
                 const SizedBox(height: 8),
                 _ThemePicker(
                   current: _cfg.themeOverride,
                   c: c,
-                  onChanged: (t) => _update(_cfg.copyWith(themeOverride: t)),
+                  onChanged: (mode) => _update(_cfg.copyWith(themeOverride: mode)),
                 ),
                 const SizedBox(height: 20),
 
                 // ── Background style ──────────────────────────────────────────
-                _SectionHeader(label: 'Фон', c: c),
+                _SectionHeader(label: t.widgetStudio.section.background, c: c),
                 const SizedBox(height: 8),
                 _BgStylePicker(
                   current: _cfg.bgStyle,
@@ -144,7 +144,7 @@ class _WidgetStudioScreenState extends ConsumerState<WidgetStudioScreen> {
                 const SizedBox(height: 20),
 
                 // ── Accent ────────────────────────────────────────────────────
-                _SectionHeader(label: 'Акцент', c: c),
+                _SectionHeader(label: t.widgetStudio.section.accent, c: c),
                 const SizedBox(height: 8),
                 _AccentPicker(
                   current: _cfg.accentOverride,
@@ -168,7 +168,7 @@ class _WidgetStudioScreenState extends ConsumerState<WidgetStudioScreen> {
     if (specs.isEmpty) return const [];
 
     return [
-      _SectionHeader(label: 'Содержимое', c: c),
+      _SectionHeader(label: t.widgetStudio.section.content, c: c),
       const SizedBox(height: 8),
       ...specs.map((spec) {
         final value = _cfg.contentOptions[spec.id] ?? spec.defaultValue;
@@ -250,7 +250,7 @@ class _PreviewSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Предпросмотр',
+            t.widgetStudio.preview.label,
             style: TextStyle(
               color: c.textSecondary,
               fontSize: 11,
@@ -296,9 +296,9 @@ class _SizeInfo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (icon, label) = switch (current) {
-      WidgetSizeBucket.small => (Icons.crop_square, 'Малый'),
-      WidgetSizeBucket.medium => (Icons.crop_landscape, 'Средний'),
-      WidgetSizeBucket.large => (Icons.crop_din, 'Большой'),
+      WidgetSizeBucket.small => (Icons.crop_square, t.widgetStudio.size.small),
+      WidgetSizeBucket.medium => (Icons.crop_landscape, t.widgetStudio.size.medium),
+      WidgetSizeBucket.large => (Icons.crop_din, t.widgetStudio.size.large),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -319,7 +319,7 @@ class _SizeInfo extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Чтобы сменить размер — удалите виджет и добавьте нужный',
+              t.widgetStudio.size.changeHint,
               style: TextStyle(color: c.textSecondary, fontSize: 11, height: 1.3),
               textAlign: TextAlign.right,
             ),
@@ -345,10 +345,10 @@ class _ThemePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const options = [
-      (WidgetThemeMode.followApp, 'Как в приложении', Icons.sync),
-      (WidgetThemeMode.forceDark, 'Тёмная', Icons.dark_mode),
-      (WidgetThemeMode.forceLight, 'Светлая', Icons.light_mode),
+    final options = [
+      (WidgetThemeMode.followApp, t.widgetStudio.theme.followApp, Icons.sync),
+      (WidgetThemeMode.forceDark, t.widgetStudio.theme.dark, Icons.dark_mode),
+      (WidgetThemeMode.forceLight, t.widgetStudio.theme.light, Icons.light_mode),
     ];
     return Row(
       children: options.map((opt) {
@@ -407,11 +407,11 @@ class _BgStylePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const options = [
-      (WidgetBackgroundStyle.flat, 'Плоский'),
-      (WidgetBackgroundStyle.glass, 'Стекло'),
-      (WidgetBackgroundStyle.gradient, 'Градиент'),
-      (WidgetBackgroundStyle.transparent, 'Прозрачный'),
+    final options = [
+      (WidgetBackgroundStyle.flat, t.widgetStudio.background.flat),
+      (WidgetBackgroundStyle.glass, t.widgetStudio.background.glass),
+      (WidgetBackgroundStyle.gradient, t.widgetStudio.background.gradient),
+      (WidgetBackgroundStyle.transparent, t.widgetStudio.background.transparent),
     ];
     return Wrap(
       spacing: 8,

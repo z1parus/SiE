@@ -1,0 +1,36 @@
+{
+  "topBar": {
+    "title": "PROGRESS HUB"
+  },
+  "error": {
+    "noConnection": "No internet connection"
+  },
+  "sections": {
+    "activityMatrix": "ACTIVITY MATRIX",
+    "xpGrowth": "XP GROWTH — 7 DAYS",
+    "focusTime": "FOCUS TIME — 7 DAYS"
+  },
+  "stats": {
+    "focusHoursMinutes": "{h}h {m}m",
+    "focusMinutes": "{m}m",
+    "totalFocus": "TOTAL\nFOCUS",
+    "habits30Days": "HABITS\n30 DAYS",
+    "dayStreak": "DAY\nSTREAK"
+  },
+  "heatMap": {
+    "weekdayInitials": "M,,W,,F,,S",
+    "monthsShort": "Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec",
+    "less": "LESS",
+    "more": "MORE"
+  },
+  "weekdaysShort": "Mo,Tu,We,Th,Fr,Sa,Su",
+  "xpChart": {
+    "legend": "XP / DAY",
+    "tooltip": "+{xp} XP"
+  },
+  "focusChart": {
+    "axisMinutes": "{n}m",
+    "legend": "MIN / DAY",
+    "tooltip": "{min} min"
+  }
+}

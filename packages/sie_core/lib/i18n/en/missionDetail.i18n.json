@@ -1,0 +1,184 @@
+{
+  "header": {
+    "aiPlanTooltip": "AI plan",
+    "journalTooltip": "Notes log",
+    "moreTooltip": "More",
+    "menuSettings": "Settings",
+    "menuStats": "Statistics",
+    "menuExport": "Export"
+  },
+  "advice": {
+    "title": "ADVICE",
+    "stale": "Goal hasn't been updated in {n} days. Complete at least one task.",
+    "overdue": "{n} tasks overdue. Set your priorities.",
+    "deadline": "{days} days until deadline, progress {progress}%. Speed up!"
+  },
+  "category": {
+    "learning": "Learning",
+    "health": "Health",
+    "project": "Project",
+    "lifestyle": "Lifestyle",
+    "discipline": "Discipline"
+  },
+  "subGoals": {
+    "sectionTitle": "OPERATIONS",
+    "locked": "LOCKED",
+    "scout": "Scout",
+    "taskCount": "{done}/{total} tasks{childPart} · {progress}%",
+    "childPart": " · {n} st.",
+    "addChild": "Add sub-stage",
+    "addTask": "Add task"
+  },
+  "task": {
+    "waitingFor": "Waiting: {names}"
+  },
+  "dependency": {
+    "title": "DEPENDS ON…",
+    "description": "This task will become available once the selected ones are completed.",
+    "noOtherTasks": "No other tasks in this goal.",
+    "errorCycle": "This would create a dependency cycle.",
+    "errorDuplicate": "Dependency already added.",
+    "errorGeneric": "Failed to add dependency."
+  },
+  "milestones": {
+    "sectionTitle": "CHECKPOINTS",
+    "measure": "MEASURE",
+    "logTitle": "LOG MEASUREMENT",
+    "save": "SAVE"
+  },
+  "habits": {
+    "sectionTitle": "HABIT SYNERGY",
+    "linkTitle": "LINK HABIT",
+    "noHabits": "No habits available"
+  },
+  "quickEntry": {
+    "stage": "STAGE",
+    "task": "TASK",
+    "point": "POINT",
+    "hintSubGoal": "New stage...",
+    "hintTask": "New task...",
+    "hintMilestone": "Checkpoint..."
+  },
+  "section": {
+    "fogActiveTooltip": "Fog of war active"
+  },
+  "status": {
+    "completed": "COMPLETED",
+    "frozen": "FROZEN",
+    "failed": "FAILED",
+    "active": "ACTIVE"
+  },
+  "deadline": {
+    "overdue": "{n} days overdue",
+    "remaining": "in {n} days"
+  },
+  "delete": {
+    "subGoalTitle": "Delete stage?",
+    "subGoalMessage": "Stage \"{name}\" and all its tasks will be deleted.",
+    "taskTitle": "Delete task?",
+    "taskMessage": "The task will be deleted permanently.",
+    "endRecurrenceTitle": "End the series?",
+    "endRecurrenceMessage": "The current task will remain, but no new repeats will be created.",
+    "milestoneTitle": "Delete checkpoint?",
+    "milestoneMessage": "The checkpoint will be deleted permanently."
+  },
+  "recurrence": {
+    "daily": "↻ daily",
+    "every": "↻ every {n} days",
+    "monthly": "↻ monthly ({day})",
+    "weekday1": "Mon",
+    "weekday2": "Tue",
+    "weekday3": "Wed",
+    "weekday4": "Thu",
+    "weekday5": "Fri",
+    "weekday6": "Sat",
+    "weekday7": "Sun"
+  },
+  "addSubGoal": {
+    "title": "NEW STAGE",
+    "nameHint": "Stage name",
+    "submit": "CREATE STAGE"
+  },
+  "addTask": {
+    "title": "NEW TASK",
+    "nameHint": "Task name",
+    "difficulty": "DIFFICULTY",
+    "easy": "Easy",
+    "medium": "Medium",
+    "hard": "Hard",
+    "deadlineSet": "Deadline: {date}",
+    "deadlineAdd": "Add deadline (optional)",
+    "repeat": "REPEAT",
+    "recurNone": "None",
+    "recurDaily": "Daily",
+    "recurWeekly": "Weekly",
+    "recurMonthly": "Monthly",
+    "recurEvery": "Every N days",
+    "everyPrefix": "Every",
+    "everySuffix": "days",
+    "weeklyHint": "Repeat on this weekday (by deadline date)",
+    "monthlyHint": "Repeat on this day of month (by deadline date)",
+    "submit": "ADD TASK"
+  },
+  "addMilestone": {
+    "title": "CHECKPOINT",
+    "nameHint": "Checkpoint name",
+    "binary": "Binary",
+    "metric": "Metric",
+    "start": "Start",
+    "target": "Target",
+    "unitHint": "Unit (kg, $, km)",
+    "direction": "Direction:",
+    "increase": "↑ Increase",
+    "decrease": "↓ Decrease",
+    "dateSet": "Date: {date}",
+    "dateAdd": "Add date (optional)",
+    "submit": "ADD CHECKPOINT"
+  },
+  "subGoalOptions": {
+    "complete": "Complete stage",
+    "unparent": "Move up a level",
+    "delete": "Delete stage"
+  },
+  "fog": {
+    "title": "FOG OF WAR",
+    "body": "\"Fog of war\" mode hides operation stages until they are unlocked. To see the next stage, tap \"Scout\" on a locked element.\n\nThis mode helps you focus on current tasks, gradually revealing the plan as you progress.",
+    "gotIt": "GOT IT"
+  },
+  "settings": {
+    "title": "MISSION SETTINGS",
+    "createdAt": "Created: {date}",
+    "whyHeader": "WHY I'M DOING THIS",
+    "whyHint": "My motivation and the meaning of this goal…",
+    "fogTitle": "Fog of war",
+    "fogSubtitle": "Hides stages until they are unlocked",
+    "hideCompleted": "Hide completed tasks",
+    "remindBefore": "Remind days before deadline",
+    "categoryTitle": "Mission category",
+    "categoryNone": "None",
+    "unfreeze": "Unfreeze mission",
+    "freeze": "Freeze mission",
+    "complete": "Complete mission",
+    "completedSubtitle": "MISSION COMPLETED",
+    "apply": "APPLY"
+  },
+  "collaboration": {
+    "sectionTitle": "COLLABORATION",
+    "removeTitle": "Remove participant?",
+    "removeMessage": "Remove {name} from the collaboration?",
+    "cancel": "Cancel",
+    "remove": "Delete",
+    "invite": "Invite a friend",
+    "roleViewer": "Viewer",
+    "roleEditor": "Editor",
+    "pending": "  awaiting response",
+    "revoke": "Revoke",
+    "inviteTitle": "INVITE A FRIEND",
+    "rights": "Rights:",
+    "rightsViewer": "Viewer",
+    "rightsEditor": "Editor",
+    "noFriends": "No friends available",
+    "sent": "Sent",
+    "invite_action": "Invite"
+  }
+}

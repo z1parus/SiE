@@ -1,0 +1,17 @@
+{
+  "title": "ЗАДАНИЕ ВЫПОЛНЕНО",
+  "defaultSubtitle": "ДЫХАТЕЛЬНЫЙ ПРОТОКОЛ ЗАВЕРШЁН",
+  "xp": {
+    "label": "ПОЛУЧЕНО XP",
+    "total": "ВСЕГО: {totalXp} XP",
+    "gained": "+{xpGained} XP"
+  },
+  "dp": {
+    "label": "ПОЛУЧЕНО DP",
+    "gained": "+{dpGained} DP"
+  },
+  "achievement": {
+    "label": "ДОСТИЖЕНИЕ ОТКРЫТО"
+  },
+  "returnButton": "ВЕРНУТЬСЯ К ОПЕРАЦИЯМ"
+}

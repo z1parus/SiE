@@ -1,0 +1,111 @@
+{
+  "limits": {
+    "maxElements": "Element limit on the map reached",
+    "imageUploadError": "Failed to upload image"
+  },
+  "imagePicker": {
+    "fromGallery": "Choose from gallery",
+    "pasteUrl": "Paste link / URL",
+    "urlTitle": "Image URL",
+    "cancel": "Cancel",
+    "add": "Add"
+  },
+  "preview": {
+    "title": "Preview",
+    "rotateLeft": "Rotate left",
+    "rotateRight": "Rotate right",
+    "cancel": "Cancel",
+    "place": "Place"
+  },
+  "rebuild": {
+    "done": "Map rebuilt",
+    "undo": "Undo"
+  },
+  "owner": "Owner",
+  "members": {
+    "title": "Members",
+    "editingBadge": "{name} is editing"
+  },
+  "connector": {
+    "pickTarget": "Choose the arrow target"
+  },
+  "addSheet": {
+    "subGoal": "Sub-goal",
+    "milestone": "Checkpoint",
+    "subGoalNameHint": "Sub-goal name",
+    "milestoneNameHint": "Checkpoint name",
+    "add": "Add"
+  },
+  "task": {
+    "complete": "Complete",
+    "addTask": "Add task",
+    "addSubStage": "Add sub-stage",
+    "unparent": "Move one level up",
+    "delete": "Delete",
+    "subStageNameHint": "Sub-stage name",
+    "cancel": "Cancel",
+    "add": "Add",
+    "taskNameHint": "Task name",
+    "weight": "Weight:",
+    "markIncomplete": "Mark as incomplete",
+    "markComplete": "Completed"
+  },
+  "milestone": {
+    "targetDate": "Target: {date}",
+    "reached": "Reached",
+    "delete": "Delete"
+  },
+  "habitLink": {
+    "title": "Linked habit",
+    "unlink": "Unlink habit"
+  },
+  "assignee": {
+    "title": "Assignee",
+    "notAssigned": "not assigned",
+    "change": "Change",
+    "pickerTitle": "Assign an assignee"
+  },
+  "search": {
+    "hint": "Search the map…"
+  },
+  "editMode": {
+    "done": "DONE",
+    "edit": "EDIT"
+  },
+  "tools": {
+    "note": "Note",
+    "label": "Label",
+    "connector": "Link",
+    "image": "Image"
+  },
+  "noteElement": {
+    "hint": "Note…"
+  },
+  "labelElement": {
+    "hint": "Label…"
+  },
+  "elementActions": {
+    "noteHeader": "NOTE",
+    "labelHeader": "LABEL",
+    "color": "Color",
+    "editText": "Edit text",
+    "delete": "Delete"
+  },
+  "connectorActions": {
+    "header": "LINK",
+    "caption": "Caption",
+    "captionHint": "No caption…",
+    "ok": "OK",
+    "makeSolid": "Make solid",
+    "makeDashed": "Make dashed",
+    "color": "Color",
+    "delete": "Delete"
+  },
+  "imageActions": {
+    "header": "IMAGE",
+    "caption": "Caption",
+    "captionHint": "Add a caption…",
+    "ok": "OK",
+    "delete": "Delete"
+  }
+}

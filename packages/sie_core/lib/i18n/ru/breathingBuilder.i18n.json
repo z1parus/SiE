@@ -1,0 +1,42 @@
+{
+  "header": {
+    "edit": "Редактирование",
+    "create": "Новая последовательность"
+  },
+  "name": {
+    "hint": "Название последовательности",
+    "emptyError": "Введите название последовательности"
+  },
+  "rounds": {
+    "sectionLabel": "РАУНДЫ ({count})",
+    "totalTime": "≈ {time}",
+    "reorderHint": "Зажмите блок и перетащите, чтобы изменить порядок.",
+    "roundTitle": "РАУНД {number}",
+    "addRound": "ДОБАВИТЬ РАУНД"
+  },
+  "stats": {
+    "cycles(plural)": {
+      "one": "{n} цикл",
+      "few": "{n} цикла",
+      "many": "{n} циклов",
+      "other": "{n} циклов"
+    },
+    "inhale": "{secs}с вдох",
+    "exhale": "{secs}с выдох",
+    "retention": "{secs}с задержка",
+    "recovery": "{secs}с восст."
+  },
+  "editor": {
+    "roundTitle": "РАУНД {number}",
+    "cyclesPerRound": "ЦИКЛОВ ДЫХАНИЯ",
+    "inhaleSec": "ВДОХ (СЕК)",
+    "exhaleSec": "ВЫДОХ (СЕК)",
+    "exhaleRetentionSec": "ЗАДЕРЖКА НА ВЫДОХЕ (СЕК)",
+    "recoveryHoldSec": "ВОССТАНОВИТЕЛЬНАЯ ЗАДЕРЖКА (СЕК)",
+    "done": "ГОТОВО"
+  },
+  "save": {
+    "save": "СОХРАНИТЬ",
+    "create": "СОЗДАТЬ"
+  }
+}

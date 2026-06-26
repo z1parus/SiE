@@ -1,0 +1,42 @@
+{
+  "header": {
+    "title": "ОПЕРАТИВНАЯ\nАУТЕНТИФИКАЦИЯ",
+    "subtitleLogin": "ВВЕДИТЕ ДАННЫЕ ДОПУСКА",
+    "subtitleRegister": "РЕГИСТРАЦИЯ НОВОГО ОПЕРАТИВА"
+  },
+  "fields": {
+    "emailLabel": "АДРЕС EMAIL",
+    "emailHint": "operative@sie.dev",
+    "emailInvalid": "НЕВЕРНЫЙ ФОРМАТ EMAIL",
+    "passwordLabel": "ПАРОЛЬ",
+    "passwordTooShort": "МИНИМУМ 6 СИМВОЛОВ",
+    "usernameLabel": "ID ОПЕРАТИВА",
+    "usernameHint": "позывной",
+    "usernameRequired": "ТРЕБУЕТСЯ ID ОПЕРАТИВА"
+  },
+  "actions": {
+    "forgotPassword": "ЗАБЫЛИ ПАРОЛЬ?",
+    "submitLogin": "ДОСТУП РАЗРЕШЁН",
+    "submitRegister": "ЗАРЕГИСТРИРОВАТЬ ОПЕРАТИВА",
+    "toggleToRegister": "НЕТ ДОПУСКА?  РЕГИСТРАЦИЯ →",
+    "toggleToLogin": "УЖЕ ЕСТЬ ДОПУСК?  ВХОД →"
+  },
+  "password": {
+    "show": "Показать пароль",
+    "hide": "Скрыть пароль"
+  },
+  "errors": {
+    "connection": "ОШИБКА СОЕДИНЕНИЯ",
+    "enterEmailFirst": "СНАЧАЛА ВВЕДИТЕ EMAIL"
+  },
+  "reset": {
+    "emailSent": "Письмо для сброса пароля отправлено на {email}"
+  },
+  "pending": {
+    "confirmationRequired": "ТРЕБУЕТСЯ ПОДТВЕРЖДЕНИЕ",
+    "confirmBody": "Подтвердите email, чтобы активировать доступ оператора. Откройте письмо и перейдите по ссылке.",
+    "localDevHint": "Local dev — check Mailpit:",
+    "title": "РЕГИСТРАЦИЯ\nИНИЦИИРОВАНА",
+    "proceed": "ПЕРЕЙТИ КО ВХОДУ"
+  }
+}

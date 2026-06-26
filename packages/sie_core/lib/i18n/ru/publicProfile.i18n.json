@@ -1,0 +1,43 @@
+{
+  "topBar": {
+    "defaultName": "OPERATIVE"
+  },
+  "sections": {
+    "awards": "AWARDS",
+    "missionMedals": "MISSION MEDALS"
+  },
+  "banner": {
+    "levelXp": "LEVEL {level}  ·  {xp} XP"
+  },
+  "stats": {
+    "focus": "КОНЦЕНТРАЦИЯ",
+    "cycles": "ЦИКЛОВ",
+    "rank": "РАНГ",
+    "level": "LVL {level}"
+  },
+  "achievements": {
+    "dataUnavailable": "AWARDS DATA UNAVAILABLE",
+    "empty": "NO AWARDS YET"
+  },
+  "achievementSheet": {
+    "xpReward": "+{xp} XP",
+    "earned": "ПОЛУЧЕНО",
+    "notEarned": "НЕ ПОЛУЧЕНО",
+    "date": "ДАТА: {date}"
+  },
+  "medals": {
+    "empty": "НЕТ МЕДАЛЕЙ"
+  },
+  "friend": {
+    "remove": "Удалить из друзей",
+    "cancelRequest": "Отменить запрос",
+    "acceptRequest": "Принять запрос",
+    "decline": "Отклонить",
+    "add": "Добавить в друзья",
+    "confirmRemoveTitle": "Удалить из друзей?",
+    "confirmRemoveBody": "Убрать {name} из списка друзей?",
+    "confirmRemoveDefaultName": "этого оперативника",
+    "cancel": "Отмена",
+    "removeAction": "Удалить"
+  }
+}

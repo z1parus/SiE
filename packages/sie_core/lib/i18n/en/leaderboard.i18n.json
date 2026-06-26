@@ -1,0 +1,40 @@
+{
+  "header": {
+    "titlePrimary": "HALL ",
+    "titleSecondary": "OF FAME",
+    "subtitle": "DAILY VANGUARD · ACTIVITY RANKING"
+  },
+  "countdown": {
+    "label": "UNTIL CYCLE ENDS",
+    "dailyReset": "DAILY RESET"
+  },
+  "row": {
+    "operative": "OPERATIVE",
+    "you": "YOU",
+    "level": "LVL {level}",
+    "xpToday": "XP TODAY"
+  },
+  "noConnection": "No internet connection",
+  "vanguard": {
+    "title": "VANGUARD RESULTS",
+    "defaultUsername": "Operative",
+    "congrats": "Keep it up, {username}! Today you made it into the top three operatives!",
+    "startNext": "START NEXT VANGUARD",
+    "dp": "DP"
+  },
+  "dateMonths": {
+    "m1": "January",
+    "m2": "February",
+    "m3": "March",
+    "m4": "April",
+    "m5": "May",
+    "m6": "June",
+    "m7": "July",
+    "m8": "August",
+    "m9": "September",
+    "m10": "October",
+    "m11": "November",
+    "m12": "December"
+  },
+  "dateFormat": "{month} {day}, {year}"
+}

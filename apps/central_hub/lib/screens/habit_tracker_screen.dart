@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sie_core/sie_core.dart';
 import '../widgets/habit_heatmap.dart';
 import 'habits_overview_screen.dart';
@@ -30,6 +31,41 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
   bool _notTodayExpanded = false;
   // Stage 6 — group habits by life area.
   bool _groupByArea = false;
+
+  // Persisted view preferences (remembered across sessions).
+  static const _kPrefGroupByArea = 'habit_group_by_area';
+  static const _kPrefViewMode = 'habit_view_mode';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadViewPrefs();
+  }
+
+  Future<void> _loadViewPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    final grouped = prefs.getBool(_kPrefGroupByArea);
+    final modeIdx = prefs.getInt(_kPrefViewMode);
+    setState(() {
+      if (grouped != null) _groupByArea = grouped;
+      if (modeIdx != null && modeIdx >= 0 && modeIdx < HabitViewMode.values.length) {
+        _viewMode = HabitViewMode.values[modeIdx];
+      }
+    });
+  }
+
+  Future<void> _setGroupByArea(bool value) async {
+    setState(() => _groupByArea = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kPrefGroupByArea, value);
+  }
+
+  Future<void> _setViewMode(HabitViewMode mode) async {
+    setState(() => _viewMode = mode);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kPrefViewMode, mode.index);
+  }
 
   Future<void> _onRefresh() async {
     ref.invalidate(habitsProvider);
@@ -88,7 +124,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
           _CyberTopBar(
             onArchive: _openArchive,
             onInfo: () => setState(() => _showOnboardingManual = true),
-            onGroupToggle: () => setState(() => _groupByArea = !_groupByArea),
+            onGroupToggle: () => _setGroupByArea(!_groupByArea),
             groupByArea: _groupByArea,
           ),
           // ── Routine Blocks ──────────────────────────────────────
@@ -128,7 +164,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
           ),
           _ViewModeToggle(
             current: _viewMode,
-            onChange: (m) => setState(() => _viewMode = m),
+            onChange: _setViewMode,
           ),
           Expanded(
             child: RefreshIndicator(
@@ -273,7 +309,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 24),
                           child: Text(
-                            'На сегодня привычек не запланировано',
+                            t.habitTracker.list.noHabitsToday,
                             textAlign: TextAlign.center,
                             style: TextStyle(
                                 color: sc.textSecondary, fontSize: 13),
@@ -325,12 +361,9 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
             Positioned.fill(
               child: OnboardingOverlay(
                 visible: showOnboarding,
-                moduleLabel: 'ПРИВЫЧКИ',
-                description: 'Архив нейронных связей.',
-                benefit:
-                    'Автоматизация успеха через микро-действия и систематическую '
-                    'дисциплину. Формирование нейронных паттернов, не требующих '
-                    'волевых ресурсов.',
+                moduleLabel: t.habitTracker.list.moduleLabel,
+                description: t.habitTracker.list.archiveDescription,
+                benefit: t.habitTracker.list.archiveBody,
                 xpReward: 25,
                 onAccept: () {
                   if (_showOnboardingManual) {
@@ -384,7 +417,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
     showStackMetaDialog(
       context,
       ref,
-      saveLabel: 'СОЗДАТЬ',
+      saveLabel: t.habitTracker.createStack.saveLabel,
       onSave: (name, cue) async {
         final id = await ref
             .read(habitRoutinesProvider.notifier)
@@ -418,7 +451,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
           children: [
             _OptionTile(
               icon: Icons.edit_outlined,
-              label: 'СВОЯ ПРИВЫЧКА',
+              label: t.habitTracker.addMenu.customHabit,
               color: sc.accent,
               onTap: () {
                 Navigator.of(ctx).pop();
@@ -428,7 +461,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
             const SizedBox(height: 8),
             _OptionTile(
               icon: Icons.auto_awesome_outlined,
-              label: 'ИЗ БИБЛИОТЕКИ',
+              label: t.habitTracker.addMenu.fromLibrary,
               color: sc.accent,
               onTap: () {
                 Navigator.of(ctx).pop();
@@ -485,7 +518,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                'ПЕРВЫЙ ПРОТОКОЛ ДИСЦИПЛИНЫ',
+                                t.habitTracker.firstProtocol.title,
                                 style: TextStyle(
                                   color: sc.accent,
                                   fontSize: 11,
@@ -495,7 +528,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                '+25 XP получено',
+                                t.habitTracker.firstProtocol.xpEarned,
                                 style: TextStyle(
                                   color: sc.textSecondary,
                                   fontSize: 11,
@@ -571,7 +604,7 @@ class _CyberTopBar extends ConsumerWidget {
                   text: TextSpan(
                     children: [
                       TextSpan(
-                        text: 'HABIT ',
+                        text: t.habitTracker.header.habit,
                         style: TextStyle(
                           color: sc.accent,
                           fontSize: 22,
@@ -581,7 +614,7 @@ class _CyberTopBar extends ConsumerWidget {
                         ),
                       ),
                       TextSpan(
-                        text: 'MATRIX',
+                        text: t.habitTracker.header.matrix,
                         style:
                             Theme.of(context).textTheme.headlineLarge?.copyWith(
                                   fontSize: 22,
@@ -594,7 +627,7 @@ class _CyberTopBar extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'НЕЙРОННАЯ МАТРИЦА · АРХИВ ДИСЦИПЛИНЫ',
+                  t.habitTracker.header.subtitle,
                   style: TextStyle(
                     color: sc.textSecondary,
                     fontSize: 10,
@@ -608,7 +641,7 @@ class _CyberTopBar extends ConsumerWidget {
             icon: Icons.help_outline,
             onTap: onInfo,
             size: 18,
-            semanticLabel: 'Справка',
+            semanticLabel: t.habitTracker.header.help,
           ),
           const SizedBox(width: 8),
           _GlassIconBtn(
@@ -619,21 +652,21 @@ class _CyberTopBar extends ConsumerWidget {
               ),
             ),
             size: 18,
-            semanticLabel: 'Обзор привычек',
+            semanticLabel: t.habitTracker.header.habitsOverview,
           ),
           const SizedBox(width: 8),
           _GlassIconBtn(
             icon: groupByArea ? Icons.view_list_outlined : Icons.view_module_outlined,
             onTap: onGroupToggle,
             size: 18,
-            semanticLabel: 'Группировка по сферам',
+            semanticLabel: t.habitTracker.header.groupByArea,
           ),
           const SizedBox(width: 8),
           _GlassIconBtn(
             icon: Icons.inventory_2_outlined,
             onTap: onArchive,
             size: 18,
-            semanticLabel: 'Архив привычек',
+            semanticLabel: t.habitTracker.header.habitArchive,
           ),
         ],
       ),
@@ -767,10 +800,10 @@ class _ViewModeToggle extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sc = ref.watch(sieColorsProvider);
-    const modes = [
-      (HabitViewMode.today, 'СЕГОДНЯ'),
-      (HabitViewMode.week, 'НЕДЕЛЯ'),
-      (HabitViewMode.allTime, 'ВСЁ ВРЕМЯ'),
+    final modes = [
+      (HabitViewMode.today, t.habitTracker.viewMode.today),
+      (HabitViewMode.week, t.habitTracker.viewMode.week),
+      (HabitViewMode.allTime, t.habitTracker.viewMode.allTime),
     ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
@@ -885,7 +918,7 @@ class _WeekViewHabitCard extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: days.map((d) {
-              final label = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'][d.weekday - 1];
+              final label = t.habitShared.weekdayShort[d.weekday - 1].toUpperCase();
               final done = logDates.contains(_fmt(d));
               final isToday = _fmt(d) == _fmt(today);
               // Stage 1 — dim days the habit isn't scheduled for so a "miss"
@@ -1334,7 +1367,7 @@ class _HabitMatrixCard extends ConsumerWidget {
       if (habit.kind == 'duration') {
         final curMin  = (currentValue / 60).round();
         final tgtMin  = (target / 60).round();
-        return '$curMin / $tgtMin мин';
+        return t.habitTracker.valueLabel.durationProgress(cur: curMin, tgt: tgtMin);
       }
       final cur = currentValue % 1 == 0
           ? currentValue.toInt().toString()
@@ -1603,8 +1636,8 @@ class _DayNode extends ConsumerWidget {
     return Semantics(
       button: true,
       label: isCompleted
-          ? 'Отменить отметку за ${date.day}'
-          : 'Отметить выполнение за ${date.day}',
+          ? t.habitTracker.checkAction.uncheckFor(day: date.day)
+          : t.habitTracker.checkAction.checkFor(day: date.day),
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
@@ -1632,7 +1665,7 @@ class _StreakBadge extends StatelessWidget {
         color: color.withValues(alpha: 0.09),
       ),
       child: Text(
-        'STREAK: $streak',
+        t.habitTracker.streak.label(streak: streak),
         style: TextStyle(
           color: color,
           fontSize: 8.5,
@@ -1695,7 +1728,7 @@ class _EmptyState extends ConsumerWidget {
           ),
           const SizedBox(height: 28),
           Text(
-            'NO PROTOCOLS ACTIVE',
+            t.habitTracker.empty.noProtocols,
             style: TextStyle(
               color: sc.textSecondary,
               fontSize: 12,
@@ -1704,7 +1737,7 @@ class _EmptyState extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'TAP + TO INITIALISE A HABIT',
+            t.habitTracker.empty.tapToInit,
             style: TextStyle(
               color: sc.textSecondary.withValues(alpha: 0.50),
               fontSize: 10,
@@ -1963,7 +1996,7 @@ class _HabitEditorScreenState extends ConsumerState<HabitEditorScreen> {
                       text: TextSpan(
                         children: [
                           TextSpan(
-                            text: isEdit ? 'EDIT ' : 'NEW ',
+                            text: isEdit ? t.habitTracker.editor.editPrefix : t.habitTracker.editor.newPrefix,
                             style: TextStyle(
                               color: sc.accent,
                               fontSize: 20,
@@ -1972,7 +2005,7 @@ class _HabitEditorScreenState extends ConsumerState<HabitEditorScreen> {
                             ),
                           ),
                           TextSpan(
-                            text: 'PROTOCOL',
+                            text: t.habitTracker.editor.protocol,
                             style: Theme.of(context)
                                 .textTheme
                                 .headlineLarge
@@ -1995,15 +2028,15 @@ class _HabitEditorScreenState extends ConsumerState<HabitEditorScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _GlowField(controller: _titleCtrl, label: 'TITLE'),
+                      _GlowField(controller: _titleCtrl, label: t.habitTracker.editor.title),
           const SizedBox(height: 12),
           _GlowField(
               controller: _descCtrl,
-              label: 'DESCRIPTION (OPTIONAL)'),
+              label: t.habitTracker.editor.description),
           const SizedBox(height: 20),
           // ── Polarity (Stage 7) ───────────────────────────────────────
           Text(
-            'ПОЛЯРНОСТЬ',
+            t.habitTracker.editor.polarity,
             style: TextStyle(
               color: sc.textSecondary,
               fontSize: 10,
@@ -2018,7 +2051,7 @@ class _HabitEditorScreenState extends ConsumerState<HabitEditorScreen> {
                 sc: sc,
                 accent: _toColor(_selectedColor),
                 icon: Icons.trending_up,
-                label: 'Развивать',
+                label: t.habitTracker.editor.polarityBuild,
                 selected: _polarity == 'build',
                 onTap: () => setState(() => _polarity = 'build'),
               ),
@@ -2027,7 +2060,7 @@ class _HabitEditorScreenState extends ConsumerState<HabitEditorScreen> {
                 sc: sc,
                 accent: const Color(0xFF6FA8DC),
                 icon: Icons.shield_outlined,
-                label: 'Избавиться',
+                label: t.habitTracker.editor.polarityAvoid,
                 selected: _polarity == 'avoid',
                 onTap: () => setState(() => _polarity = 'avoid'),
               ),
@@ -2036,8 +2069,7 @@ class _HabitEditorScreenState extends ConsumerState<HabitEditorScreen> {
           if (_polarity == 'avoid') ...[
             const SizedBox(height: 8),
             Text(
-              'Успех — это день без срыва. Счётчик «N дней без…» растёт сам; '
-              'кнопка на карточке — «Был срыв».',
+              t.habitTracker.editor.avoidHint,
               style: TextStyle(
                 color: sc.textSecondary.withValues(alpha: 0.7),
                 fontSize: 11,
@@ -2047,7 +2079,7 @@ class _HabitEditorScreenState extends ConsumerState<HabitEditorScreen> {
           ],
           const SizedBox(height: 20),
           Text(
-            'COLOR',
+            t.habitTracker.editor.color,
             style: TextStyle(
               color: sc.textSecondary,
               fontSize: 10,
@@ -2068,7 +2100,7 @@ class _HabitEditorScreenState extends ConsumerState<HabitEditorScreen> {
           ),
           const SizedBox(height: 20),
           Text(
-            'ICON',
+            t.habitTracker.editor.icon,
             style: TextStyle(
               color: sc.textSecondary,
               fontSize: 10,
@@ -2088,7 +2120,7 @@ class _HabitEditorScreenState extends ConsumerState<HabitEditorScreen> {
           if (_polarity == 'build') ...[
             const SizedBox(height: 20),
             Text(
-              'ТИП',
+              t.habitTracker.editor.type,
               style: TextStyle(
                 color: sc.textSecondary,
                 fontSize: 10,
@@ -2120,7 +2152,7 @@ class _HabitEditorScreenState extends ConsumerState<HabitEditorScreen> {
             ),
             const SizedBox(height: 20),
             Text(
-              'SCHEDULE',
+              t.habitTracker.editor.schedule,
               style: TextStyle(
                 color: sc.textSecondary,
                 fontSize: 10,
@@ -2150,7 +2182,7 @@ class _HabitEditorScreenState extends ConsumerState<HabitEditorScreen> {
           ],
           const SizedBox(height: 20),
           Text(
-            'REMINDER',
+            t.habitTracker.editor.reminder,
             style: TextStyle(
               color: sc.textSecondary,
               fontSize: 10,
@@ -2214,7 +2246,7 @@ class _HabitEditorScreenState extends ConsumerState<HabitEditorScreen> {
                 )
               else
                 Text(
-                  'Выкл.',
+                  t.habitTracker.editor.reminderOff,
                   style: TextStyle(
                     color: sc.textSecondary,
                     fontSize: 12,
@@ -2224,7 +2256,7 @@ class _HabitEditorScreenState extends ConsumerState<HabitEditorScreen> {
           ),
           const SizedBox(height: 20),
           Text(
-            'СФЕРА',
+            t.habitTracker.editor.area,
             style: TextStyle(
               color: sc.textSecondary,
               fontSize: 10,
@@ -2266,13 +2298,13 @@ class _HabitEditorScreenState extends ConsumerState<HabitEditorScreen> {
                 child: Row(
                   children: [
                     _SheetTextBtn(
-                      label: 'CANCEL',
+                      label: t.habitTracker.editor.cancel,
                       color: sc.textSecondary,
                       onTap: () => Navigator.of(context).pop(),
                     ),
                     const Spacer(),
                     _PrimaryActionBtn(
-                      label: isEdit ? 'SAVE' : 'DEPLOY',
+                      label: isEdit ? t.habitTracker.editor.save : t.habitTracker.editor.deploy,
                       color: _toColor(_selectedColor),
                       onTap: _onSave,
                     ),
@@ -2343,16 +2375,16 @@ class _HabitTypeEditor extends StatelessWidget {
     required this.onStepChanged,
   });
 
-  static const _kinds = [
-    ('binary', 'Да / Нет'),
-    ('count', 'Количество'),
-    ('duration', 'Время'),
+  List<(String, String)> get _kinds => [
+    ('binary', t.habitTracker.typeEditor.binary),
+    ('count', t.habitTracker.typeEditor.count),
+    ('duration', t.habitTracker.typeEditor.duration),
   ];
 
   String _fmtTarget() {
     if (kind == 'duration') {
       final mins = (targetValue / 60).round();
-      return '$mins мин';
+      return t.habitTracker.typeEditor.durationValue(mins: mins);
     }
     return '${targetValue.toStringAsFixed(targetValue % 1 == 0 ? 0 : 1)} $unit';
   }
@@ -2360,7 +2392,7 @@ class _HabitTypeEditor extends StatelessWidget {
   String _fmtStep() {
     if (kind == 'duration') {
       final mins = (step / 60).round();
-      return '+$mins мин';
+      return t.habitTracker.typeEditor.stepValue(mins: mins);
     }
     return '+${step.toStringAsFixed(step % 1 == 0 ? 0 : 1)}';
   }
@@ -2403,11 +2435,11 @@ class _HabitTypeEditor extends StatelessWidget {
           _StepperRow(
             sc: sc,
             accent: accent,
-            label: kind == 'duration' ? 'Цель (мин)' : 'Цель',
+            label: kind == 'duration' ? t.habitTracker.typeEditor.targetMin : t.habitTracker.typeEditor.target,
             value: kind == 'duration'
                 ? (targetValue / 60).round()
                 : targetValue.round(),
-            suffix: kind == 'duration' ? 'мин' : unit,
+            suffix: kind == 'duration' ? t.habitTracker.typeEditor.suffixMin : unit,
             min: 1,
             max: kind == 'duration' ? 240 : 999,
             onChanged: (v) => onTargetChanged(
@@ -2421,7 +2453,7 @@ class _HabitTypeEditor extends StatelessWidget {
                 ..selection = TextSelection.collapsed(offset: unit.length),
               style: TextStyle(color: sc.textPrimary, fontSize: 13),
               decoration: InputDecoration(
-                labelText: 'ЕДИНИЦА (стак., стр., раз…)',
+                labelText: t.habitTracker.typeEditor.unitLabel,
                 labelStyle:
                     TextStyle(color: sc.textSecondary, fontSize: 10, letterSpacing: 1.5),
                 enabledBorder: UnderlineInputBorder(
@@ -2437,11 +2469,11 @@ class _HabitTypeEditor extends StatelessWidget {
           _StepperRow(
             sc: sc,
             accent: accent,
-            label: 'Шаг «+»',
+            label: t.habitTracker.typeEditor.stepLabel,
             value: kind == 'duration'
                 ? (step / 60).round().clamp(1, 60)
                 : step.round(),
-            suffix: kind == 'duration' ? 'мин' : unit,
+            suffix: kind == 'duration' ? t.habitTracker.typeEditor.suffixMin : unit,
             min: 1,
             max: kind == 'duration' ? 60 : 100,
             onChanged: (v) =>
@@ -2563,7 +2595,7 @@ class _NotTodayHeader extends StatelessWidget {
         child: Row(
           children: [
             Text(
-              'НЕ СЕГОДНЯ · $count',
+              t.habitTracker.notToday.header(count: count),
               style: TextStyle(
                 color: sc.textSecondary,
                 fontSize: 10,
@@ -2613,23 +2645,22 @@ class _ScheduleEditor extends StatelessWidget {
     required this.onIntervalChanged,
   });
 
-  static const _modes = [
-    ('daily', 'Каждый день'),
-    ('weekdays', 'По дням'),
-    ('weekly', 'N раз в неделю'),
-    ('interval', 'Каждые N дней'),
-  ];
-  static const _dayLabels = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-
   @override
   Widget build(BuildContext context) {
+    final modes = [
+      ('daily', t.habitTracker.scheduleEditor.daily),
+      ('weekdays', t.habitTracker.scheduleEditor.weekdays),
+      ('weekly', t.habitTracker.scheduleEditor.weekly),
+      ('interval', t.habitTracker.scheduleEditor.interval),
+    ];
+    final dayLabels = t.habitShared.weekdayShort;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: _modes.map((m) {
+          children: modes.map((m) {
             final sel = m.$1 == mode;
             return GestureDetector(
               onTap: () => onModeChanged(m.$1),
@@ -2675,7 +2706,7 @@ class _ScheduleEditor extends StatelessWidget {
                     border: Border.all(color: sel ? accent : sc.border),
                   ),
                   child: Text(
-                    _dayLabels[i],
+                    dayLabels[i],
                     style: TextStyle(
                       color: sel ? accent : sc.textSecondary,
                       fontSize: 12,
@@ -2692,9 +2723,9 @@ class _ScheduleEditor extends StatelessWidget {
           _StepperRow(
             sc: sc,
             accent: accent,
-            label: 'Раз в неделю',
+            label: t.habitTracker.scheduleEditor.perWeek,
             value: weeklyCount,
-            suffix: weeklyCount == 1 ? 'раз' : 'раза',
+            suffix: t.habitTracker.scheduleEditor.timesWord(n: weeklyCount),
             min: 1,
             max: 7,
             onChanged: onWeeklyChanged,
@@ -2705,16 +2736,16 @@ class _ScheduleEditor extends StatelessWidget {
           _StepperRow(
             sc: sc,
             accent: accent,
-            label: 'Интервал',
+            label: t.habitTracker.scheduleEditor.intervalLabel,
             value: intervalDays,
-            suffix: 'дн.',
+            suffix: t.habitTracker.scheduleEditor.intervalSuffix,
             min: 2,
             max: 30,
             onChanged: onIntervalChanged,
           ),
           const SizedBox(height: 6),
           Text(
-            'Отсчёт — от первого выполнения',
+            t.habitTracker.scheduleEditor.countFromFirst,
             style: TextStyle(color: sc.textSecondary, fontSize: 10),
           ),
         ],
@@ -3230,10 +3261,11 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
           false;
 
       // Complete the habit if not yet done for today.
+      // Avoid habits skip this — notes are independent of the abstinence counter.
       // toggleHabit writes to local DB before the remote call, so even if
       // the Supabase insert fails we still have a local row to attach the
       // note/emoji to — catch the exception and continue.
-      if (!alreadyDone) {
+      if (!alreadyDone && !widget.habit.isAvoid) {
         try {
           await notifier.toggleHabit(widget.habit.id, date);
         } catch (_) {}
@@ -3318,7 +3350,7 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          isEdit ? 'UPDATE JOURNAL ENTRY' : 'ADD REFLECTION',
+                          isEdit ? t.habitTracker.noteSheet.updateEntry : t.habitTracker.noteSheet.addReflection,
                           style: TextStyle(
                             color: sc.textSecondary.withValues(alpha: 0.6),
                             fontSize: 9,
@@ -3353,7 +3385,7 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
               const SizedBox(height: 16),
               // Emoji selector row
               Text(
-                'MOOD',
+                t.habitTracker.noteSheet.mood,
                 style: TextStyle(
                   color: sc.textSecondary,
                   fontSize: 10,
@@ -3396,7 +3428,7 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
               const SizedBox(height: 16),
               // Note field
               Text(
-                'NOTE',
+                t.habitTracker.noteSheet.note,
                 style: TextStyle(
                   color: sc.textSecondary,
                   fontSize: 10,
@@ -3422,7 +3454,7 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
                     letterSpacing: 0.3,
                   ),
                   decoration: InputDecoration(
-                    hintText: 'Как всё прошло? Оставьте заметку...',
+                    hintText: t.habitTracker.noteSheet.hint,
                     hintStyle: TextStyle(
                       color: sc.textSecondary.withValues(alpha: 0.4),
                       fontSize: 12,
@@ -3443,13 +3475,13 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
                 children: [
                   if (isEdit)
                     _SheetTextBtn(
-                      label: 'REMOVE NOTE',
+                      label: t.habitTracker.noteSheet.removeNote,
                       color: sc.textSecondary.withValues(alpha: 0.55),
                       onTap: _saving ? () {} : _handleRemove,
                     ),
                   if (!isEdit)
                     _SheetTextBtn(
-                      label: 'CANCEL',
+                      label: t.habitTracker.noteSheet.cancel,
                       color: sc.textSecondary,
                       onTap: () => Navigator.of(context).pop(),
                     ),
@@ -3457,7 +3489,7 @@ class _ReflectionSheetState extends ConsumerState<_ReflectionSheet> {
                   _SheetTextBtn(
                     label: _saving
                         ? '...'
-                        : (isEdit ? 'UPDATE' : 'SAVE'),
+                        : (isEdit ? t.habitTracker.noteSheet.update : t.habitTracker.noteSheet.save),
                     color: _hasContent && !_saving
                         ? accentColor
                         : sc.textSecondary.withValues(alpha: 0.35),
@@ -3510,7 +3542,7 @@ class HabitArchiveScreen extends ConsumerWidget {
                             text: TextSpan(
                               children: [
                                 TextSpan(
-                                  text: 'HABIT ',
+                                  text: t.habitTracker.archive.headerPrefix,
                                   style: TextStyle(
                                     color: sc.accent,
                                     fontSize: 20,
@@ -3520,7 +3552,7 @@ class HabitArchiveScreen extends ConsumerWidget {
                                   ),
                                 ),
                                 TextSpan(
-                                  text: 'ARCHIVE',
+                                  text: t.habitTracker.archive.headerSuffix,
                                   style: Theme.of(context)
                                       .textTheme
                                       .headlineLarge
@@ -3535,7 +3567,7 @@ class HabitArchiveScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'ЗАВЕРШЁННЫЕ НЕЙРОННЫЕ ПРОТОКОЛЫ',
+                            t.habitTracker.archive.completedProtocols,
                             style: TextStyle(
                               color: sc.textSecondary,
                               fontSize: 10,
@@ -3604,7 +3636,7 @@ class _ArchiveEmptyState extends ConsumerWidget {
               size: 48, color: sc.textSecondary.withValues(alpha: 0.4)),
           const SizedBox(height: 16),
           Text(
-            'АРХИВ ПУСТ',
+            t.habitTracker.archive.empty,
             style: TextStyle(
               color: sc.textSecondary,
               fontSize: 11,
@@ -3614,7 +3646,7 @@ class _ArchiveEmptyState extends ConsumerWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Архивируйте выполненные привычки,\nчтобы увидеть их здесь',
+            t.habitTracker.archive.emptyBody,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: sc.textSecondary.withValues(alpha: 0.6),
@@ -3728,7 +3760,7 @@ class _ArchivedHabitCardState extends ConsumerState<_ArchivedHabitCard> {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      _restoring ? 'ВОССТАНОВЛЕНИЕ...' : 'ВОССТАНОВИТЬ',
+                      _restoring ? t.habitTracker.archive.restoring : t.habitTracker.archive.restore,
                       style: TextStyle(
                         color: sc.accent,
                         fontSize: 9,
@@ -3776,8 +3808,8 @@ class _NoConnectionMessage extends ConsumerWidget {
         const SizedBox(height: 12),
         Text(
           isNetwork
-              ? 'Подключение к интернету отсутствует'
-              : 'Не удалось загрузить данные',
+              ? t.habitTracker.errorState.noConnection
+              : t.habitTracker.errorState.loadFailed,
           textAlign: TextAlign.center,
           style: TextStyle(
             color: sc.iconMuted,
@@ -3857,14 +3889,14 @@ class _RoutineBlockState extends ConsumerState<_RoutineBlock> {
   void _showLongPressMenu() {
     final sc         = ref.read(sieColorsProvider);
     final editLabel  = widget.type == 'morning'
-        ? 'ИЗМЕНИТЬ УТРЕННЮЮ РУТИНУ'
-        : 'ИЗМЕНИТЬ ВЕЧЕРНЮЮ РУТИНУ';
+        ? t.habitTracker.routine.editMorning
+        : t.habitTracker.routine.editEvening;
     final deleteLabel = widget.type == 'morning'
-        ? 'УДАЛИТЬ УТРЕННЮЮ РУТИНУ'
-        : 'УДАЛИТЬ ВЕЧЕРНЮЮ РУТИНУ';
+        ? t.habitTracker.routine.deleteMorning
+        : t.habitTracker.routine.deleteEvening;
     final headerLabel = widget.type == 'morning'
-        ? 'УТРЕННЯЯ РУТИНА'
-        : 'ВЕЧЕРНЯЯ РУТИНА';
+        ? t.habitTracker.routine.morning
+        : t.habitTracker.routine.evening;
 
     showDialog<void>(
       context: context,
@@ -3974,11 +4006,11 @@ class _RoutineBlockState extends ConsumerState<_RoutineBlock> {
 
   Widget _buildStartCard(SieColors sc, HabitRoutine routine) {
     final title      = widget.type == 'morning'
-        ? 'УТРЕННЯЯ РУТИНА'
-        : 'ВЕЧЕРНЯЯ РУТИНА';
+        ? t.habitTracker.routine.morning
+        : t.habitTracker.routine.evening;
     final startLabel = widget.type == 'morning'
-        ? 'НАЧАТЬ УТРЕННЮЮ РУТИНУ'
-        : 'НАЧАТЬ ВЕЧЕРНЮЮ РУТИНУ';
+        ? t.habitTracker.routine.startMorning
+        : t.habitTracker.routine.startEvening;
 
     return GestureDetector(
       onLongPress: _showLongPressMenu,
@@ -4025,7 +4057,7 @@ class _RoutineBlockState extends ConsumerState<_RoutineBlock> {
                     const SizedBox(width: 6),
                     Text(
                       routine.habits.isEmpty
-                          ? 'ДОБАВИТЬ ПРИВЫЧКИ'
+                          ? t.habitTracker.routine.addHabits
                           : startLabel,
                       style: TextStyle(
                         color: sc.accent,
@@ -4201,7 +4233,7 @@ class _CarouselHabitSlide extends ConsumerWidget {
             if (isCompleted)
               Center(
                 child: Text(
-                  allDone ? 'РУТИНА ВЫПОЛНЕНА ✓' : 'ВЫПОЛНЕНО ✓',
+                  allDone ? t.habitTracker.routine.routineDone : t.habitTracker.routine.done,
                   style: TextStyle(
                     color: habitColor,
                     fontSize: 10,
@@ -4226,7 +4258,7 @@ class _CarouselHabitSlide extends ConsumerWidget {
                   ),
                   child: Center(
                     child: Text(
-                      'ВЫПОЛНЕНО',
+                      t.habitTracker.routine.doneShort,
                       style: TextStyle(
                         color: habitColor,
                         fontSize: 11,
@@ -4248,7 +4280,7 @@ class _CarouselHabitSlide extends ConsumerWidget {
                         size: 12),
                     const SizedBox(width: 6),
                     Text(
-                      'ЗАВЕРШИТЕ ПРЕДЫДУЩЕЕ',
+                      t.habitTracker.routine.finishPrevious,
                       style: TextStyle(
                         color:
                             sc.textSecondary.withValues(alpha: 0.50),
@@ -4297,7 +4329,7 @@ class _CarouselAddSlide extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'ДОБАВИТЬ ПРИВЫЧКУ',
+              t.habitTracker.routine.addHabit,
               style: TextStyle(
                 color: sc.textSecondary.withValues(alpha: 0.65),
                 fontSize: 10,
@@ -4377,7 +4409,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                       color: sc.accent.withValues(alpha: 0.15), height: 1),
                   _OptionTile(
                     icon: Icons.edit_outlined,
-                    label: 'EDIT PROTOCOL',
+                    label: t.habitTracker.detail.editProtocol,
                     color: sc.textPrimary,
                     onTap: () {
                       Navigator.of(ctx).pop();
@@ -4411,17 +4443,16 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                   ),
                   _OptionTile(
                     icon: Icons.inventory_2_outlined,
-                    label: 'ARCHIVE PROTOCOL',
+                    label: t.habitTracker.detail.archiveProtocol,
                     color: sc.accent,
                     onTap: () async {
                       Navigator.of(ctx).pop();
                       final ok = await confirmDestructive(
                         context,
                         ref,
-                        title: 'Архивировать привычку?',
-                        message: 'Привычка скроется из активного списка. '
-                            'Её можно восстановить из Архива в любой момент.',
-                        confirmLabel: 'В архив',
+                        title: t.habitTracker.detail.archiveConfirmTitle,
+                        message: t.habitTracker.detail.archiveConfirmMessage,
+                        confirmLabel: t.habitTracker.detail.archiveConfirmLabel,
                       );
                       if (!ok) return;
                       ref
@@ -4432,7 +4463,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                   ),
                   _OptionTile(
                     icon: Icons.delete_outline,
-                    label: 'DELETE PROTOCOL',
+                    label: t.habitTracker.detail.deleteProtocol,
                     color: sc.danger,
                     onTap: () {
                       Navigator.of(ctx).pop();
@@ -4478,7 +4509,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'CONFIRM DELETION',
+                    t.habitTracker.detail.confirmDeletion,
                     style: TextStyle(
                       color: sc.textPrimary,
                       fontSize: 12,
@@ -4488,7 +4519,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Delete "${widget.habit.title}"? All log history will be erased.',
+                    t.habitTracker.detail.deleteMessage(title: widget.habit.title),
                     style: TextStyle(
                       color: sc.textSecondary,
                       fontSize: 12,
@@ -4500,13 +4531,13 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       _SheetTextBtn(
-                        label: 'CANCEL',
+                        label: t.habitTracker.detail.cancel,
                         color: sc.textSecondary,
                         onTap: () => Navigator.of(ctx).pop(),
                       ),
                       const SizedBox(width: 8),
                       _SheetTextBtn(
-                        label: 'DELETE',
+                        label: t.habitTracker.detail.delete,
                         color: Colors.redAccent,
                         onTap: () {
                           Navigator.of(ctx).pop();
@@ -4543,6 +4574,34 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
     });
   }
 
+  static String _fmtShortDate(DateTime dt) =>
+      '${dt.day} ${t.breathingShared.months[dt.month - 1]} ${dt.year}';
+
+  Future<void> _pickAvoidStartDate(BuildContext context, DateTime? current, Habit currentHabit, Color accentColor) async {
+    final initial = current ?? currentHabit.createdAt;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial.isAfter(DateTime.now()) ? DateTime.now() : initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      helpText: t.habitTracker.avoidCard.startDatePickerTitle,
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: ColorScheme.dark(
+            primary: accentColor,
+            onPrimary: Colors.white,
+            surface: ref.read(sieColorsProvider).surface,
+            onSurface: ref.read(sieColorsProvider).textPrimary,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked == null || !mounted) return;
+    SieHaptics.selection();
+    ref.read(habitsProvider.notifier).setAvoidStartDate(widget.habit.id, picked);
+  }
+
   @override
   Widget build(BuildContext context) {
     final sc          = ref.watch(sieColorsProvider);
@@ -4566,8 +4625,12 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
 
     // Stage 7 — avoid-habit specifics.
     final isAvoid     = widget.habit.isAvoid;
+    // Read the live habit from state to pick up avoidStartDate changes.
+    final currentHabit = habitsState?.habits.cast<Habit?>()
+        .firstWhere((h) => h?.id == widget.habit.id, orElse: () => null)
+        ?? widget.habit;
     final lapseDates  = habitsState?.lapseDates[widget.habit.id] ?? {};
-    final recordClean = longestClean(widget.habit, lapseDates);
+    final recordClean = longestClean(currentHabit, lapseDates);
     final lapsedToday = lapseDates.contains(today);
     final totalLapses = lapseDates.length;
 
@@ -4600,7 +4663,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                             text: TextSpan(
                               children: [
                                 TextSpan(
-                                  text: 'HABIT ',
+                                  text: t.habitTracker.detail.headerPrefix,
                                   style: TextStyle(
                                     color: sc.accent,
                                     fontSize: 20,
@@ -4610,7 +4673,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                                   ),
                                 ),
                                 TextSpan(
-                                  text: 'DETAIL',
+                                  text: t.habitTracker.detail.headerSuffix,
                                   style: Theme.of(context)
                                       .textTheme
                                       .headlineLarge
@@ -4641,7 +4704,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                       icon: Icons.settings_outlined,
                       onTap: _editHabit,
                       size: 18,
-                      semanticLabel: 'Настройки привычки',
+                      semanticLabel: t.habitTracker.detail.habitSettings,
                     ),
                   ],
                 ),
@@ -4653,19 +4716,19 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                     ? Row(
                         children: [
                           _StatChip(
-                            label: 'ДНЕЙ БЕЗ СРЫВА',
+                            label: t.habitTracker.avoidCard.daysWithoutSlip,
                             value: '$streak',
                             accentColor: accentColor,
                           ),
                           const SizedBox(width: 8),
                           _StatChip(
-                            label: 'РЕКОРД',
+                            label: t.habitTracker.avoidCard.record,
                             value: '$recordClean',
                             accentColor: accentColor,
                           ),
                           const SizedBox(width: 8),
                           _StatChip(
-                            label: 'СРЫВОВ',
+                            label: t.habitTracker.avoidCard.slips,
                             value: '$totalLapses',
                             accentColor: totalLapses > 0
                                 ? const Color(0xFFD98C6F)
@@ -4676,15 +4739,15 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                     : Row(
                         children: [
                           _StatChip(
-                            label: 'STREAK',
+                            label: t.habitTracker.avoidCard.streak,
                             value: '$streak',
                             accentColor: accentColor,
-                            subtitle: metrics.hasEnoughData ? 'рек. ${metrics.longestStreak}' : null,
+                            subtitle: metrics.hasEnoughData ? t.habitTracker.avoidCard.recordValue(record: metrics.longestStreak) : null,
                           ),
                           const SizedBox(width: 8),
                           _StatChip(
-                            label: 'СЕГОДНЯ',
-                            value: completedToday ? 'ДА' : (restToday ? '❄️' : 'НЕТ'),
+                            label: t.habitTracker.avoidCard.today,
+                            value: completedToday ? t.habitTracker.avoidCard.yes : (restToday ? '❄️' : t.habitTracker.avoidCard.no),
                             accentColor: completedToday
                                 ? accentColor
                                 : restToday
@@ -4693,7 +4756,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                           ),
                           const SizedBox(width: 8),
                           _StatChip(
-                            label: '❄️ ФРИЗЫ',
+                            label: t.habitTracker.avoidCard.freezes,
                             value: '$freezesLeft',
                             accentColor: freezesLeft > 0
                                 ? Colors.lightBlue
@@ -4701,7 +4764,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                           ),
                           const SizedBox(width: 8),
                           _StatChip(
-                            label: 'ВСЕГО',
+                            label: t.habitTracker.avoidCard.total,
                             value: '$totalDone',
                             accentColor: accentColor,
                           ),
@@ -4730,11 +4793,10 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                             Expanded(
                               child: Text(
                                 lapsedToday
-                                    ? 'Сегодня был срыв. Это часть пути — '
-                                        'завтра начинаем заново.'
-                                    : 'Держишься $streak '
-                                        '${_AvoidHabitCard._pluralDays(streak)}. '
-                                        'Продолжай в том же духе.',
+                                    ? t.habitTracker.avoidCard.lapsedMessage
+                                    : t.habitTracker.avoidCard.holdingMessage(
+                                        streak: streak,
+                                        daysWord: t.habitTracker.daysWord(n: streak)),
                                 style: TextStyle(
                                   color: sc.textSecondary,
                                   fontSize: 12,
@@ -4745,20 +4807,105 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                           ],
                         ),
                         const SizedBox(height: 14),
-                        _DetailActionBtn(
-                          label: lapsedToday ? 'СНЯТЬ СРЫВ' : 'БЫЛ СРЫВ',
-                          icon: lapsedToday
-                              ? Icons.undo
-                              : Icons.report_gmailerrorred_outlined,
-                          accentColor: lapsedToday
-                              ? sc.textSecondary.withValues(alpha: 0.7)
-                              : const Color(0xFFD98C6F),
-                          onTap: () {
-                            SieHaptics.light();
-                            ref
-                                .read(habitsProvider.notifier)
-                                .recordLapse(widget.habit.id, DateTime.now());
-                          },
+                        // Slip + Note buttons side by side.
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _DetailActionBtn(
+                                label: lapsedToday ? t.habitTracker.avoidCard.snapSlip : t.habitTracker.avoidCard.wasSlip,
+                                icon: lapsedToday
+                                    ? Icons.undo
+                                    : Icons.report_gmailerrorred_outlined,
+                                accentColor: lapsedToday
+                                    ? sc.textSecondary.withValues(alpha: 0.7)
+                                    : const Color(0xFFD98C6F),
+                                onTap: () {
+                                  SieHaptics.light();
+                                  ref
+                                      .read(habitsProvider.notifier)
+                                      .recordLapse(widget.habit.id, DateTime.now());
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _DetailActionBtn(
+                                label: todayEntry?.note != null || todayEntry?.emoji != null
+                                    ? t.habitTracker.avoidCard.noteEdit
+                                    : t.habitTracker.avoidCard.noteAdd,
+                                icon: Icons.edit_outlined,
+                                accentColor: accentColor,
+                                onTap: () => _openReflection(today, todayEntry, accentColor),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        // Start date row — tap to pick, ✕ to reset.
+                        GestureDetector(
+                          onTap: () => _pickAvoidStartDate(
+                              context, currentHabit.avoidStartDate, currentHabit, accentColor),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              color: currentHabit.avoidStartDate != null
+                                  ? accentColor.withValues(alpha: 0.06)
+                                  : Colors.transparent,
+                              border: Border.all(
+                                color: currentHabit.avoidStartDate != null
+                                    ? accentColor.withValues(alpha: 0.25)
+                                    : sc.border,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.calendar_today_outlined,
+                                  size: 11,
+                                  color: currentHabit.avoidStartDate != null
+                                      ? accentColor
+                                      : sc.textSecondary.withValues(alpha: 0.5),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    currentHabit.avoidStartDate != null
+                                        ? t.habitTracker.avoidCard.startDateSince(
+                                            date: _fmtShortDate(currentHabit.avoidStartDate!))
+                                        : t.habitTracker.avoidCard.setStartDate,
+                                    style: TextStyle(
+                                      color: currentHabit.avoidStartDate != null
+                                          ? accentColor
+                                          : sc.textSecondary.withValues(alpha: 0.55),
+                                      fontSize: 9,
+                                      letterSpacing: 1.2,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                if (currentHabit.avoidStartDate != null)
+                                  GestureDetector(
+                                    onTap: () {
+                                      SieHaptics.light();
+                                      ref.read(habitsProvider.notifier)
+                                          .setAvoidStartDate(widget.habit.id, null);
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(left: 8),
+                                      child: Text(
+                                        t.habitTracker.avoidCard.resetStartDate,
+                                        style: TextStyle(
+                                          color: sc.textSecondary.withValues(alpha: 0.5),
+                                          fontSize: 9,
+                                          letterSpacing: 1.2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -4801,7 +4948,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                         children: [
                           Expanded(
                             child: _DetailActionBtn(
-                              label: completedToday ? 'ОТМЕНИТЬ' : 'ОТМЕТИТЬ',
+                              label: completedToday ? t.habitTracker.avoidCard.cancelMark : t.habitTracker.avoidCard.mark,
                               icon: completedToday
                                   ? Icons.remove_circle_outline
                                   : Icons.check_circle_outline,
@@ -4824,7 +4971,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: _DetailActionBtn(
-                              label: restToday ? '❄️ ОТДЫХ ✓' : '❄️ ОТДЫХ',
+                              label: restToday ? t.habitTracker.avoidCard.restDone : t.habitTracker.avoidCard.rest,
                               icon: Icons.ac_unit_outlined,
                               accentColor: completedToday
                                   ? sc.textSecondary.withValues(alpha: 0.3)
@@ -4847,8 +4994,8 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                             child: _DetailActionBtn(
                               label: todayEntry?.note != null ||
                                       todayEntry?.emoji != null
-                                  ? 'ЗАМЕТКА ✎'
-                                  : '+ ЗАМЕТКА',
+                                  ? t.habitTracker.avoidCard.noteEdit
+                                  : t.habitTracker.avoidCard.noteAdd,
                               icon: Icons.edit_outlined,
                               accentColor: completedToday
                                   ? accentColor
@@ -4857,12 +5004,11 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                                   ? () => _openReflection(
                                       today, todayEntry, accentColor)
                                   : () => ScaffoldMessenger.of(context)
-                                      .showSnackBar(const SnackBar(
+                                      .showSnackBar(SnackBar(
                                         behavior: SnackBarBehavior.floating,
-                                        duration: Duration(seconds: 2),
+                                        duration: const Duration(seconds: 2),
                                         content: Text(
-                                            'Сначала отметьте выполнение, '
-                                            'затем добавьте заметку'),
+                                            t.habitTracker.avoidCard.markFirst),
                                       )),
                             ),
                           ),
@@ -4887,7 +5033,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
                 child: Text(
-                  'ЖУРНАЛ',
+                  t.habitTracker.avoidCard.journal,
                   style: TextStyle(
                     color: sc.textSecondary.withValues(alpha: 0.55),
                     fontSize: 9,
@@ -4909,7 +5055,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(32),
                       child: Text(
-                        'ОШИБКА ЗАГРУЗКИ',
+                        t.habitTracker.avoidCard.loadError,
                         style: TextStyle(
                           color: sc.textSecondary,
                           fontSize: 11,
@@ -5187,7 +5333,7 @@ class _JournalEntryTile extends ConsumerWidget {
                   child: GestureDetector(
                     onTap: onEdit,
                     child: Text(
-                      'EDIT',
+                      t.habitTracker.edit,
                       style: TextStyle(
                         color: accentColor.withValues(alpha: 0.7),
                         fontSize: 9,
@@ -5229,7 +5375,7 @@ class _EmptyJournal extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'ЖУРНАЛ ПУСТ',
+              t.habitTracker.journal.empty,
               style: TextStyle(
                 color: sc.textSecondary.withValues(alpha: 0.6),
                 fontSize: 11,
@@ -5239,7 +5385,7 @@ class _EmptyJournal extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Отметьте выполнение и добавьте\nзаметку через кнопку "+ ЗАМЕТКА"',
+              t.habitTracker.journal.emptyBody,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: sc.textSecondary.withValues(alpha: 0.4),
@@ -5281,9 +5427,8 @@ class _HabitAnalyticsSection extends StatefulWidget {
 class _HabitAnalyticsSectionState extends State<_HabitAnalyticsSection> {
   bool _showFullYear = false;
 
-  static const _wdNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-
-  String _wdName(int? wd) => wd != null ? _wdNames[(wd - 1) % 7] : '—';
+  String _wdName(int? wd) =>
+      wd != null ? t.habitShared.weekdayShort[(wd - 1) % 7] : t.habitTracker.analytics.noWeekday;
 
   @override
   Widget build(BuildContext context) {
@@ -5301,7 +5446,7 @@ class _HabitAnalyticsSectionState extends State<_HabitAnalyticsSection> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'АНАЛИТИКА',
+                t.habitTracker.analytics.title,
                 style: TextStyle(
                   color: sc.textSecondary.withValues(alpha: 0.55),
                   fontSize: 9,
@@ -5312,7 +5457,7 @@ class _HabitAnalyticsSectionState extends State<_HabitAnalyticsSection> {
               GestureDetector(
                 onTap: () => setState(() => _showFullYear = !_showFullYear),
                 child: Text(
-                  _showFullYear ? '← 16 НЕД.' : 'ГОД →',
+                  _showFullYear ? t.habitTracker.analytics.showWeeks : t.habitTracker.analytics.showYear,
                   style: TextStyle(
                     color: accent.withValues(alpha: 0.75),
                     fontSize: 9,
@@ -5335,7 +5480,7 @@ class _HabitAnalyticsSectionState extends State<_HabitAnalyticsSection> {
           const SizedBox(height: 14),
           if (!m.hasEnoughData)
             Text(
-              'Копим данные — статистика появится через несколько дней',
+              t.habitTracker.analytics.collectingData,
               style: TextStyle(
                 color: sc.textSecondary.withValues(alpha: 0.5),
                 fontSize: 10,
@@ -5346,27 +5491,27 @@ class _HabitAnalyticsSectionState extends State<_HabitAnalyticsSection> {
           else ...[
             Row(
               children: [
-                _InsightChip(sc: sc, accent: accent, label: '7 дней',
+                _InsightChip(sc: sc, accent: accent, label: t.habitTracker.analytics.days7,
                     value: '${(m.completionRate7d * 100).round()}%'),
                 const SizedBox(width: 8),
-                _InsightChip(sc: sc, accent: accent, label: '30 дней',
+                _InsightChip(sc: sc, accent: accent, label: t.habitTracker.analytics.days30,
                     value: '${(m.completionRate30d * 100).round()}%'),
                 const SizedBox(width: 8),
-                _InsightChip(sc: sc, accent: accent, label: 'Рекорд',
+                _InsightChip(sc: sc, accent: accent, label: t.habitTracker.analytics.record,
                     value: '${m.longestStreak}'),
               ],
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                _InsightChip(sc: sc, accent: accent, label: 'Лучший день',
+                _InsightChip(sc: sc, accent: accent, label: t.habitTracker.analytics.bestDay,
                     value: _wdName(m.bestWeekday)),
                 const SizedBox(width: 8),
-                _InsightChip(sc: sc, accent: accent, label: 'Слабый день',
+                _InsightChip(sc: sc, accent: accent, label: t.habitTracker.analytics.worstDay,
                     value: _wdName(m.worstWeekday)),
                 if (widget.habit.isMetric && m.avgValueLast7 != null) ...[
                   const SizedBox(width: 8),
-                  _InsightChip(sc: sc, accent: accent, label: 'Тренд 7 дн.',
+                  _InsightChip(sc: sc, accent: accent, label: t.habitTracker.analytics.trend7d,
                       value: m.valueTrend == 'up' ? '↑'
                           : m.valueTrend == 'down' ? '↓' : '→'),
                 ],
@@ -5446,7 +5591,7 @@ class _AreaChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = area == null ? '—' : '${area!.icon} ${area!.label}';
+    final label = area == null ? t.habitTracker.areaChip.none : '${area!.icon} ${area!.label}';
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -5483,7 +5628,7 @@ class _AreaSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = area == null
-        ? '— БЕЗ СФЕРЫ'
+        ? t.habitTracker.areaSection.noArea
         : '${area!.icon} ${area!.label.toUpperCase()}';
     return Padding(
       padding: const EdgeInsets.only(bottom: 4, top: 8),
@@ -5590,13 +5735,7 @@ class _AvoidHabitCard extends ConsumerWidget {
     return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF6FA8DC);
   }
 
-  static String _pluralDays(int n) {
-    final mod10 = n % 10;
-    final mod100 = n % 100;
-    if (mod10 == 1 && mod100 != 11) return 'день';
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'дня';
-    return 'дней';
-  }
+  static String _pluralDays(int n) => t.habitTracker.daysWord(n: n);
 
   void _confirmLapse(BuildContext context, SieColors sc) {
     showModalBottomSheet<void>(
@@ -5615,7 +5754,7 @@ class _AvoidHabitCard extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              lapsedToday ? 'ОТМЕНИТЬ СРЫВ?' : 'ОТМЕТИТЬ СРЫВ?',
+              lapsedToday ? t.habitTracker.avoidCard.confirmCancelSlip : t.habitTracker.avoidCard.confirmMarkSlip,
               style: TextStyle(
                 color: sc.textPrimary,
                 fontSize: 13,
@@ -5626,10 +5765,10 @@ class _AvoidHabitCard extends ConsumerWidget {
             const SizedBox(height: 10),
             Text(
               lapsedToday
-                  ? 'Сегодняшний срыв будет снят, счётчик восстановится.'
-                  : 'Срыв — часть пути. Твой рекорд $recordDays '
-                      '${_pluralDays(recordDays)}. Счётчик обнулится, и мы '
-                      'продолжаем дальше.',
+                  ? t.habitTracker.avoidCard.cancelSlipMessage
+                  : t.habitTracker.avoidCard.markSlipMessage(
+                      record: recordDays,
+                      daysWord: t.habitTracker.daysWord(n: recordDays)),
               style: TextStyle(
                 color: sc.textSecondary,
                 fontSize: 12,
@@ -5641,13 +5780,13 @@ class _AvoidHabitCard extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 _SheetTextBtn(
-                  label: 'ОТМЕНА',
+                  label: t.habitTracker.avoidCard.cancelBtn,
                   color: sc.textSecondary,
                   onTap: () => Navigator.of(context).pop(),
                 ),
                 const SizedBox(width: 12),
                 _SheetTextBtn(
-                  label: lapsedToday ? 'СНЯТЬ' : 'БЫЛ СРЫВ',
+                  label: lapsedToday ? t.habitTracker.avoidCard.snap : t.habitTracker.avoidCard.wasSlipBtn,
                   color: const Color(0xFFD98C6F),
                   onTap: () {
                     Navigator.of(context).pop();
@@ -5731,7 +5870,8 @@ class _AvoidHabitCard extends ConsumerWidget {
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
-                        '${_pluralDays(cleanDays)} без срыва',
+                        t.habitTracker.avoidCard.withoutSlipSuffix(
+                            daysWord: _pluralDays(cleanDays)),
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: sc.textSecondary.withValues(alpha: 0.8),
@@ -5744,7 +5884,8 @@ class _AvoidHabitCard extends ConsumerWidget {
                 if (recordDays > cleanDays) ...[
                   const SizedBox(height: 2),
                   Text(
-                    'рекорд: $recordDays ${_pluralDays(recordDays)}',
+                    t.habitTracker.avoidCard.recordLine(
+                        record: recordDays, daysWord: _pluralDays(recordDays)),
                     style: TextStyle(
                       color: sc.textSecondary.withValues(alpha: 0.5),
                       fontSize: 9,
@@ -5774,7 +5915,7 @@ class _AvoidHabitCard extends ConsumerWidget {
                     : Colors.transparent,
               ),
               child: Text(
-                lapsedToday ? 'СРЫВ ✓' : 'СРЫВ',
+                lapsedToday ? t.habitTracker.avoidCard.slipDone : t.habitTracker.avoidCard.slip,
                 style: TextStyle(
                   color: lapsedToday
                       ? const Color(0xFFD98C6F)
@@ -5882,7 +6023,7 @@ class _StackChainCard extends ConsumerWidget {
           if (habits.isEmpty) ...[
             const SizedBox(height: 8),
             Text(
-              'Нажмите, чтобы добавить привычки в стэк',
+              t.habitTracker.stackCard.tapToAdd,
               style: TextStyle(
                 color: sc.textSecondary.withValues(alpha: 0.55),
                 fontSize: 11,
@@ -6042,7 +6183,7 @@ class _CreateStackButton extends ConsumerWidget {
                 color: sc.textSecondary.withValues(alpha: 0.8)),
             const SizedBox(width: 6),
             Text(
-              'СОЗДАТЬ СТЭК',
+              t.habitTracker.stackCard.create,
               style: TextStyle(
                 color: sc.textSecondary.withValues(alpha: 0.8),
                 fontSize: 10,

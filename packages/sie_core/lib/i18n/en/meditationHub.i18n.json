@@ -1,0 +1,52 @@
+{
+  "appBar": {
+    "title": "DEFRAGMENTATION"
+  },
+  "stats": {
+    "days": "days",
+    "minPerWeek": "min/week",
+    "hoursMinutes": "{h}h {m}",
+    "clarityLevel": "CLARITY LVL {level}"
+  },
+  "quickStart": {
+    "minutes": "{n} MIN"
+  },
+  "filters": {
+    "all": "All",
+    "breathing": "With breathing",
+    "affirmations": "Affirmations"
+  },
+  "empty": {
+    "noPresets": "No presets",
+    "nothingFound": "Nothing found",
+    "createFirst": "Create your first meditation preset",
+    "noneForFilter": "No presets for the selected filter",
+    "resetFilter": "RESET FILTER",
+    "loadError": "Failed to load"
+  },
+  "card": {
+    "systemBadge": "SYS",
+    "minutes": "{n} min",
+    "actionsLabel": "Preset actions",
+    "breathing": "Breathing {n} min",
+    "meditation": "Meditation {n} min"
+  },
+  "delete": {
+    "title": "Delete preset?",
+    "message": "Preset «{name}» will be deleted permanently.",
+    "confirm": "Delete"
+  },
+  "duplicate": {
+    "copySuffix": "{name} (copy)",
+    "title": "Duplicate preset",
+    "nameLabel": "Name",
+    "cancel": "Cancel",
+    "create": "Create"
+  },
+  "actions": {
+    "launch": "Start session",
+    "edit": "Edit",
+    "duplicate": "Duplicate",
+    "delete": "Delete"
+  }
+}

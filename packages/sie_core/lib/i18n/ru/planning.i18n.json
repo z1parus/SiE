@@ -1,0 +1,88 @@
+{
+  "category": {
+    "learning": "Обучение",
+    "health": "Здоровье",
+    "project": "Проект",
+    "lifestyle": "Образ жизни",
+    "discipline": "Дисциплина"
+  },
+  "header": {
+    "missionControl": "MISSION CONTROL",
+    "archiveTitle": "Архив миссий",
+    "activeTitle": "Активные миссии"
+  },
+  "modeSwitch": {
+    "agenda": "Повестка",
+    "goals": "Цели"
+  },
+  "loadError": "Ошибка загрузки",
+  "card": {
+    "stagnation": "ЗАСТОЙ",
+    "collaborative": "СОВМЕСТНАЯ",
+    "owner": "Владелец: {name}",
+    "unknownOwner": "Unknown",
+    "progress": "прогресс",
+    "stages": "{done}/{total} этапов",
+    "habits": "{n} привычек",
+    "tasks": "{done}/{total} задач"
+  },
+  "status": {
+    "completed": "ЗАВЕРШЕНА",
+    "frozen": "ЗАМОРОЖЕНА",
+    "failed": "ПРОВАЛЕНА",
+    "active": "АКТИВНА"
+  },
+  "deadline": {
+    "overdue": "просрочено {n} дн.",
+    "inDays": "через {n} дн."
+  },
+  "empty": {
+    "archiveEmpty": "Архив пуст",
+    "noActiveMissions": "Нет активных миссий",
+    "createMission": "СОЗДАТЬ МИССИЮ"
+  },
+  "createChooser": {
+    "newMission": "НОВАЯ МИССИЯ",
+    "emptyGoal": "Пустая цель",
+    "fromTemplate": "Из шаблона",
+    "aiDecomposition": "AI-декомпозиция"
+  },
+  "options": {
+    "stats": "Статистика миссии",
+    "unpin": "Открепить миссию",
+    "pin": "Закрепить миссию",
+    "unfreeze": "Разморозить миссию",
+    "freeze": "Заморозить миссию",
+    "complete": "Завершить миссию",
+    "saveAsTemplate": "Сохранить как шаблон",
+    "leave": "Покинуть миссию",
+    "delete": "Удалить миссию"
+  },
+  "delete": {
+    "title": "Удалить миссию?",
+    "message": "Все данные цели «{name}» будут удалены.",
+    "cancel": "Отмена",
+    "confirm": "Удалить"
+  },
+  "saveTemplate": {
+    "title": "Сохранить как шаблон",
+    "description": "Структура (этапы, задачи и вехи) сохранится без дат и прогресса.",
+    "hint": "Название шаблона",
+    "cancel": "Отмена",
+    "save": "Сохранить",
+    "saved": "Шаблон «{name}» сохранён"
+  },
+  "addGoal": {
+    "newMission": "НОВАЯ МИССИЯ",
+    "nameHint": "Название миссии",
+    "priority": "ПРИОРИТЕТ",
+    "priorityLow": "Низкий",
+    "priorityMedium": "Средний",
+    "priorityHigh": "Высокий",
+    "priorityCritical": "Крит.",
+    "missionColor": "ЦВЕТ МИССИИ",
+    "deadlineSet": "Дедлайн: {date}",
+    "deadlineEmpty": "Установить дедлайн (необязательно)",
+    "submit": "СОЗДАТЬ МИССИЮ"
+  }
+}

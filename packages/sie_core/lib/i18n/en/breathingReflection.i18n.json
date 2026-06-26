@@ -1,0 +1,15 @@
+{
+  "header": "PRACTICE COMPLETE",
+  "moodQuestion": "How do you feel?",
+  "save": "SAVE",
+  "skip": "Skip",
+  "summary": {
+    "timeLabel": "time",
+    "holdLabel": "hold"
+  },
+  "level": {
+    "calmness": "CALMNESS",
+    "confidence": "CONFIDENCE",
+    "value": "{value} / 10"
+  }
+}

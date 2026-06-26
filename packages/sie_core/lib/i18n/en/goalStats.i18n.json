@@ -1,0 +1,76 @@
+{
+  "monthsShort": [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  ],
+  "status": {
+    "completed": "COMPLETED",
+    "frozen": "FROZEN",
+    "failed": "FAILED",
+    "active": "ACTIVE"
+  },
+  "momentum": {
+    "title": "MOMENTUM",
+    "loadError": "Failed to load pace analytics.",
+    "collecting": "Collecting pace data… ({count}/3 progress snapshots)",
+    "paceLabel": "Pace (over 7 days)",
+    "paceValue": "{value} of progress",
+    "projection": "Projected finish",
+    "projectionZero": "pace is zero",
+    "vsDeadline": "Relative to deadline",
+    "deltaOnTime": "exactly on time",
+    "deltaEarlier": "{n} d. earlier",
+    "deltaLater": "{n} d. later",
+    "legendFact": "actual",
+    "legendIdeal": "ideal",
+    "legendDeadline": "deadline"
+  },
+  "tasks": {
+    "title": "Tasks",
+    "total": "Total",
+    "done": "Done",
+    "light": "Light (×1)",
+    "medium": "Medium (×3)",
+    "heavy": "Heavy (×5)",
+    "overdue": "Overdue",
+    "doneOfTotal": "{done} of {total}"
+  },
+  "subGoals": {
+    "title": "Stages",
+    "totalStages": "Total stages",
+    "completed": "Completed",
+    "topLevel": "Top level",
+    "nested": "Nested"
+  },
+  "milestones": {
+    "title": "Milestones",
+    "total": "Total",
+    "completed": "Completed",
+    "nearest": "Nearest: {name} ({date})"
+  },
+  "time": {
+    "title": "Time",
+    "created": "Created",
+    "activeFor": "Active for",
+    "updated": "Updated",
+    "deadline": "Deadline",
+    "daysLeft": "Days left",
+    "days": "{n} d.",
+    "notSet": "not set",
+    "overdue": "overdue",
+    "dash": "—"
+  },
+  "focus": {
+    "title": "Focus time",
+    "empty": "No focus sessions for this goal yet. Tap ▶ on a task to log time.",
+    "totalInvested": "total invested",
+    "topTasks": "TOP TASKS BY TIME"
+  },
+  "habits": {
+    "title": "Linked habits",
+    "deleted": "Habit deleted"
+  },
+  "advice": {
+    "title": "ADVICE"
+  }
+}

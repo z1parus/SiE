@@ -111,7 +111,7 @@ class _SieSplashScreenState extends ConsumerState<SieSplashScreen>
                     child: ScaleTransition(
                       scale: _textScale,
                       child: Semantics(
-                        label: 'SiE — загрузка',
+                        label: t.splash.a11y.loading,
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [

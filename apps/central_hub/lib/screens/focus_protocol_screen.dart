@@ -211,11 +211,9 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
         Positioned.fill(
           child: OnboardingOverlay(
             visible: showOnboarding,
-            moduleLabel: 'ФОКУС',
-            description: 'Протокол глубокой работы.',
-            benefit:
-                'Тренировка концентрации и защита от выгорания. Временны́е блоки '
-                'защищают состояние потока и консолидируют рабочую память.',
+            moduleLabel: t.focusProtocol.onboarding.moduleLabel,
+            description: t.focusProtocol.onboarding.description,
+            benefit: t.focusProtocol.onboarding.benefit,
             xpReward: 100,
             onAccept: () {
               if (_showOnboardingManual) {
@@ -305,7 +303,41 @@ class _FocusRing extends ConsumerWidget {
                         ],
                 ),
               ),
-            ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: phaseColor.withValues(alpha: 0.35),
+                    width: 0.8,
+                  ),
+                  borderRadius: BorderRadius.circular(4),
+                  color: phaseColor.withValues(alpha: 0.06),
+                ),
+                child: Text(
+                  phase == FocusPhase.breakTime
+                      ? t.focusProtocol.ring.breakLabel
+                      : t.focusProtocol.ring.focus,
+                  style: TextStyle(
+                    color: phaseColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 4.5,
+                    shadows: c.isLightMode
+                        ? null
+                        : [
+                            Shadow(
+                              color: phaseColor.withValues(alpha: 0.65),
+                              blurRadius: 8,
+                            ),
+                          ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -359,7 +391,7 @@ class _TopBar extends StatelessWidget {
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    'SESSION $completedSessions',
+                    t.focusProtocol.topBar.session(n: completedSessions),
                     style: TextStyle(
                       color: phaseColor,
                       fontSize: 10,
@@ -404,7 +436,7 @@ class _FocusTaskBanner extends ConsumerWidget {
             const SizedBox(width: 8),
             Flexible(
               child: Text(
-                'ФОКУС: ${title.toUpperCase()}',
+                t.focusProtocol.banner.focus(title: title.toUpperCase()),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -473,10 +505,13 @@ class _BottomHUD extends ConsumerWidget {
     final s       = timerState.settings;
 
     final phaseLabel = isBreak
-        ? 'BREAK  ·  ${s.breakMinutes} MIN'
-        : 'FOCUS PROTOCOL  ·  ${s.workMinutes} MIN';
-    final stakeLabel = isBreak ? 'РЕЖИМ' : 'XP AT STAKE';
-    final xpLabel = isBreak ? 'ОТДЫХ' : '+$_kFocusXp XP';
+        ? t.focusProtocol.hud.phaseBreak(minutes: s.breakMinutes)
+        : t.focusProtocol.hud.phaseFocus(minutes: s.workMinutes);
+    final stakeLabel =
+        isBreak ? t.focusProtocol.hud.stakeMode : t.focusProtocol.hud.stakeXp;
+    final xpLabel = isBreak
+        ? t.focusProtocol.hud.xpRest
+        : t.focusProtocol.hud.xpValue(xp: _kFocusXp);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -492,7 +527,7 @@ class _BottomHUD extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'CURRENT PHASE',
+                      t.focusProtocol.hud.currentPhase,
                       style: TextStyle(
                         color: c.textSecondary,
                         fontSize: 9,
@@ -563,7 +598,7 @@ class _BottomHUD extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: Text(
-              'TAP START TO INITIATE PROTOCOL',
+              t.focusProtocol.hud.tapStart,
               style: TextStyle(
                 color: c.accent.withValues(alpha: 0.38),
                 fontSize: 10,
@@ -593,8 +628,10 @@ class _BottomHUD extends ConsumerWidget {
               },
               child: Text(
                 timerState.isRunning
-                    ? 'PAUSE'
-                    : (isIdle ? 'START' : 'RESUME'),
+                    ? t.focusProtocol.hud.pause
+                    : (isIdle
+                        ? t.focusProtocol.hud.start
+                        : t.focusProtocol.hud.resume),
                 style: TextStyle(
                   color: phaseColor,
                   fontSize: 14,
@@ -623,7 +660,7 @@ class _BottomHUD extends ConsumerWidget {
                   onReset();
                 },
                 child: Text(
-                  'RESET',
+                  t.focusProtocol.hud.reset,
                   style: TextStyle(
                     color: c.iconMuted,
                     fontSize: 12,
@@ -661,7 +698,7 @@ class _SettingsButton extends ConsumerWidget {
             Icon(Icons.tune, size: 15, color: c.iconMuted),
             const SizedBox(width: 8),
             Text(
-              'PROTOCOL SETTINGS',
+              t.focusProtocol.settingsButton,
               style: TextStyle(
                 color: c.textSecondary,
                 fontSize: 11,
@@ -744,7 +781,7 @@ class _ResultOverlayState extends ConsumerState<_ResultOverlay>
                     alignment: Alignment.centerRight,
                     child: Semantics(
                       button: true,
-                      label: 'Закрыть',
+                      label: t.focusProtocol.result.close,
                       child: GestureDetector(
                         onTap: widget.onContinue,
                         behavior: HitTestBehavior.opaque,
@@ -791,7 +828,7 @@ class _ResultOverlayState extends ConsumerState<_ResultOverlay>
 
                   // ── Title ─────────────────────────────────────
                   Text(
-                    'SESSION COMPLETE',
+                    t.focusProtocol.result.sessionComplete,
                     style:
                         Theme.of(context).textTheme.headlineMedium?.copyWith(
                               color: c.textPrimary,
@@ -809,7 +846,7 @@ class _ResultOverlayState extends ConsumerState<_ResultOverlay>
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'FOCUS PROTOCOL EXECUTED',
+                    t.focusProtocol.result.protocolExecuted,
                     style: TextStyle(
                       color: c.textSecondary,
                       fontSize: 11,
@@ -832,7 +869,7 @@ class _ResultOverlayState extends ConsumerState<_ResultOverlay>
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              'XP GAINED',
+                              t.focusProtocol.result.xpGained,
                               style: TextStyle(
                                 color: c.textSecondary,
                                 fontSize: 11,
@@ -840,7 +877,8 @@ class _ResultOverlayState extends ConsumerState<_ResultOverlay>
                               ),
                             ),
                             Text(
-                              '+${widget.result.xpGained} XP',
+                              t.focusProtocol.result
+                                  .xpValue(xp: widget.result.xpGained),
                               style: TextStyle(
                                 color: c.accent,
                                 fontSize: 24,
@@ -873,7 +911,7 @@ class _ResultOverlayState extends ConsumerState<_ResultOverlay>
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
-                                  'DP GAINED',
+                                  t.focusProtocol.result.dpGained,
                                   style: TextStyle(
                                     color: c.textSecondary,
                                     fontSize: 11,
@@ -883,7 +921,8 @@ class _ResultOverlayState extends ConsumerState<_ResultOverlay>
                               ],
                             ),
                             Text(
-                              '+${widget.result.dpGained} DP',
+                              t.focusProtocol.result
+                                  .dpValue(dp: widget.result.dpGained),
                               style: TextStyle(
                                 color: c.dp,
                                 fontSize: 24,
@@ -935,7 +974,7 @@ class _ResultOverlayState extends ConsumerState<_ResultOverlay>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'ACHIEVEMENT UNLOCKED',
+                                  t.focusProtocol.result.achievementUnlocked,
                                   style: TextStyle(
                                     color: c.textSecondary,
                                     fontSize: 9,
@@ -991,8 +1030,8 @@ class _ResultOverlayState extends ConsumerState<_ResultOverlay>
                           const SizedBox(width: 8),
                           Text(
                             _markedDone
-                                ? 'ЗАДАЧА ВЫПОЛНЕНА'
-                                : 'ОТМЕТИТЬ ЗАДАЧУ ВЫПОЛНЕННОЙ',
+                                ? t.focusProtocol.result.taskDone
+                                : t.focusProtocol.result.markTaskDone,
                             style: TextStyle(
                               color: c.accentSecondary,
                               fontSize: 11,
@@ -1015,7 +1054,7 @@ class _ResultOverlayState extends ConsumerState<_ResultOverlay>
                     ),
                     onTap: widget.onContinue,
                     child: Text(
-                      'START BREAK',
+                      t.focusProtocol.result.startBreak,
                       style: TextStyle(
                         color: c.accentSecondary,
                         fontSize: 13,
@@ -1101,7 +1140,7 @@ class _FocusSettingsSheetState extends ConsumerState<_FocusSettingsSheet> {
               ),
             ),
             Text(
-              'PROTOCOL SETTINGS',
+              t.focusProtocol.settings.title,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: c.textPrimary,
                   ),
@@ -1114,7 +1153,7 @@ class _FocusSettingsSheetState extends ConsumerState<_FocusSettingsSheet> {
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(
-                      'НАСТРОЙКИ ЗАБЛОКИРОВАНЫ ВО ВРЕМЯ СЕССИИ',
+                      t.focusProtocol.settings.lockedDuringSession,
                       style: TextStyle(
                         fontSize: 10,
                         letterSpacing: 1.2,
@@ -1128,7 +1167,7 @@ class _FocusSettingsSheetState extends ConsumerState<_FocusSettingsSheet> {
             ],
             const SizedBox(height: 20),
             _FocusSettingRow(
-              label: 'FOCUS DURATION  (MIN)',
+              label: t.focusProtocol.settings.focusDuration,
               value: _s.workMinutes,
               min: 5,
               max: 60,
@@ -1137,7 +1176,7 @@ class _FocusSettingsSheetState extends ConsumerState<_FocusSettingsSheet> {
               onChanged: (v) => _update(_s.copyWith(workMinutes: v)),
             ),
             _FocusSettingRow(
-              label: 'BREAK DURATION  (MIN)',
+              label: t.focusProtocol.settings.breakDuration,
               value: _s.breakMinutes,
               min: 1,
               max: 15,
@@ -1150,14 +1189,14 @@ class _FocusSettingsSheetState extends ConsumerState<_FocusSettingsSheet> {
               child: Divider(color: c.border, height: 1),
             ),
             _AmbientToggleRow(
-              label: 'FOCUS MUSIC',
+              label: t.focusProtocol.settings.focusMusic,
               icon: Icons.work_outline,
               value: _s.isWorkMusicEnabled,
               onChanged: (v) =>
                   _update(_s.copyWith(isWorkMusicEnabled: v)),
             ),
             _AmbientToggleRow(
-              label: 'BREAK MUSIC',
+              label: t.focusProtocol.settings.breakMusic,
               icon: Icons.coffee_outlined,
               value: _s.isBreakMusicEnabled,
               onChanged: (v) =>

@@ -1,0 +1,33 @@
+{
+  "date": {
+    "justNow": "just now",
+    "minutesAgo": "{n} min ago",
+    "today": "today {time}",
+    "yesterday": "yesterday {time}"
+  },
+  "header": {
+    "title": "Notes log"
+  },
+  "list": {
+    "loadError": "Failed to load notes",
+    "emptyEditable": "No notes yet.\nTap + to add a note.",
+    "empty": "No notes yet."
+  },
+  "card": {
+    "deleteTooltip": "Delete"
+  },
+  "delete": {
+    "title": "Delete note?",
+    "message": "This action cannot be undone.",
+    "cancel": "Cancel",
+    "confirm": "Delete"
+  },
+  "editor": {
+    "titleEdit": "Edit note",
+    "titleNew": "New note",
+    "titleHint": "Title (optional)",
+    "bodyHint": "What to remember…",
+    "save": "SAVE",
+    "add": "ADD"
+  }
+}

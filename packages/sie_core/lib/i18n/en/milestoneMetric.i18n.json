@@ -1,0 +1,27 @@
+{
+  "loadError": "Loading error",
+  "summary": {
+    "now": "NOW",
+    "target": "TARGET",
+    "progress": "PROGRESS",
+    "goalReached": "Goal reached!"
+  },
+  "chart": {
+    "title": "DYNAMICS"
+  },
+  "history": {
+    "title": "MEASUREMENT HISTORY",
+    "addMeasurement": "MEASURE",
+    "empty": "No measurements"
+  },
+  "delete": {
+    "title": "Delete measurement?",
+    "message": "Measurement {value} will be deleted.",
+    "cancel": "CANCEL",
+    "confirm": "DELETE"
+  },
+  "sheet": {
+    "title": "ADD MEASUREMENT",
+    "save": "SAVE"
+  }
+}

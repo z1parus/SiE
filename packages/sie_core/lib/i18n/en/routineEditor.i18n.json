@@ -1,0 +1,30 @@
+{
+  "title": {
+    "stackFallback": "HABIT STACK",
+    "morning": "MORNING ROUTINE",
+    "evening": "EVENING ROUTINE"
+  },
+  "empty": {
+    "noHabits": "NO HABITS",
+    "addBelow": "Add habits below"
+  },
+  "removeSnackbar": "Habit removed from routine",
+  "dialog": {
+    "save": "SAVE",
+    "stackHeader": "HABIT STACK",
+    "nameLabel": "NAME",
+    "cueLabel": "ANCHOR TRIGGER (optional)",
+    "cueHint": "After my morning coffee…",
+    "cancel": "CANCEL"
+  },
+  "tile": {
+    "removeFromRoutine": "Remove from routine",
+    "dragToReorder": "Drag to reorder"
+  },
+  "addHabit": "ADD HABIT",
+  "picker": {
+    "addToRoutine": "ADD TO ROUTINE",
+    "createFirst": "First create habits in the Archive",
+    "allAdded": "All active habits are already added"
+  }
+}

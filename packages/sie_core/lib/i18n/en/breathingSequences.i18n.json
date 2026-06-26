@@ -1,0 +1,34 @@
+{
+  "header": {
+    "title": "My sequences"
+  },
+  "fab": {
+    "create": "CREATE"
+  },
+  "empty": {
+    "loadError": "Failed to load sequences",
+    "noSequences": "No saved sequences yet.\nTap «Create» to build your own chain of rounds."
+  },
+  "card": {
+    "roundsWord(plural)": {
+      "one": "round",
+      "other": "rounds"
+    },
+    "cyclesCount(plural)": {
+      "one": "{n} cycle",
+      "other": "{n} cycles"
+    },
+    "roundChip": "{index}: {cycles}c · {seconds}s"
+  },
+  "menu": {
+    "edit": "Edit",
+    "duplicate": "Duplicate",
+    "delete": "Delete"
+  },
+  "deleteDialog": {
+    "title": "Delete sequence?",
+    "content": "«{name}» will be deleted permanently.",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  }
+}

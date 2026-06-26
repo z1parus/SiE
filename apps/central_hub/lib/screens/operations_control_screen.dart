@@ -27,9 +27,18 @@ const _kBranchOrderKey = 'branch_order';
 // OperationsControlScreen
 // ─────────────────────────────────────────────────────────────────────────────
 class OperationsControlScreen extends ConsumerStatefulWidget {
-  const OperationsControlScreen({super.key, this.asTab = false});
+  const OperationsControlScreen({
+    super.key,
+    this.asTab = false,
+    this.offline = false,
+  });
 
   final bool asTab;
+
+  /// When true the screen is embedded in the offline shell: network-only
+  /// surfaces (daily tip, leaderboard, profile/search/logout actions in the
+  /// header) are hidden, leaving the module carousel — which works offline.
+  final bool offline;
 
   @override
   ConsumerState<OperationsControlScreen> createState() =>
@@ -104,7 +113,8 @@ class _OperationsControlScreenState
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
-            child: _ScreenHeader(profileAsync: profileAsync),
+            child: _ScreenHeader(
+                profileAsync: profileAsync, offline: widget.offline),
           ),
           const SizedBox(height: 24),
           Padding(
@@ -112,12 +122,14 @@ class _OperationsControlScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SectionHeader(title: 'DEPARTMENTS'),
+                SectionHeader(title: t.operations.departments),
                 const SizedBox(height: 12),
-                _DailyTipBanner(),
-                const SizedBox(height: 8),
-                _LeaderboardTile(),
-                const SizedBox(height: 16),
+                if (!widget.offline) ...[
+                  _DailyTipBanner(),
+                  const SizedBox(height: 8),
+                  _LeaderboardTile(),
+                  const SizedBox(height: 16),
+                ],
               ],
             ),
           ),
@@ -131,7 +143,7 @@ class _OperationsControlScreenState
                 return ordered.isEmpty
                     ? Center(
                         child: Text(
-                          'NO DEPARTMENTS AVAILABLE',
+                          t.operations.noDepartments,
                           style: TextStyle(
                             color: c.textSecondary,
                             letterSpacing: 1.5,
@@ -156,7 +168,7 @@ class _OperationsControlScreenState
                           showUndoSnackbar(
                             context,
                             ref,
-                            message: 'Порядок модулей изменён',
+                            message: t.operations.reorderDone,
                             onUndo: () {
                               setState(() => _orderedSlugs = prevSlugs);
                               _saveOrder(prevSlugs);
@@ -267,7 +279,7 @@ class _WelcomeDialogState extends ConsumerState<_WelcomeDialog>
   @override
   Widget build(BuildContext context) {
     final c    = ref.watch(sieColorsProvider);
-    final name = widget.profile.username?.toUpperCase() ?? 'OPERATIVE';
+    final name = widget.profile.username?.toUpperCase() ?? t.common.operativeFallback;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -304,7 +316,7 @@ class _WelcomeDialogState extends ConsumerState<_WelcomeDialog>
                   Container(width: 3, height: 16, color: c.accent),
                   const SizedBox(width: 10),
                   Text(
-                    'ВХОДЯЩЕЕ СООБЩЕНИЕ',
+                    t.operations.welcome.tag,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           letterSpacing: 2.5,
                           color: c.accent,
@@ -316,7 +328,7 @@ class _WelcomeDialogState extends ConsumerState<_WelcomeDialog>
                     behavior: HitTestBehavior.opaque,
                     child: Semantics(
                       button: true,
-                      label: 'Закрыть',
+                      label: t.operations.welcome.close,
                       child: Padding(
                         padding: const EdgeInsets.all(4),
                         child: Icon(Icons.close,
@@ -328,7 +340,7 @@ class _WelcomeDialogState extends ConsumerState<_WelcomeDialog>
               ),
               const SizedBox(height: 20),
               Text(
-                'ДОБРО ПОЖАЛОВАТЬ,\nОПЕРАТИВНИК $name',
+                t.operations.welcome.title(name: name),
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontSize: 19,
                       height: 1.35,
@@ -338,9 +350,7 @@ class _WelcomeDialogState extends ConsumerState<_WelcomeDialog>
               Divider(color: c.border, height: 1),
               const SizedBox(height: 16),
               Text(
-                'Вы успешно вошли в систему Корпорации SiE. Все протоколы '
-                'активированы. Выполняйте задания, фиксируйте прогресс '
-                'и получайте опыт.\n\nМиссия начинается сейчас.',
+                t.operations.welcome.body,
                 style: Theme.of(context)
                     .textTheme
                     .bodyMedium
@@ -359,7 +369,7 @@ class _WelcomeDialogState extends ConsumerState<_WelcomeDialog>
                       borderRadius: BorderRadius.circular(2),
                     ),
                     child: Text(
-                      'ПРИНЯТЬ ЗАДАНИЕ',
+                      t.operations.welcome.accept,
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: c.accent,
@@ -378,6 +388,18 @@ class _WelcomeDialogState extends ConsumerState<_WelcomeDialog>
     );
   }
 }
+
+// Localized module display name by slug (overrides the DB-provided name so the
+// carousel reads in the chosen language). Falls back to the raw name for any
+// unknown slug.
+String _moduleName(Branch branch) => switch (branch.slug) {
+      'breathing_practices' => t.operations.modules.breathing,
+      'habit_archive' => t.operations.modules.habits,
+      'focus_protocol' => t.operations.modules.focus,
+      'planning' => t.operations.modules.planning,
+      'meditation' => t.operations.modules.meditation,
+      _ => branch.name.toUpperCase(),
+    };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Branch navigation
@@ -405,10 +427,10 @@ void _onBranchTap(BuildContext context, Branch branch) {
   }
 
   ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
+    SnackBar(
       behavior: SnackBarBehavior.floating,
-      content: Text('Этот модуль скоро будет доступен'),
-      duration: Duration(seconds: 2),
+      content: Text(t.operations.comingSoon),
+      duration: const Duration(seconds: 2),
     ),
   );
 }
@@ -442,10 +464,10 @@ class _FloatingNavBar extends ConsumerWidget {
         nav.push(MaterialPageRoute(builder: (_) => const LeaderboardScreen()));
       default:
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             behavior: SnackBarBehavior.floating,
-            content: Text('Этот модуль скоро будет доступен'),
-            duration: Duration(seconds: 2),
+            content: Text(t.operations.comingSoon),
+            duration: const Duration(seconds: 2),
           ),
         );
     }
@@ -567,9 +589,9 @@ class _LeaderboardTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'СУТОЧНЫЙ АВАНГАРД',
-                  style: TextStyle(
+                Text(
+                  t.operations.leaderboard.title,
+                  style: const TextStyle(
                     color: _kOrange,
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -578,7 +600,7 @@ class _LeaderboardTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Рейтинг активности за текущий цикл',
+                  t.operations.leaderboard.subtitle,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ],
@@ -703,22 +725,26 @@ class _BranchCarouselCard extends ConsumerWidget {
     switch (branch.slug) {
       case 'habit_archive':
         final habitsState = ref.watch(habitsProvider).valueOrNull;
+        final streak = habitsState == null || habitsState.streaks.isEmpty
+            ? 0
+            : habitsState.streaks.values.reduce(math.max);
+        if (streak > 0) return t.operations.status.dayStreak(n: streak);
         final count = habitsState?.habits.length ?? 0;
-        return '$count Active';
+        return t.operations.status.activeCount(n: count);
       case 'focus_protocol':
         final focus = ref.watch(focusTimerProvider);
-        return '${focus.settings.workMinutes} min';
+        return t.operations.status.minutes(n: focus.settings.workMinutes);
       case 'breathing_practices':
-        return 'PROTOCOL READY';
+        return t.operations.status.protocolReady;
       case 'meditation':
-        return 'SESSION READY';
+        return t.operations.status.sessionReady;
       case 'planning':
         final count = ref.watch(
           planningProvider.select((s) => s.valueOrNull?.activeGoals.length ?? 0),
         );
-        return '$count ${count == 1 ? 'Mission' : 'Missions'}';
+        return t.operations.status.missions(n: count);
       default:
-        return 'ACTIVE';
+        return t.operations.status.active;
     }
   }
 
@@ -754,7 +780,7 @@ class _BranchCarouselCard extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      branch.name.toUpperCase(),
+                      _moduleName(branch),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleLarge?.copyWith(
@@ -1773,8 +1799,9 @@ class _GlassHeaderBtn extends ConsumerWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 class _ScreenHeader extends ConsumerWidget {
   final AsyncValue<Profile?> profileAsync;
+  final bool offline;
 
-  const _ScreenHeader({required this.profileAsync});
+  const _ScreenHeader({required this.profileAsync, this.offline = false});
 
   static String _badge(int level) {
     if (level <= 5)  return 'Recruit';
@@ -1790,9 +1817,9 @@ class _ScreenHeader extends ConsumerWidget {
     final gradientColors = [c.accent, c.accentSecondary];
 
     final operative = profileAsync.when(
-      data: (p) => p?.username?.toUpperCase() ?? 'UNIDENTIFIED',
+      data: (p) => p?.username?.toUpperCase() ?? t.operations.unidentified,
       loading: () => '...',
-      error: (_, _) => 'UNKNOWN',
+      error: (_, _) => t.operations.unidentified,
     );
     final xp = profileAsync.valueOrNull?.totalXp ?? 0;
 
@@ -1820,7 +1847,7 @@ class _ScreenHeader extends ConsumerWidget {
                           ),
                         ),
                         TextSpan(
-                          text: 'OPERATIONS CONTROL',
+                          text: t.operations.title,
                           style: theme.textTheme.headlineLarge?.copyWith(
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
@@ -1831,67 +1858,77 @@ class _ScreenHeader extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  GestureDetector(
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          'OPERATIVE: $operative',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontSize: 13,
-                            letterSpacing: 1.5,
+                  if (offline)
+                    Text(
+                      t.operations.operative(name: operative),
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontSize: 13,
+                        letterSpacing: 1.5,
+                      ),
+                    )
+                  else
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            t.operations.operative(name: operative),
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontSize: 13,
+                              letterSpacing: 1.5,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 6),
-                        Icon(
-                          Icons.chevron_right,
-                          color: gradientColors.first.withValues(alpha: 0.7),
-                          size: 14,
-                        ),
-                      ],
+                          const SizedBox(width: 6),
+                          Icon(
+                            Icons.chevron_right,
+                            color: gradientColors.first.withValues(alpha: 0.7),
+                            size: 14,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
-            const _NotificationBell(),
-            const SizedBox(width: 8),
-            _GlassHeaderBtn(
-              icon: Icons.search,
-              size: 20,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const UserSearchScreen()),
+            if (!offline) ...[
+              const _NotificationBell(),
+              const SizedBox(width: 8),
+              _GlassHeaderBtn(
+                icon: Icons.search,
+                size: 20,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const UserSearchScreen()),
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            _GlassHeaderBtn(
-              icon: Icons.logout,
-              size: 20,
-              onTap: () async {
-                final ok = await confirmDestructive(
-                  context,
-                  ref,
-                  title: 'Выйти из системы?',
-                  message: 'Сессия будет завершена. Несинхронизированные '
-                      'данные сохранятся локально.',
-                  confirmLabel: 'Выйти',
-                );
-                if (!ok) return;
-                await SupabaseService.signOut();
-                ref.invalidate(userProfileProvider);
-                ref.invalidate(habitsProvider);
-                ref.invalidate(branchesProvider);
-              },
-            ),
+              const SizedBox(width: 8),
+              _GlassHeaderBtn(
+                icon: Icons.logout,
+                size: 20,
+                onTap: () async {
+                  final ok = await confirmDestructive(
+                    context,
+                    ref,
+                    title: t.common.logout.confirmTitle,
+                    message: t.common.logout.confirmMessage,
+                    confirmLabel: t.common.logout.action,
+                  );
+                  if (!ok) return;
+                  await SupabaseService.signOut();
+                  ref.invalidate(userProfileProvider);
+                  ref.invalidate(habitsProvider);
+                  ref.invalidate(branchesProvider);
+                },
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 20),
         _XpBar(
             xp: xp,
             gradientColors: gradientColors,
-            badge: _badge(xp ~/ 1000),
+            badge: _badge(xp ~/ 1000 + 1),
             c: c),
       ],
     );
@@ -1917,7 +1954,7 @@ class _XpBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme     = Theme.of(context);
-    final level     = xp ~/ 1000;
+    final level     = xp ~/ 1000 + 1;
     final xpInLevel = xp % 1000;
     final progress  = (xpInLevel / 1000.0).clamp(0.0, 1.0);
 

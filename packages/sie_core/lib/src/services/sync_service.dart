@@ -444,9 +444,126 @@ class SyncService {
                   payload['node_id'] as String, payload['user_id'] as String);
             }
 
+          case 'upsert_goal_note':
+            await client
+                .from('goal_notes')
+                .upsert(payload, onConflict: 'id');
+            await _db.markGoalNoteSynced(payload['id'] as String);
+          case 'delete_goal_note':
+            await client
+                .from('goal_notes')
+                .delete()
+                .eq('id', payload['id'] as String);
+            await _db.purgeGoalNote(payload['id'] as String);
+
+          case 'upsert_breathing_sequence':
+            await client
+                .from('breathing_sequences')
+                .upsert(payload, onConflict: 'id');
+            await _db.markBreathingSequenceSynced(payload['id'] as String);
+          case 'delete_breathing_sequence':
+            await client
+                .from('breathing_sequences')
+                .delete()
+                .eq('id', payload['id'] as String);
+            await _db.purgeBreathingSequence(payload['id'] as String);
+          case 'insert_breathing_session':
+            await client
+                .from('breathing_sessions')
+                .upsert(payload, onConflict: 'id');
+            await _db.markBreathingSessionSynced(payload['id'] as String);
+          case 'insert_meditation_session':
+            // Plain row insert (not the XP-awarding RPC): XP/DP reach the
+            // server via the pending-XP flush, so awarding here would double.
+            await client
+                .from('meditation_logs')
+                .upsert(payload, onConflict: 'id');
+            await _db.markMeditationSessionSynced(payload['id'] as String);
+          case 'upsert_meditation_preset':
+            await client
+                .from('meditation_presets')
+                .upsert(payload, onConflict: 'id');
+            await _db.upsertMeditationPreset(LocalMeditationPresetsCompanion(
+                id: Value(payload['id'] as String),
+                synced: const Value(true)));
+          case 'delete_meditation_preset':
+            await client
+                .from('meditation_presets')
+                .delete()
+                .eq('id', payload['id'] as String);
+
+          // ── Habit archive / restore ───────────────────────────────────────
+          case 'archive_habit':
+            await client
+                .from('habits')
+                .update({'is_archived': true})
+                .eq('id', payload['id'] as String)
+                .eq('user_id', userId);
+          case 'restore_habit':
+            await client
+                .from('habits')
+                .update({'is_archived': false})
+                .eq('id', payload['id'] as String)
+                .eq('user_id', userId);
+
+          // ── Task recurrence stop ──────────────────────────────────────────
+          case 'end_recurrence':
+            await client
+                .from('planning_tasks')
+                .update({'recurrence_rule': null})
+                .eq('id', payload['id'] as String);
+            await _db.updatePlanningTask(payload['id'] as String,
+                const LocalPlanningTasksCompanion(synced: Value(true)));
+
+          // ── Metric-milestone measurements ─────────────────────────────────
+          case 'insert_milestone_log':
+            await client.from('milestone_logs').upsert({
+              'id': payload['id'],
+              'milestone_id': payload['milestone_id'],
+              'user_id': payload['user_id'],
+              'value': payload['value'],
+              'recorded_at': payload['recorded_at'],
+            }, onConflict: 'id');
+            await client
+                .from('milestones')
+                .update({'current_value': payload['value']})
+                .eq('id', payload['milestone_id'] as String);
+            await _db.insertMilestoneLog(LocalMilestoneLogsCompanion(
+                id: Value(payload['id'] as String),
+                synced: const Value(true)));
+          case 'delete_milestone_log':
+            await client
+                .from('milestone_logs')
+                .delete()
+                .eq('id', payload['id'] as String);
+            // Re-push the milestone's current value from the local source of
+            // truth (already recomputed from the remaining logs on delete).
+            final mlMilestoneId = payload['milestone_id'] as String;
+            final mlLocal = await _db.getMilestone(mlMilestoneId);
+            await client
+                .from('milestones')
+                .update({'current_value': mlLocal?.currentValue})
+                .eq('id', mlMilestoneId);
+
+          // ── Tactical-map node positions ───────────────────────────────────
+          case 'save_map_positions':
+            await client
+                .from('goals')
+                .update({'map_positions': payload['map_positions']})
+                .eq('id', payload['id'] as String)
+                .eq('user_id', userId);
+            await _db.updateGoal(payload['id'] as String,
+                const LocalGoalsCompanion(synced: Value(true)));
+
           default:
+            // Unknown op: do NOT delete it (that would silently lose the user's
+            // change). Keep it for retry — it surfaces via lastError and is
+            // eventually purged by the 10-attempt dead-letter cap.
             debugPrint(
-                'SiE Sync: unknown op ${op.operationType}');
+                'SiE Sync: unknown op ${op.operationType} — keeping for retry');
+            await _db.incrementSyncAttempts(
+                op.id, 'unknown op type: ${op.operationType}');
+            continue;
         }
         await _db.deleteSyncOp(op.id);
       } catch (e) {

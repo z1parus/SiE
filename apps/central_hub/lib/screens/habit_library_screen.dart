@@ -20,28 +20,28 @@ class _HabitLibraryScreenState extends ConsumerState<HabitLibraryScreen> {
     return Color(int.tryParse('FF$h', radix: 16) ?? 0xFF5AADA0);
   }
 
-  Future<void> _addTemplate(HabitTemplate t) async {
+  Future<void> _addTemplate(HabitTemplate tpl) async {
     SieHaptics.success();
-    setState(() => _added.add(t.id));
+    setState(() => _added.add(tpl.id));
     await ref.read(habitsProvider.notifier).addHabit(
-          title: t.name,
-          description: t.description,
-          color: t.color,
-          icon: t.icon,
-          schedule: t.defaultSchedule,
-          kind: t.kind,
-          targetValue: t.targetValue,
-          unit: t.unit,
-          step: t.step,
-          area: t.area,
-          polarity: t.polarity,
+          title: tpl.name,
+          description: tpl.description,
+          color: tpl.color,
+          icon: tpl.icon,
+          schedule: tpl.defaultSchedule,
+          kind: tpl.kind,
+          targetValue: tpl.targetValue,
+          unit: tpl.unit,
+          step: tpl.step,
+          area: tpl.area,
+          polarity: tpl.polarity,
         );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
-        content: Text('«${t.name}» добавлена'),
+        content: Text(t.habitLibrary.snackbar.added(name: tpl.name)),
       ),
     );
   }
@@ -74,7 +74,7 @@ class _HabitLibraryScreenState extends ConsumerState<HabitLibraryScreen> {
                       text: TextSpan(
                         children: [
                           TextSpan(
-                            text: 'HABIT ',
+                            text: t.habitLibrary.title.first,
                             style: TextStyle(
                               color: accent,
                               fontSize: 20,
@@ -83,7 +83,7 @@ class _HabitLibraryScreenState extends ConsumerState<HabitLibraryScreen> {
                             ),
                           ),
                           TextSpan(
-                            text: 'LIBRARY',
+                            text: t.habitLibrary.title.second,
                             style: Theme.of(context)
                                 .textTheme
                                 .headlineLarge
@@ -103,7 +103,7 @@ class _HabitLibraryScreenState extends ConsumerState<HabitLibraryScreen> {
                 child: templates.when(
                   loading: () => const Center(child: CircularProgressIndicator()),
                   error: (e, _) => Center(
-                    child: Text('Не удалось загрузить библиотеку',
+                    child: Text(t.habitLibrary.loadError,
                         style: TextStyle(color: sc.textSecondary)),
                   ),
                   data: (list) {
@@ -121,7 +121,7 @@ class _HabitLibraryScreenState extends ConsumerState<HabitLibraryScreen> {
                         padding: const EdgeInsets.only(bottom: 8, top: 12),
                         child: Text(
                           area == null
-                              ? '— БЕЗ СФЕРЫ'
+                              ? t.habitLibrary.noArea
                               : '${area.icon} ${area.label.toUpperCase()}',
                           style: TextStyle(
                             color: sc.textSecondary.withValues(alpha: 0.55),
@@ -249,7 +249,7 @@ class _TemplateCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    added ? 'ДОБАВЛЕНО' : 'ДОБАВИТЬ',
+                    added ? t.habitLibrary.card.added : t.habitLibrary.card.add,
                     style: TextStyle(
                       color: added
                           ? sc.textSecondary.withValues(alpha: 0.6)

@@ -1,0 +1,24 @@
+{
+  "appBarTitle": "Reminders",
+  "errorLoading": "Error",
+  "master": {
+    "title": "Reminders enabled",
+    "subtitle": "Local notifications about tasks, milestones and deadlines",
+    "disabledHint": "Turn on to receive reminders. System permission is required."
+  },
+  "dailyDigest": {
+    "title": "Daily digest",
+    "subtitle": "Morning overview of today's tasks",
+    "timeLabel": "Digest time"
+  },
+  "stagnation": {
+    "title": "Nudge when stuck",
+    "subtitle": "Notify if a goal hasn't moved for several days"
+  },
+  "weeklyReview": {
+    "title": "Weekly review",
+    "subtitle": "Weekly invitation to wrap things up",
+    "dayOfWeek": "Day of week",
+    "reviewTime": "Review time"
+  }
+}

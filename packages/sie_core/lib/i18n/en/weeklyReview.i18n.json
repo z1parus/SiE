@@ -1,0 +1,44 @@
+{
+  "title": "Weekly review",
+  "loadError": "Couldn't gather this week's data",
+  "done": "DONE",
+  "summary": {
+    "title": "Week's results",
+    "tasksDone": "tasks done",
+    "weeksInRow": "weeks in a row",
+    "quietWeek": "A quiet week is fine. Let's reset and set a focus.",
+    "greatWeek": "Great work this week. Let's pause and look back."
+  },
+  "stuck": {
+    "title": "Stuck and overdue",
+    "allClear": "Nothing stuck — all clear! 🎯",
+    "losingPace": "LOSING PACE",
+    "overdue": "OVERDUE ({n})",
+    "andMore": "…and {n} more",
+    "rescheduleAll": "Reschedule everything to today",
+    "rescheduled": "Tasks rescheduled: {n}"
+  },
+  "focus": {
+    "title": "Weekly focus",
+    "subtitle": "Pick up to 3 goals — they'll be marked ⭐ in the Agenda.",
+    "noActiveGoals": "No active goals."
+  },
+  "reflection": {
+    "title": "Key takeaway",
+    "subtitle": "One thought worth taking from this week (optional).",
+    "hint": "For example: fewer tasks, more depth…"
+  },
+  "reward": {
+    "title": "REVIEW COMPLETE",
+    "subtitle": "The week is processed. The course is set."
+  },
+  "alreadyDone": {
+    "title": "This week's review is already done",
+    "streak": "Review streak: {n} wk."
+  },
+  "nav": {
+    "back": "Back",
+    "next": "Next",
+    "finish": "Finish review"
+  }
+}

@@ -267,11 +267,7 @@ class _MomentumCard extends ConsumerWidget {
   final SieColors sc;
 
   String _fmtShortDate(DateTime d) {
-    const months = [
-      'янв', 'фев', 'мар', 'апр', 'мая', 'июн',
-      'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'
-    ];
-    return '${d.day} ${months[d.month - 1]}';
+    return '${d.day} ${t.goalStats.monthsShort[d.month - 1]}';
   }
 
   @override
@@ -288,7 +284,7 @@ class _MomentumCard extends ConsumerWidget {
               Icon(Icons.show_chart, size: 14, color: sc.textSecondary),
               const SizedBox(width: 6),
               Text(
-                'ИМПУЛЬС',
+                t.goalStats.momentum.title,
                 style: TextStyle(
                   color: sc.textSecondary,
                   fontSize: 10,
@@ -345,7 +341,7 @@ class _MomentumCard extends ConsumerWidget {
               ),
             ),
             error: (_, __) => Text(
-              'Не удалось загрузить аналитику темпа.',
+              t.goalStats.momentum.loadError,
               style: TextStyle(color: sc.textSecondary, fontSize: 12),
             ),
             data: (m) {
@@ -359,8 +355,8 @@ class _MomentumCard extends ConsumerWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Собираем данные о темпе… '
-                          '(${m.snapshots.length}/3 замера прогресса)',
+                          t.goalStats.momentum
+                              .collecting(count: m.snapshots.length),
                           style: TextStyle(
                               color: sc.textSecondary, fontSize: 12),
                         ),
@@ -388,8 +384,8 @@ class _MomentumCard extends ConsumerWidget {
                   ),
                   const SizedBox(height: 14),
                   _LabelValueRow(
-                    label: 'Темп (за 7 дней)',
-                    value: '$velStr прогресса',
+                    label: t.goalStats.momentum.paceLabel,
+                    value: t.goalStats.momentum.paceValue(value: velStr),
                     sc: sc,
                     valueColor: vel > 0
                         ? sc.success
@@ -397,21 +393,21 @@ class _MomentumCard extends ConsumerWidget {
                   ),
                   if (m.projectedCompletion != null)
                     _LabelValueRow(
-                      label: 'Прогноз финиша',
+                      label: t.goalStats.momentum.projection,
                       value: _fmtShortDate(m.projectedCompletion!),
                       sc: sc,
                       valueColor: _projectionColor(m),
                     )
                   else
                     _LabelValueRow(
-                      label: 'Прогноз финиша',
-                      value: 'темп нулевой',
+                      label: t.goalStats.momentum.projection,
+                      value: t.goalStats.momentum.projectionZero,
                       sc: sc,
                       valueColor: sc.textSecondary,
                     ),
                   if (m.daysVsDeadline != null)
                     _LabelValueRow(
-                      label: 'Относительно дедлайна',
+                      label: t.goalStats.momentum.vsDeadline,
                       value: _deadlineDeltaLabel(m.daysVsDeadline!),
                       sc: sc,
                       valueColor: m.daysVsDeadline! >= 0
@@ -422,18 +418,21 @@ class _MomentumCard extends ConsumerWidget {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        _LegendDot(color: goal.color, sc: sc, label: 'факт'),
+                        _LegendDot(
+                            color: goal.color,
+                            sc: sc,
+                            label: t.goalStats.momentum.legendFact),
                         const SizedBox(width: 12),
                         _LegendDot(
                             color: sc.textSecondary,
                             sc: sc,
-                            label: 'идеал',
+                            label: t.goalStats.momentum.legendIdeal,
                             dashed: true),
                         const SizedBox(width: 12),
                         _LegendDot(
                             color: sc.danger,
                             sc: sc,
-                            label: 'дедлайн',
+                            label: t.goalStats.momentum.legendDeadline,
                             dashed: true),
                       ],
                     ),
@@ -456,9 +455,9 @@ class _MomentumCard extends ConsumerWidget {
   }
 
   String _deadlineDeltaLabel(int days) {
-    if (days == 0) return 'точно в срок';
-    if (days > 0) return 'на $days дн. раньше';
-    return 'на ${days.abs()} дн. позже';
+    if (days == 0) return t.goalStats.momentum.deltaOnTime;
+    if (days > 0) return t.goalStats.momentum.deltaEarlier(n: days);
+    return t.goalStats.momentum.deltaLater(n: days.abs());
   }
 }
 
@@ -529,25 +528,29 @@ class _TasksCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _CardTitle(title: 'Задачи', icon: Icons.task_alt_outlined, sc: sc),
+          _CardTitle(
+              title: t.goalStats.tasks.title,
+              icon: Icons.task_alt_outlined,
+              sc: sc),
           const SizedBox(height: 12),
           Row(children: [
             Expanded(
-                child: _StatCell(label: 'Всего', value: '$total', sc: sc)),
+                child: _StatCell(
+                    label: t.goalStats.tasks.total, value: '$total', sc: sc)),
             Expanded(
-                child:
-                    _StatCell(label: 'Выполнено', value: '$done', sc: sc)),
+                child: _StatCell(
+                    label: t.goalStats.tasks.done, value: '$done', sc: sc)),
           ]),
           const SizedBox(height: 8),
           Row(children: [
             Expanded(
                 child: _StatCell(
-                    label: 'Лёгкие (×1)',
+                    label: t.goalStats.tasks.light,
                     value: '$lightDone/$lightTotal',
                     sc: sc)),
             Expanded(
                 child: _StatCell(
-                    label: 'Средние (×3)',
+                    label: t.goalStats.tasks.medium,
                     value: '$medDone/$medTotal',
                     sc: sc)),
           ]),
@@ -555,12 +558,12 @@ class _TasksCard extends StatelessWidget {
           Row(children: [
             Expanded(
                 child: _StatCell(
-                    label: 'Тяжёлые (×5)',
+                    label: t.goalStats.tasks.heavy,
                     value: '$heavyDone/$heavyTotal',
                     sc: sc)),
             Expanded(
                 child: _StatCell(
-                    label: 'Просроченных',
+                    label: t.goalStats.tasks.overdue,
                     value: '$overdueCount',
                     sc: sc,
                     valueColor: overdueCount > 0 ? sc.danger : null)),
@@ -577,7 +580,7 @@ class _TasksCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '$done из $total',
+            t.goalStats.tasks.doneOfTotal(done: done, total: total),
             style: TextStyle(color: sc.textSecondary, fontSize: 11),
           ),
         ],
@@ -608,24 +611,34 @@ class _SubGoalsCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _CardTitle(
-              title: 'Этапы', icon: Icons.account_tree_outlined, sc: sc),
+              title: t.goalStats.subGoals.title,
+              icon: Icons.account_tree_outlined,
+              sc: sc),
           const SizedBox(height: 12),
           Row(children: [
             Expanded(
                 child: _StatCell(
-                    label: 'Всего этапов', value: '$totalAll', sc: sc)),
+                    label: t.goalStats.subGoals.totalStages,
+                    value: '$totalAll',
+                    sc: sc)),
             Expanded(
                 child: _StatCell(
-                    label: 'Завершено', value: '$completedAll', sc: sc)),
+                    label: t.goalStats.subGoals.completed,
+                    value: '$completedAll',
+                    sc: sc)),
           ]),
           const SizedBox(height: 8),
           Row(children: [
             Expanded(
                 child: _StatCell(
-                    label: 'Верхний уровень', value: '$topLevel', sc: sc)),
+                    label: t.goalStats.subGoals.topLevel,
+                    value: '$topLevel',
+                    sc: sc)),
             Expanded(
-                child:
-                    _StatCell(label: 'Вложенных', value: '$nested', sc: sc)),
+                child: _StatCell(
+                    label: t.goalStats.subGoals.nested,
+                    value: '$nested',
+                    sc: sc)),
           ]),
         ],
       ),
@@ -662,22 +675,28 @@ class _MilestonesCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _CardTitle(
-              title: 'Контрольные точки',
+              title: t.goalStats.milestones.title,
               icon: Icons.flag_outlined,
               sc: sc),
           const SizedBox(height: 12),
           Row(children: [
             Expanded(
-                child:
-                    _StatCell(label: 'Всего', value: '$total', sc: sc)),
+                child: _StatCell(
+                    label: t.goalStats.milestones.total,
+                    value: '$total',
+                    sc: sc)),
             Expanded(
                 child: _StatCell(
-                    label: 'Завершено', value: '$completed', sc: sc)),
+                    label: t.goalStats.milestones.completed,
+                    value: '$completed',
+                    sc: sc)),
           ]),
           if (nearest != null) ...[
             const SizedBox(height: 10),
             Text(
-              'Ближайшая: ${nearest.name} (${_formatDate(nearest.targetDate!)})',
+              t.goalStats.milestones.nearest(
+                  name: nearest.name,
+                  date: _formatDate(nearest.targetDate!)),
               style: TextStyle(color: sc.textSecondary, fontSize: 12),
             ),
           ],
@@ -704,13 +723,13 @@ class _TimeCard extends StatelessWidget {
     final String daysLeftValue;
     final Color? daysLeftColor;
     if (daysLeft == null) {
-      daysLeftValue = '—';
+      daysLeftValue = t.goalStats.time.dash;
       daysLeftColor = null;
     } else if (daysLeft < 0) {
-      daysLeftValue = 'просрочено';
+      daysLeftValue = t.goalStats.time.overdue;
       daysLeftColor = sc.danger;
     } else {
-      daysLeftValue = '$daysLeft дн.';
+      daysLeftValue = t.goalStats.time.days(n: daysLeft);
       daysLeftColor = null;
     }
 
@@ -720,28 +739,32 @@ class _TimeCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _CardTitle(
-              title: 'Время', icon: Icons.schedule_outlined, sc: sc),
+              title: t.goalStats.time.title,
+              icon: Icons.schedule_outlined,
+              sc: sc),
           const SizedBox(height: 12),
           _LabelValueRow(
-              label: 'Создана',
+              label: t.goalStats.time.created,
               value: _formatDate(goal.createdAt),
               sc: sc),
           _LabelValueRow(
-              label: 'Активна уже', value: '$daysActive дн.', sc: sc),
+              label: t.goalStats.time.activeFor,
+              value: t.goalStats.time.days(n: daysActive),
+              sc: sc),
           _LabelValueRow(
-              label: 'Обновлена',
+              label: t.goalStats.time.updated,
               value: goal.updatedAt != null
                   ? _formatDate(goal.updatedAt!)
-                  : '—',
+                  : t.goalStats.time.dash,
               sc: sc),
           _LabelValueRow(
-              label: 'Дедлайн',
+              label: t.goalStats.time.deadline,
               value: goal.deadline != null
                   ? _formatDate(goal.deadline!)
-                  : 'не задан',
+                  : t.goalStats.time.notSet,
               sc: sc),
           _LabelValueRow(
-              label: 'Осталось дней',
+              label: t.goalStats.time.daysLeft,
               value: daysLeftValue,
               sc: sc,
               valueColor: daysLeftColor),
@@ -769,7 +792,9 @@ class _FocusTimeCard extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _CardTitle(
-              title: 'Время в фокусе', icon: Icons.timer_outlined, sc: sc),
+              title: t.goalStats.focus.title,
+              icon: Icons.timer_outlined,
+              sc: sc),
           const SizedBox(height: 12),
           statsAsync.when(
             loading: () => SizedBox(
@@ -784,13 +809,12 @@ class _FocusTimeCard extends ConsumerWidget {
                 ),
               ),
             ),
-            error: (_, __) => Text('—',
+            error: (_, __) => Text(t.goalStats.time.dash,
                 style: TextStyle(color: sc.textSecondary, fontSize: 13)),
             data: (stats) {
               if (stats.totalSeconds <= 0) {
                 return Text(
-                  'Пока нет фокус-сессий по этой цели. Запусти ▶ на задаче, '
-                  'чтобы засчитать время.',
+                  t.goalStats.focus.empty,
                   style: TextStyle(
                       color: sc.textSecondary, fontSize: 12, height: 1.4),
                 );
@@ -811,7 +835,7 @@ class _FocusTimeCard extends ConsumerWidget {
                       const SizedBox(width: 8),
                       Padding(
                         padding: const EdgeInsets.only(bottom: 3),
-                        child: Text('всего вложено',
+                        child: Text(t.goalStats.focus.totalInvested,
                             style: TextStyle(
                                 color: sc.textSecondary, fontSize: 12)),
                       ),
@@ -819,14 +843,14 @@ class _FocusTimeCard extends ConsumerWidget {
                   ),
                   if (stats.topTasks.isNotEmpty) ...[
                     const SizedBox(height: 12),
-                    Text('ТОП ЗАДАЧ ПО ВРЕМЕНИ',
+                    Text(t.goalStats.focus.topTasks,
                         style: TextStyle(
                             color: sc.textSecondary,
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.2)),
                     const SizedBox(height: 8),
-                    ...stats.topTasks.map((t) => Padding(
+                    ...stats.topTasks.map((task) => Padding(
                           padding: const EdgeInsets.symmetric(vertical: 4),
                           child: Row(
                             children: [
@@ -835,7 +859,7 @@ class _FocusTimeCard extends ConsumerWidget {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  t.taskName,
+                                  task.taskName,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -843,7 +867,7 @@ class _FocusTimeCard extends ConsumerWidget {
                                 ),
                               ),
                               Text(
-                                formatFocusDuration(t.seconds),
+                                formatFocusDuration(task.seconds),
                                 style: TextStyle(
                                     color: sc.textSecondary,
                                     fontSize: 12,
@@ -886,7 +910,7 @@ class _HabitsCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _CardTitle(
-              title: 'Привязанные привычки',
+              title: t.goalStats.habits.title,
               icon: Icons.link,
               sc: sc),
           const SizedBox(height: 12),
@@ -901,7 +925,7 @@ class _HabitsCard extends StatelessWidget {
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Text(
-                  'Привычка удалена',
+                  t.goalStats.habits.deleted,
                   style: TextStyle(
                       color: sc.textSecondary, fontSize: 13),
                 ),
@@ -984,7 +1008,7 @@ class _AdviceCard extends StatelessWidget {
                   color: sc.warning, size: 16),
               const SizedBox(width: 8),
               Text(
-                'СОВЕТЫ',
+                t.goalStats.advice.title,
                 style: TextStyle(
                   color: sc.warning,
                   fontSize: 10,
@@ -1153,10 +1177,10 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (status) {
-      'completed' => ('ЗАВЕРШЕНА', const Color(0xFF5AADA0)),
-      'frozen'    => ('ЗАМОРОЖЕНА', const Color(0xFF6A8ED8)),
-      'failed'    => ('ПРОВАЛЕНА', const Color(0xFFE03050)),
-      _           => ('АКТИВНА', const Color(0xFF5AADA0)),
+      'completed' => (t.goalStats.status.completed, const Color(0xFF5AADA0)),
+      'frozen'    => (t.goalStats.status.frozen, const Color(0xFF6A8ED8)),
+      'failed'    => (t.goalStats.status.failed, const Color(0xFFE03050)),
+      _           => (t.goalStats.status.active, const Color(0xFF5AADA0)),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),

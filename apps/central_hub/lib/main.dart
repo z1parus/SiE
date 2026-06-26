@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:sie_core/sie_core.dart';
@@ -11,6 +12,7 @@ import 'screens/focus_protocol_screen.dart';
 import 'screens/habit_tracker_screen.dart';
 import 'screens/main_navigation_shell.dart';
 import 'screens/meditation_hub_screen.dart';
+import 'screens/offline_shell.dart';
 import 'screens/planning_screen.dart';
 import 'screens/splash_screen.dart';
 
@@ -59,6 +61,9 @@ void main() async {
     url: 'https://bvqlqvzcqfgojzxztvrm.supabase.co',
     anonKey: 'sb_publishable_x54jsqL5s9ohcOJoyOTklw_5G8lbd9l',
   );
+  // Restore the saved language (or match the device, falling back to English)
+  // before the first frame so the UI renders in the right language immediately.
+  await initAppLocale();
   await NotificationService.instance.init(onTap: _handleNotificationTap);
   if (!kIsWeb) {
     try {
@@ -71,7 +76,7 @@ void main() async {
       debugPrint('SiE Widgets: init skipped — $e');
     }
   }
-  runApp(const ProviderScope(child: SieApp()));
+  runApp(TranslationProvider(child: const ProviderScope(child: SieApp())));
 }
 
 /// Routes a `sie://widget/<host>` deep-link (whole-widget tap) into the app.
@@ -141,6 +146,9 @@ class _SieAppState extends ConsumerState<SieApp> {
   @override
   void initState() {
     super.initState();
+    // Warm the startup reachability probe now so it resolves during the splash
+    // animation instead of adding its latency after the splash dismisses.
+    ref.read(appModeProvider);
     if (!kIsWeb) _initWidgetDeepLinks();
   }
 
@@ -176,6 +184,9 @@ class _SieAppState extends ConsumerState<SieApp> {
   Widget build(BuildContext context) {
     final sieMode = ref.watch(sieThemeModeProvider).valueOrNull
         ?? SieThemeMode.classicDark;
+    // Drive locale from the provider so switching language rebuilds the whole
+    // tree (and the global `t` accessor re-reads) in the chosen language.
+    final locale = ref.watch(localeProvider);
 
     return MaterialApp(
       title: 'SiE',
@@ -183,6 +194,9 @@ class _SieAppState extends ConsumerState<SieApp> {
       navigatorKey: rootNavigatorKey,
       navigatorObservers: [_routeTracker],
       theme: SieTheme.themeDataFor(sieMode),
+      locale: locale.flutterLocale,
+      supportedLocales: AppLocale.values.map((l) => l.flutterLocale).toList(),
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       builder: kIsWeb ? _webConstraint : null,
       home: !_launchComplete
           ? SieSplashScreen(
@@ -195,8 +209,22 @@ class _SieAppState extends ConsumerState<SieApp> {
   Widget _authGate() {
     final authAsync = ref.watch(authStateProvider);
     return authAsync.when(
-      data: (isAuthenticated) =>
-          isAuthenticated ? const MainNavigationShell() : const AuthScreen(),
+      data: (isAuthenticated) {
+        if (!isAuthenticated) return const AuthScreen();
+        // Authenticated (session restored from local storage even offline).
+        // Route to the full shell only when the backend was reachable at
+        // startup; otherwise run the reduced offline shell.
+        final modeAsync = ref.watch(appModeProvider);
+        return modeAsync.when(
+          data: (mode) => mode == AppMode.offline
+              ? const OfflineShell()
+              : const MainNavigationShell(),
+          loading: () => const _LoadingScreen(),
+          // Probe failed unexpectedly — assume online and let the offline-first
+          // providers degrade gracefully if it's actually down.
+          error: (_, _) => const MainNavigationShell(),
+        );
+      },
       loading: () => const _LoadingScreen(),
       error: (_, _) => const AuthScreen(),
     );

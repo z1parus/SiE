@@ -1,0 +1,40 @@
+{
+  "category": {
+    "learning": "Learning",
+    "health": "Health",
+    "project": "Project",
+    "lifestyle": "Lifestyle",
+    "discipline": "Discipline",
+    "other": "Other"
+  },
+  "title": "Mission templates",
+  "loadError": "Failed to load templates",
+  "empty": "No templates available yet",
+  "myTemplates": "MY TEMPLATES",
+  "card": {
+    "stages": "{n} stages",
+    "tasks": "{n} tasks",
+    "milestones": "{n} milestones",
+    "stagesTasks": "{stages} stages · {tasks} tasks",
+    "milestonesSuffix": " · {n} milestones"
+  },
+  "delete": {
+    "title": "Delete template?",
+    "message": "«{name}» will be removed from your templates.",
+    "cancel": "Cancel",
+    "confirm": "Delete"
+  },
+  "preview": {
+    "structure": "STRUCTURE",
+    "milestones": "MILESTONES",
+    "metricTarget": "{name} (target: {value}{unit})",
+    "create": "CREATE MISSION"
+  },
+  "createSheet": {
+    "header": "CREATE FROM TEMPLATE",
+    "nameHint": "Mission name",
+    "deadlineSet": "Deadline: {date}",
+    "deadlineEmpty": "Set deadline (optional)",
+    "submit": "DEPLOY MISSION"
+  }
+}

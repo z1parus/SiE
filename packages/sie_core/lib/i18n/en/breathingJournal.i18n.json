@@ -1,0 +1,18 @@
+{
+  "header": {
+    "title": "Practice journal"
+  },
+  "empty": {
+    "loadError": "Failed to load the practice journal",
+    "noSessions": "Your breathing practices will appear here.\nComplete your first session to start the journal."
+  },
+  "metrics": {
+    "holdLabel": "hold",
+    "timeLabel": "time"
+  },
+  "reflection": {
+    "calmness": "Calmness",
+    "confidence": "Confidence",
+    "noRating": "No state rating"
+  }
+}

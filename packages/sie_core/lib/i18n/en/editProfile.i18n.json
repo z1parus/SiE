@@ -1,0 +1,63 @@
+{
+  "topBar": {
+    "title": "EDIT PROFILE",
+    "save": "SAVE"
+  },
+  "snack": {
+    "usernameEmpty": "USERNAME CANNOT BE EMPTY",
+    "noConnection": "Check your internet connection",
+    "passwordTooShort": "PASSWORD MUST BE AT LEAST 6 CHARACTERS",
+    "passwordsDoNotMatch": "PASSWORDS DO NOT MATCH",
+    "passwordUpdated": "PASSWORD UPDATED"
+  },
+  "identity": {
+    "header": "IDENTITY",
+    "username": "USERNAME",
+    "fullName": "FULL NAME"
+  },
+  "security": {
+    "header": "SECURITY",
+    "email": "EMAIL",
+    "readOnly": "READ-ONLY",
+    "password": "PASSWORD"
+  },
+  "customization": {
+    "header": "CUSTOMIZATION",
+    "appearanceLabel": "APPEARANCE SETUP",
+    "appearanceSubtitle": "Avatar frames, profile backgrounds and stat styles",
+    "interfaceHubLabel": "INTERFACE HUB",
+    "interfaceHubSubtitle": "Frames, backgrounds and styles for Design Points"
+  },
+  "interfaceMode": {
+    "header": "INTERFACE MODE",
+    "subtitle": "GRAPHICS LOAD AND VISUAL STYLE"
+  },
+  "theme": {
+    "classicDarkLabel": "CLASSIC DARK",
+    "classicDarkDescription": "Anthracite + gold, no shaders",
+    "classicLightLabel": "CLASSIC LIGHT",
+    "classicLightDescription": "Light background + teal, no shaders"
+  },
+  "language": {
+    "header": "LANGUAGE",
+    "subtitle": "APPLICATION INTERFACE LANGUAGE",
+    "ruLabel": "РУССКИЙ",
+    "ruDescription": "Russian interface",
+    "enLabel": "ENGLISH",
+    "enDescription": "English interface"
+  },
+  "timezone": {
+    "header": "TIME ZONE",
+    "subtitle": "TIME SETUP FOR THE DAILY VANGUARD",
+    "customZone": "Custom zone",
+    "sheetTitle": "SELECT TIME ZONE"
+  },
+  "passwordSheet": {
+    "title": "CHANGE PASSWORD",
+    "newPassword": "NEW PASSWORD",
+    "confirmPassword": "CONFIRM PASSWORD",
+    "updatePassword": "UPDATE PASSWORD"
+  },
+  "passwordValue": "••••••••",
+  "noConnectionMessage": "No internet connection"
+}

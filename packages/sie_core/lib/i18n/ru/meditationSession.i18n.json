@@ -1,0 +1,51 @@
+{
+  "pauseBadge": "ПАУЗА",
+  "darkMode": {
+    "exitLabel": "Выйти из тёмного режима",
+    "tapToExit": "Коснитесь, чтобы выйти"
+  },
+  "abandon": {
+    "title": "Прервать сессию?",
+    "message": "Прогресс будет частично засчитан если прошло более 60 секунд.",
+    "continueBtn": "Продолжить",
+    "stop": "Прервать"
+  },
+  "breathingCue": {
+    "inhale": "ВДОХ",
+    "holdIn": "ЗАДЕРЖКА",
+    "exhale": "ВЫДОХ",
+    "holdOut": "ПАУЗА",
+    "secondsRemaining": "{n}с"
+  },
+  "phase": {
+    "breathing": "ДЫХАНИЕ",
+    "transition": "ПЕРЕХОД",
+    "meditating": "МЕДИТАЦИЯ",
+    "reflection": "РЕФЛЕКСИЯ",
+    "complete": "ЗАВЕРШЕНО"
+  },
+  "mixer": {
+    "music": "МУЗЫКА",
+    "ambient": "AMBIENT",
+    "voice": "ГОЛОС",
+    "dimScreen": "Экран затемнён"
+  },
+  "reflection": {
+    "preparing": "Подготовка\nк рефлексии…"
+  },
+  "completion": {
+    "title": "СЕССИЯ ЗАВЕРШЕНА",
+    "durationMinutes": "{n} мин",
+    "xpGained": "+{xp} XP",
+    "dpGained": "+{dp} DP",
+    "howDoYouFeel": "Как вы себя чувствуете?",
+    "done": "ГОТОВО",
+    "mood": {
+      "veryBad": "Очень плохо",
+      "bad": "Плохо",
+      "neutral": "Нейтрально",
+      "good": "Хорошо",
+      "great": "Отлично"
+    }
+  }
+}

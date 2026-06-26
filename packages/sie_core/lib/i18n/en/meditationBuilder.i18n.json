@@ -1,0 +1,56 @@
+{
+  "header": {
+    "edit": "EDITING",
+    "create": "NEW PRESET"
+  },
+  "leaveDialog": {
+    "title": "Leave the builder?",
+    "message": "The unsaved preset will be lost.",
+    "confirm": "Leave"
+  },
+  "nav": {
+    "back": "← Back",
+    "step": "Step {current}/{total}",
+    "next": "Next →",
+    "save": "SAVE"
+  },
+  "name": {
+    "emptyError": "Enter a preset name",
+    "label": "Preset name *",
+    "hint": "For example: Morning meditation",
+    "descLabel": "Description (optional)",
+    "descHint": "Brief session description"
+  },
+  "chain": {
+    "structureLabel": "STRUCTURE",
+    "meditationOnly": "Meditation\nonly",
+    "breathingPlusMeditation": "Breathing +\nMeditation",
+    "breathingLabel": "BREATHING",
+    "meditationLabel": "MEDITATION",
+    "duration": "Duration",
+    "minUnit": "min"
+  },
+  "audio": {
+    "volumeLabel": "VOLUME",
+    "music": "MUSIC",
+    "ambient": "AMBIENT",
+    "voice": "VOICE"
+  },
+  "affirmations": {
+    "unavailable": "Affirmation packs unavailable",
+    "packLabel": "AFFIRMATION PACK",
+    "none": "No affirmations",
+    "intervalLabel": "INTERVAL",
+    "every": "Every",
+    "secUnit": "sec",
+    "previewLabel": "PREVIEW",
+    "morePhrases(plural)": {
+      "one": "and {n} more phrase...",
+      "other": "and {n} more phrases..."
+    }
+  },
+  "patterns": {
+    "box": "Box 4×4",
+    "coherence": "Coherence"
+  }
+}

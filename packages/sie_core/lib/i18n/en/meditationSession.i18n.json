@@ -1,0 +1,51 @@
+{
+  "pauseBadge": "PAUSED",
+  "darkMode": {
+    "exitLabel": "Exit dark mode",
+    "tapToExit": "Tap to exit"
+  },
+  "abandon": {
+    "title": "Stop the session?",
+    "message": "Progress will be partially counted if more than 60 seconds have passed.",
+    "continueBtn": "Continue",
+    "stop": "Stop"
+  },
+  "breathingCue": {
+    "inhale": "INHALE",
+    "holdIn": "HOLD",
+    "exhale": "EXHALE",
+    "holdOut": "PAUSE",
+    "secondsRemaining": "{n}s"
+  },
+  "phase": {
+    "breathing": "BREATHING",
+    "transition": "TRANSITION",
+    "meditating": "MEDITATION",
+    "reflection": "REFLECTION",
+    "complete": "COMPLETE"
+  },
+  "mixer": {
+    "music": "MUSIC",
+    "ambient": "AMBIENT",
+    "voice": "VOICE",
+    "dimScreen": "Dim screen"
+  },
+  "reflection": {
+    "preparing": "Preparing\nfor reflection…"
+  },
+  "completion": {
+    "title": "SESSION COMPLETE",
+    "durationMinutes": "{n} min",
+    "xpGained": "+{xp} XP",
+    "dpGained": "+{dp} DP",
+    "howDoYouFeel": "How do you feel?",
+    "done": "DONE",
+    "mood": {
+      "veryBad": "Very bad",
+      "bad": "Bad",
+      "neutral": "Neutral",
+      "good": "Good",
+      "great": "Great"
+    }
+  }
+}

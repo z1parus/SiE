@@ -1,0 +1,25 @@
+{
+  "today": "Today",
+  "yesterday": "Yesterday",
+  "months": [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  ],
+  "moodLabels": [
+    "Hard",
+    "So-so",
+    "Neutral",
+    "Not bad",
+    "Calm",
+    "Energized",
+    "Great"
+  ],
+  "breathsWord(plural)": {
+    "one": "breath",
+    "other": "breaths"
+  },
+  "sessionsWord(plural)": {
+    "one": "session",
+    "other": "sessions"
+  }
+}

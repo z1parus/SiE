@@ -1,0 +1,18 @@
+{
+  "appBar": {
+    "titleAccent": "HABITS ",
+    "titleRest": "OVERVIEW"
+  },
+  "rate": {
+    "week": "WEEK",
+    "month": "MONTH"
+  },
+  "sections": {
+    "discipline28Days": "DISCIPLINE · 28 DAYS",
+    "leaders": "LEADERS",
+    "lagging": "LAGGING"
+  },
+  "empty": {
+    "noHabits": "No habits added"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "header": {
+    "titlePrimary": "HALL ",
+    "titleSecondary": "OF FAME",
+    "subtitle": "СУТОЧНЫЙ АВАНГАРД · РЕЙТИНГ АКТИВНОСТИ"
+  },
+  "countdown": {
+    "label": "ДО ЗАВЕРШЕНИЯ ЦИКЛА",
+    "dailyReset": "DAILY RESET"
+  },
+  "row": {
+    "operative": "OPERATIVE",
+    "you": "YOU",
+    "level": "LVL {level}",
+    "xpToday": "XP TODAY"
+  },
+  "noConnection": "Подключение к интернету отсутствует",
+  "vanguard": {
+    "title": "ИТОГИ АВАНГАРДА",
+    "defaultUsername": "Оперативник",
+    "congrats": "Так держать, {username}! Сегодня вы вошли в тройку лучших оперативников!",
+    "startNext": "НАЧАТЬ СЛЕДУЮЩИЙ АВАНГАРД",
+    "dp": "DP"
+  },
+  "dateMonths": {
+    "m1": "января",
+    "m2": "февраля",
+    "m3": "марта",
+    "m4": "апреля",
+    "m5": "мая",
+    "m6": "июня",
+    "m7": "июля",
+    "m8": "августа",
+    "m9": "сентября",
+    "m10": "октября",
+    "m11": "ноября",
+    "m12": "декабря"
+  },
+  "dateFormat": "{day} {month} {year}"
+}
