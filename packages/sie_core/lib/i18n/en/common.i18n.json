@@ -11,6 +11,7 @@
     "confirmMessage": "Your session will end. Unsynced data is kept locally. Signing back in requires an internet connection."
   },
   "offline": {
+    "banner": "OFFLINE — changes will sync on reconnect",
     "badge": "OFFLINE MODE",
     "terminal": "PERSONAL TERMINAL",
     "level": "LEVEL {n}",
