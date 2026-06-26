@@ -690,6 +690,8 @@ class _Avatar extends ConsumerWidget {
         child: avatarUrl != null && avatarUrl!.isNotEmpty
             ? Image.network(
                 avatarUrl!,
+                width: size,
+                height: size,
                 fit: BoxFit.cover,
                 cacheWidth: 76,
                 cacheHeight: 76,

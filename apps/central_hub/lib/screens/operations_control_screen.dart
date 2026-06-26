@@ -2134,7 +2134,7 @@ class _ScreenHeader extends ConsumerWidget {
         _XpBar(
             xp: xp,
             gradientColors: gradientColors,
-            badge: _badge(xp ~/ 1000),
+            badge: _badge(xp ~/ 1000 + 1),
             c: c),
       ],
     );
@@ -2160,7 +2160,7 @@ class _XpBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme     = Theme.of(context);
-    final level     = xp ~/ 1000;
+    final level     = xp ~/ 1000 + 1;
     final xpInLevel = xp % 1000;
     final progress  = (xpInLevel / 1000.0).clamp(0.0, 1.0);
 
