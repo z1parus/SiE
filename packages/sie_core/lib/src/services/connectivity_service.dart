@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/widgets.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:http/http.dart' as http;
 import '../supabase_service.dart';
@@ -32,6 +33,7 @@ class ConnectivityService {
     late final StreamController<bool> controller;
     StreamSubscription<List<ConnectivityResult>>? sub;
     Timer? timer;
+    AppLifecycleListener? lifecycle;
     bool? last;
     var probing = false;
 
@@ -54,11 +56,16 @@ class ConnectivityService {
       onListen: () {
         sub = _connectivity.onConnectivityChanged.listen((_) => emit());
         timer = Timer.periodic(_pollInterval, (_) => emit());
+        // Re-probe the moment the app comes back to the foreground, so a
+        // connection that recovered while backgrounded clears the offline
+        // banner instantly instead of waiting for the next heartbeat.
+        lifecycle = AppLifecycleListener(onResume: emit);
         emit();
       },
       onCancel: () async {
         await sub?.cancel();
         timer?.cancel();
+        lifecycle?.dispose();
       },
     );
     return controller.stream;
