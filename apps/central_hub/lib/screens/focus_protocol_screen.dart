@@ -287,7 +287,9 @@ class _FocusRing extends ConsumerWidget {
                 color: phaseColor.withValues(alpha: 0.06),
               ),
               child: Text(
-                phase == FocusPhase.breakTime ? 'BREAK' : 'FOCUS',
+                phase == FocusPhase.breakTime
+                    ? t.focusProtocol.ring.breakLabel
+                    : t.focusProtocol.ring.focus,
                 style: TextStyle(
                   color: phaseColor,
                   fontSize: 10,
@@ -303,41 +305,7 @@ class _FocusRing extends ConsumerWidget {
                         ],
                 ),
               ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: phaseColor.withValues(alpha: 0.35),
-                    width: 0.8,
-                  ),
-                  borderRadius: BorderRadius.circular(4),
-                  color: phaseColor.withValues(alpha: 0.06),
-                ),
-                child: Text(
-                  phase == FocusPhase.breakTime
-                      ? t.focusProtocol.ring.breakLabel
-                      : t.focusProtocol.ring.focus,
-                  style: TextStyle(
-                    color: phaseColor,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 4.5,
-                    shadows: c.isLightMode
-                        ? null
-                        : [
-                            Shadow(
-                              color: phaseColor.withValues(alpha: 0.65),
-                              blurRadius: 8,
-                            ),
-                          ],
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),
