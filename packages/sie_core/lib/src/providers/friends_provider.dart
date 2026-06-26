@@ -44,6 +44,18 @@ class FriendsNotifier extends AsyncNotifier<FriendsState> {
         }
       }
 
+      // Users we're already friends with. When two people add each other,
+      // a reciprocal pending row can survive an accept; we must never surface
+      // a pending request for someone who is already an accepted friend.
+      final acceptedOtherIds = <String>{};
+      for (final r in rows) {
+        if (r['status'] != 'accepted') continue;
+        final requesterId = r['requester_id'] as String;
+        final addresseeId = r['addressee_id'] as String;
+        acceptedOtherIds
+            .add(requesterId == userId ? addresseeId : requesterId);
+      }
+
       final friends = <FriendRow>[];
       final sent = <FriendRow>[];
       final received = <FriendRow>[];
@@ -65,12 +77,19 @@ class FriendsNotifier extends AsyncNotifier<FriendsState> {
         switch (r['status'] as String) {
           case 'accepted':
             friends.add(row);
+          case 'pending' when acceptedOtherIds.contains(otherId):
+            break; // already friends — hide the stale reciprocal request
           case 'pending' when iAmRequester:
             sent.add(row);
           case 'pending':
             received.add(row);
         }
       }
+
+      // Mutual pending (both sent each other a request, neither accepted yet):
+      // keep only the actionable "received" entry so it isn't shown twice.
+      final receivedIds = received.map((r) => r.otherUser.id).toSet();
+      sent.removeWhere((r) => receivedIds.contains(r.otherUser.id));
 
       return FriendsState(
           friends: friends, sentRequests: sent, receivedRequests: received);
@@ -104,10 +123,28 @@ class FriendsNotifier extends AsyncNotifier<FriendsState> {
   }
 
   Future<void> acceptRequest(String friendshipId) async {
-    await SupabaseService.client
+    // Accept and read back both participants so we can clean up duplicates.
+    final updated = await SupabaseService.client
         .from('friendships')
         .update({'status': 'accepted'})
-        .eq('id', friendshipId);
+        .eq('id', friendshipId)
+        .select('requester_id, addressee_id')
+        .maybeSingle();
+
+    if (updated != null) {
+      final a = updated['requester_id'] as String;
+      final b = updated['addressee_id'] as String;
+      // If both users added each other, a reciprocal pending row still exists.
+      // Drop any pending friendship between the same pair so it doesn't linger
+      // in Sent/Received after the relationship is accepted.
+      await SupabaseService.client
+          .from('friendships')
+          .delete()
+          .eq('status', 'pending')
+          .or('and(requester_id.eq.$a,addressee_id.eq.$b),'
+              'and(requester_id.eq.$b,addressee_id.eq.$a)');
+    }
+
     state = AsyncData(await _load());
   }
 
