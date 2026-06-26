@@ -35,5 +35,11 @@
     "weight": "Weight: {weight}",
     "duration": "{n} d."
   },
+  "ranks": {
+    "recruit": "Recruit",
+    "operative": "Operative",
+    "explorer": "Explorer",
+    "commander": "Commander"
+  },
   "noConnection": "No internet connection"
 }

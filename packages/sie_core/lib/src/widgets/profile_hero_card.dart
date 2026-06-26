@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../i18n/translations.g.dart';
 import '../models/cosmetic_asset.dart';
 import '../theme/sie_colors.dart';
 import '../theme/sie_motion.dart';
@@ -52,10 +53,11 @@ class ProfileHeroCard extends ConsumerWidget {
   final VoidCallback? onAvatarTap;
 
   static String rankLabel(int level) {
-    if (level <= 5) return 'Recruit';
-    if (level <= 10) return 'Operative';
-    if (level <= 20) return 'Explorer';
-    return 'Commander';
+    final ranks = t.profile.ranks;
+    if (level <= 5) return ranks.recruit;
+    if (level <= 10) return ranks.operative;
+    if (level <= 20) return ranks.explorer;
+    return ranks.commander;
   }
 
   @override

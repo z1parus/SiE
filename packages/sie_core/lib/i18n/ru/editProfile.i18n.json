@@ -1,25 +1,25 @@
 {
   "topBar": {
-    "title": "EDIT PROFILE",
-    "save": "SAVE"
+    "title": "РЕД. ПРОФИЛЬ",
+    "save": "СОХРАНИТЬ"
   },
   "snack": {
-    "usernameEmpty": "USERNAME CANNOT BE EMPTY",
+    "usernameEmpty": "ИМЯ ПОЛЬЗОВАТЕЛЯ НЕ МОЖЕТ БЫТЬ ПУСТЫМ",
     "noConnection": "Проверьте подключение к интернету",
-    "passwordTooShort": "PASSWORD MUST BE AT LEAST 6 CHARACTERS",
-    "passwordsDoNotMatch": "PASSWORDS DO NOT MATCH",
-    "passwordUpdated": "PASSWORD UPDATED"
+    "passwordTooShort": "ПАРОЛЬ ДОЛЖЕН СОДЕРЖАТЬ НЕ МЕНЕЕ 6 СИМВОЛОВ",
+    "passwordsDoNotMatch": "ПАРОЛИ НЕ СОВПАДАЮТ",
+    "passwordUpdated": "ПАРОЛЬ ОБНОВЛЁН"
   },
   "identity": {
-    "header": "IDENTITY",
-    "username": "USERNAME",
-    "fullName": "FULL NAME"
+    "header": "ЛИЧНОСТЬ",
+    "username": "ИМЯ ПОЛЬЗОВАТЕЛЯ",
+    "fullName": "ПОЛНОЕ ИМЯ"
   },
   "security": {
-    "header": "SECURITY",
-    "email": "EMAIL",
-    "readOnly": "READ-ONLY",
-    "password": "PASSWORD"
+    "header": "БЕЗОПАСНОСТЬ",
+    "email": "ЭЛЕКТРОННАЯ ПОЧТА",
+    "readOnly": "ТОЛЬКО ЧТЕНИЕ",
+    "password": "ПАРОЛЬ"
   },
   "customization": {
     "header": "CUSTOMIZATION",
@@ -53,10 +53,10 @@
     "sheetTitle": "ВЫБЕРИТЕ ЧАСОВОЙ ПОЯС"
   },
   "passwordSheet": {
-    "title": "CHANGE PASSWORD",
-    "newPassword": "NEW PASSWORD",
-    "confirmPassword": "CONFIRM PASSWORD",
-    "updatePassword": "UPDATE PASSWORD"
+    "title": "ИЗМЕНИТЬ ПАРОЛЬ",
+    "newPassword": "НОВЫЙ ПАРОЛЬ",
+    "confirmPassword": "ПОДТВЕРДИТЬ ПАРОЛЬ",
+    "updatePassword": "ОБНОВИТЬ ПАРОЛЬ"
   },
   "passwordValue": "••••••••",
   "noConnectionMessage": "Подключение к интернету отсутствует"

@@ -1,32 +1,32 @@
 {
   "topBar": {
-    "title": "PERSONNEL FILE"
+    "title": "ЛИЧНОЕ ДЕЛО"
   },
   "nav": {
-    "progressHub": "PROGRESS HUB",
+    "progressHub": "ХАБ ПРОГРЕССА",
     "knowledgeBase": "БАЗА ЗНАНИЙ",
     "appearance": "ОБЛИК",
     "devStudio": "DEV STUDIO",
     "myWidgets": "МОИ ВИДЖЕТЫ"
   },
   "stats": {
-    "level": "LVL {level}",
+    "level": "УР. {level}",
     "levelLabel": "УРОВЕНЬ",
     "xpTotal": "XP ВСЕГО",
     "dp": "DP"
   },
   "awards": {
-    "title": "AWARDS"
+    "title": "НАГРАДЫ"
   },
   "achievements": {
-    "loadError": "NO ACHIEVEMENTS DEFINED IN DATABASE",
-    "empty": "NO ACHIEVEMENTS YET"
+    "loadError": "ДОСТИЖЕНИЯ НЕ НАЙДЕНЫ В БАЗЕ ДАННЫХ",
+    "empty": "НЕТ ДОСТИЖЕНИЙ"
   },
   "medals": {
-    "vaultTitle": "MEDALS VAULT",
-    "vaultSubtitle": "EARNED COMMENDATIONS & COMBAT DECORATIONS",
+    "vaultTitle": "ХРАНИЛИЩЕ МЕДАЛЕЙ",
+    "vaultSubtitle": "ЗАРАБОТАННЫЕ ЗНАКИ ОТЛИЧИЯ И БОЕВЫЕ НАГРАДЫ",
     "loadError": "ОШИБКА ЗАГРУЗКИ МЕДАЛЕЙ",
-    "empty": "NO MEDALS YET — COMPLETE MISSIONS TO EARN COMMENDATIONS",
+    "empty": "НЕТ МЕДАЛЕЙ — ВЫПОЛНЯЙТЕ МИССИИ ДЛЯ ПОЛУЧЕНИЯ НАГРАД",
     "count(plural)": {
       "one": "{n} медаль",
       "few": "{n} медали",
@@ -36,6 +36,12 @@
     "completed": "Завершено: {date}",
     "weight": "Вес: {weight}",
     "duration": "{n} дн."
+  },
+  "ranks": {
+    "recruit": "Рекрут",
+    "operative": "Оперативник",
+    "explorer": "Разведчик",
+    "commander": "Командир"
   },
   "noConnection": "Подключение к интернету отсутствует"
 }

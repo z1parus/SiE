@@ -1,9 +1,9 @@
 {
   "backToExit": "Нажмите ещё раз для выхода",
   "tabs": {
-    "hub": "Hub",
-    "operations": "Operations",
-    "garage": "Garage",
-    "hallOfFame": "Hall of Fame"
+    "hub": "Хаб",
+    "operations": "Операции",
+    "garage": "Гараж",
+    "hallOfFame": "Авангард"
   }
 }
