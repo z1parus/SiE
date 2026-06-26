@@ -96,7 +96,7 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
                           ProfileScreen(asTab: true),
                           OperationsControlScreen(asTab: true),
                           const GarageScreen(asTab: true),
-                          LeaderboardScreen(asTab: true),
+                          LeaderboardScreen(asTab: true, isActive: _currentIndex == 3),
                         ],
                       ),
                     ),

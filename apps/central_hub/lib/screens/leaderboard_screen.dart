@@ -12,9 +12,13 @@ const _kLastVanguardShownKey = 'last_vanguard_shown_date';
 // LeaderboardScreen
 // ─────────────────────────────────────────────────────────────────────────────
 class LeaderboardScreen extends ConsumerStatefulWidget {
-  const LeaderboardScreen({super.key, this.asTab = false});
+  const LeaderboardScreen({super.key, this.asTab = false, this.isActive = true});
 
   final bool asTab;
+  /// When embedded in an IndexedStack, the parent sets this to true only while
+  /// this tab is visible. The screen refreshes the leaderboard each time it
+  /// transitions from hidden to visible.
+  final bool isActive;
 
   @override
   ConsumerState<LeaderboardScreen> createState() => _LeaderboardScreenState();
@@ -25,6 +29,15 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkVanguard());
+  }
+
+  @override
+  void didUpdateWidget(LeaderboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Refresh every time the tab becomes visible.
+    if (!oldWidget.isActive && widget.isActive) {
+      ref.invalidate(leaderboardProvider);
+    }
   }
 
   Future<void> _checkVanguard() async {
