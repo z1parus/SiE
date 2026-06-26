@@ -51,6 +51,10 @@ class AudioService {
   int _inhaleId = -1, _exhaleId = -1, _chimeId = -1;
   int _heartbeatId = -1, _tickId = -1;
   int _inhaleStream = 0, _exhaleStream = 0;
+  // Hum is looped through SoundPool on native (its in-RAM PCM loops seamlessly,
+  // unlike audioplayers' MediaPlayer.setLooping which clicks at the buffer seam).
+  // Web keeps the AudioPlayer path (the <audio> element loops gaplessly there).
+  int _humId = -1, _humStream = 0;
 
   bool _initialized = false;
   Timer? _cueFadeTimer;
@@ -85,6 +89,11 @@ class AudioService {
       _heartbeatId = await _pool.load(_generateHeartbeat().buffer.asByteData());
       _tickId      = await _pool.load(_generateTick().buffer.asByteData());
       _humBytes    = _generateAmbientHum();
+      // Native: also load the hum into SoundPool for gapless looping. Web keeps
+      // _humBytes for the AudioPlayer fallback (SoundPool web ignores repeat).
+      if (!kIsWeb) {
+        _humId = await _pool.load(_humBytes!.buffer.asByteData());
+      }
 
       // Web: listen for page visibility changes so we can recover after
       // the browser suspends audio on screen-lock or tab-switch.
@@ -359,22 +368,57 @@ class AudioService {
 
   // ── Ambient hum ────────────────────────────────────────────
 
+  // Whether the hum is driven by SoundPool (native, gapless) vs the AudioPlayer
+  // web fallback. Decided by whether the SoundPool sound id loaded at init.
+  bool get _humViaPool => !kIsWeb && _humId >= 0;
+
+  // Single volume sink so the fade timers don't need to know which backend the
+  // hum is playing on.
+  void _setHumVolume(double v) {
+    _humVolume = v;
+    if (_humViaPool) {
+      if (_humStream > 0) {
+        _pool.setVolume(soundId: _humId, streamId: _humStream, volume: v).ignore();
+      }
+    } else {
+      _hum.setVolume(v);
+    }
+  }
+
+  void _stopHumPlayback() {
+    if (_humViaPool) {
+      _stopStream(_humStream);
+      _humStream = 0;
+    } else {
+      _hum.stop().ignore();
+    }
+  }
+
   Future<void> startHum({double volumeFactor = 0.75}) async {
     try {
       _humFadeTimer?.cancel();
       _humVolume = 0.0;
-      final bytes = _humBytes;
-      if (bytes == null) return;
-      await _hum.setReleaseMode(ReleaseMode.loop);
-      await _hum.play(BytesSource(bytes), volume: 0.0);
       final target = (_humMaxVolume * volumeFactor).clamp(0.0, 1.0);
+
+      if (_humViaPool) {
+        // Gapless infinite loop — SoundPool replays the cached PCM buffer with
+        // no seam, so the steady drone never clicks at the 6 s boundary.
+        _stopStream(_humStream);
+        _humStream = await _pool.play(_humId, repeat: -1);
+        await _applyVolume(_humId, _humStream, 0.0);
+      } else {
+        final bytes = _humBytes;
+        if (bytes == null) return;
+        await _hum.setReleaseMode(ReleaseMode.loop);
+        await _hum.play(BytesSource(bytes), volume: 0.0);
+      }
+
       var step = 0;
       _humFadeTimer = Timer.periodic(
         const Duration(milliseconds: 80),
         (t) {
           step++;
-          _humVolume = (step / 25 * target).clamp(0.0, target);
-          _hum.setVolume(_humVolume);
+          _setHumVolume((step / 25 * target).clamp(0.0, target));
           if (step >= 25) t.cancel();
         },
       );
@@ -394,12 +438,11 @@ class AudioService {
       const Duration(milliseconds: 80),
       (t) {
         step++;
-        _humVolume = (start + (target - start) * step / steps).clamp(0.0, 1.0);
-        _hum.setVolume(_humVolume);
+        _setHumVolume(
+            (start + (target - start) * step / steps).clamp(0.0, 1.0));
         if (step >= steps) {
           t.cancel();
-          _humVolume = target;
-          _hum.setVolume(_humVolume);
+          _setHumVolume(target);
         }
       },
     );
@@ -407,13 +450,9 @@ class AudioService {
 
   Future<void> stopHum({int durationMs = 2000}) async {
     _humFadeTimer?.cancel();
-    if (_humVolume <= 0.001) {
-      await _hum.stop().catchError((_) {});
-      return;
-    }
-    if (durationMs <= 0) {
-      _humVolume = 0.0;
-      await _hum.stop().catchError((_) {});
+    if (_humVolume <= 0.001 || durationMs <= 0) {
+      _setHumVolume(0.0);
+      _stopHumPlayback();
       return;
     }
     final startVol = _humVolume;
@@ -423,12 +462,11 @@ class AudioService {
       const Duration(milliseconds: 80),
       (t) {
         step++;
-        _humVolume = (startVol * (1.0 - step / steps)).clamp(0.0, startVol);
-        _hum.setVolume(_humVolume);
+        _setHumVolume((startVol * (1.0 - step / steps)).clamp(0.0, startVol));
         if (step >= steps || _humVolume <= 0.001) {
           t.cancel();
-          _humVolume = 0.0;
-          _hum.stop().ignore();
+          _setHumVolume(0.0);
+          _stopHumPlayback();
         }
       },
     );
@@ -580,9 +618,11 @@ class AudioService {
       await Future.wait([
         _fadeOutAndStop(),
         _hum.stop().catchError((_) {}),
+        if (_humStream > 0) _pool.stop(_humStream),
         if (_inhaleStream > 0) _pool.stop(_inhaleStream),
         if (_exhaleStream > 0) _pool.stop(_exhaleStream),
       ]);
+      _humStream = 0;
     } catch (_) {}
   }
 
