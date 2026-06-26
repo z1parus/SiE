@@ -160,6 +160,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             onTap: _pickImage,
           ),
           const SizedBox(height: 32),
+          // Identity — always expanded.
           SectionHeader(title: t.editProfile.identity.header),
           const SizedBox(height: 16),
           identityCard(
@@ -175,89 +176,76 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 32),
-          SectionHeader(title: t.editProfile.security.header),
-          const SizedBox(height: 16),
-          securityCard(
+          const SizedBox(height: 24),
+          _CollapsibleSection(
+            title: t.editProfile.security.header,
+            child: securityCard(
+              child: Column(
+                children: [
+                  _EmailRow(
+                      email: SupabaseService.client.auth.currentUser?.email ??
+                          ''),
+                  Container(
+                    height: 1,
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    color: c.border,
+                  ),
+                  _ActionRow(
+                    label: t.editProfile.security.password,
+                    value: t.editProfile.passwordValue,
+                    onTap: _showPasswordSheet,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          _CollapsibleSection(
+            title: t.editProfile.customization.header,
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _EmailRow(
-                    email: SupabaseService.client.auth.currentUser?.email ??
-                        ''),
-                Container(
-                  height: 1,
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  color: c.border,
+                _NavRow(
+                  icon: Icons.style_outlined,
+                  label: t.editProfile.customization.appearanceLabel,
+                  subtitle: t.editProfile.customization.appearanceSubtitle,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (_) => CustomizationScreen(profile: profile)),
+                  ),
                 ),
-                _ActionRow(
-                  label: t.editProfile.security.password,
-                  value: t.editProfile.passwordValue,
-                  onTap: _showPasswordSheet,
+                const SizedBox(height: 10),
+                _NavRow(
+                  icon: Icons.storefront_outlined,
+                  label: t.editProfile.customization.interfaceHubLabel,
+                  subtitle: t.editProfile.customization.interfaceHubSubtitle,
+                  accentColor: c.dp,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (_) => const InterfaceHubScreen()),
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 32),
-          SectionHeader(title: t.editProfile.customization.header),
-          const SizedBox(height: 16),
-          _NavRow(
-            icon: Icons.style_outlined,
-            label: t.editProfile.customization.appearanceLabel,
-            subtitle: t.editProfile.customization.appearanceSubtitle,
-            onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                      builder: (_) => CustomizationScreen(profile: profile)),
-                ),
+          const SizedBox(height: 24),
+          _CollapsibleSection(
+            title: t.editProfile.interfaceMode.header,
+            subtitle: t.editProfile.interfaceMode.subtitle,
+            child: const _ThemeSwitcherSection(),
           ),
-          const SizedBox(height: 10),
-          _NavRow(
-            icon: Icons.storefront_outlined,
-            label: t.editProfile.customization.interfaceHubLabel,
-            subtitle: t.editProfile.customization.interfaceHubSubtitle,
-            accentColor: c.dp,
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const InterfaceHubScreen()),
-            ),
+          const SizedBox(height: 24),
+          _CollapsibleSection(
+            title: t.editProfile.language.header,
+            subtitle: t.editProfile.language.subtitle,
+            child: const _LanguageSwitcherSection(),
           ),
-          const SizedBox(height: 32),
-          SectionHeader(title: t.editProfile.interfaceMode.header),
-          const SizedBox(height: 4),
-          Text(
-            t.editProfile.interfaceMode.subtitle,
-            style: TextStyle(
-              color: c.textSecondary.withValues(alpha: 0.55),
-              fontSize: 9,
-              letterSpacing: 1.5,
-            ),
+          const SizedBox(height: 24),
+          _CollapsibleSection(
+            title: t.editProfile.timezone.header,
+            subtitle: t.editProfile.timezone.subtitle,
+            child: const _TimezonePicker(),
           ),
-          const SizedBox(height: 12),
-          const _ThemeSwitcherSection(),
-          const SizedBox(height: 32),
-          SectionHeader(title: t.editProfile.language.header),
-          const SizedBox(height: 4),
-          Text(
-            t.editProfile.language.subtitle,
-            style: TextStyle(
-              color: c.textSecondary.withValues(alpha: 0.55),
-              fontSize: 9,
-              letterSpacing: 1.5,
-            ),
-          ),
-          const SizedBox(height: 12),
-          const _LanguageSwitcherSection(),
-          const SizedBox(height: 32),
-          SectionHeader(title: t.editProfile.timezone.header),
-          const SizedBox(height: 4),
-          Text(
-            t.editProfile.timezone.subtitle,
-            style: TextStyle(
-              color: c.textSecondary.withValues(alpha: 0.55),
-              fontSize: 9,
-              letterSpacing: 1.5,
-            ),
-          ),
-          const SizedBox(height: 12),
-          const _TimezonePicker(),
           if (_isSaving) ...[
             const SizedBox(height: 32),
             Center(
@@ -267,6 +255,90 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           ],
         ],
       ),
+    );
+  }
+}
+
+// ── Collapsible Section ───────────────────────────────────────
+// A section whose body is hidden by default; tapping the header (title + a
+// rotating chevron) smoothly expands/collapses it. Used for every Edit Profile
+// section except Identity, which stays permanently expanded.
+
+class _CollapsibleSection extends ConsumerStatefulWidget {
+  const _CollapsibleSection({
+    required this.title,
+    required this.child,
+    this.subtitle,
+  });
+
+  final String title;
+  final Widget child;
+  final String? subtitle;
+
+  @override
+  ConsumerState<_CollapsibleSection> createState() =>
+      _CollapsibleSectionState();
+}
+
+class _CollapsibleSectionState extends ConsumerState<_CollapsibleSection> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final c        = ref.watch(sieColorsProvider);
+    final duration = SieMotion.duration(context, SieMotion.base);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            SieHaptics.selection();
+            setState(() => _expanded = !_expanded);
+          },
+          child: Row(
+            children: [
+              Expanded(child: SectionHeader(title: widget.title)),
+              AnimatedRotation(
+                turns: _expanded ? 0.5 : 0.0,
+                duration: duration,
+                curve: Curves.easeOut,
+                child: Icon(Icons.keyboard_arrow_down,
+                    color: c.textSecondary, size: 22),
+              ),
+            ],
+          ),
+        ),
+        AnimatedCrossFade(
+          firstChild: const SizedBox(width: double.infinity, height: 0),
+          secondChild: Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (widget.subtitle != null) ...[
+                  Text(
+                    widget.subtitle!,
+                    style: TextStyle(
+                      color: c.textSecondary.withValues(alpha: 0.55),
+                      fontSize: 9,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                widget.child,
+              ],
+            ),
+          ),
+          crossFadeState: _expanded
+              ? CrossFadeState.showSecond
+              : CrossFadeState.showFirst,
+          duration: duration,
+          sizeCurve: Curves.easeInOut,
+        ),
+      ],
     );
   }
 }
