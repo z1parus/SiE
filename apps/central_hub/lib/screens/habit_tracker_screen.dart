@@ -4538,11 +4538,8 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
     });
   }
 
-  static String _fmtShortDate(DateTime dt) {
-    const months = ['янв', 'фев', 'мар', 'апр', 'май', 'июн',
-                    'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
-    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
-  }
+  static String _fmtShortDate(DateTime dt) =>
+      '${dt.day} ${t.breathingShared.months[dt.month - 1]} ${dt.year}';
 
   Future<void> _pickAvoidStartDate(BuildContext context, DateTime? current, Habit currentHabit, Color accentColor) async {
     final initial = current ?? currentHabit.createdAt;
