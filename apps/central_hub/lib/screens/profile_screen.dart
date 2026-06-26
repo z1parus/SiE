@@ -190,7 +190,6 @@ class _ProfileContent extends ConsumerWidget {
                     username: profile?.username ?? '',
                     avatarUrl: profile?.avatarUrl,
                     totalXp: xp,
-                    designPoints: profile?.designPoints ?? 0,
                     frame: equipped.frame,
                     background: equipped.background,
                     pattern: equipped.pattern,

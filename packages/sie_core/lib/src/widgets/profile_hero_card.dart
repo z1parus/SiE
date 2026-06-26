@@ -28,7 +28,6 @@ class ProfileHeroCard extends ConsumerWidget {
     required this.username,
     required this.avatarUrl,
     required this.totalXp,
-    required this.designPoints,
     this.frame,
     this.background,
     this.pattern,
@@ -39,7 +38,6 @@ class ProfileHeroCard extends ConsumerWidget {
   final String username;
   final String? avatarUrl;
   final int totalXp;
-  final int designPoints;
 
   /// Equipped avatar frame (border / glow), if any.
   final CosmeticAsset? frame;
@@ -161,13 +159,6 @@ class ProfileHeroCard extends ConsumerWidget {
                                   fontWeight: FontWeight.w600,
                                   letterSpacing: 2,
                                 ),
-                              ),
-                              const SizedBox(height: 10),
-                              _HeroChip(
-                                label: '$designPoints DP',
-                                borderColor: c.dp.withValues(alpha: 0.45),
-                                textColor: decorated ? Colors.white : c.dp,
-                                icon: Icons.palette_outlined,
                               ),
                             ],
                           ),
@@ -430,49 +421,6 @@ class _Initials extends StatelessWidget {
             letterSpacing: 1,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _HeroChip extends StatelessWidget {
-  const _HeroChip({
-    required this.label,
-    required this.borderColor,
-    required this.textColor,
-    this.icon,
-  });
-
-  final String label;
-  final Color borderColor;
-  final Color textColor;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        border: Border.all(color: borderColor),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 12, color: textColor),
-            const SizedBox(width: 4),
-          ],
-          Text(
-            label,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-            ),
-          ),
-        ],
       ),
     );
   }

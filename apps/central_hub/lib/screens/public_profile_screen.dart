@@ -153,7 +153,6 @@ class _HeroSection extends ConsumerWidget {
             username: profile.username ?? '',
             avatarUrl: profile.avatarUrl,
             totalXp: profile.totalXp,
-            designPoints: profile.designPoints,
             frame: equipped.frame,
             background: equipped.background,
             pattern: equipped.pattern,
