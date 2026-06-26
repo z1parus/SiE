@@ -1,0 +1,30 @@
+{
+  "topBar": {
+    "title": "НАСТРОЙКА ОБЛИКА",
+    "apply": "ПРИМЕНИТЬ"
+  },
+  "tabs": {
+    "frames": "РАМКИ",
+    "backgrounds": "ФОНЫ",
+    "styles": "СТИЛИ",
+    "patterns": "УЗОРЫ"
+  },
+  "snack": {
+    "noConnection": "Проверьте подключение к интернету",
+    "unlockRequired": "Требуется {dp} DP для разблокировки",
+    "unavailable": "Этот элемент недоступен"
+  },
+  "preview": {
+    "defaultUsername": "OPERATIVE",
+    "level": "LEVEL {level}",
+    "designPoints": "{dp} DP",
+    "xpTotal": "{xp} XP TOTAL",
+    "xpToLevel": "{xp} XP TO LVL {level}",
+    "label": "ПРЕДПРОСМОТР"
+  },
+  "card": {
+    "active": "АКТИВНО",
+    "noPattern": "БЕЗ УЗОРА",
+    "locked": "Заблокировано"
+  }
+}

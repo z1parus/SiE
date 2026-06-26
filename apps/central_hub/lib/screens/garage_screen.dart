@@ -59,7 +59,7 @@ class _GarageScreenState extends ConsumerState<GarageScreen> {
         ),
         error: (e, _) => Center(
           child: Text(
-            'СИСТЕМА НЕДОСТУПНА',
+            t.garage.systemUnavailable,
             style: TextStyle(
               color: c.textSecondary,
               fontSize: 11,
@@ -92,8 +92,8 @@ class _GarageScreenState extends ConsumerState<GarageScreen> {
                     setState(() => _selectedDay = day);
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: const Text(
-                        'Завершите предыдущий день, чтобы разблокировать',
+                      content: Text(
+                        t.garage.dayLockedSnackbar,
                       ),
                       duration: const Duration(seconds: 2),
                     ));
@@ -225,8 +225,8 @@ class _GarageHeader extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               progress.courseComplete
-                  ? 'ПРОТОКОЛ ЗАВЕРШЁН'
-                  : 'ВВОДНЫЙ КУРС — ДЕНЬ $completedCount/7',
+                  ? t.garage.header.protocolComplete
+                  : t.garage.header.introCourseDay(count: completedCount),
               style: TextStyle(
                 color: c.textSecondary,
                 fontSize: 11,
@@ -468,7 +468,7 @@ class _DayNodeState extends State<_DayNode>
         SizedBox(width: 44, height: 44, child: nodeWidget),
         const SizedBox(height: 4),
         Text(
-          'ДЕНЬ ${widget.day}',
+          t.garage.pipeline.dayLabel(day: widget.day),
           style: TextStyle(
             color: widget.isSelected ? c.accent : c.textSecondary,
             fontSize: 8,
@@ -521,7 +521,7 @@ class _DayContent extends StatelessWidget {
         progress.isDayLockedUntilTomorrow(day);
 
     final completedCount =
-        dayData.tasks.where((t) => t.isAutoComplete(act)).length;
+        dayData.tasks.where((task) => task.isAutoComplete(act)).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -536,7 +536,7 @@ class _DayContent extends StatelessWidget {
             Container(width: 3, height: 12, color: c.accent),
             const SizedBox(width: 8),
             Text(
-              'ОПЕРАТИВНЫЕ ЗАДАЧИ',
+              t.garage.tasks.sectionTitle,
               style: TextStyle(
                 color: c.textSecondary,
                 fontSize: 10,
@@ -652,7 +652,7 @@ class _StoryTerminal extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  'ДЕНЬ ${dayData.dayNumber}',
+                  t.garage.story.dayLabel(day: dayData.dayNumber),
                   style: TextStyle(
                     color: c.accent,
                     fontSize: 9,
@@ -700,7 +700,7 @@ class _LockedTransmissionText extends StatelessWidget {
             Icon(Icons.lock_outline, color: c.border, size: 14),
             const SizedBox(width: 8),
             Text(
-              'СЕКРЕТНО',
+              t.garage.story.classified,
               style: TextStyle(
                 color: c.border,
                 fontSize: 10,
@@ -712,7 +712,7 @@ class _LockedTransmissionText extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Завершите предыдущий протокол для получения доступа\nк этой трансмиссии.',
+          t.garage.story.lockedTransmission,
           style: TextStyle(
             color: c.border,
             fontSize: 13,
@@ -772,9 +772,9 @@ class _TaskCardState extends State<_TaskCard>
   }
 
   String get _destinationLabel => switch (widget.task.destination) {
-        BootcampTaskDestination.breathing    => 'ДЫХАНИЕ',
-        BootcampTaskDestination.focusForge   => 'FOCUS FORGE',
-        BootcampTaskDestination.habitArchive => 'ПРИВЫЧКИ',
+        BootcampTaskDestination.breathing    => t.garage.tasks.destinationBreathing,
+        BootcampTaskDestination.focusForge   => t.garage.tasks.destinationFocusForge,
+        BootcampTaskDestination.habitArchive => t.garage.tasks.destinationHabitArchive,
       };
 
   @override
@@ -868,7 +868,7 @@ class _TaskCardState extends State<_TaskCard>
                           ),
                         ),
                         child: Text(
-                          'ЗАПУСТИТЬ → $_destinationLabel',
+                          t.garage.tasks.launch(destination: _destinationLabel),
                           style: TextStyle(
                             color: c.accent,
                             fontSize: 9,
@@ -913,7 +913,7 @@ class _LockedDayCard extends StatelessWidget {
           Icon(Icons.lock_outline, color: c.border, size: 18),
           const SizedBox(width: 10),
           Text(
-            'ЗАВЕРШИТЕ ПРЕДЫДУЩИЙ ДЕНЬ',
+            t.garage.lockedDay,
             style: TextStyle(
               color: c.border,
               fontSize: 11,
@@ -960,7 +960,7 @@ class _DayLockBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'СЛЕДУЮЩИЙ ДЕНЬ ОТКРОЕТСЯ ЗАВТРА',
+                  t.garage.dayLockBanner.title,
                   style: TextStyle(
                     color: lockColor,
                     fontSize: 10,
@@ -970,7 +970,7 @@ class _DayLockBanner extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Вы закрыли предыдущий день сегодня. Возвращайтесь завтра.',
+                  t.garage.dayLockBanner.body,
                   style: TextStyle(
                     color: lockColor.withValues(alpha: 0.7),
                     fontSize: 11,
@@ -1009,7 +1009,7 @@ class _CompletedBadge extends StatelessWidget {
           Icon(Icons.verified_outlined, color: c.accent, size: 16),
           const SizedBox(width: 10),
           Text(
-            'ДЕНЬ ЗАВЕРШЁН · +1000 DP ПОЛУЧЕНО',
+            t.garage.completedBadge,
             style: TextStyle(
               color: c.accent,
               fontSize: 11,
@@ -1083,7 +1083,7 @@ class _ClaimButtonState extends State<_ClaimButton>
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                '★  ПОЛУЧИТЬ НАГРАДУ  ★',
+                t.garage.claim.button,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: c.accent,
@@ -1095,7 +1095,7 @@ class _ClaimButtonState extends State<_ClaimButton>
               ),
               const SizedBox(height: 4),
               Text(
-                '+ 1 000 DP DESIGN POINTS',
+                t.garage.claim.reward,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: c.dp,
@@ -1206,7 +1206,7 @@ class _CourseCompletedViewState extends State<_CourseCompletedView>
 
           // Badge name
           Text(
-            'ИСПЫТАТЕЛЬ',
+            t.garage.completedView.badgeName,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: c.dp,
@@ -1218,7 +1218,7 @@ class _CourseCompletedViewState extends State<_CourseCompletedView>
           ),
           const SizedBox(height: 8),
           Text(
-            'ЛЕГЕНДАРНЫЙ ЗНАЧОК',
+            t.garage.completedView.badgeRarity,
             style: TextStyle(
               color: c.textSecondary,
               fontSize: 10,
@@ -1243,7 +1243,7 @@ class _CourseCompletedViewState extends State<_CourseCompletedView>
                     Container(width: 3, height: 14, color: c.dp),
                     const SizedBox(width: 10),
                     Text(
-                      'СЕРТИФИКАТ КОРПОРАЦИИ SiE',
+                      t.garage.completedView.certificateTitle,
                       style: TextStyle(
                         color: c.dp,
                         fontSize: 11,
@@ -1255,9 +1255,7 @@ class _CourseCompletedViewState extends State<_CourseCompletedView>
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Вы успешно завершили 7-дневный вводный протокол Корпорации SiE. '
-                  'Базовый стек инструментов саморазвития освоен и интегрирован '
-                  'в ваш ежедневный рабочий процесс.',
+                  t.garage.completedView.certificateBody,
                   style: TextStyle(
                     color: c.textSecondary,
                     fontSize: 13,
@@ -1268,22 +1266,22 @@ class _CourseCompletedViewState extends State<_CourseCompletedView>
                 Divider(color: c.border, height: 1),
                 const SizedBox(height: 14),
                 _StatRow(
-                  label: 'ДНЕЙ ЗАВЕРШЕНО',
-                  value: '7 / 7',
+                  label: t.garage.completedView.statDaysCompleted,
+                  value: t.garage.completedView.statDaysCompletedValue,
                   c: c,
                   useAccent: false,
                 ),
                 const SizedBox(height: 10),
                 _StatRow(
-                  label: 'ПОЛУЧЕНО DP',
-                  value: '7 000',
+                  label: t.garage.completedView.statDpEarned,
+                  value: t.garage.completedView.statDpEarnedValue,
                   c: c,
                   useAccent: true,
                 ),
                 const SizedBox(height: 10),
                 _StatRow(
-                  label: 'СТАТУС',
-                  value: 'CERTIFIED',
+                  label: t.garage.completedView.statStatus,
+                  value: t.garage.completedView.statStatusValue,
                   c: c,
                   useAccent: true,
                 ),
@@ -1293,7 +1291,7 @@ class _CourseCompletedViewState extends State<_CourseCompletedView>
           const SizedBox(height: 16),
 
           Text(
-            'Следите за обновлениями — новые курсы\nи вызовы скоро появятся в Garage.',
+            t.garage.completedView.footer,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: c.textSecondary,
@@ -1432,8 +1430,8 @@ class _RewardDialogState extends State<_RewardDialog>
               const SizedBox(height: 16),
               Text(
                 widget.courseComplete
-                    ? 'ПРОТОКОЛ ЗАВЕРШЁН!'
-                    : 'ДЕНЬ ${widget.day} ЗАКРЫТ',
+                    ? t.garage.rewardDialog.protocolComplete
+                    : t.garage.rewardDialog.dayClosed(day: widget.day),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: c.dp,
@@ -1445,8 +1443,8 @@ class _RewardDialogState extends State<_RewardDialog>
               const SizedBox(height: 8),
               Text(
                 widget.courseComplete
-                    ? 'Значок «Испытатель» разблокирован!\nВы в верхних 10%.'
-                    : '+1 000 Design Points начислено\nСледующий день разблокирован.',
+                    ? t.garage.rewardDialog.courseCompleteBody
+                    : t.garage.rewardDialog.dayClaimedBody,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: c.textSecondary,
@@ -1467,7 +1465,7 @@ class _RewardDialogState extends State<_RewardDialog>
                         Border.all(color: c.dp.withValues(alpha: 0.5)),
                   ),
                   child: Text(
-                    'ПРОДОЛЖИТЬ',
+                    t.garage.rewardDialog.continueBtn,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: c.dp,

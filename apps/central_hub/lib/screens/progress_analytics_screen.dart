@@ -58,7 +58,7 @@ class _TopBar extends ConsumerWidget {
           ),
           Expanded(
             child: Text(
-              'PROGRESS HUB',
+              t.progressAnalytics.topBar.title,
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     color: c.textPrimary,
                     letterSpacing: 3,
@@ -101,7 +101,7 @@ class _ErrorState extends ConsumerWidget {
           Icon(Icons.wifi_off_outlined, color: c.iconMuted, size: 36),
           const SizedBox(height: 12),
           Text(
-            'Подключение к интернету отсутствует',
+            t.progressAnalytics.error.noConnection,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: c.iconMuted,
@@ -137,15 +137,15 @@ class _AnalyticsBody extends ConsumerWidget {
         children: [
           _StatsRow(data: data),
           const SizedBox(height: 28),
-          const _SectionLabel(label: 'ACTIVITY MATRIX'),
+          _SectionLabel(label: t.progressAnalytics.sections.activityMatrix),
           const SizedBox(height: 12),
           _HeatMap(heatMap: data.heatMap),
           const SizedBox(height: 28),
-          const _SectionLabel(label: 'XP GROWTH — 7 DAYS'),
+          _SectionLabel(label: t.progressAnalytics.sections.xpGrowth),
           const SizedBox(height: 12),
           _XpLineChart(points: data.xpHistory),
           const SizedBox(height: 28),
-          const _SectionLabel(label: 'FOCUS TIME — 7 DAYS'),
+          _SectionLabel(label: t.progressAnalytics.sections.focusTime),
           const SizedBox(height: 12),
           _FocusBarChart(points: data.focusByDay),
         ],
@@ -197,7 +197,9 @@ class _StatsRow extends ConsumerWidget {
     final c = ref.watch(sieColorsProvider);
     final focusH = data.totalFocusMinutes ~/ 60;
     final focusM = data.totalFocusMinutes % 60;
-    final focusLabel = focusH > 0 ? '${focusH}h ${focusM}m' : '${focusM}m';
+    final focusLabel = focusH > 0
+        ? t.progressAnalytics.stats.focusHoursMinutes(h: focusH, m: focusM)
+        : t.progressAnalytics.stats.focusMinutes(m: focusM);
     final completionPct = (data.habitCompletionRate * 100).round();
 
     return Row(
@@ -207,7 +209,7 @@ class _StatsRow extends ConsumerWidget {
             child: _StatCard(
               icon: Icons.timer_outlined,
               value: focusLabel,
-              label: 'TOTAL\nFOCUS',
+              label: t.progressAnalytics.stats.totalFocus,
               color: c.accent,
               c: c,
             ),
@@ -219,7 +221,7 @@ class _StatsRow extends ConsumerWidget {
             child: _StatCard(
               icon: Icons.check_circle_outline,
               value: '$completionPct%',
-              label: 'HABITS\n30 DAYS',
+              label: t.progressAnalytics.stats.habits30Days,
               color: c.accentSecondary,
               c: c,
             ),
@@ -231,7 +233,7 @@ class _StatsRow extends ConsumerWidget {
             child: _StatCard(
               icon: Icons.local_fire_department_outlined,
               value: '${data.currentStreak}',
-              label: 'DAY\nSTREAK',
+              label: t.progressAnalytics.stats.dayStreak,
               color: c.warning,
               c: c,
             ),
@@ -334,7 +336,8 @@ class _HeatMap extends ConsumerWidget {
             children: [
               const SizedBox(width: 28),
               ...List.generate(rows, (r) {
-                final label = ['M', '', 'W', '', 'F', '', 'S'][r];
+                final label =
+                    t.progressAnalytics.heatMap.weekdayInitials.split(',')[r];
                 return SizedBox(
                   width: cellSize + gap,
                   child: Text(
@@ -361,10 +364,8 @@ class _HeatMap extends ConsumerWidget {
                 for (var r = 0; r < rows; r++) {
                   final d = firstDayOfCol.add(Duration(days: r));
                   if (d.day == 1) {
-                    const months = [
-                      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-                    ];
+                    final months =
+                        t.progressAnalytics.heatMap.monthsShort.split(',');
                     monthLabel = months[d.month - 1];
                     break;
                   }
@@ -420,7 +421,7 @@ class _HeatMap extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               Text(
-                'LESS',
+                t.progressAnalytics.heatMap.less,
                 style: TextStyle(color: c.accent.withValues(alpha: 0.45), fontSize: 8),
               ),
               const SizedBox(width: 4),
@@ -439,7 +440,7 @@ class _HeatMap extends ConsumerWidget {
                   )),
               const SizedBox(width: 4),
               Text(
-                'MORE',
+                t.progressAnalytics.heatMap.more,
                 style: TextStyle(color: c.accent.withValues(alpha: 0.45), fontSize: 8),
               ),
             ],
@@ -512,7 +513,8 @@ class _XpLineChart extends ConsumerWidget {
                   final i = v.toInt();
                   if (i < 0 || i >= points.length) return const SizedBox();
                   final d = points[i].date;
-                  const days = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+                  final days =
+                      t.progressAnalytics.weekdaysShort.split(',');
                   return Text(
                     days[d.weekday - 1],
                     style: TextStyle(
@@ -534,7 +536,7 @@ class _XpLineChart extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(1),
                       )),
                   const SizedBox(width: 4),
-                  Text('XP / ДЕНЬ', style: TextStyle(color: c.accent.withValues(alpha: 0.55), fontSize: 8, letterSpacing: 1)),
+                  Text(t.progressAnalytics.xpChart.legend, style: TextStyle(color: c.accent.withValues(alpha: 0.55), fontSize: 8, letterSpacing: 1)),
                   const SizedBox(width: 4),
                 ],
               ),
@@ -580,7 +582,7 @@ class _XpLineChart extends ConsumerWidget {
               getTooltipColor: (_) => c.surface,
               getTooltipItems: (spots) => spots.map((s) {
                 return LineTooltipItem(
-                  '+${s.y.toInt()} XP',
+                  t.progressAnalytics.xpChart.tooltip(xp: s.y.toInt()),
                   TextStyle(
                     color: c.accent,
                     fontSize: 11,
@@ -665,7 +667,7 @@ class _FocusBarChart extends ConsumerWidget {
                 reservedSize: 36,
                 interval: topY / 4,
                 getTitlesWidget: (v, _) => Text(
-                  '${v.toInt()}m',
+                  t.progressAnalytics.focusChart.axisMinutes(n: v.toInt()),
                   style: TextStyle(
                     color: c.accent.withValues(alpha: 0.5),
                     fontSize: 9,
@@ -681,7 +683,8 @@ class _FocusBarChart extends ConsumerWidget {
                   final i = v.toInt();
                   if (i < 0 || i >= points.length) return const SizedBox();
                   final d = points[i].date;
-                  const days = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+                  final days =
+                      t.progressAnalytics.weekdaysShort.split(',');
                   return Text(
                     days[d.weekday - 1],
                     style: TextStyle(
@@ -704,7 +707,7 @@ class _FocusBarChart extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(2),
                       )),
                   const SizedBox(width: 4),
-                  Text('МИН / ДЕНЬ', style: TextStyle(color: c.accent.withValues(alpha: 0.55), fontSize: 8, letterSpacing: 1)),
+                  Text(t.progressAnalytics.focusChart.legend, style: TextStyle(color: c.accent.withValues(alpha: 0.55), fontSize: 8, letterSpacing: 1)),
                   const SizedBox(width: 4),
                 ],
               ),
@@ -717,7 +720,7 @@ class _FocusBarChart extends ConsumerWidget {
             touchTooltipData: BarTouchTooltipData(
               getTooltipColor: (_) => c.surface,
               getTooltipItem: (_, _, rod, _) => BarTooltipItem(
-                '${rod.toY.toInt()} min',
+                t.progressAnalytics.focusChart.tooltip(min: rod.toY.toInt()),
                 TextStyle(
                   color: c.accent,
                   fontSize: 11,

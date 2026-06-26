@@ -86,8 +86,8 @@ class _CustomizationScreenState extends ConsumerState<CustomizationScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Проверьте подключение к интернету')),
+          SnackBar(
+              content: Text(t.customization.snack.noConnection)),
         );
       }
     } finally {
@@ -195,11 +195,11 @@ class _CustomizationScreenState extends ConsumerState<CustomizationScreen>
         letterSpacing: 1.5,
         fontWeight: FontWeight.w600,
       ),
-      tabs: const [
-        Tab(text: 'РАМКИ'),
-        Tab(text: 'ФОНЫ'),
-        Tab(text: 'СТИЛИ'),
-        Tab(text: 'УЗОРЫ'),
+      tabs: [
+        Tab(text: t.customization.tabs.frames),
+        Tab(text: t.customization.tabs.backgrounds),
+        Tab(text: t.customization.tabs.styles),
+        Tab(text: t.customization.tabs.patterns),
       ],
     );
   }
@@ -225,7 +225,7 @@ class _TopBar extends ConsumerWidget {
           ),
           Expanded(
             child: Text(
-              'НАСТРОЙКА ОБЛИКА',
+              t.customization.topBar.title,
               style: Theme.of(context).textTheme.titleMedium,
               textAlign: TextAlign.center,
             ),
@@ -277,9 +277,9 @@ class _SaveButtonState extends ConsumerState<_SaveButton>
       child: AnimatedBuilder(
         animation: _ctrl,
         builder: (_, _) {
-          final t = _ctrl.value;
+          final tv = _ctrl.value;
           return Transform.scale(
-            scale: 1.0 - 0.03 * t,
+            scale: 1.0 - 0.03 * tv,
             child: Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -289,23 +289,23 @@ class _SaveButtonState extends ConsumerState<_SaveButton>
                     ? LinearGradient(
                         colors: [
                           Color.lerp(c.accent,
-                              c.accent.withValues(alpha: 0.8), t)!,
+                              c.accent.withValues(alpha: 0.8), tv)!,
                           Color.lerp(c.accentSecondary,
-                              c.accentSecondary.withValues(alpha: 0.8), t)!,
+                              c.accentSecondary.withValues(alpha: 0.8), tv)!,
                         ],
                       )
                     : null,
                 boxShadow: widget.onTap != null
                     ? [
                         BoxShadow(
-                          color: c.accent.withValues(alpha: 0.18 + 0.25 * t),
-                          blurRadius: 8.0 + 6.0 * t,
+                          color: c.accent.withValues(alpha: 0.18 + 0.25 * tv),
+                          blurRadius: 8.0 + 6.0 * tv,
                         ),
                       ]
                     : null,
               ),
               child: Text(
-                'ПРИМЕНИТЬ',
+                t.customization.topBar.apply,
                 style: TextStyle(
                   color: widget.onTap != null
                       ? Colors.white
@@ -398,7 +398,7 @@ class _Preview extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              (profile.username ?? 'OPERATIVE').toUpperCase(),
+                              (profile.username ?? t.customization.preview.defaultUsername).toUpperCase(),
                               style: TextStyle(
                                 color: textMain,
                                 fontSize: 13,
@@ -410,13 +410,13 @@ class _Preview extends ConsumerWidget {
                             Row(
                               children: [
                                 _PreviewChip(
-                                  label: 'LEVEL $level',
+                                  label: t.customization.preview.level(level: level),
                                   borderColor: c.accent.withValues(alpha: 0.5),
                                   textColor: c.accent,
                                 ),
                                 const SizedBox(width: 6),
                                 _PreviewChip(
-                                  label: '${profile.designPoints} DP',
+                                  label: t.customization.preview.designPoints(dp: profile.designPoints),
                                   borderColor: c.dp.withValues(alpha: 0.45),
                                   textColor: c.dp,
                                   icon: Icons.palette_outlined,
@@ -433,7 +433,7 @@ class _Preview extends ConsumerWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '${profile.totalXp} XP TOTAL',
+                        t.customization.preview.xpTotal(xp: profile.totalXp),
                         style: TextStyle(
                           color: c.accent,
                           fontSize: 10,
@@ -442,7 +442,7 @@ class _Preview extends ConsumerWidget {
                         ),
                       ),
                       Text(
-                        '$xpToNext XP TO LVL ${level + 1}',
+                        t.customization.preview.xpToLevel(xp: xpToNext, level: level + 1),
                         style: TextStyle(color: textSub, fontSize: 9),
                       ),
                     ],
@@ -471,7 +471,7 @@ class _Preview extends ConsumerWidget {
                   Align(
                     alignment: Alignment.centerRight,
                     child: Text(
-                      'ПРЕДПРОСМОТР',
+                      t.customization.preview.label,
                       style: TextStyle(
                         color: c.accent.withValues(alpha: 0.5),
                         fontSize: 8,
@@ -728,9 +728,9 @@ class _NonePatternCardState extends ConsumerState<_NonePatternCard>
                       color: c.accentSecondary.withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: const Text(
-                      'АКТИВНО',
-                      style: TextStyle(
+                    child: Text(
+                      t.customization.card.active,
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 7,
                         fontWeight: FontWeight.w800,
@@ -758,7 +758,7 @@ class _NonePatternCardState extends ConsumerState<_NonePatternCard>
             ),
             const SizedBox(height: 8),
             Text(
-              'БЕЗ УЗОРА',
+              t.customization.card.noPattern,
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -838,8 +838,8 @@ class _AssetCardState extends ConsumerState<_AssetCard>
           ? widget.onTap
           : () {
               final msg = widget.asset.priceDP > 0
-                  ? 'Требуется ${widget.asset.priceDP} DP для разблокировки'
-                  : 'Этот элемент недоступен';
+                  ? t.customization.snack.unlockRequired(dp: widget.asset.priceDP)
+                  : t.customization.snack.unavailable;
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 content: Text(msg),
                 duration: const Duration(seconds: 2),
@@ -899,9 +899,9 @@ class _AssetCardState extends ConsumerState<_AssetCard>
                       color: c.accentSecondary.withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: const Text(
-                      'АКТИВНО',
-                      style: TextStyle(
+                    child: Text(
+                      t.customization.card.active,
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 7,
                         fontWeight: FontWeight.w800,
@@ -953,8 +953,8 @@ class _AssetCardState extends ConsumerState<_AssetCard>
                   right: 5,
                   child: Tooltip(
                     message: widget.asset.priceDP > 0
-                        ? '${widget.asset.priceDP} DP'
-                        : 'Заблокировано',
+                        ? t.customization.preview.designPoints(dp: widget.asset.priceDP)
+                        : t.customization.card.locked,
                     child: Container(
                       width: 18,
                       height: 18,

@@ -70,9 +70,9 @@ class _MeditationPresetBuilderScreenState
       final leave = await confirmDestructive(
         context,
         ref,
-        title: 'Выйти из конструктора?',
-        message: 'Несохранённый пресет будет потерян.',
-        confirmLabel: 'Выйти',
+        title: t.meditationBuilder.leaveDialog.title,
+        message: t.meditationBuilder.leaveDialog.message,
+        confirmLabel: t.meditationBuilder.leaveDialog.confirm,
       );
       if (!leave) return;
     }
@@ -113,7 +113,9 @@ class _MeditationPresetBuilderScreenState
             onPressed: _handleBack,
           ),
           title: Text(
-            widget.editPreset != null ? 'РЕДАКТИРОВАНИЕ' : 'НОВЫЙ ПРЕСЕТ',
+            widget.editPreset != null
+                ? t.meditationBuilder.header.edit
+                : t.meditationBuilder.header.create,
             style: TextStyle(
               color: c.accent,
               fontSize: 13,
@@ -140,14 +142,15 @@ class _MeditationPresetBuilderScreenState
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
                       ),
-                      child: const Text('← Назад'),
+                      child: Text(t.meditationBuilder.nav.back),
                     ),
                   )
                 else
                   const Expanded(child: SizedBox()),
                 const SizedBox(width: 12),
                 Text(
-                  'Шаг ${_page + 1}/$_totalPages',
+                  t.meditationBuilder.nav.step(
+                      current: _page + 1, total: _totalPages),
                   style:
                       TextStyle(color: c.textSecondary, fontSize: 12),
                 ),
@@ -165,8 +168,8 @@ class _MeditationPresetBuilderScreenState
                           borderRadius: BorderRadius.circular(10)),
                     ),
                     child: Text(_page < _totalPages - 1
-                        ? 'Далее →'
-                        : 'СОХРАНИТЬ'),
+                        ? t.meditationBuilder.nav.next
+                        : t.meditationBuilder.nav.save),
                   ),
                 ),
               ],
@@ -182,7 +185,9 @@ class _MeditationPresetBuilderScreenState
               nameCtrl: _nameCtrl,
               descCtrl: _descCtrl,
               c: c,
-              nameError: _showNameError ? 'Введите название пресета' : null,
+              nameError: _showNameError
+                  ? t.meditationBuilder.name.emptyError
+                  : null,
             ),
             _ChainPage(
               preset: _preset,
@@ -275,19 +280,19 @@ class _NamePage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Label('Название пресета *', c),
+          _Label(t.meditationBuilder.name.label, c),
           const SizedBox(height: 12),
           _Field(
               controller: nameCtrl,
-              hint: 'Например: Утренняя медитация',
+              hint: t.meditationBuilder.name.hint,
               errorText: nameError,
               c: c),
           const SizedBox(height: 20),
-          _Label('Описание (необязательно)', c),
+          _Label(t.meditationBuilder.name.descLabel, c),
           const SizedBox(height: 12),
           _Field(
               controller: descCtrl,
-              hint: 'Краткое описание сессии',
+              hint: t.meditationBuilder.name.descHint,
               maxLines: 3,
               c: c),
         ],
@@ -369,12 +374,12 @@ class _ChainPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Label('СТРУКТУРА', c),
+          _Label(t.meditationBuilder.chain.structureLabel, c),
           const SizedBox(height: 10),
           Row(
             children: [
               _ToggleOpt(
-                label: 'Только\nмедитация',
+                label: t.meditationBuilder.chain.meditationOnly,
                 icon: Icons.self_improvement_rounded,
                 selected: !preset.hasBreathing,
                 onTap: () =>
@@ -383,7 +388,7 @@ class _ChainPage extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               _ToggleOpt(
-                label: 'Дыхание +\nМедитация',
+                label: t.meditationBuilder.chain.breathingPlusMeditation,
                 icon: Icons.air_rounded,
                 selected: preset.hasBreathing,
                 onTap: () =>
@@ -394,12 +399,12 @@ class _ChainPage extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           if (preset.hasBreathing) ...[
-            _Label('ДЫХАНИЕ', c),
+            _Label(t.meditationBuilder.chain.breathingLabel, c),
             const SizedBox(height: 10),
             _NumberRow(
-              label: 'Длительность',
+              label: t.meditationBuilder.chain.duration,
               value: preset.breathingDurationMin,
-              unit: 'мин',
+              unit: t.meditationBuilder.chain.minUnit,
               min: 1,
               max: 30,
               onChanged: (v) =>
@@ -415,12 +420,12 @@ class _ChainPage extends StatelessWidget {
             ),
             const SizedBox(height: 20),
           ],
-          _Label('МЕДИТАЦИЯ', c),
+          _Label(t.meditationBuilder.chain.meditationLabel, c),
           const SizedBox(height: 10),
           _NumberRow(
-            label: 'Длительность',
+            label: t.meditationBuilder.chain.duration,
             value: preset.meditationDurationMin,
-            unit: 'мин',
+            unit: t.meditationBuilder.chain.minUnit,
             min: 1,
             max: 120,
             onChanged: (v) =>
@@ -451,10 +456,10 @@ class _AudioPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Label('ГРОМКОСТЬ', c),
+          _Label(t.meditationBuilder.audio.volumeLabel, c),
           const SizedBox(height: 12),
           _SliderRow(
-            label: 'МУЗЫКА',
+            label: t.meditationBuilder.audio.music,
             value: preset.baseVolume,
             onChanged: (v) =>
                 onChanged(preset.copyWith(baseVolume: v)),
@@ -462,7 +467,7 @@ class _AudioPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           _SliderRow(
-            label: 'AMBIENT',
+            label: t.meditationBuilder.audio.ambient,
             value: preset.ambientVolume,
             onChanged: (v) =>
                 onChanged(preset.copyWith(ambientVolume: v)),
@@ -470,7 +475,7 @@ class _AudioPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           _SliderRow(
-            label: 'ГОЛОС',
+            label: t.meditationBuilder.audio.voice,
             value: preset.voiceVolume,
             onChanged: (v) =>
                 onChanged(preset.copyWith(voiceVolume: v)),
@@ -499,7 +504,7 @@ class _AffirmationsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     if (packs.isEmpty) {
       return Center(
-        child: Text('Паки аффирмаций недоступны',
+        child: Text(t.meditationBuilder.affirmations.unavailable,
             style: TextStyle(color: c.textSecondary, fontSize: 14)),
       );
     }
@@ -512,7 +517,7 @@ class _AffirmationsPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Label('ПАК АФФИРМАЦИЙ', c),
+          _Label(t.meditationBuilder.affirmations.packLabel, c),
           const SizedBox(height: 12),
           DropdownButtonFormField<String?>(
             value: preset.affirmationPackId,
@@ -535,7 +540,7 @@ class _AffirmationsPage extends StatelessWidget {
             items: [
               DropdownMenuItem<String?>(
                 value: null,
-                child: Text('Без аффирмаций',
+                child: Text(t.meditationBuilder.affirmations.none,
                     style: TextStyle(
                         color: c.textSecondary, fontSize: 13)),
               ),
@@ -547,12 +552,12 @@ class _AffirmationsPage extends StatelessWidget {
           ),
           if (preset.affirmationPackId != null) ...[
             const SizedBox(height: 16),
-            _Label('ИНТЕРВАЛ', c),
+            _Label(t.meditationBuilder.affirmations.intervalLabel, c),
             const SizedBox(height: 8),
             _NumberRow(
-              label: 'Каждые',
+              label: t.meditationBuilder.affirmations.every,
               value: preset.affirmationIntervalSecs,
-              unit: 'сек',
+              unit: t.meditationBuilder.affirmations.secUnit,
               min: 10,
               max: 300,
               step: 10,
@@ -564,7 +569,7 @@ class _AffirmationsPage extends StatelessWidget {
           if (selectedPack != null &&
               selectedPack.phrases.isNotEmpty) ...[
             const SizedBox(height: 16),
-            _Label('ПРЕДПРОСМОТР', c),
+            _Label(t.meditationBuilder.affirmations.previewLabel, c),
             const SizedBox(height: 8),
             ...selectedPack.phrases.take(3).map(
                   (ph) => Padding(
@@ -592,7 +597,8 @@ class _AffirmationsPage extends StatelessWidget {
                 ),
             if (selectedPack.phrases.length > 3)
               Text(
-                'и ещё ${selectedPack.phrases.length - 3} фраз...',
+                t.meditationBuilder.affirmations
+                    .morePhrases(n: selectedPack.phrases.length - 3),
                 style:
                     TextStyle(color: c.textSecondary, fontSize: 11),
               ),
@@ -740,16 +746,15 @@ class _PatternRow extends StatelessWidget {
     required this.c,
   });
 
-  static const _patterns = [
-    ('box', 'Box 4×4', '4-4-4-4'),
-    ('4-7-8', '4-7-8', '4-7-8'),
-    ('coherence', 'Coherence', '5-5'),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final patterns = [
+      ('box', t.meditationBuilder.patterns.box, '4-4-4-4'),
+      ('4-7-8', '4-7-8', '4-7-8'),
+      ('coherence', t.meditationBuilder.patterns.coherence, '5-5'),
+    ];
     return Row(
-      children: _patterns.map((rec) {
+      children: patterns.map((rec) {
         final (id, name, timing) = rec;
         final isSelected = selected == id;
         return Expanded(

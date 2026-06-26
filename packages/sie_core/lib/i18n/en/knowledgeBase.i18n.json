@@ -1,0 +1,70 @@
+{
+  "topBar": {
+    "title": "KNOWLEDGE BASE"
+  },
+  "sections": {
+    "systemModules": "SYSTEM MODULES",
+    "progressTable": "PROGRESS TABLE",
+    "corporateEthics": "CORPORATE ETHICS"
+  },
+  "header": {
+    "matrixVersion": "SiE KNOWLEDGE MATRIX v1.0",
+    "intro": "The SiE Corporation is a self-development ecosystem built on scientific protocols. Each system module acts on specific neural and physiological mechanisms. Explore the knowledge base to understand exactly how each tool works and how to maximize your progress."
+  },
+  "entries": {
+    "breathing": {
+      "label": "BREATHING",
+      "subtitle": "Nervous system reset"
+    },
+    "habits": {
+      "label": "HABIT ARCHIVE",
+      "subtitle": "Neural connection archive"
+    },
+    "focus": {
+      "label": "FOCUS PROTOCOL",
+      "subtitle": "Deep work protocol"
+    },
+    "openModule": "OPEN MODULE",
+    "openModuleSemantics": "Open module"
+  },
+  "xpTable": {
+    "headerActivity": "ACTIVITY",
+    "headerReward": "REWARD",
+    "headerModule": "MODULE",
+    "footer": "1000 XP = LEVEL UP  ·  Your level determines an operative's rank in the SiE hierarchy",
+    "rows": {
+      "breathingSession": "Completing a breathing session",
+      "breathingHold": "Breath hold ≥ 30 sec",
+      "habitDailyMark": "Marking a habit for the day",
+      "habitFirstCreated": "Creating your first habit",
+      "habitStreak7": "7-day habit streak",
+      "focusSession": "Completing a focus session",
+      "focusBreak": "Completing a rest block"
+    },
+    "rewards": {
+      "breathingSession": "100 XP",
+      "breathingHold": "10–80 XP",
+      "habitDailyMark": "15 XP",
+      "habitFirstCreated": "25 XP",
+      "habitStreak7": "50 XP",
+      "focusSession": "30 XP",
+      "focusBreak": "5 XP"
+    },
+    "modules": {
+      "breathing": "Breathing",
+      "habits": "Habits",
+      "focus": "Focus"
+    }
+  },
+  "ethics": {
+    "paragraph1": "SiE — Self-improvement Ecosystem — is not an app, it is an operating system for personal growth. Every action here is a contribution to the long-term architecture of your effectiveness.",
+    "paragraph2": "We believe in science, not motivation. Motivation is unstable — systems and protocols are constant. Each SiE module is built on verified mechanics: the neurobiology of breathing, the psychology of habit formation, and the cognitive science of concentration.",
+    "paragraph3": "An SiE operative takes responsibility for their progress. XP is not a game mechanic, it is a quantitative measure of effort invested. Your level is your rank in the hierarchy of those who chose a systematic approach to themselves.",
+    "paragraph4": "Corporate motto: \"Discipline is a form of respect for your future self.\""
+  },
+  "bodies": {
+    "breathing": "The breathing practices of the SiE module are based on the Wim Hof method — a technique of hyperventilation followed by breath holding.\n\nPhysiologically: a series of rapid breaths lowers the CO₂ level in the blood and raises pH (alkalosis). Holding the breath on the exhale induces controlled hypoxic stress, stimulating mitochondrial adaptations and a release of adrenaline from the adrenal glands.\n\nProven effects (randomized studies):\n→ Reduction of subjective stress by up to 30% after a single session\n→ Increased pain threshold and immune response\n→ Improved energy tone through oxygen saturation of tissues\n\nRecommended protocol: 3 rounds of 30 cycles. The minimum effective session is 30 seconds of active practice.",
+    "habits": "A habit is a behavior transferred into the basal ganglia: the neural structure responsible for automating actions. Once a habit is formed, it no longer requires willpower resources.\n\nFormation mechanics (C. Duhigg's model):\n→ Cue → Routine → Reward\n\nForming a stable neural connection takes an average of 66 days of regular performance (Lally et al. study, UCL). The key metric is the streak: an uninterrupted series of marks.\n\nThe SiE strategy: start with micro-habits (the 2-minute rule). Small wins accumulate behavioral momentum. The tracking system and pins for priority protocols help you manage attention.",
+    "focus": "The Pomodoro method (Francesco Cirillo, 1980s) uses time blocks to protect the deep flow state from interruptions.\n\nNeurobiology: during a 25-minute block, the brain enters a state of sustained activation of the prefrontal cortex. Rest periods are necessary to consolidate working memory and prevent cognitive exhaustion.\n\nSiE protocol settings:\n→ Work block: 15–60 minutes (default 25)\n→ Short break: 5–15 minutes (default 5)\n→ Long break: 15–30 minutes after every 4 sessions\n\nResearch shows: 4 completed pomodoros per day correlate with 2× productivity compared to continuous work of the same total time."
+  }
+}

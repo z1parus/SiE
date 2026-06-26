@@ -1,0 +1,36 @@
+{
+  "topBar": {
+    "title": "ПРОГРЕСС"
+  },
+  "error": {
+    "noConnection": "Подключение к интернету отсутствует"
+  },
+  "sections": {
+    "activityMatrix": "МАТРИЦА АКТИВНОСТИ",
+    "xpGrowth": "РОСТ XP — 7 ДНЕЙ",
+    "focusTime": "ВРЕМЯ ФОКУСА — 7 ДНЕЙ"
+  },
+  "stats": {
+    "focusHoursMinutes": "{h}ч {m}м",
+    "focusMinutes": "{m}м",
+    "totalFocus": "ВСЕГО\nФОКУС",
+    "habits30Days": "ПРИВЫЧКИ\n30 ДНЕЙ",
+    "dayStreak": "ДНЕЙ\nПОДРЯД"
+  },
+  "heatMap": {
+    "weekdayInitials": "П,,С,,П,,В",
+    "monthsShort": "Янв,Фев,Мар,Апр,Май,Июн,Июл,Авг,Сен,Окт,Ноя,Дек",
+    "less": "МЕНЬШЕ",
+    "more": "БОЛЬШЕ"
+  },
+  "weekdaysShort": "Пн,Вт,Ср,Чт,Пт,Сб,Вс",
+  "xpChart": {
+    "legend": "XP / ДЕНЬ",
+    "tooltip": "+{xp} XP"
+  },
+  "focusChart": {
+    "axisMinutes": "{n}м",
+    "legend": "МИН / ДЕНЬ",
+    "tooltip": "{min} мин"
+  }
+}

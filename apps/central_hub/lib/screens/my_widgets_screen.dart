@@ -96,7 +96,7 @@ class _MyWidgetsScreenState extends ConsumerState<MyWidgetsScreen> {
         backgroundColor: c.surface,
         foregroundColor: c.textPrimary,
         elevation: 0,
-        title: Text('Мои виджеты',
+        title: Text(t.myWidgets.appBar.title,
             style: TextStyle(
                 color: c.textPrimary,
                 fontSize: 16,
@@ -131,9 +131,9 @@ class _WidgetRow extends StatelessWidget {
   const _WidgetRow({required this.entry, required this.c, required this.onTap});
 
   String get _sizeLabel => switch (entry.config.sizeBucket) {
-        WidgetSizeBucket.small => 'Малый',
-        WidgetSizeBucket.medium => 'Средний',
-        WidgetSizeBucket.large => 'Большой',
+        WidgetSizeBucket.small => t.myWidgets.size.small,
+        WidgetSizeBucket.medium => t.myWidgets.size.medium,
+        WidgetSizeBucket.large => t.myWidgets.size.large,
       };
 
   @override
@@ -165,7 +165,9 @@ class _WidgetRow extends StatelessWidget {
                           fontSize: 14,
                           fontWeight: FontWeight.w600)),
                   const SizedBox(height: 3),
-                  Text('$_sizeLabel · #${entry.appWidgetId}',
+                  Text(
+                      t.myWidgets.row.subtitle(
+                          size: _sizeLabel, id: entry.appWidgetId),
                       style:
                           TextStyle(color: c.textSecondary, fontSize: 12)),
                 ],
@@ -194,7 +196,7 @@ class _EmptyState extends StatelessWidget {
             Icon(Icons.widgets_outlined, color: c.iconMuted, size: 48),
             const SizedBox(height: 16),
             Text(
-              'Виджетов пока нет',
+              t.myWidgets.empty.title,
               style: TextStyle(
                   color: c.textPrimary,
                   fontSize: 16,
@@ -202,9 +204,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Добавь виджет SiE на домашний экран '
-              '(долгое нажатие на экране → Виджеты), затем вернись сюда, '
-              'чтобы настроить его.',
+              t.myWidgets.empty.description,
               textAlign: TextAlign.center,
               style: TextStyle(color: c.textSecondary, fontSize: 13, height: 1.4),
             ),

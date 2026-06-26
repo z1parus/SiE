@@ -1,0 +1,9 @@
+{
+  "backToExit": "Press again to exit",
+  "tabs": {
+    "hub": "Hub",
+    "operations": "Operations",
+    "garage": "Garage",
+    "hallOfFame": "Hall of Fame"
+  }
+}

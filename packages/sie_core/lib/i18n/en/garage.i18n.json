@@ -1,0 +1,53 @@
+{
+  "systemUnavailable": "SYSTEM UNAVAILABLE",
+  "dayLockedSnackbar": "Complete the previous day to unlock",
+  "header": {
+    "protocolComplete": "PROTOCOL COMPLETE",
+    "introCourseDay": "INTRO COURSE — DAY {count}/7"
+  },
+  "pipeline": {
+    "dayLabel": "DAY {day}"
+  },
+  "tasks": {
+    "sectionTitle": "OPERATIONAL TASKS",
+    "launch": "LAUNCH → {destination}",
+    "destinationBreathing": "BREATHING",
+    "destinationFocusForge": "FOCUS FORGE",
+    "destinationHabitArchive": "HABITS"
+  },
+  "story": {
+    "dayLabel": "DAY {day}",
+    "classified": "CLASSIFIED",
+    "lockedTransmission": "Complete the previous protocol to gain access\nto this transmission."
+  },
+  "lockedDay": "COMPLETE THE PREVIOUS DAY",
+  "dayLockBanner": {
+    "title": "NEXT DAY UNLOCKS TOMORROW",
+    "body": "You closed the previous day today. Come back tomorrow."
+  },
+  "completedBadge": "DAY COMPLETE · +1000 DP EARNED",
+  "claim": {
+    "button": "★  CLAIM REWARD  ★",
+    "reward": "+ 1 000 DP DESIGN POINTS"
+  },
+  "completedView": {
+    "badgeName": "TESTER",
+    "badgeRarity": "LEGENDARY BADGE",
+    "certificateTitle": "SiE CORPORATION CERTIFICATE",
+    "certificateBody": "You have successfully completed the 7-day SiE Corporation intro protocol. The core self-development tool stack has been mastered and integrated into your daily workflow.",
+    "statDaysCompleted": "DAYS COMPLETED",
+    "statDaysCompletedValue": "7 / 7",
+    "statDpEarned": "DP EARNED",
+    "statDpEarnedValue": "7 000",
+    "statStatus": "STATUS",
+    "statStatusValue": "CERTIFIED",
+    "footer": "Stay tuned — new courses\nand challenges are coming soon to Garage."
+  },
+  "rewardDialog": {
+    "protocolComplete": "PROTOCOL COMPLETE!",
+    "dayClosed": "DAY {day} CLOSED",
+    "courseCompleteBody": "The «Tester» badge is unlocked!\nYou're in the top 10%.",
+    "dayClaimedBody": "+1 000 Design Points awarded\nNext day unlocked.",
+    "continueBtn": "CONTINUE"
+  }
+}

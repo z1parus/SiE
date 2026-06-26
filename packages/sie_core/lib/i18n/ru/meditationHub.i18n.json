@@ -1,0 +1,52 @@
+{
+  "appBar": {
+    "title": "ДЕФРАГМЕНТАЦИЯ"
+  },
+  "stats": {
+    "days": "дней",
+    "minPerWeek": "мин/нед",
+    "hoursMinutes": "{h}ч {m}",
+    "clarityLevel": "CLARITY LVL {level}"
+  },
+  "quickStart": {
+    "minutes": "{n} МИН"
+  },
+  "filters": {
+    "all": "Все",
+    "breathing": "С дыханием",
+    "affirmations": "Аффирмации"
+  },
+  "empty": {
+    "noPresets": "Нет пресетов",
+    "nothingFound": "Ничего не найдено",
+    "createFirst": "Создайте свой первый пресет медитации",
+    "noneForFilter": "Под выбранный фильтр пресетов нет",
+    "resetFilter": "СБРОСИТЬ ФИЛЬТР",
+    "loadError": "Ошибка загрузки"
+  },
+  "card": {
+    "systemBadge": "SYS",
+    "minutes": "{n} мин",
+    "actionsLabel": "Действия с пресетом",
+    "breathing": "Дыхание {n} мин",
+    "meditation": "Медитация {n} мин"
+  },
+  "delete": {
+    "title": "Удалить пресет?",
+    "message": "Пресет «{name}» будет удалён без возможности восстановления.",
+    "confirm": "Удалить"
+  },
+  "duplicate": {
+    "copySuffix": "{name} (копия)",
+    "title": "Дублировать пресет",
+    "nameLabel": "Название",
+    "cancel": "Отмена",
+    "create": "Создать"
+  },
+  "actions": {
+    "launch": "Запустить сессию",
+    "edit": "Редактировать",
+    "duplicate": "Дублировать",
+    "delete": "Удалить"
+  }
+}

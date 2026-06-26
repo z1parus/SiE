@@ -60,7 +60,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     } on AuthException catch (e) {
       setState(() => _errorMessage = e.message.toUpperCase());
     } catch (_) {
-      setState(() => _errorMessage = 'CONNECTION ERROR');
+      setState(() => _errorMessage = t.auth.errors.connection);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -104,7 +104,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       child: TextButton(
                         onPressed: _isLoading ? null : _forgotPassword,
                         child: Text(
-                          'ЗАБЫЛИ ПАРОЛЬ?',
+                          t.auth.actions.forgotPassword,
                           style: TextStyle(
                             color: c.textSecondary,
                             fontSize: 11,
@@ -146,10 +146,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        Text('OPERATIVE\nAUTHENTICATION', style: theme.textTheme.headlineMedium),
+        Text(t.auth.header.title, style: theme.textTheme.headlineMedium),
         const SizedBox(height: 8),
         Text(
-          _isLogin ? 'ENTER CLEARANCE CREDENTIALS' : 'REGISTER NEW OPERATIVE',
+          _isLogin
+              ? t.auth.header.subtitleLogin
+              : t.auth.header.subtitleRegister,
           style: theme.textTheme.bodyMedium,
         ),
       ],
@@ -163,20 +165,22 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         children: [
           _NeonField(
             controller: _emailController,
-            label: 'EMAIL ADDRESS',
-            hint: 'operative@sie.dev',
+            label: t.auth.fields.emailLabel,
+            hint: t.auth.fields.emailHint,
             keyboardType: TextInputType.emailAddress,
-            validator: (v) =>
-                (v == null || !v.contains('@')) ? 'INVALID EMAIL FORMAT' : null,
+            validator: (v) => (v == null || !v.contains('@'))
+                ? t.auth.fields.emailInvalid
+                : null,
           ),
           const SizedBox(height: 16),
           _NeonField(
             controller: _passwordController,
-            label: 'PASSPHRASE',
+            label: t.auth.fields.passwordLabel,
             hint: '••••••••',
             obscureText: true,
-            validator: (v) =>
-                (v == null || v.length < 6) ? 'MIN 6 CHARACTERS REQUIRED' : null,
+            validator: (v) => (v == null || v.length < 6)
+                ? t.auth.fields.passwordTooShort
+                : null,
           ),
           AnimatedSize(
             duration: const Duration(milliseconds: 250),
@@ -188,10 +192,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       const SizedBox(height: 16),
                       _NeonField(
                         controller: _usernameController,
-                        label: 'OPERATIVE ID',
-                        hint: 'codename',
+                        label: t.auth.fields.usernameLabel,
+                        hint: t.auth.fields.usernameHint,
                         validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'OPERATIVE ID REQUIRED'
+                            ? t.auth.fields.usernameRequired
                             : null,
                       ),
                     ],
@@ -234,7 +238,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     final c = ref.read(sieColorsProvider);
     final email = _emailController.text.trim();
     if (!email.contains('@')) {
-      setState(() => _errorMessage = 'ENTER EMAIL FIRST');
+      setState(() => _errorMessage = t.auth.errors.enterEmailFirst);
       return;
     }
     try {
@@ -245,13 +249,13 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           behavior: SnackBarBehavior.floating,
           backgroundColor: c.surface,
           content: Text(
-            'Письмо для сброса пароля отправлено на $email',
+            t.auth.reset.emailSent(email: email),
             style: TextStyle(color: c.textPrimary),
           ),
         ),
       );
     } catch (_) {
-      if (mounted) setState(() => _errorMessage = 'CONNECTION ERROR');
+      if (mounted) setState(() => _errorMessage = t.auth.errors.connection);
     }
   }
 
@@ -265,7 +269,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
             )
           : Text(
-              _isLogin ? 'ACCESS GRANTED' : 'REGISTER OPERATIVE',
+              _isLogin
+                  ? t.auth.actions.submitLogin
+                  : t.auth.actions.submitRegister,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 13,
@@ -283,7 +289,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         _errorMessage = null;
       }),
       child: Text(
-        _isLogin ? 'NO CLEARANCE?  REGISTER →' : 'ALREADY CLEARED?  SIGN IN →',
+        _isLogin
+            ? t.auth.actions.toggleToRegister
+            : t.auth.actions.toggleToLogin,
         style: TextStyle(
           color: c.textSecondary,
           fontSize: 12,
@@ -344,10 +352,10 @@ class _PressButtonState extends ConsumerState<_PressButton>
       child: AnimatedBuilder(
         animation: _ctrl,
         builder: (_, child) {
-          final t = _ctrl.value;
+          final pressT = _ctrl.value;
           final gradientColors = [c.accent, c.accentSecondary];
           return Transform.scale(
-            scale: 1.0 - 0.03 * t,
+            scale: 1.0 - 0.03 * pressT,
             child: Container(
               height: 52,
               decoration: BoxDecoration(
@@ -356,8 +364,8 @@ class _PressButtonState extends ConsumerState<_PressButton>
                 boxShadow: [
                   BoxShadow(
                     color: c.accent.withValues(
-                        alpha: (c.isLightMode ? 0.15 : 0.3) + 0.3 * t),
-                    blurRadius: 12.0 + 8.0 * t,
+                        alpha: (c.isLightMode ? 0.15 : 0.3) + 0.3 * pressT),
+                    blurRadius: 12.0 + 8.0 * pressT,
                     spreadRadius: 0,
                     offset: const Offset(0, 2),
                   ),
@@ -480,7 +488,8 @@ class _NeonFieldState extends ConsumerState<_NeonField> {
                     color: c.iconMuted,
                     size: 20,
                   ),
-                  tooltip: _obscured ? 'Показать пароль' : 'Скрыть пароль',
+                  tooltip:
+                      _obscured ? t.auth.password.show : t.auth.password.hide,
                   onPressed: () => setState(() => _obscured = !_obscured),
                 )
               : null,
@@ -517,18 +526,18 @@ class _PendingConfirmScreen extends ConsumerWidget {
     final infoCard = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('CONFIRMATION REQUIRED', style: theme.textTheme.labelSmall),
+        Text(t.auth.pending.confirmationRequired,
+            style: theme.textTheme.labelSmall),
         const SizedBox(height: 8),
         Text(
-          'Подтвердите email, чтобы активировать доступ оператора. '
-          'Откройте письмо и перейдите по ссылке.',
+          t.auth.pending.confirmBody,
           style: theme.textTheme.bodyMedium,
         ),
         // Dev-only Mailpit hint — never shown in release builds.
         if (!kReleaseMode) ...[
           const SizedBox(height: 12),
           Text(
-            'Local dev — check Mailpit:',
+            t.auth.pending.localDevHint,
             style: TextStyle(color: c.textSecondary, fontSize: 12),
           ),
           const SizedBox(height: 4),
@@ -568,7 +577,7 @@ class _PendingConfirmScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text('REGISTRATION\nINITIATED',
+                Text(t.auth.pending.title,
                     style: theme.textTheme.headlineMedium),
                 const SizedBox(height: 24),
                 Container(
@@ -579,9 +588,9 @@ class _PendingConfirmScreen extends ConsumerWidget {
                 const SizedBox(height: 32),
                 _PressButton(
                   onTap: onContinue,
-                  child: const Text(
-                    'PROCEED TO SIGN IN',
-                    style: TextStyle(
+                  child: Text(
+                    t.auth.pending.proceed,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 13,
                       letterSpacing: 2.0,

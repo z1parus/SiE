@@ -32,7 +32,7 @@ class _MeditationHubScreenState extends ConsumerState<MeditationHubScreen> {
             onPressed: () => Navigator.of(context).pop(),
           ),
           title: Text(
-            'ДЕФРАГМЕНТАЦИЯ',
+            t.meditationHub.appBar.title,
             style: TextStyle(
               color: c.accent,
               fontSize: 14,
@@ -84,18 +84,18 @@ class _MeditationHubScreenState extends ConsumerState<MeditationHubScreen> {
                     return SieEmptyState(
                       icon: Icons.self_improvement_rounded,
                       title: noneAtAll
-                          ? 'Нет пресетов'
-                          : 'Ничего не найдено',
+                          ? t.meditationHub.empty.noPresets
+                          : t.meditationHub.empty.nothingFound,
                       subtitle: noneAtAll
-                          ? 'Создайте свой первый пресет медитации'
-                          : 'Под выбранный фильтр пресетов нет',
+                          ? t.meditationHub.empty.createFirst
+                          : t.meditationHub.empty.noneForFilter,
                       action: noneAtAll
                           ? null
                           : TextButton(
                               onPressed: () =>
                                   setState(() => _filter = 'all'),
                               child: Text(
-                                'СБРОСИТЬ ФИЛЬТР',
+                                t.meditationHub.empty.resetFilter,
                                 style: TextStyle(
                                   color: c.accent,
                                   fontSize: 12,
@@ -129,7 +129,7 @@ class _MeditationHubScreenState extends ConsumerState<MeditationHubScreen> {
                   child: SieSkeletonList(itemCount: 4, itemHeight: 80),
                 ),
                 error: (e, _) => Center(
-                  child: Text('Ошибка загрузки',
+                  child: Text(t.meditationHub.empty.loadError,
                       style: TextStyle(color: c.textSecondary)),
                 ),
               ),
@@ -189,7 +189,7 @@ class _MiniStatsWidget extends StatelessWidget {
             icon: Icons.local_fire_department_rounded,
             iconColor: const Color(0xFFFF6B35),
             label: '${stats.zenStreakDays}',
-            sub: 'дней',
+            sub: t.meditationHub.stats.days,
             c: c,
           ),
           _divider(),
@@ -197,7 +197,7 @@ class _MiniStatsWidget extends StatelessWidget {
             icon: Icons.access_time_rounded,
             iconColor: c.accent,
             label: _fmtMins(stats.claritySecondsThisWeek),
-            sub: 'мин/нед',
+            sub: t.meditationHub.stats.minPerWeek,
             c: c,
           ),
           _divider(),
@@ -206,7 +206,7 @@ class _MiniStatsWidget extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  'CLARITY LVL ${stats.clarityXpLevel}',
+                  t.meditationHub.stats.clarityLevel(level: stats.clarityXpLevel),
                   style: TextStyle(
                       color: c.accent,
                       fontSize: 10,
@@ -241,7 +241,9 @@ class _MiniStatsWidget extends StatelessWidget {
 
   String _fmtMins(int secs) {
     final m = secs ~/ 60;
-    return m < 60 ? '$m' : '${m ~/ 60}ч ${m % 60}';
+    return m < 60
+        ? '$m'
+        : t.meditationHub.stats.hoursMinutes(h: m ~/ 60, m: m % 60);
   }
 }
 
@@ -326,7 +328,7 @@ class _QuickStartStrip extends StatelessWidget {
                       Icon(_presetIcon(p), color: c.accent, size: 14),
                       const SizedBox(width: 4),
                       Text(
-                        '${p.totalDurationMin} МИН',
+                        t.meditationHub.quickStart.minutes(n: p.totalDurationMin),
                         style: TextStyle(
                             color: c.accent,
                             fontSize: 9,
@@ -380,11 +382,13 @@ class _FilterRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          _Chip('all', 'Все', selected, onSelected, c),
+          _Chip('all', t.meditationHub.filters.all, selected, onSelected, c),
           const SizedBox(width: 8),
-          _Chip('breathing', 'С дыханием', selected, onSelected, c),
+          _Chip('breathing', t.meditationHub.filters.breathing, selected,
+              onSelected, c),
           const SizedBox(width: 8),
-          _Chip('affirmations', 'Аффирмации', selected, onSelected, c),
+          _Chip('affirmations', t.meditationHub.filters.affirmations, selected,
+              onSelected, c),
         ],
       ),
     );
@@ -491,7 +495,7 @@ class _PresetCard extends ConsumerWidget {
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
-                            'SYS',
+                            t.meditationHub.card.systemBadge,
                             style: TextStyle(
                                 color: c.accent,
                                 fontSize: 8,
@@ -515,7 +519,7 @@ class _PresetCard extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '${preset.totalDurationMin} мин',
+                  t.meditationHub.card.minutes(n: preset.totalDurationMin),
                   style: TextStyle(
                       color: c.accent,
                       fontSize: 13,
@@ -537,7 +541,7 @@ class _PresetCard extends ConsumerWidget {
               behavior: HitTestBehavior.opaque,
               child: Semantics(
                 button: true,
-                label: 'Действия с пресетом',
+                label: t.meditationHub.card.actionsLabel,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 4, vertical: 8),
@@ -564,9 +568,9 @@ class _PresetCard extends ConsumerWidget {
   String get _subtitle {
     final parts = <String>[];
     if (preset.hasBreathing) {
-      parts.add('Дыхание ${preset.breathingDurationMin} мин');
+      parts.add(t.meditationHub.card.breathing(n: preset.breathingDurationMin));
     }
-    parts.add('Медитация ${preset.meditationDurationMin} мин');
+    parts.add(t.meditationHub.card.meditation(n: preset.meditationDurationMin));
     return parts.join(' · ');
   }
 
@@ -606,10 +610,9 @@ class _PresetCard extends ConsumerWidget {
                 final ok = await confirmDestructive(
                   context,
                   ref,
-                  title: 'Удалить пресет?',
-                  message: 'Пресет «${preset.name}» будет удалён без '
-                      'возможности восстановления.',
-                  confirmLabel: 'Удалить',
+                  title: t.meditationHub.delete.title,
+                  message: t.meditationHub.delete.message(name: preset.name),
+                  confirmLabel: t.meditationHub.delete.confirm,
                 );
                 if (!ok) return;
                 ref
@@ -622,19 +625,19 @@ class _PresetCard extends ConsumerWidget {
 
   void _duplicatePreset(
       BuildContext context, WidgetRef ref, SieColors c) async {
-    final nameCtrl =
-        TextEditingController(text: '${preset.name} (копия)');
+    final nameCtrl = TextEditingController(
+        text: t.meditationHub.duplicate.copySuffix(name: preset.name));
     final newName = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: c.surface,
-        title: Text('Дублировать пресет',
+        title: Text(t.meditationHub.duplicate.title,
             style: TextStyle(color: c.textPrimary)),
         content: TextField(
           controller: nameCtrl,
           style: TextStyle(color: c.textPrimary),
           decoration: InputDecoration(
-            labelText: 'Название',
+            labelText: t.meditationHub.duplicate.nameLabel,
             labelStyle: TextStyle(color: c.textSecondary),
           ),
           autofocus: true,
@@ -642,14 +645,14 @@ class _PresetCard extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Отмена',
+            child: Text(t.meditationHub.duplicate.cancel,
                 style: TextStyle(color: c.textSecondary)),
           ),
           TextButton(
             onPressed: () =>
                 Navigator.pop(context, nameCtrl.text.trim()),
-            child:
-                Text('Создать', style: TextStyle(color: c.accent)),
+            child: Text(t.meditationHub.duplicate.create,
+                style: TextStyle(color: c.accent)),
           ),
         ],
       ),
@@ -696,27 +699,27 @@ class _PresetActionsSheet extends StatelessWidget {
             const SizedBox(height: 16),
             _ActionTile(
               icon: Icons.play_arrow_rounded,
-              label: 'Запустить сессию',
+              label: t.meditationHub.actions.launch,
               color: c.accent,
               onTap: onLaunch,
             ),
             if (onEdit != null)
               _ActionTile(
                 icon: Icons.edit_rounded,
-                label: 'Редактировать',
+                label: t.meditationHub.actions.edit,
                 color: c.textPrimary,
                 onTap: onEdit!,
               ),
             _ActionTile(
               icon: Icons.copy_rounded,
-              label: 'Дублировать',
+              label: t.meditationHub.actions.duplicate,
               color: c.textPrimary,
               onTap: onDuplicate,
             ),
             if (onDelete != null)
               _ActionTile(
                 icon: Icons.delete_outline_rounded,
-                label: 'Удалить',
+                label: t.meditationHub.actions.delete,
                 color: Colors.redAccent,
                 onTap: onDelete!,
               ),

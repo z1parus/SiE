@@ -1,0 +1,43 @@
+{
+  "topBar": {
+    "defaultName": "OPERATIVE"
+  },
+  "sections": {
+    "awards": "AWARDS",
+    "missionMedals": "MISSION MEDALS"
+  },
+  "banner": {
+    "levelXp": "LEVEL {level}  ·  {xp} XP"
+  },
+  "stats": {
+    "focus": "FOCUS",
+    "cycles": "CYCLES",
+    "rank": "RANK",
+    "level": "LVL {level}"
+  },
+  "achievements": {
+    "dataUnavailable": "AWARDS DATA UNAVAILABLE",
+    "empty": "NO AWARDS YET"
+  },
+  "achievementSheet": {
+    "xpReward": "+{xp} XP",
+    "earned": "EARNED",
+    "notEarned": "NOT EARNED",
+    "date": "DATE: {date}"
+  },
+  "medals": {
+    "empty": "NO MEDALS"
+  },
+  "friend": {
+    "remove": "Remove from friends",
+    "cancelRequest": "Cancel request",
+    "acceptRequest": "Accept request",
+    "decline": "Decline",
+    "add": "Add friend",
+    "confirmRemoveTitle": "Remove from friends?",
+    "confirmRemoveBody": "Remove {name} from your friends list?",
+    "confirmRemoveDefaultName": "this operative",
+    "cancel": "Cancel",
+    "removeAction": "Remove"
+  }
+}

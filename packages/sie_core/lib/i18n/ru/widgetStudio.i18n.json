@@ -1,0 +1,38 @@
+{
+  "appBar": {
+    "fallbackTitle": "Виджет",
+    "save": "Сохранить",
+    "moduleNotFound": "Модуль не найден"
+  },
+  "snackBar": {
+    "saved": "Виджет сохранён",
+    "error": "Ошибка: {error}"
+  },
+  "preview": {
+    "label": "Предпросмотр"
+  },
+  "section": {
+    "size": "Размер",
+    "theme": "Тема",
+    "background": "Фон",
+    "accent": "Акцент",
+    "content": "Содержимое"
+  },
+  "size": {
+    "small": "Малый",
+    "medium": "Средний",
+    "large": "Большой",
+    "changeHint": "Чтобы сменить размер — удалите виджет и добавьте нужный"
+  },
+  "theme": {
+    "followApp": "Как в приложении",
+    "dark": "Тёмная",
+    "light": "Светлая"
+  },
+  "background": {
+    "flat": "Плоский",
+    "glass": "Стекло",
+    "gradient": "Градиент",
+    "transparent": "Прозрачный"
+  }
+}

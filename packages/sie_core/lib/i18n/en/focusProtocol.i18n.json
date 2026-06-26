@@ -1,0 +1,53 @@
+{
+  "onboarding": {
+    "moduleLabel": "FOCUS",
+    "description": "Deep work protocol.",
+    "benefit": "Concentration training and burnout protection. Time blocks protect the flow state and consolidate working memory."
+  },
+  "ring": {
+    "breakLabel": "BREAK",
+    "focus": "FOCUS"
+  },
+  "topBar": {
+    "session": "SESSION {n}"
+  },
+  "banner": {
+    "focus": "FOCUS: {title}"
+  },
+  "hud": {
+    "phaseBreak": "BREAK  ·  {minutes} MIN",
+    "phaseFocus": "FOCUS PROTOCOL  ·  {minutes} MIN",
+    "stakeMode": "MODE",
+    "stakeXp": "XP AT STAKE",
+    "xpRest": "REST",
+    "xpValue": "+{xp} XP",
+    "currentPhase": "CURRENT PHASE",
+    "tapStart": "TAP START TO INITIATE PROTOCOL",
+    "pause": "PAUSE",
+    "start": "START",
+    "resume": "RESUME",
+    "reset": "RESET"
+  },
+  "settingsButton": "PROTOCOL SETTINGS",
+  "result": {
+    "close": "Close",
+    "sessionComplete": "SESSION COMPLETE",
+    "protocolExecuted": "FOCUS PROTOCOL EXECUTED",
+    "xpGained": "XP GAINED",
+    "xpValue": "+{xp} XP",
+    "dpGained": "DP GAINED",
+    "dpValue": "+{dp} DP",
+    "achievementUnlocked": "ACHIEVEMENT UNLOCKED",
+    "taskDone": "TASK COMPLETED",
+    "markTaskDone": "MARK TASK AS DONE",
+    "startBreak": "START BREAK"
+  },
+  "settings": {
+    "title": "PROTOCOL SETTINGS",
+    "lockedDuringSession": "SETTINGS LOCKED DURING SESSION",
+    "focusDuration": "FOCUS DURATION  (MIN)",
+    "breakDuration": "BREAK DURATION  (MIN)",
+    "focusMusic": "FOCUS MUSIC",
+    "breakMusic": "BREAK MUSIC"
+  }
+}

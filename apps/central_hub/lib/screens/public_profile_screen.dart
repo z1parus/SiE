@@ -37,7 +37,8 @@ class PublicProfileScreen extends ConsumerWidget {
           child: Column(
             children: [
               _PublicTopBar(
-                title: (profile.username ?? 'OPERATIVE').toUpperCase(),
+                title: (profile.username ?? t.publicProfile.topBar.defaultName)
+                    .toUpperCase(),
                 onBack: () => Navigator.of(context).pop(),
               ),
               Expanded(
@@ -73,12 +74,12 @@ class PublicProfileScreen extends ConsumerWidget {
                                   statStyle: equipped.statStyle),
                               const SizedBox(height: 16),
                               _SectionBlock(
-                                title: 'AWARDS',
+                                title: t.publicProfile.sections.awards,
                                 child: _AchievementsSection(userId: profile.id),
                               ),
                               const SizedBox(height: 16),
                               _SectionBlock(
-                                title: 'MISSION MEDALS',
+                                title: t.publicProfile.sections.missionMedals,
                                 child:
                                     _PublicMedalsSection(userId: profile.id),
                               ),
@@ -200,7 +201,7 @@ class _StatStyleBanner extends StatelessWidget {
           Icon(Icons.bolt, color: accent, size: 14),
           const SizedBox(width: 8),
           Text(
-            'LEVEL $level  ·  $xp XP',
+            t.publicProfile.banner.levelXp(level: level, xp: xp),
             style: TextStyle(
               color: accent,
               fontSize: 12,
@@ -236,7 +237,7 @@ class _StatsRow extends ConsumerWidget {
           child: _StatCard(
             icon: Icons.timer_outlined,
             value: stats.focusTime,
-            label: 'КОНЦЕНТРАЦИЯ',
+            label: t.publicProfile.stats.focus,
             statStyle: statStyle,
             c: c,
           ),
@@ -246,7 +247,7 @@ class _StatsRow extends ConsumerWidget {
           child: _StatCard(
             icon: Icons.checklist_outlined,
             value: stats.habitCompletions.toString(),
-            label: 'ЦИКЛОВ',
+            label: t.publicProfile.stats.cycles,
             statStyle: statStyle,
             c: c,
           ),
@@ -255,8 +256,8 @@ class _StatsRow extends ConsumerWidget {
         Expanded(
           child: _StatCard(
             icon: Icons.military_tech_outlined,
-            value: 'LVL ${profile.level}',
-            label: 'РАНГ',
+            value: t.publicProfile.stats.level(level: profile.level),
+            label: t.publicProfile.stats.rank,
             statStyle: statStyle,
             c: c,
           ),
@@ -358,14 +359,14 @@ class _AchievementsSection extends ConsumerWidget {
     return achAsync.when(
       loading: () => const SieSkeletonGrid(columns: 4, count: 8),
       error: (_, _) => Text(
-        'AWARDS DATA UNAVAILABLE',
+        t.publicProfile.achievements.dataUnavailable,
         style: TextStyle(
             color: c.textSecondary, fontSize: 11, letterSpacing: 1),
       ),
       data: (achievements) {
         if (achievements.isEmpty) {
           return Text(
-            'NO AWARDS YET',
+            t.publicProfile.achievements.empty,
             style: TextStyle(
                 color: c.textSecondary, fontSize: 11, letterSpacing: 1),
           );
@@ -494,7 +495,7 @@ class _AchievementSheet extends ConsumerWidget {
               Icon(Icons.bolt, color: c.accent, size: 14),
               const SizedBox(width: 4),
               Text(
-                '+${ach.xpReward} XP',
+                t.publicProfile.achievementSheet.xpReward(xp: ach.xpReward),
                 style: TextStyle(
                   color: c.accent,
                   fontSize: 11,
@@ -512,7 +513,9 @@ class _AchievementSheet extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  earned ? 'ПОЛУЧЕНО' : 'НЕ ПОЛУЧЕНО',
+                  earned
+                      ? t.publicProfile.achievementSheet.earned
+                      : t.publicProfile.achievementSheet.notEarned,
                   style: TextStyle(
                     color: earned ? c.accent : c.textSecondary,
                     fontSize: 9,
@@ -526,7 +529,8 @@ class _AchievementSheet extends ConsumerWidget {
           if (earned && ua.earnedAt != null) ...[
             const SizedBox(height: 8),
             Text(
-              'ДАТА: ${_formatDate(ua.earnedAt!)}',
+              t.publicProfile.achievementSheet
+                  .date(date: _formatDate(ua.earnedAt!)),
               style: TextStyle(
                 color: c.textSecondary,
                 fontSize: 9,
@@ -587,7 +591,7 @@ class _PublicMedalsSection extends ConsumerWidget {
       data: (medals) {
         if (medals.isEmpty) {
           return Text(
-            'НЕТ МЕДАЛЕЙ',
+            t.publicProfile.medals.empty,
             style:
                 TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),
           );
@@ -665,7 +669,7 @@ class _FriendActionSectionState extends ConsumerState<_FriendActionSection> {
 
     if (friend != null) {
       return _SocialBtn(
-        label: 'Удалить из друзей',
+        label: t.publicProfile.friend.remove,
         icon: Icons.person_remove_outlined,
         filled: false,
         busy: _busy,
@@ -674,7 +678,7 @@ class _FriendActionSectionState extends ConsumerState<_FriendActionSection> {
     }
     if (sent != null) {
       return _SocialBtn(
-        label: 'Отменить запрос',
+        label: t.publicProfile.friend.cancelRequest,
         icon: Icons.cancel_outlined,
         filled: false,
         busy: _busy,
@@ -685,7 +689,7 @@ class _FriendActionSectionState extends ConsumerState<_FriendActionSection> {
       return Row(children: [
         Expanded(
           child: _SocialBtn(
-            label: 'Принять запрос',
+            label: t.publicProfile.friend.acceptRequest,
             icon: Icons.check,
             filled: true,
             busy: _busy,
@@ -695,7 +699,7 @@ class _FriendActionSectionState extends ConsumerState<_FriendActionSection> {
         const SizedBox(width: 10),
         Expanded(
           child: _SocialBtn(
-            label: 'Отклонить',
+            label: t.publicProfile.friend.decline,
             icon: Icons.close,
             filled: false,
             busy: _busy,
@@ -705,7 +709,7 @@ class _FriendActionSectionState extends ConsumerState<_FriendActionSection> {
       ]);
     }
     return _SocialBtn(
-      label: 'Добавить в друзья',
+      label: t.publicProfile.friend.add,
       icon: Icons.person_add_outlined,
       filled: true,
       busy: _busy,
@@ -717,18 +721,20 @@ class _FriendActionSectionState extends ConsumerState<_FriendActionSection> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (d) => AlertDialog(
-        title: const Text('Удалить из друзей?'),
+        title: Text(t.publicProfile.friend.confirmRemoveTitle),
         content: Text(
-          'Убрать ${widget.profile.username ?? 'этого оперативника'} '
-          'из списка друзей?',
+          t.publicProfile.friend.confirmRemoveBody(
+            name: widget.profile.username ??
+                t.publicProfile.friend.confirmRemoveDefaultName,
+          ),
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(d, false),
-              child: const Text('Отмена')),
+              child: Text(t.publicProfile.friend.cancel)),
           TextButton(
               onPressed: () => Navigator.pop(d, true),
-              child: const Text('Удалить')),
+              child: Text(t.publicProfile.friend.removeAction)),
         ],
       ),
     );

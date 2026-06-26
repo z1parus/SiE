@@ -1,0 +1,53 @@
+{
+  "onboarding": {
+    "moduleLabel": "ФОКУС",
+    "description": "Протокол глубокой работы.",
+    "benefit": "Тренировка концентрации и защита от выгорания. Временны́е блоки защищают состояние потока и консолидируют рабочую память."
+  },
+  "ring": {
+    "breakLabel": "BREAK",
+    "focus": "FOCUS"
+  },
+  "topBar": {
+    "session": "SESSION {n}"
+  },
+  "banner": {
+    "focus": "ФОКУС: {title}"
+  },
+  "hud": {
+    "phaseBreak": "BREAK  ·  {minutes} MIN",
+    "phaseFocus": "FOCUS PROTOCOL  ·  {minutes} MIN",
+    "stakeMode": "РЕЖИМ",
+    "stakeXp": "XP AT STAKE",
+    "xpRest": "ОТДЫХ",
+    "xpValue": "+{xp} XP",
+    "currentPhase": "CURRENT PHASE",
+    "tapStart": "TAP START TO INITIATE PROTOCOL",
+    "pause": "PAUSE",
+    "start": "START",
+    "resume": "RESUME",
+    "reset": "RESET"
+  },
+  "settingsButton": "PROTOCOL SETTINGS",
+  "result": {
+    "close": "Закрыть",
+    "sessionComplete": "SESSION COMPLETE",
+    "protocolExecuted": "FOCUS PROTOCOL EXECUTED",
+    "xpGained": "XP GAINED",
+    "xpValue": "+{xp} XP",
+    "dpGained": "DP GAINED",
+    "dpValue": "+{dp} DP",
+    "achievementUnlocked": "ACHIEVEMENT UNLOCKED",
+    "taskDone": "ЗАДАЧА ВЫПОЛНЕНА",
+    "markTaskDone": "ОТМЕТИТЬ ЗАДАЧУ ВЫПОЛНЕННОЙ",
+    "startBreak": "START BREAK"
+  },
+  "settings": {
+    "title": "PROTOCOL SETTINGS",
+    "lockedDuringSession": "НАСТРОЙКИ ЗАБЛОКИРОВАНЫ ВО ВРЕМЯ СЕССИИ",
+    "focusDuration": "FOCUS DURATION  (MIN)",
+    "breakDuration": "BREAK DURATION  (MIN)",
+    "focusMusic": "FOCUS MUSIC",
+    "breakMusic": "BREAK MUSIC"
+  }
+}

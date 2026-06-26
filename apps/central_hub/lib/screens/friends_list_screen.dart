@@ -51,7 +51,7 @@ class FriendsListScreen extends ConsumerWidget {
                       ),
                       Expanded(
                         child: Text(
-                          'МОИ ДРУЗЬЯ',
+                          t.friendsList.header.title,
                           textAlign: TextAlign.center,
                           style: Theme.of(context)
                               .textTheme
@@ -80,16 +80,17 @@ class FriendsListScreen extends ConsumerWidget {
                     tabs: [
                       Tab(
                         child: _TabLabel(
-                            text: 'ДРУЗЬЯ', count: state.friends.length),
+                            text: t.friendsList.tabs.friends,
+                            count: state.friends.length),
                       ),
                       Tab(
                         child: _TabLabel(
-                            text: 'ИСХОДЯЩИЕ',
+                            text: t.friendsList.tabs.sent,
                             count: state.sentRequests.length),
                       ),
                       Tab(
                         child: _TabLabel(
-                            text: 'ВХОДЯЩИЕ',
+                            text: t.friendsList.tabs.received,
                             count: state.receivedRequests.length,
                             highlight: true),
                       ),
@@ -104,24 +105,24 @@ class FriendsListScreen extends ConsumerWidget {
                           color: c.accent, strokeWidth: 1.5),
                     ),
                     error: (e, _) => Center(
-                      child: Text('Ошибка загрузки',
+                      child: Text(t.friendsList.loadError,
                           style: TextStyle(color: c.textSecondary)),
                     ),
                     data: (s) => TabBarView(
                       children: [
                         _FriendsList(
                           rows: s.friends,
-                          emptyText: 'Пока нет друзей',
+                          emptyText: t.friendsList.empty.friends,
                           trailing: (row) => _RemoveBtn(row: row),
                         ),
                         _FriendsList(
                           rows: s.sentRequests,
-                          emptyText: 'Нет исходящих запросов',
+                          emptyText: t.friendsList.empty.sent,
                           trailing: (row) => _CancelBtn(row: row),
                         ),
                         _FriendsList(
                           rows: s.receivedRequests,
-                          emptyText: 'Нет входящих запросов',
+                          emptyText: t.friendsList.empty.received,
                           trailing: (row) => _AcceptDeclineRow(row: row),
                         ),
                       ],
@@ -316,7 +317,8 @@ class _FriendTile extends ConsumerWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    'LEVEL ${profile.level} · ${profile.totalXp} XP',
+                    t.friendsList.tile.levelXp(
+                        level: profile.level, xp: profile.totalXp),
                     style: TextStyle(
                         fontSize: 10,
                         color: c.textSecondary,
@@ -368,13 +370,13 @@ class _RemoveBtn extends ConsumerWidget {
   }
 
   Future<void> _confirm(BuildContext context, WidgetRef ref) async {
-    final name = row.otherUser.username ?? 'пользователя';
+    final name = row.otherUser.username ?? t.friendsList.remove.fallbackName;
     final ok = await confirmDestructive(
       context,
       ref,
-      title: 'Удалить из друзей?',
-      message: '$name будет удалён из вашего списка друзей.',
-      confirmLabel: 'Удалить',
+      title: t.friendsList.remove.title,
+      message: t.friendsList.remove.message(name: name),
+      confirmLabel: t.friendsList.remove.confirm,
     );
     if (ok) {
       await ref.read(friendsProvider.notifier).removeFriend(row.friendshipId);

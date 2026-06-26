@@ -1,0 +1,34 @@
+{
+  "topBar": {
+    "title": "INTERFACE HUB",
+    "dp": "{dp} DP"
+  },
+  "tabs": {
+    "frames": "FRAMES",
+    "backgrounds": "BACKGROUNDS",
+    "styles": "STYLES",
+    "patterns": "PATTERNS"
+  },
+  "snack": {
+    "purchaseSuccess": "VISUALIZATION PROTOCOL SUCCESSFULLY ACQUIRED",
+    "insufficientDp": "Not enough DP. Earn it by completing tasks and missions.",
+    "transactionError": "TRANSACTION ERROR",
+    "equipApplied": "GEAR APPLIED",
+    "equipError": "ERROR: {error}"
+  },
+  "card": {
+    "active": "ACTIVE",
+    "purchased": "PURCHASED",
+    "price": "{price} DP",
+    "equipped": "EQUIPPED",
+    "select": "SELECT",
+    "get": "GET",
+    "buy": "BUY"
+  },
+  "preview": {
+    "title": "PREVIEW",
+    "operative": "OPERATIVE",
+    "stat": "LVL {level}  ·  {xp} XP",
+    "watermark": "PREVIEW"
+  }
+}

@@ -175,25 +175,25 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
 
   // ── Validation ───────────────────────────────────────────────
   String? _validate() {
-    if (_nameCtrl.text.trim().isEmpty) return 'Укажите название';
-    if (_slugCtrl.text.trim().isEmpty) return 'Укажите slug';
+    if (_nameCtrl.text.trim().isEmpty) return t.devStudio.validation.nameRequired;
+    if (_slugCtrl.text.trim().isEmpty) return t.devStudio.validation.slugRequired;
     if (int.tryParse(_priceCtrl.text.trim()) == null) {
-      return 'Цена DP должна быть числом';
+      return t.devStudio.validation.priceMustBeNumber;
     }
     if (int.tryParse(_sortCtrl.text.trim()) == null) {
-      return 'Порядок должен быть числом';
+      return t.devStudio.validation.sortMustBeNumber;
     }
     if (_kind == BackgroundKind.gradient) {
       try {
         jsonDecode(_styleCtrl.text);
       } catch (_) {
-        return 'style_config — некорректный JSON';
+        return t.devStudio.validation.styleConfigInvalidJson;
       }
     } else if (_mainFile?.bytes == null) {
-      return 'Выберите файл фона';
+      return t.devStudio.validation.selectBackgroundFile;
     }
     if (_needsThumb && _thumbFile?.bytes == null) {
-      return 'Для анимированного фона нужна статичная превью';
+      return t.devStudio.validation.thumbRequired;
     }
     return null;
   }
@@ -256,12 +256,14 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
       ref.invalidate(allProfileBackgroundsProvider);
       ref.invalidate(profileBackgroundsProvider);
       messenger.showSnackBar(
-          const SnackBar(content: Text('Фон опубликован')));
+          SnackBar(content: Text(t.devStudio.backgrounds.published)));
       _resetForm();
     } on PostgrestException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Ошибка: ${e.message}')));
+      messenger.showSnackBar(
+          SnackBar(content: Text(t.devStudio.backgrounds.error(message: e.message))));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      messenger.showSnackBar(
+          SnackBar(content: Text(t.devStudio.backgrounds.error(message: '$e'))));
     } finally {
       if (mounted) setState(() => _publishing = false);
     }
@@ -303,11 +305,11 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
         if (result != null) {
           _dpValueCtrl.text = result['design_points'].toString();
         } else {
-          _dpStatusMsg = 'Пользователь «$username» не найден';
+          _dpStatusMsg = t.devStudio.dp.userNotFound(username: username);
         }
       });
     } catch (e) {
-      setState(() => _dpStatusMsg = 'Ошибка поиска: $e');
+      setState(() => _dpStatusMsg = t.devStudio.dp.searchError(error: '$e'));
     } finally {
       if (mounted) setState(() => _searching = false);
     }
@@ -327,12 +329,12 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
       });
       setState(() {
         _foundUser = {..._foundUser!, 'design_points': newDp};
-        _dpStatusMsg = 'DP обновлено: $newDp';
+        _dpStatusMsg = t.devStudio.dp.dpUpdated(dp: newDp);
       });
     } on PostgrestException catch (e) {
-      setState(() => _dpStatusMsg = 'Ошибка: ${e.message}');
+      setState(() => _dpStatusMsg = t.devStudio.dp.error(message: e.message));
     } catch (e) {
-      setState(() => _dpStatusMsg = 'Ошибка: $e');
+      setState(() => _dpStatusMsg = t.devStudio.dp.error(message: '$e'));
     } finally {
       if (mounted) setState(() => _settingDp = false);
     }
@@ -344,15 +346,15 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить фон?'),
-        content: Text('«${bg.name}» будет удалён из каталога.'),
+        title: Text(t.devStudio.backgrounds.deleteTitle),
+        content: Text(t.devStudio.backgrounds.deleteBody(name: bg.name)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена')),
+              child: Text(t.devStudio.common.cancel)),
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Удалить')),
+              child: Text(t.devStudio.common.delete)),
         ],
       ),
     );
@@ -364,9 +366,9 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
           .eq('id', bg.id);
       ref.invalidate(allProfileBackgroundsProvider);
       ref.invalidate(profileBackgroundsProvider);
-      messenger.showSnackBar(const SnackBar(content: Text('Фон удалён')));
+      messenger.showSnackBar(SnackBar(content: Text(t.devStudio.backgrounds.deleted)));
     } on PostgrestException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Ошибка: ${e.message}')));
+      messenger.showSnackBar(SnackBar(content: Text(t.devStudio.backgrounds.error(message: e.message))));
     }
   }
 
@@ -375,7 +377,7 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
     final title = _tipTitleCtrl.text.trim();
     final desc = _tipDescCtrl.text.trim();
     if (title.isEmpty || desc.isEmpty) {
-      _toast('Заполните заголовок и описание');
+      _toast(t.devStudio.tips.fillTitleAndDescription);
       return;
     }
     setState(() => _savingTip = true);
@@ -386,22 +388,22 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
           'title': title,
           'description': desc,
         }).eq('id', _editingTip!.id);
-        messenger.showSnackBar(const SnackBar(content: Text('Подсказка обновлена')));
+        messenger.showSnackBar(SnackBar(content: Text(t.devStudio.tips.updated)));
       } else {
         await SupabaseService.client.from('tips').insert({
           'title': title,
           'description': desc,
           'is_active': true,
         });
-        messenger.showSnackBar(const SnackBar(content: Text('Подсказка создана')));
+        messenger.showSnackBar(SnackBar(content: Text(t.devStudio.tips.created)));
       }
       _resetTipForm();
       ref.invalidate(allTipsProvider);
       ref.invalidate(tipsProvider);
     } on PostgrestException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Ошибка: ${e.message}')));
+      messenger.showSnackBar(SnackBar(content: Text(t.devStudio.tips.error(message: e.message))));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      messenger.showSnackBar(SnackBar(content: Text(t.devStudio.tips.error(message: '$e'))));
     } finally {
       if (mounted) setState(() => _savingTip = false);
     }
@@ -432,7 +434,7 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
       ref.invalidate(allTipsProvider);
       ref.invalidate(tipsProvider);
     } on PostgrestException catch (e) {
-      _toast('Ошибка: ${e.message}');
+      _toast(t.devStudio.tips.error(message: e.message));
     }
   }
 
@@ -441,15 +443,15 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить подсказку?'),
-        content: Text('«${tip.title}» будет удалена безвозвратно.'),
+        title: Text(t.devStudio.tips.deleteTitle),
+        content: Text(t.devStudio.tips.deleteBody(title: tip.title)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена')),
+              child: Text(t.devStudio.common.cancel)),
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Удалить')),
+              child: Text(t.devStudio.common.delete)),
         ],
       ),
     );
@@ -458,10 +460,10 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
       await SupabaseService.client.from('tips').delete().eq('id', tip.id);
       ref.invalidate(allTipsProvider);
       ref.invalidate(tipsProvider);
-      messenger.showSnackBar(const SnackBar(content: Text('Подсказка удалена')));
+      messenger.showSnackBar(SnackBar(content: Text(t.devStudio.tips.deleted)));
       if (_editingTip?.id == tip.id) _resetTipForm();
     } on PostgrestException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Ошибка: ${e.message}')));
+      messenger.showSnackBar(SnackBar(content: Text(t.devStudio.tips.error(message: e.message))));
     }
   }
 
@@ -480,7 +482,7 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
           elevation: 0,
           iconTheme: IconThemeData(color: c.textPrimary),
           title: Text(
-            'Dev Studio',
+            t.devStudio.title,
             style: TextStyle(
                 color: c.textPrimary,
                 fontSize: 18,
@@ -497,10 +499,10 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
               letterSpacing: 1.5,
               fontWeight: FontWeight.w600,
             ),
-            tabs: const [
-              Tab(text: 'ФОНЫ'),
-              Tab(text: 'DP'),
-              Tab(text: 'ПОДСКАЗКИ'),
+            tabs: [
+              Tab(text: t.devStudio.tabs.backgrounds),
+              Tab(text: t.devStudio.tabs.dp),
+              Tab(text: t.devStudio.tabs.tips),
             ],
           ),
         ),
@@ -520,9 +522,9 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
   Widget _backgroundsTab(SieColors c) => ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          _section(c, 'НОВЫЙ ФОН'),
-          _field(c, 'Название', _nameCtrl),
-          _field(c, 'Slug', _slugCtrl, onChanged: (_) => _slugEdited = true),
+          _section(c, t.devStudio.backgrounds.sectionNew),
+          _field(c, t.devStudio.backgrounds.fieldName, _nameCtrl),
+          _field(c, t.devStudio.backgrounds.fieldSlug, _slugCtrl, onChanged: (_) => _slugEdited = true),
           const SizedBox(height: 12),
           _kindDropdown(c),
           const SizedBox(height: 12),
@@ -531,10 +533,10 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
           Row(
             children: [
               Expanded(
-                  child: _field(c, 'Цена DP', _priceCtrl, number: true)),
+                  child: _field(c, t.devStudio.backgrounds.fieldPrice, _priceCtrl, number: true)),
               const SizedBox(width: 12),
               Expanded(
-                  child: _field(c, 'Порядок', _sortCtrl, number: true)),
+                  child: _field(c, t.devStudio.backgrounds.fieldSort, _sortCtrl, number: true)),
             ],
           ),
           const SizedBox(height: 12),
@@ -543,20 +545,20 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
             value: _published,
             activeColor: c.accent,
             onChanged: (v) => setState(() => _published = v),
-            title: Text('Опубликован',
+            title: Text(t.devStudio.backgrounds.publishedTitle,
                 style: TextStyle(color: c.textPrimary, fontSize: 14)),
-            subtitle: Text('Виден всем в магазине',
+            subtitle: Text(t.devStudio.backgrounds.publishedSubtitle,
                 style: TextStyle(color: c.textSecondary, fontSize: 12)),
           ),
           const SizedBox(height: 8),
           if (_kind == BackgroundKind.gradient)
-            _field(c, 'style_config (JSON)', _styleCtrl, maxLines: 4)
+            _field(c, t.devStudio.backgrounds.fieldStyleConfig, _styleCtrl, maxLines: 4)
           else ...[
-            _filePicker(c, 'Файл фона', _mainFile, _pickMain),
+            _filePicker(c, t.devStudio.backgrounds.fileBackground, _mainFile, _pickMain),
             const SizedBox(height: 10),
             _filePicker(
               c,
-              _needsThumb ? 'Превью (обязательно)' : 'Превью (опц.)',
+              _needsThumb ? t.devStudio.backgrounds.thumbRequired : t.devStudio.backgrounds.thumbOptional,
               _thumbFile,
               _pickThumb,
             ),
@@ -566,7 +568,7 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
           Row(
             children: [
               Text(
-                'Затемнение: ${(_overlayOpacity * 100).round()}%',
+                t.devStudio.backgrounds.overlay(percent: (_overlayOpacity * 100).round()),
                 style:
                     TextStyle(color: c.textSecondary, fontSize: 13),
               ),
@@ -581,7 +583,7 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      'АКТИВНО',
+                      t.devStudio.backgrounds.overlayActive,
                       style: TextStyle(
                           color: c.accent,
                           fontSize: 9,
@@ -625,7 +627,7 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
             ),
             const SizedBox(height: 4),
             Text(
-              'Предпросмотр затемнения',
+              t.devStudio.backgrounds.overlayPreview,
               style:
                   TextStyle(color: c.textSecondary, fontSize: 11),
             ),
@@ -644,10 +646,10 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.white),
                   )
-                : const Text('ОПУБЛИКОВАТЬ'),
+                : Text(t.devStudio.backgrounds.publishButton),
           ),
           const SizedBox(height: 32),
-          _section(c, 'СУЩЕСТВУЮЩИЕ ФОНЫ'),
+          _section(c, t.devStudio.backgrounds.sectionExisting),
           _existingList(c),
         ],
       );
@@ -658,11 +660,11 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _section(c, 'ПОИСК ПОЛЬЗОВАТЕЛЯ'),
+            _section(c, t.devStudio.dp.sectionSearch),
             Row(
               children: [
                 Expanded(
-                    child: _field(c, 'Имя пользователя', _usernameCtrl)),
+                    child: _field(c, t.devStudio.dp.fieldUsername, _usernameCtrl)),
                 const SizedBox(width: 10),
                 FilledButton(
                   style: FilledButton.styleFrom(
@@ -678,8 +680,8 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white),
                         )
-                      : const Text('НАЙТИ',
-                          style: TextStyle(fontSize: 12)),
+                      : Text(t.devStudio.dp.searchButton,
+                          style: const TextStyle(fontSize: 12)),
                 ),
               ],
             ),
@@ -690,7 +692,7 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
             ],
             if (_foundUser != null) ...[
               const SizedBox(height: 20),
-              _section(c, 'НАЙДЕННЫЙ ПОЛЬЗОВАТЕЛЬ'),
+              _section(c, t.devStudio.dp.sectionFound),
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
@@ -723,7 +725,7 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
                             color: c.dp, size: 14),
                         const SizedBox(width: 6),
                         Text(
-                          'Текущий баланс: ${_foundUser!['design_points']} DP',
+                          t.devStudio.dp.currentBalance(dp: _foundUser!['design_points']),
                           style: TextStyle(
                               color: c.textSecondary, fontSize: 13),
                         ),
@@ -733,11 +735,11 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
                 ),
               ),
               const SizedBox(height: 16),
-              _section(c, 'УСТАНОВИТЬ НОВЫЙ БАЛАНС'),
+              _section(c, t.devStudio.dp.sectionSetBalance),
               Row(
                 children: [
                   Expanded(
-                    child: _field(c, 'Новое значение DP', _dpValueCtrl,
+                    child: _field(c, t.devStudio.dp.fieldNewDp, _dpValueCtrl,
                         number: true),
                   ),
                   const SizedBox(width: 10),
@@ -756,8 +758,8 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
                                 strokeWidth: 2,
                                 color: Colors.white),
                           )
-                        : const Text('ПРИМЕНИТЬ',
-                            style: TextStyle(fontSize: 12)),
+                        : Text(t.devStudio.dp.applyButton,
+                            style: const TextStyle(fontSize: 12)),
                   ),
                 ],
               ),
@@ -770,9 +772,9 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
   Widget _tipsTab(SieColors c) => ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          _section(c, _editingTip != null ? 'РЕДАКТИРОВАТЬ ПОДСКАЗКУ' : 'НОВАЯ ПОДСКАЗКА'),
-          _field(c, 'Заголовок', _tipTitleCtrl),
-          _field(c, 'Описание', _tipDescCtrl, maxLines: 3),
+          _section(c, _editingTip != null ? t.devStudio.tips.sectionEdit : t.devStudio.tips.sectionNew),
+          _field(c, t.devStudio.tips.fieldTitle, _tipTitleCtrl),
+          _field(c, t.devStudio.tips.fieldDescription, _tipDescCtrl, maxLines: 3),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -790,7 +792,7 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white),
                         )
-                      : Text(_editingTip != null ? 'СОХРАНИТЬ' : 'ОПУБЛИКОВАТЬ'),
+                      : Text(_editingTip != null ? t.devStudio.tips.saveButton : t.devStudio.tips.publishButton),
                 ),
               ),
               if (_editingTip != null) ...[
@@ -802,13 +804,13 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
                     minimumSize: const Size.fromHeight(48),
                   ),
                   onPressed: _resetTipForm,
-                  child: const Text('ОТМЕНА'),
+                  child: Text(t.devStudio.tips.cancelButton),
                 ),
               ],
             ],
           ),
           const SizedBox(height: 32),
-          _section(c, 'СУЩЕСТВУЮЩИЕ ПОДСКАЗКИ'),
+          _section(c, t.devStudio.tips.sectionExisting),
           _tipsList(c),
         ],
       );
@@ -818,14 +820,14 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
     return async.when(
       loading: () =>
           Center(child: CircularProgressIndicator(color: c.accent)),
-      error: (e, _) => Text('Ошибка загрузки: $e',
+      error: (e, _) => Text(t.devStudio.common.loadError(error: '$e'),
           style: TextStyle(color: c.textSecondary)),
       data: (tips) {
         if (tips.isEmpty) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 20),
             child: Text(
-              'Пока нет ни одной подсказки',
+              t.devStudio.tips.empty,
               style: TextStyle(color: c.textSecondary, fontSize: 13),
             ),
           );
@@ -934,18 +936,18 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
       DropdownButtonFormField<BackgroundKind>(
         value: _kind,
         dropdownColor: c.surface,
-        decoration: _dropDeco(c, 'Тип'),
+        decoration: _dropDeco(c, t.devStudio.kind.label),
         style: TextStyle(color: c.textPrimary, fontSize: 14),
-        items: const [
+        items: [
           DropdownMenuItem(
-              value: BackgroundKind.gradient, child: Text('Градиент')),
+              value: BackgroundKind.gradient, child: Text(t.devStudio.kind.gradient)),
           DropdownMenuItem(
-              value: BackgroundKind.image, child: Text('Картинка')),
+              value: BackgroundKind.image, child: Text(t.devStudio.kind.image)),
           DropdownMenuItem(
               value: BackgroundKind.animatedWebp,
-              child: Text('Анимированный WebP')),
+              child: Text(t.devStudio.kind.animatedWebp)),
           DropdownMenuItem(
-              value: BackgroundKind.lottie, child: Text('Lottie')),
+              value: BackgroundKind.lottie, child: Text(t.devStudio.kind.lottie)),
         ],
         onChanged: (v) => setState(() {
           _kind = v ?? BackgroundKind.gradient;
@@ -958,17 +960,17 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
       DropdownButtonFormField<CosmeticRarity>(
         value: _rarity,
         dropdownColor: c.surface,
-        decoration: _dropDeco(c, 'Редкость'),
+        decoration: _dropDeco(c, t.devStudio.rarity.label),
         style: TextStyle(color: c.textPrimary, fontSize: 14),
-        items: const [
+        items: [
           DropdownMenuItem(
-              value: CosmeticRarity.common, child: Text('Common')),
+              value: CosmeticRarity.common, child: Text(t.devStudio.rarity.common)),
           DropdownMenuItem(
-              value: CosmeticRarity.rare, child: Text('Rare')),
+              value: CosmeticRarity.rare, child: Text(t.devStudio.rarity.rare)),
           DropdownMenuItem(
-              value: CosmeticRarity.epic, child: Text('Epic')),
+              value: CosmeticRarity.epic, child: Text(t.devStudio.rarity.epic)),
           DropdownMenuItem(
-              value: CosmeticRarity.legendary, child: Text('Legendary')),
+              value: CosmeticRarity.legendary, child: Text(t.devStudio.rarity.legendary)),
         ],
         onChanged: (v) =>
             setState(() => _rarity = v ?? CosmeticRarity.common),

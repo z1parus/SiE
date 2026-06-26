@@ -1,0 +1,55 @@
+{
+  "topBar": {
+    "title": "EDIT PROFILE",
+    "save": "SAVE"
+  },
+  "snack": {
+    "usernameEmpty": "USERNAME CANNOT BE EMPTY",
+    "noConnection": "Проверьте подключение к интернету",
+    "passwordTooShort": "PASSWORD MUST BE AT LEAST 6 CHARACTERS",
+    "passwordsDoNotMatch": "PASSWORDS DO NOT MATCH",
+    "passwordUpdated": "PASSWORD UPDATED"
+  },
+  "identity": {
+    "header": "IDENTITY",
+    "username": "USERNAME",
+    "fullName": "FULL NAME"
+  },
+  "security": {
+    "header": "SECURITY",
+    "email": "EMAIL",
+    "readOnly": "READ-ONLY",
+    "password": "PASSWORD"
+  },
+  "customization": {
+    "header": "CUSTOMIZATION",
+    "appearanceLabel": "НАСТРОЙКА ОБЛИКА",
+    "appearanceSubtitle": "Рамки аватара, фоны профиля и стили статистики",
+    "interfaceHubLabel": "ИНТЕРФЕЙС-ХАБ",
+    "interfaceHubSubtitle": "Рамки, фоны и стили за Design Points"
+  },
+  "interfaceMode": {
+    "header": "РЕЖИМ ИНТЕРФЕЙСА",
+    "subtitle": "ГРАФИЧЕСКАЯ НАГРУЗКА И СТИЛЬ ОФОРМЛЕНИЯ"
+  },
+  "theme": {
+    "classicDarkLabel": "CLASSIC DARK",
+    "classicDarkDescription": "Антрацит + золото, без шейдеров",
+    "classicLightLabel": "CLASSIC LIGHT",
+    "classicLightDescription": "Светлый фон + бирюза, без шейдеров"
+  },
+  "timezone": {
+    "header": "ЧАСОВОЙ ПОЯС",
+    "subtitle": "НАСТРОЙКА ВРЕМЕНИ ДЛЯ СУТОЧНОГО АВАНГАРДА",
+    "customZone": "Пользовательский пояс",
+    "sheetTitle": "ВЫБЕРИТЕ ЧАСОВОЙ ПОЯС"
+  },
+  "passwordSheet": {
+    "title": "CHANGE PASSWORD",
+    "newPassword": "NEW PASSWORD",
+    "confirmPassword": "CONFIRM PASSWORD",
+    "updatePassword": "UPDATE PASSWORD"
+  },
+  "passwordValue": "••••••••",
+  "noConnectionMessage": "Подключение к интернету отсутствует"
+}

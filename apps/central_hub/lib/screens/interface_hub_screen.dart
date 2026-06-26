@@ -43,9 +43,9 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
       SieHaptics.success();
       ref.read(audioServiceProvider).playPurchase().ignore();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           behavior: SnackBarBehavior.floating,
-          content: Text('ПРОТОКОЛ ВИЗУАЛИЗАЦИИ УСПЕШНО ПРИОБРЕТЁН'),
+          content: Text(t.interfaceHub.snack.purchaseSuccess),
         ),
       );
     } catch (e) {
@@ -57,8 +57,8 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
           behavior: SnackBarBehavior.floating,
           content: Text(
             isInsufficient
-                ? 'Недостаточно DP. Зарабатывайте их, выполняя задания и миссии.'
-                : 'ОШИБКА ТРАНЗАКЦИИ',
+                ? t.interfaceHub.snack.insufficientDp
+                : t.interfaceHub.snack.transactionError,
           ),
         ),
       );
@@ -73,14 +73,15 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
       ref.invalidate(userProfileProvider);
       if (!mounted) return;
       SieHaptics.success();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         behavior: SnackBarBehavior.floating,
-        content: Text('ОСНАЩЕНИЕ ПРИМЕНЕНО'),
+        content: Text(t.interfaceHub.snack.equipApplied),
       ));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('ОШИБКА: $e')));
+          .showSnackBar(SnackBar(
+              content: Text(t.interfaceHub.snack.equipError(error: e))));
     }
   }
 
@@ -195,11 +196,11 @@ class _InterfaceHubScreenState extends ConsumerState<InterfaceHubScreen>
         letterSpacing: 1.5,
         fontWeight: FontWeight.w600,
       ),
-      tabs: const [
-        Tab(text: 'РАМКИ'),
-        Tab(text: 'ФОНЫ'),
-        Tab(text: 'СТИЛИ'),
-        Tab(text: 'УЗОРЫ'),
+      tabs: [
+        Tab(text: t.interfaceHub.tabs.frames),
+        Tab(text: t.interfaceHub.tabs.backgrounds),
+        Tab(text: t.interfaceHub.tabs.styles),
+        Tab(text: t.interfaceHub.tabs.patterns),
       ],
     );
   }
@@ -226,7 +227,7 @@ class _TopBar extends ConsumerWidget {
           ),
           Expanded(
             child: Text(
-              'ИНТЕРФЕЙС-ХАБ',
+              t.interfaceHub.topBar.title,
               style: Theme.of(context).textTheme.titleMedium,
               textAlign: TextAlign.center,
             ),
@@ -245,7 +246,7 @@ class _TopBar extends ConsumerWidget {
                     size: 11, color: c.dp.withValues(alpha: 0.9)),
                 const SizedBox(width: 4),
                 Text(
-                  '$dp DP',
+                  t.interfaceHub.topBar.dp(dp: dp),
                   style: TextStyle(
                     color: c.dp,
                     fontSize: 11,
@@ -543,7 +544,7 @@ class _CardContent extends ConsumerWidget {
                       top: 7,
                       left: 7,
                       child: _Badge(
-                          label: 'АКТИВНО',
+                          label: t.interfaceHub.card.active,
                           color: c.accent,
                           filled: true),
                     )
@@ -552,7 +553,7 @@ class _CardContent extends ConsumerWidget {
                       top: 7,
                       left: 7,
                       child: _Badge(
-                          label: 'КУПЛЕНО',
+                          label: t.interfaceHub.card.purchased,
                           color: c.accent,
                           filled: false),
                     ),
@@ -630,7 +631,7 @@ class _CardContent extends ConsumerWidget {
                     ),
                     const SizedBox(width: 3),
                     Text(
-                      '${asset.priceDP} DP',
+                      t.interfaceHub.card.price(price: asset.priceDP),
                       style: TextStyle(
                         color: canAfford ? c.dp : c.textSecondary,
                         fontSize: 9,
@@ -649,12 +650,14 @@ class _CardContent extends ConsumerWidget {
               const SizedBox(height: 6),
               _ActionButton(
                 label: equipped
-                    ? 'ЭКИПИРОВАНО'
+                    ? t.interfaceHub.card.equipped
                     : accessible
-                        ? 'ВЫБРАТЬ'
+                        ? t.interfaceHub.card.select
                         : (loading
                             ? '...'
-                            : (isFree ? 'ПОЛУЧИТЬ' : 'КУПИТЬ')),
+                            : (isFree
+                                ? t.interfaceHub.card.get
+                                : t.interfaceHub.card.buy)),
                 color: equipped
                     ? c.textSecondary
                     : accessible
@@ -1168,7 +1171,7 @@ class _PreviewSheet extends ConsumerWidget {
             ),
           ),
           Text(
-            'ПРЕДПРОСМОТР',
+            t.interfaceHub.preview.title,
             style: Theme.of(context)
                 .textTheme
                 .labelSmall
@@ -1246,7 +1249,9 @@ class _PreviewSheet extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            (profile?.username ?? 'OPERATIVE').toUpperCase(),
+                            (profile?.username ??
+                                    t.interfaceHub.preview.operative)
+                                .toUpperCase(),
                             style: TextStyle(
                               color: c.textPrimary,
                               fontSize: 12,
@@ -1266,8 +1271,10 @@ class _PreviewSheet extends ConsumerWidget {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                             child: Text(
-                              'LVL ${((profile?.totalXp ?? 0) ~/ 1000) + 1}'
-                              '  ·  ${profile?.totalXp ?? 0} XP',
+                              t.interfaceHub.preview.stat(
+                                level: ((profile?.totalXp ?? 0) ~/ 1000) + 1,
+                                xp: profile?.totalXp ?? 0,
+                              ),
                               style: TextStyle(
                                 color: previewEquipped.statStyle?.accentColor ??
                                     c.accent,
@@ -1286,7 +1293,7 @@ class _PreviewSheet extends ConsumerWidget {
                   bottom: 5,
                   right: 10,
                   child: Text(
-                    'ПРЕДПРОСМОТР',
+                    t.interfaceHub.preview.watermark,
                     style: TextStyle(
                       color: c.accent.withValues(alpha: 0.5),
                       fontSize: 7,

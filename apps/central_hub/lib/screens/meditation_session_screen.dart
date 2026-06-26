@@ -237,7 +237,7 @@ class _MeditationSessionScreenState
                             color: Colors.white.withValues(alpha: 0.7)),
                         const SizedBox(width: 6),
                         Text(
-                          'ПАУЗА',
+                          t.meditationSession.pauseBadge,
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 11,
@@ -321,7 +321,7 @@ class _MeditationSessionScreenState
               Positioned.fill(
                 child: Semantics(
                   button: true,
-                  label: 'Выйти из тёмного режима',
+                  label: t.meditationSession.darkMode.exitLabel,
                   child: GestureDetector(
                     onTap: () => ref
                         .read(meditationSessionProvider.notifier)
@@ -335,7 +335,7 @@ class _MeditationSessionScreenState
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            'Коснитесь, чтобы выйти',
+                            t.meditationSession.darkMode.tapToExit,
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.35),
                               fontSize: 11,
@@ -387,16 +387,16 @@ class _MeditationSessionScreenState
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: c.surface,
-        title: Text('Прервать сессию?',
+        title: Text(t.meditationSession.abandon.title,
             style: TextStyle(color: c.textPrimary)),
         content: Text(
-          'Прогресс будет частично засчитан если прошло более 60 секунд.',
+          t.meditationSession.abandon.message,
           style: TextStyle(color: c.textSecondary, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text('Продолжить',
+            child: Text(t.meditationSession.abandon.continueBtn,
                 style: TextStyle(color: c.textSecondary)),
           ),
           TextButton(
@@ -407,8 +407,8 @@ class _MeditationSessionScreenState
                   .abandonSession();
               Navigator.of(context).pop(); // pop session screen
             },
-            child: const Text('Прервать',
-                style: TextStyle(color: Colors.redAccent)),
+            child: Text(t.meditationSession.abandon.stop,
+                style: const TextStyle(color: Colors.redAccent)),
           ),
         ],
       ),
@@ -507,10 +507,10 @@ class _BreathingCue extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = switch (session.breathingSubPhase) {
-      BreathingSubPhase.inhale  => 'ВДОХ',
-      BreathingSubPhase.holdIn  => 'ЗАДЕРЖКА',
-      BreathingSubPhase.exhale  => 'ВЫДОХ',
-      BreathingSubPhase.holdOut => 'ПАУЗА',
+      BreathingSubPhase.inhale  => t.meditationSession.breathingCue.inhale,
+      BreathingSubPhase.holdIn  => t.meditationSession.breathingCue.holdIn,
+      BreathingSubPhase.exhale  => t.meditationSession.breathingCue.exhale,
+      BreathingSubPhase.holdOut => t.meditationSession.breathingCue.holdOut,
     };
     return Column(
       children: [
@@ -526,7 +526,8 @@ class _BreathingCue extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          '${session.breathingSubPhaseRemaining}с',
+          t.meditationSession.breathingCue
+              .secondsRemaining(n: session.breathingSubPhaseRemaining),
           textAlign: TextAlign.center,
           style: TextStyle(
               color: c.textSecondary,
@@ -641,11 +642,11 @@ class _TopHud extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final phaseLabel = switch (session.phase) {
-      MeditationPhase.breathing       => 'ДЫХАНИЕ',
-      MeditationPhase.transition      => 'ПЕРЕХОД',
-      MeditationPhase.meditating      => 'МЕДИТАЦИЯ',
-      MeditationPhase.reflectionPause => 'РЕФЛЕКСИЯ',
-      MeditationPhase.complete        => 'ЗАВЕРШЕНО',
+      MeditationPhase.breathing       => t.meditationSession.phase.breathing,
+      MeditationPhase.transition      => t.meditationSession.phase.transition,
+      MeditationPhase.meditating      => t.meditationSession.phase.meditating,
+      MeditationPhase.reflectionPause => t.meditationSession.phase.reflection,
+      MeditationPhase.complete        => t.meditationSession.phase.complete,
       _                               => '',
     };
     return Row(
@@ -715,19 +716,19 @@ class _FloatingMixer extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             _MixerRow(
-                label: 'МУЗЫКА',
+                label: t.meditationSession.mixer.music,
                 value: session.musicVolume,
                 onChanged: (v) =>
                     onVolumeChanged(v, null, null),
                 c: c),
             _MixerRow(
-                label: 'AMBIENT',
+                label: t.meditationSession.mixer.ambient,
                 value: session.ambientVolume,
                 onChanged: (v) =>
                     onVolumeChanged(null, v, null),
                 c: c),
             _MixerRow(
-                label: 'ГОЛОС',
+                label: t.meditationSession.mixer.voice,
                 value: session.voiceVolume,
                 onChanged: (v) =>
                     onVolumeChanged(null, null, v),
@@ -735,7 +736,7 @@ class _FloatingMixer extends StatelessWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                Text('Экран затемнён',
+                Text(t.meditationSession.mixer.dimScreen,
                     style: TextStyle(
                         color: c.textSecondary, fontSize: 12)),
                 const Spacer(),
@@ -875,7 +876,7 @@ class _ReflectionOverlay extends StatelessWidget {
         color: Colors.black.withValues(alpha: 0.7),
         alignment: Alignment.center,
         child: Text(
-          'Подготовка\nк рефлексии…',
+          t.meditationSession.reflection.preparing,
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.7),
@@ -918,7 +919,7 @@ class _CompletionSheetState extends ConsumerState<_CompletionSheet> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'СЕССИЯ ЗАВЕРШЕНА',
+              t.meditationSession.completion.title,
               style: TextStyle(
                   color: c.accent,
                   fontSize: 12,
@@ -930,24 +931,27 @@ class _CompletionSheetState extends ConsumerState<_CompletionSheet> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 _ResultChip(
-                    label: '$durationMins мин',
+                    label: t.meditationSession.completion
+                        .durationMinutes(n: durationMins),
                     icon: Icons.access_time_rounded,
                     c: c),
                 const SizedBox(width: 16),
                 _ResultChip(
-                    label: '+${result?.xpGained ?? 0} XP',
+                    label: t.meditationSession.completion
+                        .xpGained(xp: result?.xpGained ?? 0),
                     icon: Icons.bolt_rounded,
                     c: c),
                 const SizedBox(width: 16),
                 _ResultChip(
-                    label: '+${result?.dpGained ?? 0} DP',
+                    label: t.meditationSession.completion
+                        .dpGained(dp: result?.dpGained ?? 0),
                     icon: Icons.diamond_outlined,
                     c: c),
               ],
             ),
             const SizedBox(height: 24),
             Text(
-              'Как вы себя чувствуете?',
+              t.meditationSession.completion.howDoYouFeel,
               style: TextStyle(
                   color: c.textPrimary,
                   fontSize: 15,
@@ -959,12 +963,12 @@ class _CompletionSheetState extends ConsumerState<_CompletionSheet> {
               children: List.generate(5, (i) {
                 final v   = i + 1;
                 final sel = v == _stateAfter;
-                const moodLabels = [
-                  'Очень плохо',
-                  'Плохо',
-                  'Нейтрально',
-                  'Хорошо',
-                  'Отлично'
+                final moodLabels = [
+                  t.meditationSession.completion.mood.veryBad,
+                  t.meditationSession.completion.mood.bad,
+                  t.meditationSession.completion.mood.neutral,
+                  t.meditationSession.completion.mood.good,
+                  t.meditationSession.completion.mood.great,
                 ];
                 return Semantics(
                   button: true,
@@ -1011,9 +1015,9 @@ class _CompletionSheetState extends ConsumerState<_CompletionSheet> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text(
-                  'ГОТОВО',
-                  style: TextStyle(
+                child: Text(
+                  t.meditationSession.completion.done,
+                  style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 2),

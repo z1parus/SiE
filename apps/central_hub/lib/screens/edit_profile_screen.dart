@@ -55,7 +55,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final username = _usernameCtrl.text.trim();
     if (username.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('USERNAME CANNOT BE EMPTY')),
+        SnackBar(content: Text(t.editProfile.snack.usernameEmpty)),
       );
       return;
     }
@@ -74,7 +74,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Проверьте подключение к интернету')),
+          SnackBar(content: Text(t.editProfile.snack.noConnection)),
         );
       }
     } finally {
@@ -160,19 +160,23 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             onTap: _pickImage,
           ),
           const SizedBox(height: 32),
-          const SectionHeader(title: 'IDENTITY'),
+          SectionHeader(title: t.editProfile.identity.header),
           const SizedBox(height: 16),
           identityCard(
             child: Column(
               children: [
-                _NeonField(label: 'USERNAME', controller: _usernameCtrl),
+                _NeonField(
+                    label: t.editProfile.identity.username,
+                    controller: _usernameCtrl),
                 const SizedBox(height: 16),
-                _NeonField(label: 'FULL NAME', controller: _fullNameCtrl),
+                _NeonField(
+                    label: t.editProfile.identity.fullName,
+                    controller: _fullNameCtrl),
               ],
             ),
           ),
           const SizedBox(height: 32),
-          const SectionHeader(title: 'SECURITY'),
+          SectionHeader(title: t.editProfile.security.header),
           const SizedBox(height: 16),
           securityCard(
             child: Column(
@@ -186,20 +190,20 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   color: c.border,
                 ),
                 _ActionRow(
-                  label: 'PASSWORD',
-                  value: '••••••••',
+                  label: t.editProfile.security.password,
+                  value: t.editProfile.passwordValue,
                   onTap: _showPasswordSheet,
                 ),
               ],
             ),
           ),
           const SizedBox(height: 32),
-          const SectionHeader(title: 'CUSTOMIZATION'),
+          SectionHeader(title: t.editProfile.customization.header),
           const SizedBox(height: 16),
           _NavRow(
             icon: Icons.style_outlined,
-            label: 'НАСТРОЙКА ОБЛИКА',
-            subtitle: 'Рамки аватара, фоны профиля и стили статистики',
+            label: t.editProfile.customization.appearanceLabel,
+            subtitle: t.editProfile.customization.appearanceSubtitle,
             onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
                       builder: (_) => CustomizationScreen(profile: profile)),
@@ -208,18 +212,18 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           const SizedBox(height: 10),
           _NavRow(
             icon: Icons.storefront_outlined,
-            label: 'ИНТЕРФЕЙС-ХАБ',
-            subtitle: 'Рамки, фоны и стили за Design Points',
+            label: t.editProfile.customization.interfaceHubLabel,
+            subtitle: t.editProfile.customization.interfaceHubSubtitle,
             accentColor: c.dp,
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const InterfaceHubScreen()),
             ),
           ),
           const SizedBox(height: 32),
-          const SectionHeader(title: 'РЕЖИМ ИНТЕРФЕЙСА'),
+          SectionHeader(title: t.editProfile.interfaceMode.header),
           const SizedBox(height: 4),
           Text(
-            'ГРАФИЧЕСКАЯ НАГРУЗКА И СТИЛЬ ОФОРМЛЕНИЯ',
+            t.editProfile.interfaceMode.subtitle,
             style: TextStyle(
               color: c.textSecondary.withValues(alpha: 0.55),
               fontSize: 9,
@@ -229,10 +233,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           const SizedBox(height: 12),
           const _ThemeSwitcherSection(),
           const SizedBox(height: 32),
-          const SectionHeader(title: 'ЧАСОВОЙ ПОЯС'),
+          SectionHeader(title: t.editProfile.timezone.header),
           const SizedBox(height: 4),
           Text(
-            'НАСТРОЙКА ВРЕМЕНИ ДЛЯ СУТОЧНОГО АВАНГАРДА',
+            t.editProfile.timezone.subtitle,
             style: TextStyle(
               color: c.textSecondary.withValues(alpha: 0.55),
               fontSize: 9,
@@ -274,7 +278,7 @@ class _TopBar extends ConsumerWidget {
           ),
           Expanded(
             child: Text(
-              'EDIT PROFILE',
+              t.editProfile.topBar.title,
               style: Theme.of(context)
                   .textTheme
                   .titleMedium
@@ -337,9 +341,9 @@ class _SaveButtonState extends ConsumerState<_SaveButton>
       child: AnimatedBuilder(
         animation: _ctrl,
         builder: (_, _) {
-          final t = _ctrl.value;
+          final tv = _ctrl.value;
           return Transform.scale(
-            scale: 1.0 - 0.03 * t,
+            scale: 1.0 - 0.03 * tv,
             child: Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -349,9 +353,9 @@ class _SaveButtonState extends ConsumerState<_SaveButton>
                     ? LinearGradient(
                         colors: [
                           Color.lerp(c.accent,
-                              c.accent.withValues(alpha: 0.8), t)!,
+                              c.accent.withValues(alpha: 0.8), tv)!,
                           Color.lerp(c.accentSecondary,
-                              c.accentSecondary.withValues(alpha: 0.9), t)!,
+                              c.accentSecondary.withValues(alpha: 0.9), tv)!,
                         ],
                       )
                     : null,
@@ -360,14 +364,14 @@ class _SaveButtonState extends ConsumerState<_SaveButton>
                     ? [
                         BoxShadow(
                           color: c.accent.withValues(
-                              alpha: 0.2 + 0.3 * t),
-                          blurRadius: 8.0 + 6.0 * t,
+                              alpha: 0.2 + 0.3 * tv),
+                          blurRadius: 8.0 + 6.0 * tv,
                         ),
                       ]
                     : null,
               ),
               child: Text(
-                'SAVE',
+                t.editProfile.topBar.save,
                 style: TextStyle(
                   color: widget.onTap != null
                       ? Colors.white
@@ -630,7 +634,7 @@ class _EmailRow extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'EMAIL',
+                  t.editProfile.security.email,
                   style: TextStyle(
                     color: c.textSecondary,
                     fontSize: 10,
@@ -646,7 +650,7 @@ class _EmailRow extends ConsumerWidget {
             ),
           ),
           Text(
-            'READ-ONLY',
+            t.editProfile.security.readOnly,
             style: TextStyle(
               color: c.textSecondary,
               fontSize: 9,
@@ -771,14 +775,14 @@ class _PasswordSheetState extends ConsumerState<_PasswordSheet> {
     final newPwd = _newCtrl.text;
     if (newPwd.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('PASSWORD MUST BE AT LEAST 6 CHARACTERS')),
+        SnackBar(
+            content: Text(t.editProfile.snack.passwordTooShort)),
       );
       return;
     }
     if (newPwd != _confirmCtrl.text) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('PASSWORDS DO NOT MATCH')),
+        SnackBar(content: Text(t.editProfile.snack.passwordsDoNotMatch)),
       );
       return;
     }
@@ -789,14 +793,14 @@ class _PasswordSheetState extends ConsumerState<_PasswordSheet> {
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('PASSWORD UPDATED')),
+          SnackBar(content: Text(t.editProfile.snack.passwordUpdated)),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Проверьте подключение к интернету')),
+          SnackBar(
+              content: Text(t.editProfile.snack.noConnection)),
         );
       }
     } finally {
@@ -830,7 +834,7 @@ class _PasswordSheetState extends ConsumerState<_PasswordSheet> {
             ),
           ),
           Text(
-            'CHANGE PASSWORD',
+            t.editProfile.passwordSheet.title,
             style: Theme.of(context)
                 .textTheme
                 .titleMedium
@@ -838,10 +842,12 @@ class _PasswordSheetState extends ConsumerState<_PasswordSheet> {
           ),
           const SizedBox(height: 20),
           _SheetField(
-              label: 'NEW PASSWORD', controller: _newCtrl, obscure: true),
+              label: t.editProfile.passwordSheet.newPassword,
+              controller: _newCtrl,
+              obscure: true),
           const SizedBox(height: 12),
           _SheetField(
-              label: 'CONFIRM PASSWORD',
+              label: t.editProfile.passwordSheet.confirmPassword,
               controller: _confirmCtrl,
               obscure: true),
           const SizedBox(height: 24),
@@ -854,9 +860,9 @@ class _PasswordSheetState extends ConsumerState<_PasswordSheet> {
                     child: CircularProgressIndicator(
                         color: Colors.white, strokeWidth: 2),
                   )
-                : const Text(
-                    'UPDATE PASSWORD',
-                    style: TextStyle(
+                : Text(
+                    t.editProfile.passwordSheet.updatePassword,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 12,
                       letterSpacing: 1.5,
@@ -1026,9 +1032,9 @@ class _PressButtonState extends ConsumerState<_PressButton>
       child: AnimatedBuilder(
         animation: _ctrl,
         builder: (_, child) {
-          final t = _ctrl.value;
+          final tv = _ctrl.value;
           return Transform.scale(
-            scale: 1.0 - 0.03 * t,
+            scale: 1.0 - 0.03 * tv,
             child: Container(
               width: double.infinity,
               height: 52,
@@ -1037,16 +1043,16 @@ class _PressButtonState extends ConsumerState<_PressButton>
                 gradient: LinearGradient(
                   colors: [
                     Color.lerp(c.accent, c.accent.withValues(alpha: 0.8),
-                        t)!,
+                        tv)!,
                     Color.lerp(c.accentSecondary,
-                        c.accentSecondary.withValues(alpha: 0.9), t)!,
+                        c.accentSecondary.withValues(alpha: 0.9), tv)!,
                   ],
                 ),
                 boxShadow: [
                   BoxShadow(
                     color: c.accent.withValues(
-                        alpha: (c.isLightMode ? 0.15 : 0.3) + 0.3 * t),
-                    blurRadius: 12.0 + 8.0 * t,
+                        alpha: (c.isLightMode ? 0.15 : 0.3) + 0.3 * tv),
+                    blurRadius: 12.0 + 8.0 * tv,
                     offset: const Offset(0, 2),
                   ),
                 ],
@@ -1134,45 +1140,45 @@ class _NavRow extends ConsumerWidget {
 class _ThemeSwitcherSection extends ConsumerWidget {
   const _ThemeSwitcherSection();
 
-  static const _options = [
-    (
-      mode: SieThemeMode.classicDark,
-      label: 'CLASSIC DARK',
-      description: 'Антрацит + золото, без шейдеров',
-      bgColor: Color(0xFF1C1C22),
-      accentColor: Color(0xFFC8A84B),
-    ),
-    (
-      mode: SieThemeMode.classicLight,
-      label: 'CLASSIC LIGHT',
-      description: 'Светлый фон + бирюза, без шейдеров',
-      bgColor: Color(0xFFF5F6FA),
-      accentColor: Color(0xFF5AADA0),
-    ),
-  ];
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c       = ref.watch(sieColorsProvider);
     final current = ref.watch(sieThemeModeProvider).valueOrNull
         ?? SieThemeMode.classicDark;
 
+    final options = [
+      (
+        mode: SieThemeMode.classicDark,
+        label: t.editProfile.theme.classicDarkLabel,
+        description: t.editProfile.theme.classicDarkDescription,
+        bgColor: const Color(0xFF1C1C22),
+        accentColor: const Color(0xFFC8A84B),
+      ),
+      (
+        mode: SieThemeMode.classicLight,
+        label: t.editProfile.theme.classicLightLabel,
+        description: t.editProfile.theme.classicLightDescription,
+        bgColor: const Color(0xFFF5F6FA),
+        accentColor: const Color(0xFF5AADA0),
+      ),
+    ];
+
     return Column(
       children: [
-        for (int i = 0; i < _options.length; i++) ...[
+        for (int i = 0; i < options.length; i++) ...[
           if (i > 0) const SizedBox(height: 8),
           _ThemeOptionTile(
-            label:       _options[i].label,
-            description: _options[i].description,
-            bgColor:     _options[i].bgColor,
-            accentColor: _options[i].accentColor,
-            isActive:    current == _options[i].mode,
+            label:       options[i].label,
+            description: options[i].description,
+            bgColor:     options[i].bgColor,
+            accentColor: options[i].accentColor,
+            isActive:    current == options[i].mode,
             c:           c,
-            onTap: current == _options[i].mode
+            onTap: current == options[i].mode
                 ? null
                 : () => ref
                     .read(sieThemeModeProvider.notifier)
-                    .setMode(_options[i].mode),
+                    .setMode(options[i].mode),
           ),
         ],
       ],
@@ -1348,7 +1354,7 @@ class _TimezonePicker extends ConsumerWidget {
     for (final opt in kTimezoneOptions) {
       if (opt.$1 == minutes) return opt.$3;
     }
-    return 'Пользовательский пояс';
+    return t.editProfile.timezone.customZone;
   }
 
   void _showSheet(BuildContext context, WidgetRef ref, Duration current) {
@@ -1439,7 +1445,7 @@ class _TimezoneSheetState extends ConsumerState<_TimezoneSheet> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: Text(
-              'ВЫБЕРИТЕ ЧАСОВОЙ ПОЯС',
+              t.editProfile.timezone.sheetTitle,
               style: TextStyle(
                 color: c.textPrimary,
                 fontSize: 13,
@@ -1533,7 +1539,7 @@ class _NoConnectionMessage extends ConsumerWidget {
         Icon(Icons.wifi_off_outlined, color: c.iconMuted, size: 36),
         const SizedBox(height: 12),
         Text(
-          'Подключение к интернету отсутствует',
+          t.editProfile.noConnectionMessage,
           textAlign: TextAlign.center,
           style: TextStyle(
             color: c.iconMuted,

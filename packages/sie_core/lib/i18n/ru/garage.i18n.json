@@ -1,0 +1,53 @@
+{
+  "systemUnavailable": "СИСТЕМА НЕДОСТУПНА",
+  "dayLockedSnackbar": "Завершите предыдущий день, чтобы разблокировать",
+  "header": {
+    "protocolComplete": "ПРОТОКОЛ ЗАВЕРШЁН",
+    "introCourseDay": "ВВОДНЫЙ КУРС — ДЕНЬ {count}/7"
+  },
+  "pipeline": {
+    "dayLabel": "ДЕНЬ {day}"
+  },
+  "tasks": {
+    "sectionTitle": "ОПЕРАТИВНЫЕ ЗАДАЧИ",
+    "launch": "ЗАПУСТИТЬ → {destination}",
+    "destinationBreathing": "ДЫХАНИЕ",
+    "destinationFocusForge": "FOCUS FORGE",
+    "destinationHabitArchive": "ПРИВЫЧКИ"
+  },
+  "story": {
+    "dayLabel": "ДЕНЬ {day}",
+    "classified": "СЕКРЕТНО",
+    "lockedTransmission": "Завершите предыдущий протокол для получения доступа\nк этой трансмиссии."
+  },
+  "lockedDay": "ЗАВЕРШИТЕ ПРЕДЫДУЩИЙ ДЕНЬ",
+  "dayLockBanner": {
+    "title": "СЛЕДУЮЩИЙ ДЕНЬ ОТКРОЕТСЯ ЗАВТРА",
+    "body": "Вы закрыли предыдущий день сегодня. Возвращайтесь завтра."
+  },
+  "completedBadge": "ДЕНЬ ЗАВЕРШЁН · +1000 DP ПОЛУЧЕНО",
+  "claim": {
+    "button": "★  ПОЛУЧИТЬ НАГРАДУ  ★",
+    "reward": "+ 1 000 DP DESIGN POINTS"
+  },
+  "completedView": {
+    "badgeName": "ИСПЫТАТЕЛЬ",
+    "badgeRarity": "ЛЕГЕНДАРНЫЙ ЗНАЧОК",
+    "certificateTitle": "СЕРТИФИКАТ КОРПОРАЦИИ SiE",
+    "certificateBody": "Вы успешно завершили 7-дневный вводный протокол Корпорации SiE. Базовый стек инструментов саморазвития освоен и интегрирован в ваш ежедневный рабочий процесс.",
+    "statDaysCompleted": "ДНЕЙ ЗАВЕРШЕНО",
+    "statDaysCompletedValue": "7 / 7",
+    "statDpEarned": "ПОЛУЧЕНО DP",
+    "statDpEarnedValue": "7 000",
+    "statStatus": "СТАТУС",
+    "statStatusValue": "CERTIFIED",
+    "footer": "Следите за обновлениями — новые курсы\nи вызовы скоро появятся в Garage."
+  },
+  "rewardDialog": {
+    "protocolComplete": "ПРОТОКОЛ ЗАВЕРШЁН!",
+    "dayClosed": "ДЕНЬ {day} ЗАКРЫТ",
+    "courseCompleteBody": "Значок «Испытатель» разблокирован!\nВы в верхних 10%.",
+    "dayClaimedBody": "+1 000 Design Points начислено\nСледующий день разблокирован.",
+    "continueBtn": "ПРОДОЛЖИТЬ"
+  }
+}

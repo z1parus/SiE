@@ -1,0 +1,22 @@
+{
+  "search": {
+    "hint": "SEARCH OPERATIVE..."
+  },
+  "prompt": {
+    "text": "ENTER A NAME TO SEARCH",
+    "sub": "Minimum 2 characters"
+  },
+  "error": {
+    "text": "CONNECTION ERROR"
+  },
+  "empty": {
+    "text": "OPERATIVE NOT FOUND",
+    "sub": "Try a different query"
+  },
+  "history": {
+    "title": "RECENT QUERIES"
+  },
+  "tile": {
+    "levelBadge": "LEVEL {level}  ·  {xp} XP"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "header": {
+    "edit": "РЕДАКТИРОВАНИЕ",
+    "create": "НОВЫЙ ПРЕСЕТ"
+  },
+  "leaveDialog": {
+    "title": "Выйти из конструктора?",
+    "message": "Несохранённый пресет будет потерян.",
+    "confirm": "Выйти"
+  },
+  "nav": {
+    "back": "← Назад",
+    "step": "Шаг {current}/{total}",
+    "next": "Далее →",
+    "save": "СОХРАНИТЬ"
+  },
+  "name": {
+    "emptyError": "Введите название пресета",
+    "label": "Название пресета *",
+    "hint": "Например: Утренняя медитация",
+    "descLabel": "Описание (необязательно)",
+    "descHint": "Краткое описание сессии"
+  },
+  "chain": {
+    "structureLabel": "СТРУКТУРА",
+    "meditationOnly": "Только\nмедитация",
+    "breathingPlusMeditation": "Дыхание +\nМедитация",
+    "breathingLabel": "ДЫХАНИЕ",
+    "meditationLabel": "МЕДИТАЦИЯ",
+    "duration": "Длительность",
+    "minUnit": "мин"
+  },
+  "audio": {
+    "volumeLabel": "ГРОМКОСТЬ",
+    "music": "МУЗЫКА",
+    "ambient": "AMBIENT",
+    "voice": "ГОЛОС"
+  },
+  "affirmations": {
+    "unavailable": "Паки аффирмаций недоступны",
+    "packLabel": "ПАК АФФИРМАЦИЙ",
+    "none": "Без аффирмаций",
+    "intervalLabel": "ИНТЕРВАЛ",
+    "every": "Каждые",
+    "secUnit": "сек",
+    "previewLabel": "ПРЕДПРОСМОТР",
+    "morePhrases(plural)": {
+      "one": "и ещё {n} фраза...",
+      "few": "и ещё {n} фразы...",
+      "many": "и ещё {n} фраз...",
+      "other": "и ещё {n} фраз..."
+    }
+  },
+  "patterns": {
+    "box": "Box 4×4",
+    "coherence": "Coherence"
+  }
+}

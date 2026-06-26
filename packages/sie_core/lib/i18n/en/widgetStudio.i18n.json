@@ -1,0 +1,38 @@
+{
+  "appBar": {
+    "fallbackTitle": "Widget",
+    "save": "Save",
+    "moduleNotFound": "Module not found"
+  },
+  "snackBar": {
+    "saved": "Widget saved",
+    "error": "Error: {error}"
+  },
+  "preview": {
+    "label": "Preview"
+  },
+  "section": {
+    "size": "Size",
+    "theme": "Theme",
+    "background": "Background",
+    "accent": "Accent",
+    "content": "Content"
+  },
+  "size": {
+    "small": "Small",
+    "medium": "Medium",
+    "large": "Large",
+    "changeHint": "To change the size — remove the widget and add the one you need"
+  },
+  "theme": {
+    "followApp": "As in app",
+    "dark": "Dark",
+    "light": "Light"
+  },
+  "background": {
+    "flat": "Flat",
+    "glass": "Glass",
+    "gradient": "Gradient",
+    "transparent": "Transparent"
+  }
+}

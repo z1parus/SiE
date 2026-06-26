@@ -1,0 +1,17 @@
+{
+  "appBar": {
+    "title": "My widgets"
+  },
+  "size": {
+    "small": "Small",
+    "medium": "Medium",
+    "large": "Large"
+  },
+  "row": {
+    "subtitle": "{size} · #{id}"
+  },
+  "empty": {
+    "title": "No widgets yet",
+    "description": "Add a SiE widget to your home screen (long-press the screen → Widgets), then come back here to configure it."
+  }
+}
