@@ -1031,7 +1031,7 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
     return async.when(
       loading: () =>
           Center(child: CircularProgressIndicator(color: c.accent)),
-      error: (e, _) => Text('Ошибка загрузки: $e',
+      error: (e, _) => Text(t.devStudio.common.loadError(error: '$e'),
           style: TextStyle(color: c.textSecondary)),
       data: (bgs) => Column(
         children: [for (final bg in bgs) _existingRow(c, bg)],
@@ -1061,7 +1061,7 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
                           fontWeight: FontWeight.w600)),
                   const SizedBox(height: 2),
                   Text(
-                    '${_kindDb(bg.backgroundKind)} · ${bg.rarityLabel} · ${bg.priceDP} DP',
+                    t.devStudio.backgrounds.rowSubtitle(kind: _kindDb(bg.backgroundKind), rarity: bg.rarityLabel, price: bg.priceDP),
                     style:
                         TextStyle(color: c.textSecondary, fontSize: 11),
                   ),
@@ -1129,11 +1129,11 @@ class _CropDialogState extends State<_CropDialog> {
                     icon: const Icon(Icons.close, color: Colors.white70),
                     onPressed: () => Navigator.pop(context, null),
                   ),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'КАДРИРОВАНИЕ',
+                      t.devStudio.crop.title,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -1146,14 +1146,14 @@ class _CropDialogState extends State<_CropDialog> {
               ),
             ),
             // Instructions
-            const Text(
-              'Используйте жесты для позиционирования',
-              style: TextStyle(color: Colors.white54, fontSize: 12),
+            Text(
+              t.devStudio.crop.instruction,
+              style: const TextStyle(color: Colors.white54, fontSize: 12),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Результат — только область карточки',
-              style: TextStyle(color: Colors.white38, fontSize: 11),
+            Text(
+              t.devStudio.crop.hint,
+              style: const TextStyle(color: Colors.white38, fontSize: 11),
             ),
             // Crop area
             Expanded(
@@ -1221,7 +1221,7 @@ class _CropDialogState extends State<_CropDialog> {
                         minimumSize: const Size.fromHeight(48),
                       ),
                       onPressed: () => Navigator.pop(context, null),
-                      child: const Text('ОТМЕНА'),
+                      child: Text(t.devStudio.crop.cancel),
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -1239,9 +1239,9 @@ class _CropDialogState extends State<_CropDialog> {
                               child: CircularProgressIndicator(
                                   strokeWidth: 2, color: Colors.black),
                             )
-                          : const Text(
-                              'ОБРЕЗАТЬ',
-                              style: TextStyle(
+                          : Text(
+                              t.devStudio.crop.crop,
+                              style: const TextStyle(
                                   color: Colors.black,
                                   fontWeight: FontWeight.w700),
                             ),
