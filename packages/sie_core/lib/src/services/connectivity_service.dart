@@ -23,7 +23,7 @@ class ConnectivityService {
   static const _pollInterval = Duration(seconds: 20);
 
   /// Probe budget — kept short so a dead upstream flips us offline quickly.
-  static const _probeTimeout = Duration(seconds: 4);
+  static const _probeTimeout = Duration(seconds: 2);
 
   /// Emits the real online/offline state: on every connectivity change, on a
   /// periodic heartbeat, and once immediately on subscribe. Consecutive
