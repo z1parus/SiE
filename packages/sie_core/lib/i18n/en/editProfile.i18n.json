@@ -38,6 +38,14 @@
     "classicLightLabel": "CLASSIC LIGHT",
     "classicLightDescription": "Light background + teal, no shaders"
   },
+  "language": {
+    "header": "LANGUAGE",
+    "subtitle": "APPLICATION INTERFACE LANGUAGE",
+    "ruLabel": "РУССКИЙ",
+    "ruDescription": "Russian interface",
+    "enLabel": "ENGLISH",
+    "enDescription": "English interface"
+  },
   "timezone": {
     "header": "TIME ZONE",
     "subtitle": "TIME SETUP FOR THE DAILY VANGUARD",

@@ -38,6 +38,14 @@
     "classicLightLabel": "CLASSIC LIGHT",
     "classicLightDescription": "Светлый фон + бирюза, без шейдеров"
   },
+  "language": {
+    "header": "ЯЗЫК",
+    "subtitle": "ЯЗЫК ИНТЕРФЕЙСА ПРИЛОЖЕНИЯ",
+    "ruLabel": "РУССКИЙ",
+    "ruDescription": "Русский интерфейс",
+    "enLabel": "ENGLISH",
+    "enDescription": "English interface"
+  },
   "timezone": {
     "header": "ЧАСОВОЙ ПОЯС",
     "subtitle": "НАСТРОЙКА ВРЕМЕНИ ДЛЯ СУТОЧНОГО АВАНГАРДА",

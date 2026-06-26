@@ -233,6 +233,19 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           const SizedBox(height: 12),
           const _ThemeSwitcherSection(),
           const SizedBox(height: 32),
+          SectionHeader(title: t.editProfile.language.header),
+          const SizedBox(height: 4),
+          Text(
+            t.editProfile.language.subtitle,
+            style: TextStyle(
+              color: c.textSecondary.withValues(alpha: 0.55),
+              fontSize: 9,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const _LanguageSwitcherSection(),
+          const SizedBox(height: 32),
           SectionHeader(title: t.editProfile.timezone.header),
           const SizedBox(height: 4),
           Text(
@@ -1286,6 +1299,171 @@ class _ThemeOptionTile extends StatelessWidget {
                       color: c.textSecondary.withValues(alpha: 0.35),
                       size: 18),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Language Switcher ─────────────────────────────────────────────────────
+
+class _LanguageSwitcherSection extends ConsumerWidget {
+  const _LanguageSwitcherSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c       = ref.watch(sieColorsProvider);
+    final current = ref.watch(localeProvider);
+
+    final options = [
+      (
+        locale:      AppLocale.ru,
+        label:       t.editProfile.language.ruLabel,
+        description: t.editProfile.language.ruDescription,
+        badge:       'RU',
+        accentColor: const Color(0xFFC8A84B),
+      ),
+      (
+        locale:      AppLocale.en,
+        label:       t.editProfile.language.enLabel,
+        description: t.editProfile.language.enDescription,
+        badge:       'EN',
+        accentColor: const Color(0xFF5AADA0),
+      ),
+    ];
+
+    return Column(
+      children: [
+        for (int i = 0; i < options.length; i++) ...[
+          if (i > 0) const SizedBox(height: 8),
+          _LangOptionTile(
+            label:       options[i].label,
+            description: options[i].description,
+            badge:       options[i].badge,
+            accentColor: options[i].accentColor,
+            isActive:    current == options[i].locale,
+            c:           c,
+            onTap: current == options[i].locale
+                ? null
+                : () => ref
+                    .read(localeProvider.notifier)
+                    .setLocale(options[i].locale),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _LangOptionTile extends StatelessWidget {
+  const _LangOptionTile({
+    required this.label,
+    required this.description,
+    required this.badge,
+    required this.accentColor,
+    required this.isActive,
+    required this.c,
+    this.onTap,
+  });
+  final String label;
+  final String description;
+  final String badge;
+  final Color accentColor;
+  final bool isActive;
+  final SieColors c;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+        decoration: BoxDecoration(
+          color: isActive
+              ? accentColor.withValues(alpha: 0.07)
+              : (c.isLightMode
+                  ? const Color(0x0A000000)
+                  : Colors.white.withValues(alpha: 0.04)),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isActive
+                ? accentColor.withValues(alpha: 0.50)
+                : (c.isLightMode
+                    ? c.border
+                    : Colors.white.withValues(alpha: 0.08)),
+            width: isActive ? 1.0 : 0.8,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: isActive
+                    ? accentColor.withValues(alpha: 0.15)
+                    : (c.isLightMode
+                        ? const Color(0x0A000000)
+                        : Colors.white.withValues(alpha: 0.06)),
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(
+                  color: accentColor.withValues(alpha: isActive ? 0.55 : 0.25),
+                  width: 1.5,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  badge,
+                  style: TextStyle(
+                    color: accentColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: isActive ? accentColor : c.textPrimary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    description,
+                    style: TextStyle(color: c.textSecondary, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            if (isActive)
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: accentColor,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: accentColor.withValues(alpha: 0.6),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
