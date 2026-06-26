@@ -202,7 +202,7 @@ function authorize(url: URL): Response {
     Deno.env.get('TELEGRAM_BOT_USERNAME') ??
     ''
   if (!botUsername) return html(errorPage('Missing bot_username'))
-  const cbUrl = `${url.origin}/functions/telegram-auth/telegram-callback`
+  const cbUrl = `https://${url.hostname}/functions/telegram-auth/telegram-callback`
   return html(widgetPage(botUsername, cbUrl, state, redirectUri))
 }
 
