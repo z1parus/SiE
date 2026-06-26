@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:sie_core/sie_core.dart';
 
 import 'customization_screen.dart';
@@ -195,6 +196,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     value: t.editProfile.passwordValue,
                     onTap: _showPasswordSheet,
                   ),
+                  Container(
+                    height: 1,
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    color: c.border,
+                  ),
+                  const _TelegramLinkRow(),
                 ],
               ),
             ),
@@ -1798,6 +1805,153 @@ class _NoConnectionMessage extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── Telegram link / unlink row ────────────────────────────────────────────────
+
+class _TelegramLinkRow extends ConsumerStatefulWidget {
+  const _TelegramLinkRow();
+
+  @override
+  ConsumerState<_TelegramLinkRow> createState() => _TelegramLinkRowState();
+}
+
+class _TelegramLinkRowState extends ConsumerState<_TelegramLinkRow> {
+  bool _busy = false;
+
+  bool get _isLinked {
+    final identities = SupabaseService.client.auth.currentUser?.identities;
+    return identities != null &&
+        identities.any((i) => i.provider == 'custom:telegram');
+  }
+
+  String? get _telegramUsername {
+    final user = SupabaseService.client.auth.currentUser;
+    final meta = user?.userMetadata;
+    return meta?['user_name'] as String? ?? meta?['full_name'] as String?;
+  }
+
+  Future<void> _link() async {
+    setState(() => _busy = true);
+    try {
+      await SupabaseService.client.auth.signInWithOAuth(
+        OAuthProvider('custom:telegram'),
+        redirectTo: 'sie://auth/callback',
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t.auth.telegram.error)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _unlink() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        title: Text(t.auth.telegram.unlinkConfirmTitle),
+        content: Text(t.auth.telegram.unlinkConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(t.common.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(t.auth.telegram.unlink),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _busy = true);
+    try {
+      final identities = SupabaseService.client.auth.currentUser?.identities;
+      final tg = identities?.firstWhere(
+        (i) => i.provider == 'telegram',
+        orElse: () => throw StateError('no telegram identity'),
+      );
+      if (tg != null) {
+        await SupabaseService.client.auth.unlinkIdentity(tg);
+        ref.invalidate(userProfileProvider);
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t.auth.telegram.unlinkError)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
+    final linked = _isLinked;
+    final username = _telegramUsername;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Icon(Icons.send, color: c.iconMuted, size: 18),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Telegram',
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 10,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  linked
+                      ? (username != null
+                          ? t.auth.telegram.linked(username: username)
+                          : t.auth.telegram.linked(username: ''))
+                      : t.auth.telegram.notLinked,
+                  style: TextStyle(color: c.textPrimary, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+          if (_busy)
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                  color: c.accent, strokeWidth: 1.5),
+            )
+          else
+            TextButton(
+              onPressed: linked ? _unlink : _link,
+              child: Text(
+                linked ? t.auth.telegram.unlink : t.auth.telegram.link,
+                style: TextStyle(
+                  color: linked ? c.danger : c.accent,
+                  fontSize: 11,
+                  letterSpacing: 1.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

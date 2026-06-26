@@ -139,6 +139,8 @@ create table public.profiles (
   username      text        unique,
   full_name     text,
   avatar_url    text,
+  telegram_id   bigint      unique,
+  telegram_username text,
 
   -- Прогресс
   total_xp      integer     not null default 0,
@@ -204,6 +206,37 @@ $$;
 create trigger trg_on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+
+-- Автозаполнение telegram_id / telegram_username при первом входе через Telegram.
+-- Supabase хранит идентичность в raw_user_meta_data с `sub` = "telegram:<id>"
+-- (без явного ключа `provider`), поэтому определяем по префиксу sub.
+-- Триггер идемпотентен: обновляет только если telegram_id IS NULL.
+create or replace function public.handle_telegram_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_sub text;
+  v_telegram_id bigint;
+begin
+  v_sub := new.raw_user_meta_data ->> 'sub';
+  if v_sub is not null and v_sub like 'telegram:%' then
+    v_telegram_id := substring(v_sub from 10)::bigint;
+    update public.profiles
+       set telegram_id       = v_telegram_id,
+           telegram_username = new.raw_user_meta_data ->> 'preferred_username'
+     where id = new.id
+       and telegram_id is null;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger trg_on_auth_user_telegram
+  after insert on auth.users
+  for each row execute function public.handle_telegram_user();
 
 
 /* ══════════════════════════════════════════════════════════════

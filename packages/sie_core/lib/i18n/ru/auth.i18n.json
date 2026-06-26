@@ -38,5 +38,17 @@
     "localDevHint": "Local dev — check Mailpit:",
     "title": "РЕГИСТРАЦИЯ\nИНИЦИИРОВАНА",
     "proceed": "ПЕРЕЙТИ КО ВХОДУ"
+  },
+  "telegram": {
+    "signIn": "ВОЙТИ ЧЕРЕЗ TELEGRAM",
+    "orDivider": "ИЛИ",
+    "linked": "Привязан Telegram: @{username}",
+    "notLinked": "Telegram не привязан",
+    "link": "ПРИВЯЗАТЬ TELEGRAM",
+    "unlink": "ОТВЯЗАТЬ",
+    "unlinkConfirmTitle": "Отвязать Telegram",
+    "unlinkConfirmBody": "Аккаунт Telegram будет отключён от вашего профиля.",
+    "error": "НЕ УДАЛОСЬ ВЫПОЛНИТЬ ВХОД ЧЕРЕЗ TELEGRAM",
+    "unlinkError": "НЕ УДАЛОСЬ ОТВЯЗАТЬ TELEGRAM"
   }
 }

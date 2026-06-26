@@ -48,6 +48,18 @@ class SupabaseService {
     );
   }
 
+  /// Launches the Telegram OAuth flow. Supabase opens the Telegram Login
+  /// Widget / bot flow; after the user confirms, Telegram redirects to
+  /// `sie://auth/callback` which `supabase_flutter` intercepts (configured via
+  /// `authCallbackUrlScheme: 'sie'`). The resulting session is picked up by
+  /// `authStateProvider` and the app routes to the main shell automatically.
+  static Future<void> signInWithTelegram() async {
+    await client.auth.signInWithOAuth(
+      OAuthProvider('custom:telegram'),
+      redirectTo: 'sie://auth/callback',
+    );
+  }
+
   static Future<void> signOut() async {
     await client.auth.signOut();
   }

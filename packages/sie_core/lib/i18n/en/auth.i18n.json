@@ -38,5 +38,17 @@
     "localDevHint": "Local dev — check Mailpit:",
     "title": "REGISTRATION\nINITIATED",
     "proceed": "PROCEED TO SIGN IN"
+  },
+  "telegram": {
+    "signIn": "SIGN IN WITH TELEGRAM",
+    "orDivider": "OR",
+    "linked": "Telegram linked: @{username}",
+    "notLinked": "Telegram is not linked",
+    "link": "LINK TELEGRAM",
+    "unlink": "UNLINK",
+    "unlinkConfirmTitle": "Unlink Telegram",
+    "unlinkConfirmBody": "The Telegram account will be disconnected from your profile.",
+    "error": "FAILED TO SIGN IN WITH TELEGRAM",
+    "unlinkError": "FAILED TO UNLINK TELEGRAM"
   }
 }
