@@ -350,7 +350,7 @@ class _LeaderboardList extends ConsumerWidget {
     final c = ref.watch(sieColorsProvider);
     return RefreshIndicator(
       color: c.accent,
-      backgroundColor: Colors.transparent,
+      backgroundColor: c.surface,
       onRefresh: onRefresh,
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 96),
