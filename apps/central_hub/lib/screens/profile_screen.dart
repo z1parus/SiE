@@ -590,7 +590,20 @@ class _AchievementsGrid extends ConsumerWidget {
             childAspectRatio: 0.88,
           ),
           itemCount: achievements.length,
-          itemBuilder: (_, i) => AchievementBadge(userAchievement: achievements[i]),
+          itemBuilder: (ctx, i) => GestureDetector(
+            onTap: () => showModalBottomSheet(
+              context: ctx,
+              backgroundColor: c.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(20)),
+                side: BorderSide(color: c.border),
+              ),
+              builder: (_) =>
+                  _AchievementDetailSheet(ua: achievements[i]),
+            ),
+            child: AchievementBadge(userAchievement: achievements[i]),
+          ),
         );
       },
     );
@@ -956,6 +969,152 @@ class _StatChip extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Achievement detail sheet (personal profile)
+// ─────────────────────────────────────────────────────────────────────────────
+class _AchievementDetailSheet extends ConsumerWidget {
+  const _AchievementDetailSheet({required this.ua});
+
+  final UserAchievement ua;
+
+  static IconData _icon(String slug) => switch (slug) {
+        'first_breath'         => Icons.air,
+        'streak_7'             => Icons.local_fire_department,
+        'streak_30'            => Icons.whatshot,
+        'habits_10'            => Icons.checklist,
+        'xp_1000'              => Icons.bolt,
+        'first_habit_created'  => Icons.add_task,
+        'deep_focus_initiated' => Icons.center_focus_strong,
+        _                      => Icons.emoji_events,
+      };
+
+  static String _formatDate(DateTime dt) =>
+      '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}.${dt.year}';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c   = ref.watch(sieColorsProvider);
+    final ach = ua.achievement;
+    final earned = ua.earned;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 36),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36,
+            height: 3,
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(
+              color: c.accent.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: earned ? c.accent.withValues(alpha: 0.12) : c.background,
+              border: Border.all(
+                color: earned ? c.accent : c.border,
+                width: earned ? 1.5 : 1,
+              ),
+            ),
+            child: Icon(
+              _icon(ach.slug),
+              color: earned ? c.accent : c.textSecondary,
+              size: 24,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            ach.name.toUpperCase(),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          if (ach.description != null) ...[
+            Text(
+              ach.description!,
+              textAlign: TextAlign.center,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(height: 1.5),
+            ),
+            const SizedBox(height: 12),
+          ],
+          Container(
+            height: 1,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.transparent,
+                  c.accent.withValues(alpha: 0.3),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.bolt, color: c.accent, size: 14),
+              const SizedBox(width: 4),
+              Text(
+                t.publicProfile.achievementSheet.xpReward(xp: ach.xpReward),
+                style: TextStyle(
+                  color: c.accent,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(width: 20),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                      color: earned ? c.accent : c.textSecondary),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  earned
+                      ? t.publicProfile.achievementSheet.earned
+                      : t.publicProfile.achievementSheet.notEarned,
+                  style: TextStyle(
+                    color: earned ? c.accent : c.textSecondary,
+                    fontSize: 9,
+                    letterSpacing: 1.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (earned && ua.earnedAt != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              t.publicProfile.achievementSheet
+                  .date(date: _formatDate(ua.earnedAt!)),
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 9,
+                letterSpacing: 1,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 class _NoConnectionMessage extends ConsumerWidget {
   const _NoConnectionMessage();
 

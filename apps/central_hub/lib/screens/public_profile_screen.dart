@@ -579,28 +579,71 @@ class _PublicMedalsSection extends ConsumerWidget {
 
   final String userId;
 
+  void _showMedalSheet(BuildContext context, MissionMedal medal, SieColors c) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _PublicMedalDetailSheet(medal: medal, c: c),
+    );
+  }
+
+  void _showMedalGroupSheet(
+      BuildContext context, List<MissionMedal> group, SieColors c) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _PublicMedalGroupSheet(medals: group, c: c),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c           = ref.watch(sieColorsProvider);
     final medalsAsync = ref.watch(publicMissionMedalsProvider(userId));
 
     return medalsAsync.when(
-      loading: () => const SieSkeletonGrid(columns: 4, count: 4, childAspectRatio: 1.0),
+      loading: () => const SieSkeletonGrid(columns: 3, count: 3, childAspectRatio: 0.82),
       error: (_, _) => const SizedBox.shrink(),
       data: (medals) {
         if (medals.isEmpty) {
           return Text(
             t.publicProfile.medals.empty,
-            style:
-                TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),
+            style: TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 1),
           );
         }
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: medals
-              .map((m) => MissionMedalBadge(medal: m, size: 56))
-              .toList(),
+
+        // Group by category + level (same logic as personal profile)
+        final Map<String, List<MissionMedal>> groupMap = {};
+        for (final medal in medals) {
+          final key = medal.isVanguard
+              ? 'vanguard_${medal.level}'
+              : '${medal.category?.name ?? '_'}_${medal.level}';
+          groupMap.putIfAbsent(key, () => []).add(medal);
+        }
+        final groups = groupMap.values.toList()
+          ..sort((a, b) => b.first.level.compareTo(a.first.level));
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 0.82,
+          ),
+          itemCount: groups.length,
+          itemBuilder: (_, i) {
+            final group = groups[i];
+            return MissionMedalBadge(
+              medal: group.first,
+              count: group.length,
+              onTap: () => group.length == 1
+                  ? _showMedalSheet(context, group.first, c)
+                  : _showMedalGroupSheet(context, group, c),
+            );
+          },
         );
       },
     );
@@ -808,6 +851,268 @@ class _SocialBtn extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Public medal detail sheet
+// ─────────────────────────────────────────────────────────────────────────────
+class _PublicMedalDetailSheet extends StatelessWidget {
+  const _PublicMedalDetailSheet({required this.medal, required this.c});
+
+  final MissionMedal medal;
+  final SieColors c;
+
+  @override
+  Widget build(BuildContext context) {
+    final levelColor = medalLevelColor(medal.level);
+    final levelLabel = medalLevelLabel(medal.level);
+    final d = medal.earnedAt;
+    final dateStr =
+        '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: levelColor.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+                color: c.border, borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(height: 20),
+          MissionMedalBadge(medal: medal, size: 80, showLabel: false),
+          const SizedBox(height: 14),
+          Text(
+            medal.name,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 17,
+                fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              color: levelColor.withValues(alpha: 0.12),
+              border: Border.all(color: levelColor.withValues(alpha: 0.35)),
+            ),
+            child: Text(
+              levelLabel,
+              style: TextStyle(
+                  color: levelColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5),
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (medal.goalName.isNotEmpty) ...[
+            Text(
+              medal.goalName,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 6),
+          ],
+          Text(
+            t.profile.medals.completed(date: dateStr),
+            style: TextStyle(color: c.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _MedalStatChip(
+                  icon: Icons.fitness_center,
+                  label: t.profile.medals.weight(weight: medal.totalTaskWeight),
+                  c: c),
+              _MedalStatChip(
+                  icon: Icons.calendar_today_outlined,
+                  label: t.profile.medals.duration(n: medal.durationDays),
+                  c: c),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Public medal group sheet
+// ─────────────────────────────────────────────────────────────────────────────
+class _PublicMedalGroupSheet extends StatelessWidget {
+  const _PublicMedalGroupSheet({required this.medals, required this.c});
+
+  final List<MissionMedal> medals;
+  final SieColors c;
+
+  @override
+  Widget build(BuildContext context) {
+    final rep = medals.first;
+    final levelColor = medalLevelColor(rep.level);
+    final levelLabel = medalLevelLabel(rep.level);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: levelColor.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 8),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+                color: c.border, borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: levelColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: levelColor.withValues(alpha: 0.35)),
+                ),
+                child: Text(
+                  levelLabel,
+                  style: TextStyle(
+                    color: levelColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                rep.name,
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            t.profile.medals.count(n: medals.length),
+            style: TextStyle(color: c.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          Divider(height: 1, color: c.border),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.45,
+            ),
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: medals.length,
+              separatorBuilder: (_, __) => Divider(height: 1, color: c.border),
+              itemBuilder: (ctx, i) {
+                final medal = medals[i];
+                final d = medal.earnedAt;
+                final dateStr =
+                    '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
+                final title =
+                    medal.goalName.isNotEmpty ? medal.goalName : medal.name;
+                return InkWell(
+                  onTap: () {
+                    Navigator.pop(context);
+                    showModalBottomSheet(
+                      context: context,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) =>
+                          _PublicMedalDetailSheet(medal: medal, c: c),
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    child: Row(
+                      children: [
+                        MissionMedalBadge(medal: medal, size: 48),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                t.profile.medals.completed(date: dateStr),
+                                style: TextStyle(
+                                    color: c.textSecondary, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.chevron_right_outlined,
+                            color: c.textSecondary, size: 18),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+class _MedalStatChip extends StatelessWidget {
+  const _MedalStatChip(
+      {required this.icon, required this.label, required this.c});
+
+  final IconData icon;
+  final String label;
+  final SieColors c;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: c.textSecondary),
+        const SizedBox(width: 5),
+        Text(label, style: TextStyle(color: c.textSecondary, fontSize: 12)),
+      ],
     );
   }
 }
