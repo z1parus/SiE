@@ -54,6 +54,8 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
   // ── Tips tab state ────────────────────────────────────────────
   final _tipTitleCtrl = TextEditingController();
   final _tipDescCtrl = TextEditingController();
+  final _tipTitleEnCtrl = TextEditingController();
+  final _tipDescEnCtrl = TextEditingController();
   Tip? _editingTip;
   bool _savingTip = false;
 
@@ -79,6 +81,8 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
     _dpValueCtrl.dispose();
     _tipTitleCtrl.dispose();
     _tipDescCtrl.dispose();
+    _tipTitleEnCtrl.dispose();
+    _tipDescEnCtrl.dispose();
     super.dispose();
   }
 
@@ -376,7 +380,13 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
   Future<void> _saveTip() async {
     final title = _tipTitleCtrl.text.trim();
     final desc = _tipDescCtrl.text.trim();
-    if (title.isEmpty || desc.isEmpty) {
+    final titleEn = _tipTitleEnCtrl.text.trim();
+    final descEn = _tipDescEnCtrl.text.trim();
+    // Both languages are required so every hint has a Russian and English copy.
+    if (title.isEmpty ||
+        desc.isEmpty ||
+        titleEn.isEmpty ||
+        descEn.isEmpty) {
       _toast(t.devStudio.tips.fillTitleAndDescription);
       return;
     }
@@ -387,12 +397,16 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
         await SupabaseService.client.from('tips').update({
           'title': title,
           'description': desc,
+          'title_en': titleEn,
+          'description_en': descEn,
         }).eq('id', _editingTip!.id);
         messenger.showSnackBar(SnackBar(content: Text(t.devStudio.tips.updated)));
       } else {
         await SupabaseService.client.from('tips').insert({
           'title': title,
           'description': desc,
+          'title_en': titleEn,
+          'description_en': descEn,
           'is_active': true,
         });
         messenger.showSnackBar(SnackBar(content: Text(t.devStudio.tips.created)));
@@ -414,6 +428,8 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
       _editingTip = tip;
       _tipTitleCtrl.text = tip.title;
       _tipDescCtrl.text = tip.description;
+      _tipTitleEnCtrl.text = tip.titleEn;
+      _tipDescEnCtrl.text = tip.descriptionEn;
     });
   }
 
@@ -421,6 +437,8 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
     setState(() {
       _tipTitleCtrl.clear();
       _tipDescCtrl.clear();
+      _tipTitleEnCtrl.clear();
+      _tipDescEnCtrl.clear();
       _editingTip = null;
     });
   }
@@ -773,8 +791,11 @@ class _DevStudioScreenState extends ConsumerState<DevStudioScreen>
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           _section(c, _editingTip != null ? t.devStudio.tips.sectionEdit : t.devStudio.tips.sectionNew),
-          _field(c, t.devStudio.tips.fieldTitle, _tipTitleCtrl),
-          _field(c, t.devStudio.tips.fieldDescription, _tipDescCtrl, maxLines: 3),
+          _field(c, t.devStudio.tips.fieldTitleRu, _tipTitleCtrl),
+          _field(c, t.devStudio.tips.fieldDescriptionRu, _tipDescCtrl, maxLines: 3),
+          const SizedBox(height: 8),
+          _field(c, t.devStudio.tips.fieldTitleEn, _tipTitleEnCtrl),
+          _field(c, t.devStudio.tips.fieldDescriptionEn, _tipDescEnCtrl, maxLines: 3),
           const SizedBox(height: 16),
           Row(
             children: [

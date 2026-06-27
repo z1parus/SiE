@@ -69,20 +69,22 @@
   "tips": {
     "sectionEdit": "РЕДАКТИРОВАТЬ ПОДСКАЗКУ",
     "sectionNew": "НОВАЯ ПОДСКАЗКА",
-    "fieldTitle": "Заголовок",
-    "fieldDescription": "Описание",
     "saveButton": "СОХРАНИТЬ",
     "publishButton": "ОПУБЛИКОВАТЬ",
     "cancelButton": "ОТМЕНА",
     "sectionExisting": "СУЩЕСТВУЮЩИЕ ПОДСКАЗКИ",
     "empty": "Пока нет ни одной подсказки",
-    "fillTitleAndDescription": "Заполните заголовок и описание",
+    "fillTitleAndDescription": "Заполните заголовок и описание на обоих языках",
     "updated": "Подсказка обновлена",
     "created": "Подсказка создана",
     "deleted": "Подсказка удалена",
     "deleteTitle": "Удалить подсказку?",
     "deleteBody": "«{title}» будет удалена безвозвратно.",
-    "error": "Ошибка: {message}"
+    "error": "Ошибка: {message}",
+    "fieldTitleRu": "Заголовок (RU)",
+    "fieldDescriptionRu": "Описание (RU)",
+    "fieldTitleEn": "Заголовок (EN)",
+    "fieldDescriptionEn": "Описание (EN)"
   },
   "common": {
     "cancel": "Отмена",

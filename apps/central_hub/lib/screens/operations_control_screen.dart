@@ -2472,6 +2472,7 @@ class _DailyTipBannerState extends ConsumerState<_DailyTipBanner>
   Widget build(BuildContext context) {
     final c = ref.watch(sieColorsProvider);
     final tipsAsync = ref.watch(tipsProvider);
+    final lang = ref.watch(localeProvider).languageCode;
 
     tipsAsync.whenData(_pickTip);
 
@@ -2500,7 +2501,7 @@ class _DailyTipBannerState extends ConsumerState<_DailyTipBanner>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _tip!.title,
+                      _tip!.localizedTitle(lang),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -2512,7 +2513,7 @@ class _DailyTipBannerState extends ConsumerState<_DailyTipBanner>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _tip!.description,
+                      _tip!.localizedDescription(lang),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -2530,7 +2531,7 @@ class _DailyTipBannerState extends ConsumerState<_DailyTipBanner>
                 behavior: HitTestBehavior.opaque,
                 child: Semantics(
                   button: true,
-                  label: 'Закрыть подсказку',
+                  label: t.operations.tip.close,
                   child: Padding(
                     padding: const EdgeInsets.all(2),
                     child: Icon(Icons.close,

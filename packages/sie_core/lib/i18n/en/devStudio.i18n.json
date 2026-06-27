@@ -69,20 +69,22 @@
   "tips": {
     "sectionEdit": "EDIT TIP",
     "sectionNew": "NEW TIP",
-    "fieldTitle": "Title",
-    "fieldDescription": "Description",
     "saveButton": "SAVE",
     "publishButton": "PUBLISH",
     "cancelButton": "CANCEL",
     "sectionExisting": "EXISTING TIPS",
     "empty": "No tips yet",
-    "fillTitleAndDescription": "Fill in the title and description",
+    "fillTitleAndDescription": "Fill in the title and description in both languages",
     "updated": "Tip updated",
     "created": "Tip created",
     "deleted": "Tip deleted",
     "deleteTitle": "Delete tip?",
     "deleteBody": "«{title}» will be deleted permanently.",
-    "error": "Error: {message}"
+    "error": "Error: {message}",
+    "fieldTitleRu": "Title (RU)",
+    "fieldDescriptionRu": "Description (RU)",
+    "fieldTitleEn": "Title (EN)",
+    "fieldDescriptionEn": "Description (EN)"
   },
   "common": {
     "cancel": "Cancel",

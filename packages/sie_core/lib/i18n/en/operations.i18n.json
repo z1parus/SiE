@@ -36,5 +36,8 @@
     "body": "You have successfully logged into the SiE Corporation system. All protocols are active. Complete missions, track your progress and earn experience.\n\nThe mission begins now.",
     "accept": "ACCEPT MISSION",
     "close": "Close"
+  },
+  "tip": {
+    "close": "Close hint"
   }
 }
