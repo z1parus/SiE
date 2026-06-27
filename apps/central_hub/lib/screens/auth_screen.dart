@@ -23,8 +23,13 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   bool _isLogin = true;
   bool _isLoading = false;
   bool _telegramLoading = false;
+  bool _googleLoading = false;
+  bool _appleLoading = false;
   bool _registrationPending = false;
   String? _errorMessage;
+
+  bool get _anySocialLoading =>
+      _telegramLoading || _googleLoading || _appleLoading;
 
   @override
   void dispose() {
@@ -144,6 +149,34 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _googleLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      await SupabaseService.signInWithGoogle();
+    } catch (_) {
+      if (mounted) setState(() => _errorMessage = t.auth.social.googleError);
+    } finally {
+      if (mounted) setState(() => _googleLoading = false);
+    }
+  }
+
+  Future<void> _signInWithApple() async {
+    setState(() {
+      _appleLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      await SupabaseService.signInWithApple();
+    } catch (_) {
+      if (mounted) setState(() => _errorMessage = t.auth.social.appleError);
+    } finally {
+      if (mounted) setState(() => _appleLoading = false);
+    }
+  }
+
   Widget _buildTelegramSection(SieColors c) {
     return Column(
       children: [
@@ -166,8 +199,27 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         ),
         const SizedBox(height: 12),
         _TelegramButton(
-          onTap: _telegramLoading ? null : _signInWithTelegram,
+          onTap: _anySocialLoading ? null : _signInWithTelegram,
           loading: _telegramLoading,
+        ),
+        const SizedBox(height: 10),
+        _SocialButton(
+          label: t.auth.social.signInGoogle,
+          loading: _googleLoading,
+          onTap: _anySocialLoading ? null : _signInWithGoogle,
+          background: Colors.white,
+          foreground: const Color(0xFF1F1F1F),
+          border: c.border,
+          leading: const _GoogleGlyph(),
+        ),
+        const SizedBox(height: 10),
+        _SocialButton(
+          label: t.auth.social.signInApple,
+          loading: _appleLoading,
+          onTap: _anySocialLoading ? null : _signInWithApple,
+          background: const Color(0xFF000000),
+          foreground: Colors.white,
+          leading: const Icon(Icons.apple, color: Colors.white, size: 20),
         ),
       ],
     );
@@ -752,6 +804,85 @@ class _TelegramButtonState extends ConsumerState<_TelegramButton>
                   ),
                 ],
               ),
+      ),
+    );
+  }
+}
+
+// ─── Generic social-auth button (Google / Apple brand colours) ───────────────
+
+class _SocialButton extends StatelessWidget {
+  final String label;
+  final bool loading;
+  final VoidCallback? onTap;
+  final Color background;
+  final Color foreground;
+  final Color? border;
+  final Widget leading;
+
+  const _SocialButton({
+    required this.label,
+    required this.loading,
+    required this.onTap,
+    required this.background,
+    required this.foreground,
+    required this.leading,
+    this.border,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 52,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          color: background,
+          border: border != null ? Border.all(color: border!) : null,
+        ),
+        alignment: Alignment.center,
+        child: loading
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                    color: foreground, strokeWidth: 2),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  leading,
+                  const SizedBox(width: 10),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: foreground,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 2.0,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+// Simple multi-colour Google "G" glyph rendered from text (no asset needed).
+class _GoogleGlyph extends StatelessWidget {
+  const _GoogleGlyph();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Text(
+      'G',
+      style: TextStyle(
+        color: Color(0xFF4285F4),
+        fontSize: 20,
+        fontWeight: FontWeight.w800,
+        height: 1.0,
       ),
     );
   }

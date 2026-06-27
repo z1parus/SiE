@@ -50,5 +50,11 @@
     "unlinkConfirmBody": "The Telegram account will be disconnected from your profile.",
     "error": "FAILED TO SIGN IN WITH TELEGRAM",
     "unlinkError": "FAILED TO UNLINK TELEGRAM"
+  },
+  "social": {
+    "signInGoogle": "SIGN IN WITH GOOGLE",
+    "signInApple": "SIGN IN WITH APPLE",
+    "googleError": "FAILED TO SIGN IN WITH GOOGLE",
+    "appleError": "FAILED TO SIGN IN WITH APPLE"
   }
 }
