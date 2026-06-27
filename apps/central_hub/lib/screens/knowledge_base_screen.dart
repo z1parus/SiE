@@ -5,6 +5,7 @@ import 'package:sie_core/sie_core.dart';
 import 'breathing_exercise_screen.dart';
 import 'focus_protocol_screen.dart';
 import 'habit_tracker_screen.dart';
+import 'planning_screen.dart';
 
 // ── Knowledge Base Screen ─────────────────────────────────────
 
@@ -26,6 +27,33 @@ class KnowledgeBaseScreen extends ConsumerWidget {
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 48),
                   children: [
                     const _SystemHeader(),
+                    const SizedBox(height: 28),
+                    // Interactive tutorials — the app tour + per-module courses.
+                    _NeonSectionLabel(
+                        label: t.knowledgeBase.sections.tutorials),
+                    const SizedBox(height: 14),
+                    _TutorialTile(
+                      icon: Icons.explore_outlined,
+                      label: t.tour.replayItem,
+                      onTap: () {
+                        // The app tour targets the shell — drop back to it first.
+                        Navigator.of(context).popUntil((r) => r.isFirst);
+                        ref
+                            .read(tourControllerProvider.notifier)
+                            .start(TourType.app);
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    _TutorialTile(
+                      icon: Icons.account_tree_outlined,
+                      label: t.coursePlanning.replayItem,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              const PlanningScreen(startCourse: true),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 28),
                     _NeonSectionLabel(label: t.knowledgeBase.sections.systemModules),
                     const SizedBox(height: 14),
@@ -79,6 +107,58 @@ class KnowledgeBaseScreen extends ConsumerWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Tutorial tile (interactive course launcher) ───────────────
+
+class _TutorialTile extends ConsumerWidget {
+  const _TutorialTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: c.subtleContainer(radius: 16),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: c.accent.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(icon, color: c.accent, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+            Icon(Icons.play_arrow_rounded, color: c.accent, size: 20),
+          ],
         ),
       ),
     );

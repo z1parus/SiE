@@ -14,7 +14,13 @@ enum TargetPosition { above, below, auto }
 
 /// Which screen a course step lives on (used by the app-side course
 /// coordinator to push/switch screens). App-tour steps ignore this.
-enum TourScreen { primary, missionDetail, tacticalMap }
+enum TourScreen {
+  primary,
+  missionDetail,
+  tacticalMap,
+  habitDetail,
+  habitsOverview,
+}
 
 /// One step of a tour: a highlighted target + an explanatory card.
 class TourStep {

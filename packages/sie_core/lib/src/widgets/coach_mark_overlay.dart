@@ -155,8 +155,10 @@ class _CoachMarkOverlayState extends ConsumerState<CoachMarkOverlay> {
       },
     );
 
-    // Placement: centred for completion / no-target steps; otherwise above or
-    // below the target with a 16px gap.
+    // Placement: centred for completion / no-target steps. For a spotlighted
+    // target, place the card on whichever side (above/below) has enough room;
+    // if neither side fits (a tall target that fills the screen), pin the card
+    // near the bottom so its controls are always reachable.
     final rect = _targetRect;
     if (completing || rect == null) {
       return Center(
@@ -167,27 +169,47 @@ class _CoachMarkOverlayState extends ConsumerState<CoachMarkOverlay> {
       );
     }
 
-    final pos = step?.position ?? TargetPosition.auto;
-    final placeAbove = pos == TargetPosition.above ||
-        (pos == TargetPosition.auto && rect.center.dy > size.height * 0.45);
-
     const sideInset = 16.0;
-    final maxW = size.width - sideInset * 2;
-    final cardW = maxW.clamp(0.0, 360.0);
-    final left = ((rect.center.dx - cardW / 2))
+    const gap = 16.0;
+    const need = 200.0; // rough min height the card needs on a side
+    final spaceAbove = rect.top;
+    final spaceBelow = size.height - rect.bottom;
+    final cardW = (size.width - sideInset * 2).clamp(0.0, 400.0);
+    final left = (rect.center.dx - cardW / 2)
         .clamp(sideInset, size.width - sideInset - cardW);
 
+    final pos = step?.position ?? TargetPosition.auto;
+    bool? placeAbove;
+    if (pos == TargetPosition.above && spaceAbove >= need) {
+      placeAbove = true;
+    } else if (pos == TargetPosition.below && spaceBelow >= need) {
+      placeAbove = false;
+    } else if (spaceBelow >= need && spaceBelow >= spaceAbove) {
+      placeAbove = false;
+    } else if (spaceAbove >= need) {
+      placeAbove = true;
+    }
+
+    if (placeAbove == null) {
+      // Neither side fits — pin near the bottom (clear of the nav bar inset).
+      return Positioned(
+        left: sideInset,
+        right: sideInset,
+        bottom: 28 + MediaQuery.of(context).padding.bottom,
+        child: card,
+      );
+    }
     if (placeAbove) {
       return Positioned(
         left: left,
-        bottom: (size.height - rect.top + 16).clamp(16.0, size.height - 80),
+        bottom: size.height - rect.top + gap,
         width: cardW,
         child: card,
       );
     }
     return Positioned(
       left: left,
-      top: (rect.bottom + 16).clamp(16.0, size.height - 120),
+      top: rect.bottom + gap,
       width: cardW,
       child: card,
     );
