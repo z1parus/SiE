@@ -103,6 +103,13 @@ class _OperationsControlScreenState
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _showWelcomeModal(profile);
         });
+      } else if (!profile.hasSeenTour && !widget.offline) {
+        // Welcome already seen but the interactive tour hasn't run yet.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ref.read(tourControllerProvider.notifier).start(TourType.app);
+          }
+        });
       }
     });
 
@@ -127,7 +134,10 @@ class _OperationsControlScreenState
                 if (!widget.offline) ...[
                   _DailyTipBanner(),
                   const SizedBox(height: 8),
-                  _LeaderboardTile(),
+                  _LeaderboardTile(
+                      key: ref
+                          .read(tourControllerProvider.notifier)
+                          .keyFor('leaderboard_tile')),
                   const SizedBox(height: 16),
                 ],
               ],
@@ -152,6 +162,9 @@ class _OperationsControlScreenState
                         ),
                       )
                     : _BranchCarousel(
+                        key: ref
+                            .read(tourControllerProvider.notifier)
+                            .keyFor('branch_carousel'),
                         branches: ordered,
                         onBranchTap: (b) => _onBranchTap(context, b),
                         onReorder: (oldIndex, newIndex) {
@@ -235,7 +248,13 @@ class _OperationsControlScreenState
       barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.75),
       builder: (_) => _WelcomeDialog(profile: profile),
-    ).then((_) => markWelcomeSeen(profile.id));
+    ).then((_) {
+      markWelcomeSeen(profile.id);
+      // Kick off the interactive tour right after the welcome modal closes.
+      if (mounted && !profile.hasSeenTour && !widget.offline) {
+        ref.read(tourControllerProvider.notifier).start(TourType.app);
+      }
+    });
   }
 }
 
@@ -1926,6 +1945,7 @@ class _ScreenHeader extends ConsumerWidget {
         ),
         const SizedBox(height: 20),
         _XpBar(
+            key: ref.read(tourControllerProvider.notifier).keyFor('xp_bar'),
             xp: xp,
             gradientColors: gradientColors,
             badge: _badge(xp ~/ 1000 + 1),

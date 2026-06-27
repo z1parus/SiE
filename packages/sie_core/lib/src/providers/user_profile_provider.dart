@@ -100,6 +100,7 @@ class UserProfileNotifier extends AsyncNotifier<Profile?> {
             'has_seen_onboarding_breathing': serverProfile.hasSeenOnboardingBreathing,
             'has_seen_onboarding_habits': serverProfile.hasSeenOnboardingHabits,
             'has_seen_onboarding_focus': serverProfile.hasSeenOnboardingFocus,
+            'has_seen_tour': serverProfile.hasSeenTour,
             'equipped_frame_id': serverProfile.equippedFrameId,
             'equipped_background_id': serverProfile.equippedBackgroundId,
             'equipped_stat_style_id': serverProfile.equippedStatStyleId,
@@ -181,6 +182,25 @@ class UserProfileNotifier extends AsyncNotifier<Profile?> {
   /// Re-fetches from Supabase and overwrites local cache. Called after sync.
   Future<void> reconcileFromServer() async {
     state = await AsyncValue.guard(_fetchFromServer);
+  }
+
+  /// Marks the interactive app tour as seen. Updates the local state
+  /// immediately (so it never re-triggers this session) and best-effort writes
+  /// the flag to Supabase. Offline-tolerant: a failed write is ignored.
+  Future<void> markTourSeen() async {
+    final current = state.valueOrNull;
+    if (current != null && !current.hasSeenTour) {
+      state = AsyncData(current.copyWith(hasSeenTour: true));
+    }
+    final userId = SupabaseService.client.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      await SupabaseService.client
+          .from('profiles')
+          .update({'has_seen_tour': true}).eq('id', userId);
+    } catch (e) {
+      debugPrint('SiE Profile: markTourSeen write failed (ignored) — $e');
+    }
   }
 }
 

@@ -50,6 +50,7 @@ class _GarageScreenState extends ConsumerState<GarageScreen> {
     final activityAsync = ref.watch(bootcampDailyActivityProvider);
 
     final body = SafeArea(
+      key: ref.read(tourControllerProvider.notifier).keyFor('garage_body'),
       bottom: false,
       child: progressAsync.when(
         loading: () => Center(

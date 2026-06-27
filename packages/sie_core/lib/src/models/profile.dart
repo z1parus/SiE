@@ -9,6 +9,7 @@ class Profile {
   final bool hasSeenOnboardingBreathing;
   final bool hasSeenOnboardingHabits;
   final bool hasSeenOnboardingFocus;
+  final bool hasSeenTour;
   final String? equippedFrameId;
   final String? equippedBackgroundId;
   final String? equippedStatStyleId;
@@ -29,6 +30,7 @@ class Profile {
     this.hasSeenOnboardingBreathing = false,
     this.hasSeenOnboardingHabits = false,
     this.hasSeenOnboardingFocus = false,
+    this.hasSeenTour = false,
     this.equippedFrameId,
     this.equippedBackgroundId,
     this.equippedStatStyleId,
@@ -45,6 +47,7 @@ class Profile {
     String? avatarUrl,
     String? username,
     String? fullName,
+    bool? hasSeenTour,
   }) =>
       Profile(
         id: id,
@@ -57,6 +60,7 @@ class Profile {
         hasSeenOnboardingBreathing: hasSeenOnboardingBreathing,
         hasSeenOnboardingHabits: hasSeenOnboardingHabits,
         hasSeenOnboardingFocus: hasSeenOnboardingFocus,
+        hasSeenTour: hasSeenTour ?? this.hasSeenTour,
         equippedFrameId: equippedFrameId,
         equippedBackgroundId: equippedBackgroundId,
         equippedStatStyleId: equippedStatStyleId,
@@ -81,6 +85,7 @@ class Profile {
             json['has_seen_onboarding_habits'] as bool? ?? false,
         hasSeenOnboardingFocus:
             json['has_seen_onboarding_focus'] as bool? ?? false,
+        hasSeenTour: json['has_seen_tour'] as bool? ?? false,
         equippedFrameId: json['equipped_frame_id'] as String?,
         equippedBackgroundId: json['equipped_background_id'] as String?,
         equippedStatStyleId: json['equipped_stat_style_id'] as String?,

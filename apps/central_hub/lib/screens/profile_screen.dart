@@ -24,6 +24,7 @@ class ProfileScreen extends ConsumerWidget {
     final profileAsync = ref.watch(userProfileProvider);
 
     final body = SafeArea(
+      key: ref.read(tourControllerProvider.notifier).keyFor('profile_body'),
       bottom: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -320,6 +321,45 @@ class _ProfileContent extends ConsumerWidget {
                           const SizedBox(width: 14),
                           Text(
                             t.profile.nav.myWidgets,
+                            style: TextStyle(
+                              color: c.textPrimary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                          const Spacer(),
+                          Icon(Icons.chevron_right,
+                              color: c.textSecondary, size: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Replay the interactive app tour.
+                  GestureDetector(
+                    onTap: () => ref
+                        .read(tourControllerProvider.notifier)
+                        .start(TourType.app),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      decoration: c.subtleContainer(radius: 16),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: c.accent.withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Icon(Icons.explore_outlined,
+                                color: c.accent, size: 20),
+                          ),
+                          const SizedBox(width: 14),
+                          Text(
+                            t.tour.replayItem,
                             style: TextStyle(
                               color: c.textPrimary,
                               fontSize: 12,
