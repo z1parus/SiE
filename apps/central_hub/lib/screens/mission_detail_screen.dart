@@ -114,6 +114,18 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
             c.status == 'accepted' &&
             c.role == 'editor');
 
+    // The Planning course drives the List/Map mode as it walks steps 4-10.
+    final tourSt = ref.watch(tourControllerProvider);
+    final courseScreen =
+        ref.read(tourControllerProvider.notifier).currentScreen;
+    final courseDrivesMap = tourSt.type == TourType.planning &&
+        tourSt.isActive &&
+        !tourSt.isCompleting &&
+        (courseScreen == TourScreen.missionDetail ||
+            courseScreen == TourScreen.tacticalMap);
+    final mapMode =
+        courseDrivesMap ? courseScreen == TourScreen.tacticalMap : _mapMode;
+
     return SieBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -122,8 +134,11 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
           child: Column(
             children: [
               _MissionHeader(
+                key: ref
+                    .read(tourControllerProvider.notifier)
+                    .keyFor('md_view_toggle'),
                 goal: goal,
-                mapMode: _mapMode,
+                mapMode: mapMode,
                 onToggle: () => setState(() => _mapMode = !_mapMode),
                 sc: sc,
                 onBack: () => Navigator.pop(context),
@@ -150,7 +165,7 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
                 onExport: () => _showExportSheet(context, goal, sc),
               ),
               Expanded(
-                child: _mapMode
+                child: mapMode
                     ? RepaintBoundary(
                         key: _mapRepaintKey,
                         child: TacticalMapView(goal: goal, canEdit: canEdit),
@@ -168,6 +183,9 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
               ),
               if (canEdit)
                 _QuickEntryBar(
+                  key: ref
+                      .read(tourControllerProvider.notifier)
+                      .keyFor('md_quick_entry'),
                   goal: goal,
                   sc: sc,
                   selectedSubGoalId: _selectedSubGoalId,
@@ -189,6 +207,7 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
 
 class _MissionHeader extends StatelessWidget {
   const _MissionHeader({
+    super.key,
     required this.goal,
     required this.mapMode,
     required this.onToggle,
@@ -2196,6 +2215,7 @@ enum _QuickEntryMode { subGoal, task, milestone }
 
 class _QuickEntryBar extends ConsumerStatefulWidget {
   const _QuickEntryBar({
+    super.key,
     required this.goal,
     required this.sc,
     required this.selectedSubGoalId,

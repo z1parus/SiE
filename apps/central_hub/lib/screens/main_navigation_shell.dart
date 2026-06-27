@@ -124,7 +124,6 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
                     },
                   ),
                 ),
-                const CoachMarkOverlay(),
               ],
             ),
           ),

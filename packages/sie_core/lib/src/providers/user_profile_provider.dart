@@ -101,6 +101,10 @@ class UserProfileNotifier extends AsyncNotifier<Profile?> {
             'has_seen_onboarding_habits': serverProfile.hasSeenOnboardingHabits,
             'has_seen_onboarding_focus': serverProfile.hasSeenOnboardingFocus,
             'has_seen_tour': serverProfile.hasSeenTour,
+            'has_seen_course_planning': serverProfile.hasSeenCoursePlanning,
+            'has_seen_course_habits': serverProfile.hasSeenCourseHabits,
+            'has_seen_course_focus': serverProfile.hasSeenCourseFocus,
+            'has_seen_course_breathing': serverProfile.hasSeenCourseBreathing,
             'equipped_frame_id': serverProfile.equippedFrameId,
             'equipped_background_id': serverProfile.equippedBackgroundId,
             'equipped_stat_style_id': serverProfile.equippedStatStyleId,
@@ -200,6 +204,32 @@ class UserProfileNotifier extends AsyncNotifier<Profile?> {
           .update({'has_seen_tour': true}).eq('id', userId);
     } catch (e) {
       debugPrint('SiE Profile: markTourSeen write failed (ignored) — $e');
+    }
+  }
+
+  /// Marks a per-module course (`planning` | `habits` | `focus` | `breathing`)
+  /// as seen — local state first (no re-trigger this session), then best-effort
+  /// to Supabase.
+  Future<void> markCourseSeen(String course) async {
+    final current = state.valueOrNull;
+    if (current != null) {
+      final updated = switch (course) {
+        'planning' => current.copyWith(hasSeenCoursePlanning: true),
+        'habits' => current.copyWith(hasSeenCourseHabits: true),
+        'focus' => current.copyWith(hasSeenCourseFocus: true),
+        'breathing' => current.copyWith(hasSeenCourseBreathing: true),
+        _ => current,
+      };
+      state = AsyncData(updated);
+    }
+    final userId = SupabaseService.client.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      await SupabaseService.client
+          .from('profiles')
+          .update({'has_seen_course_$course': true}).eq('id', userId);
+    } catch (e) {
+      debugPrint('SiE Profile: markCourseSeen($course) write failed — $e');
     }
   }
 }

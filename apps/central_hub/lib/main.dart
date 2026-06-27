@@ -8,6 +8,7 @@ import 'package:home_widget/home_widget.dart';
 import 'package:sie_core/sie_core.dart';
 import 'screens/auth_screen.dart';
 import 'screens/breathing_exercise_screen.dart';
+import 'screens/course_tour_coordinator.dart';
 import 'screens/focus_protocol_screen.dart';
 import 'screens/habit_tracker_screen.dart';
 import 'screens/main_navigation_shell.dart';
@@ -197,7 +198,7 @@ class _SieAppState extends ConsumerState<SieApp> {
       locale: locale.flutterLocale,
       supportedLocales: AppLocale.values.map((l) => l.flutterLocale).toList(),
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      builder: kIsWeb ? _webConstraint : null,
+      builder: _globalBuilder,
       home: !_launchComplete
           ? SieSplashScreen(
               onComplete: () => setState(() => _launchComplete = true),
@@ -236,6 +237,22 @@ class _SieAppState extends ConsumerState<SieApp> {
           child: child!,
         ),
       );
+
+  // Mounts the interactive-tour overlay + course coordinator above the whole
+  // navigator, so coach marks also render over pushed routes (mission detail,
+  // tactical map, etc.).
+  static Widget _globalBuilder(BuildContext context, Widget? child) {
+    Widget content = child ?? const SizedBox.shrink();
+    if (kIsWeb) content = _webConstraint(context, content);
+    return Stack(
+      textDirection: TextDirection.ltr,
+      children: [
+        content,
+        const CourseTourCoordinator(),
+        const CoachMarkOverlay(),
+      ],
+    );
+  }
 }
 
 class _LoadingScreen extends ConsumerWidget {

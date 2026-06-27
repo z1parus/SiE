@@ -12,6 +12,10 @@ enum TourType { app, planning, habits, focus, breathing }
 /// Preferred placement of the tooltip card relative to its target.
 enum TargetPosition { above, below, auto }
 
+/// Which screen a course step lives on (used by the app-side course
+/// coordinator to push/switch screens). App-tour steps ignore this.
+enum TourScreen { primary, missionDetail, tacticalMap }
+
 /// One step of a tour: a highlighted target + an explanatory card.
 class TourStep {
   final String id;
@@ -27,6 +31,9 @@ class TourStep {
   final String body;
   final TargetPosition position;
 
+  /// Screen this step lives on (module courses only).
+  final TourScreen screen;
+
   const TourStep({
     required this.id,
     required this.title,
@@ -34,6 +41,7 @@ class TourStep {
     this.tabIndex = 1,
     this.targetKey,
     this.position = TargetPosition.auto,
+    this.screen = TourScreen.primary,
   });
 }
 
@@ -74,12 +82,52 @@ class TourController extends Notifier<TourState> {
   // key via [keyFor]; the overlay reads the same key's render box to spotlight.
   final Map<String, GlobalKey> _keys = {};
 
+  // Optional extra action on the completion card (e.g. "delete demo mission"),
+  // wired by the app-side course coordinator.
+  String? _extraLabel;
+  VoidCallback? _extraAction;
+
   @override
   TourState build() => TourState.initial;
 
   GlobalKey keyFor(String id) => _keys.putIfAbsent(id, () => GlobalKey());
 
   GlobalKey? existingKey(String id) => _keys[id];
+
+  /// The screen the current course step lives on (for the coordinator).
+  TourScreen get currentScreen => currentStep?.screen ?? TourScreen.primary;
+
+  // Completion-card copy for the active tour/course.
+  String get completeTitle => switch (state.type) {
+        TourType.app => t.tour.complete.title,
+        TourType.planning => t.coursePlanning.complete.title,
+        _ => t.tour.complete.title,
+      };
+
+  String get completeBody => switch (state.type) {
+        TourType.app => t.tour.complete.body,
+        TourType.planning => t.coursePlanning.complete.body,
+        _ => t.tour.complete.body,
+      };
+
+  // ── Completion extra action ────────────────────────────────────────────────
+  String? get extraLabel => _extraLabel;
+  bool get hasExtra => _extraLabel != null && _extraAction != null;
+
+  void setExtraAction(String label, VoidCallback action) {
+    _extraLabel = label;
+    _extraAction = action;
+  }
+
+  void clearExtraAction() {
+    _extraLabel = null;
+    _extraAction = null;
+  }
+
+  void runExtra() {
+    _extraAction?.call();
+    clearExtraAction();
+  }
 
   // ── Steps ──────────────────────────────────────────────────────────────────
   List<TourStep> get steps => _stepsFor(state.type);
@@ -103,14 +151,98 @@ class TourController extends Notifier<TourState> {
     switch (type) {
       case TourType.app:
         return _appSteps;
-      // Module courses are registered in their respective stages.
       case TourType.planning:
+        return _planningSteps;
+      // Remaining module courses are registered in their respective stages.
       case TourType.habits:
       case TourType.focus:
       case TourType.breathing:
         return const [];
     }
   }
+
+  // Planning course — 10 steps across PlanningScreen → MissionDetail (list) →
+  // Tactical Map (mission detail's map mode). `screen` drives the coordinator.
+  List<TourStep> get _planningSteps => [
+        TourStep(
+          id: 'planning_fab',
+          screen: TourScreen.primary,
+          targetKey: 'planning_fab',
+          title: t.coursePlanning.step1.title,
+          body: t.coursePlanning.step1.body,
+          position: TargetPosition.above,
+        ),
+        TourStep(
+          id: 'planning_mode_switch',
+          screen: TourScreen.primary,
+          targetKey: 'planning_mode_switch',
+          title: t.coursePlanning.step2.title,
+          body: t.coursePlanning.step2.body,
+          position: TargetPosition.below,
+        ),
+        TourStep(
+          id: 'planning_goal_arc',
+          screen: TourScreen.primary,
+          targetKey: 'planning_goal_arc',
+          title: t.coursePlanning.step3.title,
+          body: t.coursePlanning.step3.body,
+          position: TargetPosition.below,
+        ),
+        TourStep(
+          id: 'md_view_toggle',
+          screen: TourScreen.missionDetail,
+          targetKey: 'md_view_toggle',
+          title: t.coursePlanning.step4.title,
+          body: t.coursePlanning.step4.body,
+          position: TargetPosition.below,
+        ),
+        TourStep(
+          id: 'md_subgoals_header',
+          screen: TourScreen.missionDetail,
+          targetKey: 'md_subgoals_header',
+          title: t.coursePlanning.step5.title,
+          body: t.coursePlanning.step5.body,
+          position: TargetPosition.below,
+        ),
+        TourStep(
+          id: 'md_task_checkbox',
+          screen: TourScreen.missionDetail,
+          targetKey: 'md_task_checkbox',
+          title: t.coursePlanning.step6.title,
+          body: t.coursePlanning.step6.body,
+          position: TargetPosition.below,
+        ),
+        TourStep(
+          id: 'md_ai_button',
+          screen: TourScreen.missionDetail,
+          targetKey: 'md_ai_button',
+          title: t.coursePlanning.step7.title,
+          body: t.coursePlanning.step7.body,
+          position: TargetPosition.below,
+        ),
+        TourStep(
+          id: 'md_quick_entry',
+          screen: TourScreen.missionDetail,
+          targetKey: 'md_quick_entry',
+          title: t.coursePlanning.step8.title,
+          body: t.coursePlanning.step8.body,
+          position: TargetPosition.above,
+        ),
+        TourStep(
+          id: 'tm_canvas',
+          screen: TourScreen.tacticalMap,
+          targetKey: null, // centred card; the map is shown behind
+          title: t.coursePlanning.step9.title,
+          body: t.coursePlanning.step9.body,
+        ),
+        TourStep(
+          id: 'tm_edit_mode',
+          screen: TourScreen.tacticalMap,
+          targetKey: null,
+          title: t.coursePlanning.step10.title,
+          body: t.coursePlanning.step10.body,
+        ),
+      ];
 
   // App tour — 7 steps across the four bottom tabs. Built from `t` so it picks
   // up the active locale.
@@ -175,6 +307,7 @@ class TourController extends Notifier<TourState> {
 
   // ── Control ─────────────────────────────────────────────────────────────────
   void start(TourType type) {
+    clearExtraAction();
     state = TourState(type: type, currentIndex: 0, isActive: true);
   }
 
@@ -203,17 +336,27 @@ class TourController extends Notifier<TourState> {
 
   /// Close without recording completion — the tour can be replayed later.
   void skip() {
+    clearExtraAction();
     state = TourState.initial;
   }
 
   /// Finish and persist the "seen" flag for the active tour/course.
   void finish() {
     final type = state.type;
+    clearExtraAction();
     state = TourState.initial;
-    if (type == TourType.app) {
-      ref.read(userProfileProvider.notifier).markTourSeen();
+    switch (type) {
+      case TourType.app:
+        ref.read(userProfileProvider.notifier).markTourSeen();
+      case TourType.planning:
+        ref.read(userProfileProvider.notifier).markCourseSeen('planning');
+      case TourType.habits:
+        ref.read(userProfileProvider.notifier).markCourseSeen('habits');
+      case TourType.focus:
+        ref.read(userProfileProvider.notifier).markCourseSeen('focus');
+      case TourType.breathing:
+        ref.read(userProfileProvider.notifier).markCourseSeen('breathing');
     }
-    // Course "seen" flags are recorded in their respective stages.
   }
 }
 

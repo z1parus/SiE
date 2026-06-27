@@ -36,7 +36,8 @@
     "back": "BACK",
     "skip": "Skip",
     "finish": "START OPERATIONS",
-    "step": "Step {n} of {total}"
+    "step": "Step {n} of {total}",
+    "done": "DONE"
   },
   "replayItem": "App tour"
 }

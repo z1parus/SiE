@@ -113,10 +113,12 @@ class _CoachMarkOverlayState extends ConsumerState<CoachMarkOverlay> {
     int total,
     Size size,
   ) {
+    final controller = ref.read(tourControllerProvider.notifier);
     final completing = st.isCompleting;
-    final title = completing ? t.tour.complete.title : (step?.title ?? '');
-    final body = completing ? t.tour.complete.body : (step?.body ?? '');
-
+    final title = completing ? controller.completeTitle : (step?.title ?? '');
+    final body = completing ? controller.completeBody : (step?.body ?? '');
+    final finishLabel =
+        st.type == TourType.app ? t.tour.actions.finish : t.tour.actions.done;
     final card = _CardBody(
       c: c,
       title: title,
@@ -126,13 +128,22 @@ class _CoachMarkOverlayState extends ConsumerState<CoachMarkOverlay> {
           : t.tour.actions.step(n: st.currentIndex + 1, total: total),
       isFirst: st.currentIndex == 0 && !completing,
       isCompleting: completing,
+      finishLabel: finishLabel,
+      extraLabel: completing && controller.hasExtra
+          ? controller.extraLabel
+          : null,
+      onExtra: () {
+        SieHaptics.selection();
+        controller.runExtra();
+        controller.finish();
+      },
       onSkip: () {
         SieHaptics.selection();
-        ref.read(tourControllerProvider.notifier).skip();
+        controller.skip();
       },
       onBack: () {
         SieHaptics.selection();
-        ref.read(tourControllerProvider.notifier).back();
+        controller.back();
       },
       onNext: () {
         if (completing) {
@@ -140,7 +151,7 @@ class _CoachMarkOverlayState extends ConsumerState<CoachMarkOverlay> {
         } else {
           SieHaptics.selection();
         }
-        ref.read(tourControllerProvider.notifier).next();
+        controller.next();
       },
     );
 
@@ -190,6 +201,9 @@ class _CardBody extends StatelessWidget {
   final String? stepLabel;
   final bool isFirst;
   final bool isCompleting;
+  final String finishLabel;
+  final String? extraLabel;
+  final VoidCallback onExtra;
   final VoidCallback onSkip;
   final VoidCallback onBack;
   final VoidCallback onNext;
@@ -201,6 +215,9 @@ class _CardBody extends StatelessWidget {
     required this.stepLabel,
     required this.isFirst,
     required this.isCompleting,
+    required this.finishLabel,
+    required this.extraLabel,
+    required this.onExtra,
     required this.onSkip,
     required this.onBack,
     required this.onNext,
@@ -218,9 +235,7 @@ class _CardBody extends StatelessWidget {
             Container(width: 3, height: 14, color: c.accent),
             const SizedBox(width: 10),
             Text(
-              isCompleting
-                  ? t.tour.complete.title
-                  : (stepLabel ?? '').toUpperCase(),
+              isCompleting ? title : (stepLabel ?? '').toUpperCase(),
               style: TextStyle(
                 color: c.accent,
                 fontSize: 10,
@@ -251,21 +266,44 @@ class _CardBody extends StatelessWidget {
             letterSpacing: 0.3,
           ),
         ),
+        if (isCompleting && extraLabel != null) ...[
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: onExtra,
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                Icon(Icons.delete_outline,
+                    size: 15, color: c.danger.withValues(alpha: 0.85)),
+                const SizedBox(width: 8),
+                Text(
+                  extraLabel!,
+                  style: TextStyle(
+                    color: c.danger.withValues(alpha: 0.85),
+                    fontSize: 12,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 20),
         Row(
           children: [
-            GestureDetector(
-              onTap: onSkip,
-              behavior: HitTestBehavior.opaque,
-              child: Text(
-                t.tour.actions.skip,
-                style: TextStyle(
-                  color: c.textSecondary.withValues(alpha: 0.7),
-                  fontSize: 12,
-                  letterSpacing: 0.5,
+            if (!isCompleting)
+              GestureDetector(
+                onTap: onSkip,
+                behavior: HitTestBehavior.opaque,
+                child: Text(
+                  t.tour.actions.skip,
+                  style: TextStyle(
+                    color: c.textSecondary.withValues(alpha: 0.7),
+                    fontSize: 12,
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ),
-            ),
             const Spacer(),
             if (!isFirst && !isCompleting) ...[
               _PillButton(
@@ -278,9 +316,7 @@ class _CardBody extends StatelessWidget {
             ],
             _PillButton(
               c: c,
-              label: isCompleting
-                  ? t.tour.actions.finish
-                  : t.tour.actions.next,
+              label: isCompleting ? finishLabel : t.tour.actions.next,
               filled: true,
               onTap: onNext,
             ),

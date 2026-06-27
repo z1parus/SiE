@@ -1,0 +1,49 @@
+{
+  "step1": {
+    "title": "Create a mission",
+    "body": "A mission is your top-level goal. Tap + to create one: from scratch, from a template, or via AI."
+  },
+  "step2": {
+    "title": "Agenda / Goals",
+    "body": "\"Agenda\" is a strategic view of your day. \"Goals\" lists every mission with progress and momentum."
+  },
+  "step3": {
+    "title": "Mission card",
+    "body": "Progress, momentum (↗/→/↘), deadline and mini-stats. Tap to open the mission."
+  },
+  "step4": {
+    "title": "List / Map",
+    "body": "Inside a mission: \"List\" — the hierarchy of sub-goals and tasks. \"Map\" — a visual graph."
+  },
+  "step5": {
+    "title": "Sub-goals & Fog of War",
+    "body": "A mission breaks into stages. Fog of War hides future stages — unlock them as you go."
+  },
+  "step6": {
+    "title": "Tasks",
+    "body": "Tasks are concrete steps. Check them off, assign weight, link dependencies."
+  },
+  "step7": {
+    "title": "AI decomposition",
+    "body": "AI automatically breaks a mission into sub-goals, tasks and milestones. Requires processing consent."
+  },
+  "step8": {
+    "title": "Quick entry",
+    "body": "The bottom bar instantly adds a sub-goal, task or milestone. Switch the type on the left."
+  },
+  "step9": {
+    "title": "Tactical Map",
+    "body": "A visual graph of your mission. Drag nodes, add notes and connections. Tools on the right: search, zoom, auto-layout."
+  },
+  "step10": {
+    "title": "Edit mode",
+    "body": "Turn on map edit mode to add notes, markers, images and connectors directly onto the canvas."
+  },
+  "complete": {
+    "title": "COURSE COMPLETE",
+    "body": "You've mastered the Planning module. Good luck on your operations, operative."
+  },
+  "deleteDemo": "Delete demo mission",
+  "replayItem": "Course: Planning",
+  "demoName": "Operation: Demo"
+}

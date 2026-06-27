@@ -52,7 +52,11 @@ String _categoryLabel(GoalCategory cat) => switch (cat) {
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 class PlanningScreen extends ConsumerStatefulWidget {
-  const PlanningScreen({super.key});
+  const PlanningScreen({super.key, this.startCourse = false});
+
+  /// When true, the Planning interactive course is started on entry regardless
+  /// of the seen-flag (used by the "replay course" entry in the profile).
+  final bool startCourse;
 
   @override
   ConsumerState<PlanningScreen> createState() => _PlanningScreenState();
@@ -63,6 +67,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
 
   bool _showArchive = false;
   bool _showAgenda = true;
+  bool _courseChecked = false;
 
   @override
   void initState() {
@@ -70,6 +75,20 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
     SharedPreferences.getInstance().then((prefs) {
       final v = prefs.getBool(_kModeKey);
       if (v != null && mounted) setState(() => _showAgenda = v);
+    });
+  }
+
+  void _maybeStartCourse(Profile? profile) {
+    if (_courseChecked) return;
+    if (profile == null && !widget.startCourse) return;
+    _courseChecked = true;
+    final shouldStart =
+        widget.startCourse || !(profile?.hasSeenCoursePlanning ?? true);
+    if (!shouldStart) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(tourControllerProvider.notifier).start(TourType.planning);
+      }
     });
   }
 
@@ -87,12 +106,25 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
     final planningAsync = ref.watch(planningProvider);
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
+    // Auto-launch the interactive course on first entry.
+    _maybeStartCourse(ref.watch(userProfileProvider).valueOrNull);
+
+    // While the Planning course runs, force "Goals" mode so its targets (FAB,
+    // goal cards) are actually on screen to spotlight.
+    final courseActive =
+        ref.watch(tourControllerProvider).type == TourType.planning &&
+            ref.watch(tourControllerProvider).isActive;
+    final showAgenda = courseActive ? false : _showAgenda;
+
     return SieBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        floatingActionButton: (_showArchive || _showAgenda)
+        floatingActionButton: (_showArchive || showAgenda)
             ? null
             : FloatingActionButton(
+                key: ref
+                    .read(tourControllerProvider.notifier)
+                    .keyFor('planning_fab'),
                 onPressed: () => _showCreateChooser(context),
                 backgroundColor: sc.accent,
                 foregroundColor: Colors.white,
@@ -106,7 +138,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
               _PlanningHeader(
                 sc: sc,
                 showArchive: _showArchive,
-                showArchiveButton: !_showAgenda,
+                showArchiveButton: !showAgenda,
                 onToggle: () => setState(() => _showArchive = !_showArchive),
                 onReminders: () => Navigator.push(
                   context,
@@ -115,11 +147,14 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                 ),
               ),
               _ModeSwitch(
+                key: ref
+                    .read(tourControllerProvider.notifier)
+                    .keyFor('planning_mode_switch'),
                 sc: sc,
-                showAgenda: _showAgenda,
+                showAgenda: showAgenda,
                 onChanged: _setMode,
               ),
-              if (_showAgenda)
+              if (showAgenda)
                 const Expanded(child: WarRoomView())
               else
               Expanded(
@@ -486,6 +521,7 @@ class _PlanningHeader extends StatelessWidget {
 
 class _ModeSwitch extends StatelessWidget {
   const _ModeSwitch({
+    super.key,
     required this.sc,
     required this.showAgenda,
     required this.onChanged,
@@ -580,10 +616,18 @@ class _GoalList extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(0, 4, 0, 16),
         child: Column(
           children: goals
-              .map((g) => _GoalCard(
-                    goal: g,
+              .asMap()
+              .entries
+              .map((e) => _GoalCard(
+                    // Spotlight the first card during the Planning course.
+                    key: e.key == 0
+                        ? ref
+                            .read(tourControllerProvider.notifier)
+                            .keyFor('planning_goal_arc')
+                        : null,
+                    goal: e.value,
                     sc: sc,
-                    onLongPress: () => onLongPress(g),
+                    onLongPress: () => onLongPress(e.value),
                   ))
               .toList(),
         ),
@@ -596,6 +640,7 @@ class _GoalList extends ConsumerWidget {
 
 class _GoalCard extends ConsumerWidget {
   const _GoalCard({
+    super.key,
     required this.goal,
     required this.sc,
     required this.onLongPress,

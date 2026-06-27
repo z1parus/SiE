@@ -8,6 +8,7 @@ import 'edit_profile_screen.dart';
 import 'friends_list_screen.dart';
 import 'knowledge_base_screen.dart';
 import 'my_widgets_screen.dart';
+import 'planning_screen.dart';
 import 'progress_analytics_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -337,42 +338,25 @@ class _ProfileContent extends ConsumerWidget {
                   ),
                   const SizedBox(height: 12),
                   // Replay the interactive app tour.
-                  GestureDetector(
+                  _CourseReplayTile(
+                    icon: Icons.explore_outlined,
+                    label: t.tour.replayItem,
                     onTap: () => ref
                         .read(tourControllerProvider.notifier)
                         .start(TourType.app),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                      decoration: c.subtleContainer(radius: 16),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 38,
-                            height: 38,
-                            decoration: BoxDecoration(
-                              color: c.accent.withValues(alpha: 0.10),
-                              borderRadius: BorderRadius.circular(11),
-                            ),
-                            child: Icon(Icons.explore_outlined,
-                                color: c.accent, size: 20),
-                          ),
-                          const SizedBox(width: 14),
-                          Text(
-                            t.tour.replayItem,
-                            style: TextStyle(
-                              color: c.textPrimary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                          const Spacer(),
-                          Icon(Icons.chevron_right,
-                              color: c.textSecondary, size: 20),
-                        ],
+                    c: c,
+                  ),
+                  const SizedBox(height: 8),
+                  // Replay the Planning module course.
+                  _CourseReplayTile(
+                    icon: Icons.account_tree_outlined,
+                    label: t.coursePlanning.replayItem,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const PlanningScreen(startCourse: true),
                       ),
                     ),
+                    c: c,
                   ),
                   const SizedBox(height: 28),
                   const _AwardsHeader(),
@@ -1176,6 +1160,59 @@ class _NoConnectionMessage extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Course / tour replay tile (used in the Hub nav list)
+// ─────────────────────────────────────────────────────────────────────────────
+class _CourseReplayTile extends StatelessWidget {
+  const _CourseReplayTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    required this.c,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final SieColors c;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: c.subtleContainer(radius: 16),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: c.accent.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(icon, color: c.accent, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Text(
+              label,
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const Spacer(),
+            Icon(Icons.chevron_right, color: c.textSecondary, size: 20),
+          ],
+        ),
+      ),
     );
   }
 }
