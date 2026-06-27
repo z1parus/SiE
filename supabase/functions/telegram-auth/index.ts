@@ -179,6 +179,15 @@ Deno.serve(async (req: Request) => {
   const path = url.pathname.replace(/\/$/, '')
 
   try {
+    // Telegram-OIDC shim: a discovery doc + filtered JWKS that let Supabase use
+    // Telegram's native OIDC. Telegram's own JWKS includes an ES256K
+    // (secp256k1) key that GoTrue's JOSE library can't parse, which breaks
+    // id_token verification for the whole set. We re-publish Telegram's
+    // discovery with `jwks_uri` pointed at our proxy, which drops the
+    // unparseable key.
+    if (path.endsWith('/telegram-oidc-config'))
+      return await telegramOidcConfig(url)
+    if (path.endsWith('/telegram-jwks')) return await telegramJwks()
     if (path.endsWith('/.well-known/openid-configuration'))
       return discovery(url)
     if (path.endsWith('/authorize')) return authorize(url)
@@ -192,6 +201,55 @@ Deno.serve(async (req: Request) => {
     return new Response('Internal Server Error', { status: 500 })
   }
 })
+
+// ─── Telegram-OIDC shim ─────────────────────────────────────────────────────────
+const TELEGRAM_ISSUER = 'https://oauth.telegram.org'
+
+// Discovery override: Telegram's own OIDC metadata, but with `jwks_uri` pointed
+// at our filtered proxy below. `issuer` stays `https://oauth.telegram.org` so it
+// still matches the id_token's `iss` and the configured Issuer URL. Configure
+// this URL as the provider's "Discovery URL" in the Supabase dashboard.
+async function telegramOidcConfig(url: URL): Promise<Response> {
+  const fnName = url.pathname.split('/').filter(Boolean)[0] ?? 'telegram-auth'
+  const jwksUri = `https://${url.host}/functions/v1/${fnName}/telegram-jwks`
+
+  let meta: Record<string, unknown>
+  try {
+    const resp = await fetch(`${TELEGRAM_ISSUER}/.well-known/openid-configuration`)
+    meta = await resp.json()
+  } catch (_) {
+    // Fallback to the known-good shape if Telegram is briefly unreachable.
+    meta = {
+      issuer: TELEGRAM_ISSUER,
+      authorization_endpoint: `${TELEGRAM_ISSUER}/auth`,
+      token_endpoint: `${TELEGRAM_ISSUER}/token`,
+      response_types_supported: ['code'],
+      subject_types_supported: ['public'],
+      id_token_signing_alg_values_supported: ['RS256', 'ES256'],
+      scopes_supported: ['openid', 'profile'],
+    }
+  }
+  meta.jwks_uri = jwksUri
+  // Advertise only the algorithms our proxied JWKS keeps, so GoTrue won't expect
+  // an ES256K / EdDSA key it can't handle.
+  meta.id_token_signing_alg_values_supported = ['RS256', 'ES256']
+  return json(meta)
+}
+
+// JWKS proxy: fetch Telegram's keys and keep only the ones GoTrue's JOSE
+// library can parse — RSA (RS256) and EC P-256 (ES256). The dropped key is the
+// EC secp256k1 (ES256K) one, whose curve is unsupported and fails the whole
+// set's decode.
+async function telegramJwks(): Promise<Response> {
+  const resp = await fetch(`${TELEGRAM_ISSUER}/.well-known/jwks.json`)
+  const set = await resp.json() as { keys?: Array<Record<string, unknown>> }
+  const keys = (set.keys ?? []).filter((k) => {
+    if (k.kty === 'RSA') return true
+    if (k.kty === 'EC' && k.crv === 'P-256') return true
+    return false
+  })
+  return json({ keys })
+}
 
 // ─── /.well-known/openid-configuration ──────────────────────────────────────────
 // Supabase's Custom OAuth provider is OIDC-discovery based: given the configured
