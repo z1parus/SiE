@@ -1441,27 +1441,31 @@ class _HabitMatrixCard extends ConsumerWidget {
                   size: 22,
                   stroke: 2.2,
                 ),
+                const SizedBox(width: 8),
+                _MetricStepBtn(
+                  icon: Icons.remove,
+                  color: accentColor,
+                  filled: false,
+                  semanticLabel: t.habitTracker.valueLabel.decrement,
+                  onTap: currentValue > 0
+                      ? () {
+                          SieHaptics.light();
+                          ref.read(habitsProvider.notifier).logHabitValue(
+                              habit.id, DateTime.now(), -habit.effectiveStep);
+                        }
+                      : null,
+                ),
                 const SizedBox(width: 6),
-                GestureDetector(
-                  onTap: () => ref
-                      .read(habitsProvider.notifier)
-                      .logHabitValue(habit.id, DateTime.now(), habit.effectiveStep),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: accentColor.withValues(alpha: 0.55)),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      '+${habit.effectiveStep % 1 == 0 ? habit.effectiveStep.toInt() : habit.effectiveStep}',
-                      style: TextStyle(
-                        color: accentColor,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
+                _MetricStepBtn(
+                  icon: Icons.add,
+                  color: accentColor,
+                  filled: true,
+                  semanticLabel: t.habitTracker.valueLabel.increment,
+                  onTap: () {
+                    SieHaptics.light();
+                    ref.read(habitsProvider.notifier).logHabitValue(
+                        habit.id, DateTime.now(), habit.effectiveStep);
+                  },
                 ),
               ] else if (completedToday) ...[
                 const SizedBox(width: 8),
@@ -1531,6 +1535,162 @@ class _HabitMatrixCard extends ConsumerWidget {
     );
 
     return card;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Metric step button — a circular +/− control for count/duration habits.
+// `filled` renders the primary (+) action; a null [onTap] reads as disabled.
+// ─────────────────────────────────────────────────────────────────────────────
+class _MetricStepBtn extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final bool filled;
+  final VoidCallback? onTap;
+  final double size;
+  final String? semanticLabel;
+
+  const _MetricStepBtn({
+    required this.icon,
+    required this.color,
+    required this.onTap,
+    this.filled = false,
+    this.size = 28,
+    this.semanticLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    final tint = enabled ? color : color.withValues(alpha: 0.30);
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: semanticLabel,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: filled
+                ? tint.withValues(alpha: enabled ? 0.16 : 0.06)
+                : Colors.transparent,
+            border: Border.all(
+              color: filled
+                  ? tint.withValues(alpha: 0.75)
+                  : tint.withValues(alpha: 0.45),
+              width: filled ? 1.5 : 1.0,
+            ),
+          ),
+          child: Icon(icon, color: tint, size: size * 0.58),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Metric detail bar — the prominent +/− stepper inside a count/duration
+// habit's detail screen, with a progress bar and current/target read-out.
+// ─────────────────────────────────────────────────────────────────────────────
+class _MetricDetailBar extends StatelessWidget {
+  final Habit habit;
+  final double currentValue;
+  final Color accentColor;
+  final SieColors sc;
+  final VoidCallback onAdd;
+  final VoidCallback onSub;
+
+  const _MetricDetailBar({
+    required this.habit,
+    required this.currentValue,
+    required this.accentColor,
+    required this.sc,
+    required this.onAdd,
+    required this.onSub,
+  });
+
+  String _label() {
+    final target = habit.effectiveTarget;
+    if (habit.kind == 'duration') {
+      final curMin = (currentValue / 60).round();
+      final tgtMin = (target / 60).round();
+      return t.habitTracker.valueLabel.durationProgress(cur: curMin, tgt: tgtMin);
+    }
+    final cur = currentValue % 1 == 0
+        ? currentValue.toInt().toString()
+        : currentValue.toStringAsFixed(1);
+    final tgt = target % 1 == 0
+        ? target.toInt().toString()
+        : target.toStringAsFixed(1);
+    final u = habit.unit?.isNotEmpty == true ? ' ${habit.unit}' : '';
+    return '$cur / $tgt$u';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final target = habit.effectiveTarget;
+    final progress = target > 0 ? (currentValue / target).clamp(0.0, 1.0) : 0.0;
+    final met = habit.isMetByValue(currentValue);
+    return Row(
+      children: [
+        _MetricStepBtn(
+          icon: Icons.remove,
+          color: accentColor,
+          filled: false,
+          size: 40,
+          semanticLabel: t.habitTracker.valueLabel.decrement,
+          onTap: currentValue > 0 ? onSub : null,
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (met) ...[
+                    Icon(Icons.check_circle, color: accentColor, size: 14),
+                    const SizedBox(width: 6),
+                  ],
+                  Text(
+                    _label(),
+                    style: TextStyle(
+                      color: met ? accentColor : sc.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 5,
+                  backgroundColor: accentColor.withValues(alpha: 0.15),
+                  valueColor: AlwaysStoppedAnimation(accentColor),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 14),
+        _MetricStepBtn(
+          icon: Icons.add,
+          color: accentColor,
+          filled: true,
+          size: 40,
+          semanticLabel: t.habitTracker.valueLabel.increment,
+          onTap: onAdd,
+        ),
+      ],
+    );
   }
 }
 
@@ -4919,6 +5079,31 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (widget.habit.isMetric) ...[
+                        _MetricDetailBar(
+                          habit: currentHabit,
+                          currentValue: logValues[today] ?? 0,
+                          accentColor: accentColor,
+                          sc: sc,
+                          onAdd: () {
+                            SieHaptics.light();
+                            ref.read(habitsProvider.notifier).logHabitValue(
+                                widget.habit.id,
+                                DateTime.now(),
+                                currentHabit.effectiveStep);
+                          },
+                          onSub: () {
+                            SieHaptics.light();
+                            ref.read(habitsProvider.notifier).logHabitValue(
+                                widget.habit.id,
+                                DateTime.now(),
+                                -currentHabit.effectiveStep);
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        Divider(height: 1, color: sc.border),
+                        const SizedBox(height: 14),
+                      ],
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: days.asMap().entries.map((e) {

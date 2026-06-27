@@ -32,7 +32,9 @@
     "allTime": "ВСЁ ВРЕМЯ"
   },
   "valueLabel": {
-    "durationProgress": "{cur} / {tgt} мин"
+    "durationProgress": "{cur} / {tgt} мин",
+    "increment": "Прибавить",
+    "decrement": "Убавить"
   },
   "checkAction": {
     "uncheckFor": "Отменить отметку за {day}",

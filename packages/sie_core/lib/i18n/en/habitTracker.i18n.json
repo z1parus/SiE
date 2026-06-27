@@ -32,7 +32,9 @@
     "allTime": "ALL TIME"
   },
   "valueLabel": {
-    "durationProgress": "{cur} / {tgt} min"
+    "durationProgress": "{cur} / {tgt} min",
+    "increment": "Add",
+    "decrement": "Subtract"
   },
   "checkAction": {
     "uncheckFor": "Undo mark for {day}",
