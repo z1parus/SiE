@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sie_core/sie_core.dart';
 import 'session_orb_painters.dart';
 import 'breathing_sequences_screen.dart';
+import 'breathing_recovery_screen.dart';
 import 'breathing_reflection_screen.dart';
 import 'breathing_journal_screen.dart';
 import 'breathing_stats_screen.dart';
@@ -33,6 +34,10 @@ class BreathingSettings {
   final bool breathingSoundsEnabled;
   final bool heartbeatEnabled;
   final bool tickEnabled;
+  /// When true, a recovery screen is shown after the session (music keeps
+  /// playing until the user taps "continue") before the reflection screen.
+  /// When false, the session goes straight to reflection and the music fades.
+  final bool recoveryScreenEnabled;
   final double ambientVolume;
   final double breathingVolume;
   final double heartbeatVolume;
@@ -51,6 +56,7 @@ class BreathingSettings {
     this.breathingSoundsEnabled = true,
     this.heartbeatEnabled = true,
     this.tickEnabled = true,
+    this.recoveryScreenEnabled = true,
     this.ambientVolume = 0.75,
     this.breathingVolume = 0.75,
     this.heartbeatVolume = 0.75,
@@ -69,6 +75,7 @@ class BreathingSettings {
     bool? breathingSoundsEnabled,
     bool? heartbeatEnabled,
     bool? tickEnabled,
+    bool? recoveryScreenEnabled,
     double? ambientVolume,
     double? breathingVolume,
     double? heartbeatVolume,
@@ -87,6 +94,8 @@ class BreathingSettings {
             breathingSoundsEnabled ?? this.breathingSoundsEnabled,
         heartbeatEnabled: heartbeatEnabled ?? this.heartbeatEnabled,
         tickEnabled: tickEnabled ?? this.tickEnabled,
+        recoveryScreenEnabled:
+            recoveryScreenEnabled ?? this.recoveryScreenEnabled,
         ambientVolume: ambientVolume ?? this.ambientVolume,
         breathingVolume: breathingVolume ?? this.breathingVolume,
         heartbeatVolume: heartbeatVolume ?? this.heartbeatVolume,
@@ -105,6 +114,7 @@ class BreathingSettings {
         'breathingSoundsEnabled': breathingSoundsEnabled,
         'heartbeatEnabled': heartbeatEnabled,
         'tickEnabled': tickEnabled,
+        'recoveryScreenEnabled': recoveryScreenEnabled,
         'ambientVolume': ambientVolume,
         'breathingVolume': breathingVolume,
         'heartbeatVolume': heartbeatVolume,
@@ -124,6 +134,7 @@ class BreathingSettings {
         breathingSoundsEnabled: json['breathingSoundsEnabled'] as bool? ?? true,
         heartbeatEnabled: json['heartbeatEnabled'] as bool? ?? true,
         tickEnabled: json['tickEnabled'] as bool? ?? true,
+        recoveryScreenEnabled: json['recoveryScreenEnabled'] as bool? ?? true,
         ambientVolume: ((json['ambientVolume'] as num?)?.toDouble() ?? 0.75).clamp(0.0, 1.0),
         breathingVolume: ((json['breathingVolume'] as num?)?.toDouble() ?? 0.75).clamp(0.0, 1.0),
         heartbeatVolume: ((json['heartbeatVolume'] as num?)?.toDouble() ?? 0.75).clamp(0.0, 1.0),
@@ -178,6 +189,10 @@ class _BreathingExerciseScreenState
   late final AnimationController _shaderCtrl;
   late final Animation<double> _pulseAnim;
   late final AudioService _audio;
+
+  /// Set when the completed session hands the still-playing ambient music to
+  /// the recovery screen, so dispose() leaves the music running.
+  bool _handOffAudioToRecovery = false;
 
   FragmentShader? _sphereShader;
 
@@ -281,7 +296,9 @@ class _BreathingExerciseScreenState
   @override
   void dispose() {
     _cancelTimers();
-    _audio.stopAll();
+    // When handing the still-playing ambient music over to the recovery
+    // screen, the recovery screen owns the fade-out — don't kill it here.
+    if (!_handOffAudioToRecovery) _audio.stopAll();
     _circleCtrl.dispose();
     _breathColorCtrl.dispose();
     _pulseCtrl.dispose();
@@ -669,8 +686,32 @@ class _BreathingExerciseScreenState
         ? 60
         : DateTime.now().difference(_sessionStart!).inSeconds;
 
-    await _audio.stopAll();
+    if (!mounted) return;
 
+    if (_settings.recoveryScreenEnabled) {
+      // Hand the recovery screen the still-playing ambient music: it keeps it
+      // alive until the user taps "continue", then fades it out and reveals
+      // the reflection screen. Stop only the breath cues / hold hum here, and
+      // mark the audio as handed off so dispose() doesn't kill the music.
+      _audio.stopHum();
+      _handOffAudioToRecovery = true;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => BreathingRecoveryScreen(
+            durationSeconds: elapsed,
+            breaths: _totalBreaths,
+            rounds: _roundsCompleted,
+            longestHoldSeconds: _longestHold,
+            totalHoldSeconds: _totalHold,
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Recovery screen disabled — fade the music out smoothly and go straight
+    // to reflection.
+    await _audio.stopAll();
     if (!mounted) return;
     // Reflection first: capture the user's post-practice state, then the
     // reflection screen logs the session (with the metrics below) and reveals
@@ -1877,6 +1918,14 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 label: t.breathingExercise.settings.clockTicks,
                 value: _s.tickEnabled,
                 onChanged: (v) => _update(_s.copyWith(tickEnabled: v)),
+              ),
+              const SizedBox(height: 12),
+              _sectionLabel(context, c, t.breathingExercise.settings.sectionSession),
+              _ToggleRow(
+                label: t.breathingExercise.settings.recoveryScreen,
+                value: _s.recoveryScreenEnabled,
+                onChanged: (v) =>
+                    _update(_s.copyWith(recoveryScreenEnabled: v)),
               ),
               const SizedBox(height: 12),
               _sectionLabel(context, c, t.breathingExercise.settings.sectionVolume),

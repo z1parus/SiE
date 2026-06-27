@@ -50,6 +50,11 @@
     "nextRound": "NEXT ROUND",
     "seconds": "{secs}s"
   },
+  "recoveryScreen": {
+    "title": "Session complete",
+    "subtitle": "Let your breath return to its natural rhythm.",
+    "continueButton": "Tap to continue"
+  },
   "topBar": {
     "round": "ROUND {round} / {total}"
   },
@@ -63,6 +68,8 @@
     "sectionProtocol": "PROTOCOL",
     "protocolLockedHint": "The protocol is defined by your custom sequence and can't be changed here.",
     "sectionSoundToggles": "SOUND TOGGLES",
+    "sectionSession": "SESSION",
+    "recoveryScreen": "RECOVERY SCREEN",
     "sectionVolume": "VOLUME",
     "sectionPresets": "PRESETS",
     "rounds": "ROUNDS",
