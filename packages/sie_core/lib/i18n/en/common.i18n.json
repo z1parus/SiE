@@ -13,6 +13,7 @@
   "offline": {
     "banner": "OFFLINE — changes will sync on reconnect",
     "badge": "OFFLINE MODE",
+    "reconnected": "Connection restored — tap to exit offline mode",
     "terminal": "PERSONAL TERMINAL",
     "level": "LEVEL {n}",
     "xp": "XP",

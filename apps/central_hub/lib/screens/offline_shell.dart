@@ -99,34 +99,96 @@ class _OfflineShellState extends ConsumerState<OfflineShell> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Offline badge bar — a thin always-on indicator that the app is running
-// without a backend connection.
+// Offline badge bar — a thin indicator of backend reachability. While the
+// backend stays unreachable it shows a muted orange "OFFLINE MODE" badge. The
+// moment connectivity returns it flips to a green, tappable "connection
+// restored" badge that re-probes the backend and swaps in the full online
+// shell.
 // ─────────────────────────────────────────────────────────────────────────────
-class _OfflineBadgeBar extends ConsumerWidget {
+class _OfflineBadgeBar extends ConsumerStatefulWidget {
   const _OfflineBadgeBar();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_OfflineBadgeBar> createState() => _OfflineBadgeBarState();
+}
+
+class _OfflineBadgeBarState extends ConsumerState<_OfflineBadgeBar> {
+  bool _connecting = false;
+
+  Future<void> _exitOffline() async {
+    if (_connecting) return;
+    SieHaptics.selection();
+    setState(() => _connecting = true);
+    final ok = await ref.read(appModeProvider.notifier).tryConnect();
+    if (!mounted) return;
+    // On success the app root swaps in the full shell automatically; refresh the
+    // connectivity stream + the branches cache so it opens with fresh state.
+    if (ok) {
+      ref.invalidate(connectivityProvider);
+      ref.invalidate(branchesProvider);
+      return;
+    }
+    setState(() => _connecting = false);
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(t.common.offline.connectFailed),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final c = ref.watch(sieColorsProvider);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      color: c.warning.withValues(alpha: 0.12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.cloud_off_outlined, size: 13, color: c.warning),
-          const SizedBox(width: 8),
-          Text(
-            t.common.offline.badge,
-            style: TextStyle(
-              color: c.warning,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 2,
+    // Live backend reachability. Treat the unresolved/loading state as offline
+    // so the badge never falsely invites the user out before a probe lands.
+    final online = ref.watch(connectivityProvider).valueOrNull ?? false;
+
+    final color = online ? c.success : c.warning;
+    final label =
+        online ? t.common.offline.reconnected : t.common.offline.badge;
+
+    return GestureDetector(
+      onTap: online ? _exitOffline : null,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: SieMotion.duration(context, SieMotion.base),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+        color: color.withValues(alpha: 0.12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (_connecting)
+              SizedBox(
+                width: 13,
+                height: 13,
+                child: CircularProgressIndicator(strokeWidth: 2, color: color),
+              )
+            else
+              Icon(
+                online ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+                size: 13,
+                color: color,
+              ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
