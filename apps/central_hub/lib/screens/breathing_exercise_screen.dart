@@ -252,6 +252,7 @@ class _BreathingExerciseScreenState
   Timer? _retentionTimer;
   Timer? _transitionTimer;
   Timer? _pauseTimer;
+  Timer? _exhalePauseHalfTimer;
   Timer? _heartbeatTimer;
   DateTime? _sessionStart;
   DateTime? _heartbeatStart;
@@ -311,6 +312,7 @@ class _BreathingExerciseScreenState
     _retentionTimer?.cancel();
     _transitionTimer?.cancel();
     _pauseTimer?.cancel();
+    _exhalePauseHalfTimer?.cancel();
     _heartbeatTimer?.cancel();
   }
 
@@ -476,8 +478,13 @@ class _BreathingExerciseScreenState
 
   // ── Phase: Exhale Pause (active → exhale hold) ────────────
 
-  /// 5-second breathe-out bridge after active breathing: lets the user fully
-  /// exhale before the retention, while the ambient music fades out smoothly.
+  /// 5-second bridge after active breathing, before the retention hold.
+  ///
+  /// Active breathing always ends on an exhale, so opening this bridge with
+  /// another exhale produced two exhales back-to-back. Instead it is split into
+  /// a calm inhale (first 2.5s) and an exhale (last 2.5s), so the user arrives
+  /// at the breath-hold having just exhaled — without the doubled exhale. The
+  /// ambient music still fades out smoothly across the full pause.
   void _startExhalePause() {
     if (!mounted) return;
     _breathTimer?.cancel();
@@ -487,15 +494,37 @@ class _BreathingExerciseScreenState
     setState(() {
       _phase = _Phase.exhalePause;
       _pauseElapsed = 0;
+      _isInhaling = true;
     });
-    _breathColorCtrl.animateTo(1.0,
+
+    const halfMs = _kBreathPauseSecs * 1000 ~/ 2; // 2500ms
+    const half = _kBreathPauseSecs / 2.0; // 2.5s
+
+    // First half — inhale: expand the orb, switch to the inhale colour, cue.
+    _breathColorCtrl.animateTo(0.0,
         duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+    _circleCtrl.animateTo(1.0,
+        duration: const Duration(milliseconds: halfMs), curve: Curves.easeInOut);
     if (_settings.breathingSoundsEnabled) {
-      _audio.playExhale(
-          targetSecs: _kBreathPauseSecs, volumeFactor: _settings.breathingVolume);
+      _audio.playInhale(
+          targetSecs: half, volumeFactor: _settings.breathingVolume);
     }
-    _circleCtrl.animateTo(0.3,
-        duration: const Duration(seconds: 3), curve: Curves.easeOut);
+
+    // Second half — exhale: contract the orb, exhale colour + cue.
+    _exhalePauseHalfTimer?.cancel();
+    _exhalePauseHalfTimer = Timer(const Duration(milliseconds: halfMs), () {
+      if (!mounted || _phase != _Phase.exhalePause) return;
+      setState(() => _isInhaling = false);
+      _breathColorCtrl.animateTo(1.0,
+          duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+      _circleCtrl.animateTo(0.3,
+          duration: const Duration(milliseconds: halfMs), curve: Curves.easeOut);
+      if (_settings.breathingSoundsEnabled) {
+        _audio.playExhale(
+            targetSecs: half, volumeFactor: _settings.breathingVolume);
+      }
+    });
+
     // Fade the music out gently across the whole pause.
     if (_settings.ambientEnabled) {
       _audio.fadeAmbientTo(0.0, durationMs: _kBreathPauseSecs * 1000);
@@ -1178,7 +1207,9 @@ class _BreathingExerciseScreenState
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    t.breathingExercise.exhalePause.title,
+                    _isInhaling
+                        ? t.breathingExercise.active.inhale
+                        : t.breathingExercise.exhalePause.title,
                     style: TextStyle(
                       color: c.accentSecondary,
                       fontSize: 22,
