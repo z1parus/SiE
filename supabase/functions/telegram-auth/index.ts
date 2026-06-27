@@ -202,7 +202,15 @@ function authorize(url: URL): Response {
     Deno.env.get('TELEGRAM_BOT_USERNAME') ??
     ''
   if (!botUsername) return html(errorPage('Missing bot_username'))
-  const cbUrl = `https://${url.hostname}/functions/telegram-auth/telegram-callback`
+  // Build the public callback URL for the widget to POST to. The edge runtime
+  // strips the `/functions/v1` prefix before the handler sees it (internal
+  // pathname is `/telegram-auth/authorize`), so we re-add that prefix here.
+  // The previous hardcoded `/functions/telegram-auth/...` dropped the `/v1/`
+  // segment, so the widget POSTed to the API gateway (401 "No API key found")
+  // and the callback — and therefore the one-time code storage — never ran.
+  const fnName = url.pathname.split('/').filter(Boolean)[0] ?? 'telegram-auth'
+  const cbUrl =
+    `https://${url.host}/functions/v1/${fnName}/telegram-callback`
   return html(widgetPage(botUsername, cbUrl, state, redirectUri))
 }
 
