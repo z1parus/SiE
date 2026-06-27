@@ -179,6 +179,8 @@ Deno.serve(async (req: Request) => {
   const path = url.pathname.replace(/\/$/, '')
 
   try {
+    if (path.endsWith('/.well-known/openid-configuration'))
+      return discovery(url)
     if (path.endsWith('/authorize')) return authorize(url)
     if (path.endsWith('/telegram-callback'))
       return await telegramCallback(url)
@@ -190,6 +192,41 @@ Deno.serve(async (req: Request) => {
     return new Response('Internal Server Error', { status: 500 })
   }
 })
+
+// ─── /.well-known/openid-configuration ──────────────────────────────────────────
+// Supabase's Custom OAuth provider is OIDC-discovery based: given the configured
+// "Issuer URL" it fetches `${issuer}/.well-known/openid-configuration` to learn
+// the authorize / token / userinfo endpoints. We advertise this bridge's own
+// endpoints. `issuer` MUST exactly equal the configured Issuer URL (this
+// function's public base). No `jwks_uri` / `id_token` is advertised — the flow
+// is access-token + userinfo, so no asymmetric key validation is needed.
+function discovery(url: URL): Response {
+  const fnName = url.pathname.split('/').filter(Boolean)[0] ?? 'telegram-auth'
+  const base = `https://${url.host}/functions/v1/${fnName}`
+  return json({
+    issuer: base,
+    authorization_endpoint: `${base}/authorize`,
+    token_endpoint: `${base}/token`,
+    userinfo_endpoint: `${base}/userinfo`,
+    response_types_supported: ['code'],
+    grant_types_supported: ['authorization_code'],
+    subject_types_supported: ['public'],
+    id_token_signing_alg_values_supported: ['HS256'],
+    scopes_supported: ['openid', 'profile'],
+    token_endpoint_auth_methods_supported: [
+      'client_secret_post',
+      'client_secret_basic',
+    ],
+    claims_supported: [
+      'sub',
+      'name',
+      'preferred_username',
+      'picture',
+      'email',
+      'email_verified',
+    ],
+  })
+}
 
 // ─── /authorize ────────────────────────────────────────────────────────────────
 function authorize(url: URL): Response {
