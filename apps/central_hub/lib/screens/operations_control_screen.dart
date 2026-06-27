@@ -593,6 +593,8 @@ class _NavItem extends StatelessWidget {
 // Leaderboard Tile
 // ─────────────────────────────────────────────────────────────────────────────
 class _LeaderboardTile extends StatelessWidget {
+  const _LeaderboardTile({super.key});
+
   @override
   Widget build(BuildContext context) {
     return SieGlassCard(
@@ -641,6 +643,7 @@ class _BranchCarousel extends StatelessWidget {
   final void Function(int oldIndex, int newIndex) onReorder;
 
   const _BranchCarousel({
+    super.key,
     required this.branches,
     required this.onBranchTap,
     required this.onReorder,
@@ -1965,6 +1968,7 @@ class _XpBar extends StatelessWidget {
   final SieColors c;
 
   const _XpBar({
+    super.key,
     required this.xp,
     required this.gradientColors,
     required this.badge,

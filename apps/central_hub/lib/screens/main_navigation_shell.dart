@@ -142,6 +142,7 @@ class _ShellNavBar extends ConsumerWidget {
   final ValueChanged<int> onTabChanged;
 
   const _ShellNavBar({
+    super.key,
     required this.activeIndex,
     required this.onTabChanged,
   });
