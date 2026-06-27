@@ -35,7 +35,7 @@
                 <action android:name="es.antonborri.home_widget.action.LAUNCH" />
             </intent-filter>
             <!-- Supabase OAuth (Telegram) deep-link callback: sie://auth/callback -->
-            <intent-filter android:autoVerify="false">
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />

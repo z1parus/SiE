@@ -1836,7 +1836,7 @@ class _TelegramLinkRowState extends ConsumerState<_TelegramLinkRow> {
   Future<void> _link() async {
     setState(() => _busy = true);
     try {
-      await SupabaseService.client.auth.signInWithOAuth(
+      await SupabaseService.client.auth.linkIdentity(
         OAuthProvider('custom:telegram'),
         redirectTo: 'sie://auth/callback',
         authScreenLaunchMode: LaunchMode.externalApplication,
