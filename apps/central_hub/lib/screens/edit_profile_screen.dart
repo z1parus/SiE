@@ -1839,6 +1839,7 @@ class _TelegramLinkRowState extends ConsumerState<_TelegramLinkRow> {
       await SupabaseService.client.auth.signInWithOAuth(
         OAuthProvider('custom:telegram'),
         redirectTo: 'sie://auth/callback',
+        authScreenLaunchMode: LaunchMode.externalApplication,
       );
     } catch (_) {
       if (mounted) {

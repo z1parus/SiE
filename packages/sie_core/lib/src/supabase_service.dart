@@ -57,6 +57,7 @@ class SupabaseService {
     await client.auth.signInWithOAuth(
       OAuthProvider('custom:telegram'),
       redirectTo: 'sie://auth/callback',
+      authScreenLaunchMode: LaunchMode.externalApplication,
     );
   }
 
