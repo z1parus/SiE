@@ -107,12 +107,14 @@ class TourController extends Notifier<TourState> {
   String get completeTitle => switch (state.type) {
         TourType.app => t.tour.complete.title,
         TourType.planning => t.coursePlanning.complete.title,
+        TourType.habits => t.courseHabits.complete.title,
         _ => t.tour.complete.title,
       };
 
   String get completeBody => switch (state.type) {
         TourType.app => t.tour.complete.body,
         TourType.planning => t.coursePlanning.complete.body,
+        TourType.habits => t.courseHabits.complete.body,
         _ => t.tour.complete.body,
       };
 
@@ -159,13 +161,93 @@ class TourController extends Notifier<TourState> {
         return _appSteps;
       case TourType.planning:
         return _planningSteps;
-      // Remaining module courses are registered in their respective stages.
       case TourType.habits:
+        return _habitsSteps;
+      // Remaining module courses are registered in their respective stages.
       case TourType.focus:
       case TourType.breathing:
         return const [];
     }
   }
+
+  // Habits course — 9 steps across HabitTracker (primary) → HabitDetail →
+  // HabitsOverview. `screen` drives the app-side course coordinator, which
+  // pushes/pops the detail and overview screens; all target keys are attached
+  // by the screens themselves.
+  List<TourStep> get _habitsSteps => [
+        TourStep(
+          id: 'habits_fab',
+          screen: TourScreen.primary,
+          targetKey: 'habits_fab',
+          title: t.courseHabits.step1.title,
+          body: t.courseHabits.step1.body,
+          position: TargetPosition.above,
+        ),
+        TourStep(
+          id: 'habits_view_toggle',
+          screen: TourScreen.primary,
+          targetKey: 'habits_view_toggle',
+          title: t.courseHabits.step2.title,
+          body: t.courseHabits.step2.body,
+          position: TargetPosition.below,
+        ),
+        TourStep(
+          id: 'habits_first_card',
+          screen: TourScreen.primary,
+          targetKey: 'habits_first_card',
+          title: t.courseHabits.step3.title,
+          body: t.courseHabits.step3.body,
+          position: TargetPosition.below,
+        ),
+        TourStep(
+          id: 'habits_morning_routine',
+          screen: TourScreen.primary,
+          targetKey: 'habits_morning_routine',
+          title: t.courseHabits.step4.title,
+          body: t.courseHabits.step4.body,
+          position: TargetPosition.below,
+        ),
+        TourStep(
+          id: 'habits_create_stack',
+          screen: TourScreen.primary,
+          targetKey: 'habits_create_stack',
+          title: t.courseHabits.step5.title,
+          body: t.courseHabits.step5.body,
+          position: TargetPosition.above,
+        ),
+        TourStep(
+          id: 'hd_stats',
+          screen: TourScreen.habitDetail,
+          targetKey: 'hd_stats',
+          title: t.courseHabits.step6.title,
+          body: t.courseHabits.step6.body,
+          position: TargetPosition.below,
+        ),
+        TourStep(
+          id: 'hd_heatmap',
+          screen: TourScreen.habitDetail,
+          targetKey: 'hd_heatmap',
+          title: t.courseHabits.step7.title,
+          body: t.courseHabits.step7.body,
+          position: TargetPosition.below,
+        ),
+        TourStep(
+          id: 'hd_journal',
+          screen: TourScreen.habitDetail,
+          targetKey: 'hd_journal',
+          title: t.courseHabits.step8.title,
+          body: t.courseHabits.step8.body,
+          position: TargetPosition.above,
+        ),
+        TourStep(
+          id: 'ho_week_rate',
+          screen: TourScreen.habitsOverview,
+          targetKey: 'ho_week_rate',
+          title: t.courseHabits.step9.title,
+          body: t.courseHabits.step9.body,
+          position: TargetPosition.below,
+        ),
+      ];
 
   // Planning course — 10 steps across PlanningScreen → MissionDetail (list) →
   // Tactical Map (mission detail's map mode). `screen` drives the coordinator.

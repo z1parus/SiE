@@ -16,7 +16,11 @@ enum HabitViewMode { today, week, allTime }
 // HabitTrackerScreen
 // ─────────────────────────────────────────────────────────────────────────────
 class HabitTrackerScreen extends ConsumerStatefulWidget {
-  const HabitTrackerScreen({super.key});
+  const HabitTrackerScreen({super.key, this.startCourse = false});
+
+  /// When true, force-launch the interactive Habits course on entry (used by
+  /// the "replay course" tile in the knowledge base).
+  final bool startCourse;
 
   @override
   ConsumerState<HabitTrackerScreen> createState() =>
@@ -24,8 +28,8 @@ class HabitTrackerScreen extends ConsumerStatefulWidget {
 }
 
 class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
-  bool _onboardingDismissed = false;
   bool _showOnboardingManual = false;
+  bool _courseChecked = false;
   HabitViewMode _viewMode = HabitViewMode.today;
   // Stage 1 — "Не сегодня" section collapsed by default.
   bool _notTodayExpanded = false;
@@ -67,6 +71,23 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
     await prefs.setInt(_kPrefViewMode, mode.index);
   }
 
+  /// Auto-launch the interactive Habits course on first entry (or when forced
+  /// via the knowledge-base replay tile). Replaces the legacy full-screen
+  /// onboarding overlay, which now only shows on demand (info button).
+  void _maybeStartCourse(Profile? profile) {
+    if (_courseChecked) return;
+    if (profile == null && !widget.startCourse) return;
+    _courseChecked = true;
+    final shouldStart =
+        widget.startCourse || !(profile?.hasSeenCourseHabits ?? true);
+    if (!shouldStart) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(tourControllerProvider.notifier).start(TourType.habits);
+      }
+    });
+  }
+
   Future<void> _onRefresh() async {
     ref.invalidate(habitsProvider);
     ref.invalidate(habitRoutinesProvider);
@@ -100,6 +121,20 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
     });
     final profile       = ref.watch(userProfileProvider).valueOrNull;
 
+    // Auto-launch the interactive course on first entry.
+    _maybeStartCourse(profile);
+
+    // While the Habits course runs, force the "Today" ungrouped view so its
+    // targets (first habit card, routine block) are actually on screen.
+    final courseActive =
+        ref.watch(tourControllerProvider).type == TourType.habits &&
+            ref.watch(tourControllerProvider).isActive;
+    final courseStepId = courseActive
+        ? ref.watch(tourControllerProvider.notifier).currentStep?.id
+        : null;
+    final effViewMode  = courseActive ? HabitViewMode.today : _viewMode;
+    final effGroupByArea = courseActive ? false : _groupByArea;
+
     final habitsData   = habitsAsync.valueOrNull;
     final routineData  = routinesAsync.valueOrNull;
     final isListEmpty  = habitsData != null && () {
@@ -111,10 +146,9 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
       };
       return habitsData.habits.where((h) => !routineIds.contains(h.id)).isEmpty;
     }();
-    final showOnboarding = _showOnboardingManual ||
-        (!_onboardingDismissed &&
-            profile != null &&
-            !profile.hasSeenOnboardingHabits);
+    // The interactive course replaces the auto onboarding overlay; the overlay
+    // now only appears on demand via the info button.
+    final showOnboarding = _showOnboardingManual;
 
     final body = SafeArea(
       bottom: false,
@@ -135,6 +169,9 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _RoutineBlock(
+                    key: ref
+                        .read(tourControllerProvider.notifier)
+                        .keyFor('habits_morning_routine'),
                     type: 'morning',
                     routine: routines.morning,
                     habitsState: habitsAsync.valueOrNull,
@@ -154,7 +191,12 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                     ),
                   ],
                   const SizedBox(height: 8),
-                  _CreateStackButton(onCreate: _createStack),
+                  _CreateStackButton(
+                    key: ref
+                        .read(tourControllerProvider.notifier)
+                        .keyFor('habits_create_stack'),
+                    onCreate: _createStack,
+                  ),
                   const SizedBox(height: 12),
                 ],
               ),
@@ -163,7 +205,10 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
             error: (_, _) => const SizedBox(height: 8),
           ),
           _ViewModeToggle(
-            current: _viewMode,
+            key: ref
+                .read(tourControllerProvider.notifier)
+                .keyFor('habits_view_toggle'),
+            current: effViewMode,
             onChange: _setViewMode,
           ),
           Expanded(
@@ -195,7 +240,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                   );
                 }
 
-                Widget buildCard(Habit habit) {
+                Widget buildCard(Habit habit, {bool isFirst = false}) {
                   final logDates = state.logDates[habit.id] ?? {};
                   final entries  = state.logEntries[habit.id] ?? [];
                   final todayEntry = entries.cast<HabitLogEntry?>()
@@ -222,7 +267,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                           .recordLapse(habit.id, DateTime.now()),
                     );
                   }
-                  if (_viewMode == HabitViewMode.week) {
+                  if (effViewMode == HabitViewMode.week) {
                     return _WeekViewHabitCard(
                       key: ValueKey('w_${habit.id}'),
                       habit: habit,
@@ -231,7 +276,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                       onTap: onTapDetail,
                     );
                   }
-                  if (_viewMode == HabitViewMode.allTime) {
+                  if (effViewMode == HabitViewMode.allTime) {
                     return _AllTimeHabitCard(
                       key: ValueKey('a_${habit.id}'),
                       habit: habit,
@@ -239,13 +284,22 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                       onTap: onTapDetail,
                     );
                   }
+                  // During the course, the first card carries the tour key and
+                  // shows an animated swipe hint (step 3).
+                  final courseFirst = isFirst && courseActive;
                   return _SwipeableHabitCard(
-                    key: ValueKey(habit.id),
+                    key: courseFirst
+                        ? ref
+                            .read(tourControllerProvider.notifier)
+                            .keyFor('habits_first_card')
+                        : ValueKey(habit.id),
                     habit: habit,
                     completedToday: logDates.contains(today),
                     streak: state.streaks[habit.id] ?? 0,
                     todayEmoji: todayEntry?.emoji,
                     currentValue: state.valueFor(habit.id, today),
+                    showSwipeHint:
+                        courseFirst && courseStepId == 'habits_first_card',
                     onTap: onTapDetail,
                     onDelete: () => ref
                         .read(habitsProvider.notifier)
@@ -257,7 +311,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                 }
 
                 // Stage 6 — group by life area when toggle is active.
-                if (_groupByArea) {
+                if (effGroupByArea) {
                   final grouped = <LifeArea?, List<Habit>>{};
                   for (final h in visibleHabits) {
                     grouped.putIfAbsent(h.area, () => []).add(h);
@@ -283,7 +337,7 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
 
                 // Stage 1 — in Today view, split scheduled-for-today from the
                 // rest and tuck the latter into a collapsed "Не сегодня" group.
-                if (_viewMode == HabitViewMode.today) {
+                if (effViewMode == HabitViewMode.today) {
                   final now = DateTime.now();
                   final due = <Habit>[];
                   final notToday = <Habit>[];
@@ -300,10 +354,10 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
                     children: [
-                      for (final h in due)
+                      for (var i = 0; i < due.length; i++)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 12),
-                          child: buildCard(h),
+                          child: buildCard(due[i], isFirst: i == 0),
                         ),
                       if (due.isEmpty)
                         Padding(
@@ -366,12 +420,8 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                 benefit: t.habitTracker.list.archiveBody,
                 xpReward: 25,
                 onAccept: () {
-                  if (_showOnboardingManual) {
-                    setState(() => _showOnboardingManual = false);
-                  } else {
-                    setState(() => _onboardingDismissed = true);
-                    markOnboardingSeen('habits');
-                  }
+                  setState(() => _showOnboardingManual = false);
+                  markOnboardingSeen('habits');
                 },
               ),
             ),
@@ -380,6 +430,9 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
               left: 24,
               right: 24,
               child: _BottomActionBar(
+                centerKey: ref
+                    .read(tourControllerProvider.notifier)
+                    .keyFor('habits_fab'),
                 onAdd: _showAddChooser,
                 isEmpty: isListEmpty,
                 onMorning: () => Navigator.of(context).push(
@@ -722,11 +775,14 @@ class _BottomActionBar extends ConsumerWidget {
   final VoidCallback onEvening;
   final bool isEmpty;
 
+  final Key? centerKey;
+
   const _BottomActionBar({
     required this.onAdd,
     required this.onMorning,
     required this.onEvening,
     this.isEmpty = false,
+    this.centerKey,
   });
 
   @override
@@ -749,11 +805,12 @@ class _BottomActionBar extends ConsumerWidget {
     }
 
     Widget centerBtn() {
-      if (isEmpty) return _AddButton(onTap: onAdd);
+      if (isEmpty) return _AddButton(key: centerKey, onTap: onAdd);
       final child = Center(
         child: Icon(Icons.add, color: Colors.black, size: 24),
       );
       return GestureDetector(
+        key: centerKey,
         onTap: onAdd,
         child: Container(
           width: 56,
@@ -795,7 +852,8 @@ class _ViewModeToggle extends ConsumerWidget {
   final HabitViewMode current;
   final void Function(HabitViewMode) onChange;
 
-  const _ViewModeToggle({required this.current, required this.onChange});
+  const _ViewModeToggle(
+      {super.key, required this.current, required this.onChange});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1092,6 +1150,9 @@ class _SwipeableHabitCard extends StatefulWidget {
   final Future<void> Function() onDelete;
   final VoidCallback onTogglePin;
 
+  /// When true (course step 3), overlay an animated swipe hint on the card.
+  final bool showSwipeHint;
+
   const _SwipeableHabitCard({
     super.key,
     required this.habit,
@@ -1102,6 +1163,7 @@ class _SwipeableHabitCard extends StatefulWidget {
     required this.onTogglePin,
     this.todayEmoji,
     this.currentValue = 0,
+    this.showSwipeHint = false,
   });
 
   @override
@@ -1248,9 +1310,88 @@ class _SwipeableHabitCardState extends State<_SwipeableHabitCard>
                   ),
                 ),
               ),
+              // Course step 3 — animated swipe hint (hidden while dragging).
+              if (widget.showSwipeHint && !swiping)
+                const Positioned.fill(
+                  child: IgnorePointer(child: _SwipeHintOverlay()),
+                ),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Swipe Hint Overlay (course step 3)
+// ─────────────────────────────────────────────────────────────────────────────
+class _SwipeHintOverlay extends ConsumerStatefulWidget {
+  const _SwipeHintOverlay();
+
+  @override
+  ConsumerState<_SwipeHintOverlay> createState() => _SwipeHintOverlayState();
+}
+
+class _SwipeHintOverlayState extends ConsumerState<_SwipeHintOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sc = ref.watch(sieColorsProvider);
+    final animate = SieMotion.enabled(context);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: sc.background.withValues(alpha: 0.55),
+        ),
+        child: AnimatedBuilder(
+          animation: _ctrl,
+          builder: (context, _) {
+            // Eased back-and-forth between left (delete) and right (pin).
+            final t = animate
+                ? Curves.easeInOut.transform(_ctrl.value) * 2 - 1
+                : 0.0;
+            final towardPin = t >= 0;
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.delete_outline,
+                    color: sc.danger.withValues(
+                        alpha: towardPin ? 0.35 : 0.9),
+                    size: 18),
+                const SizedBox(width: 10),
+                Transform.translate(
+                  offset: Offset(t * 26, 0),
+                  child: Icon(Icons.touch_app_outlined,
+                      color: sc.accent, size: 26),
+                ),
+                const SizedBox(width: 10),
+                Icon(Icons.push_pin_outlined,
+                    color: sc.accent.withValues(
+                        alpha: towardPin ? 0.9 : 0.35),
+                    size: 18),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -1915,7 +2056,7 @@ class _EmptyState extends ConsumerWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 class _AddButton extends ConsumerStatefulWidget {
   final VoidCallback onTap;
-  const _AddButton({required this.onTap});
+  const _AddButton({super.key, required this.onTap});
 
   @override
   ConsumerState<_AddButton> createState() => _AddButtonState();
@@ -3988,6 +4129,7 @@ class _NoConnectionMessage extends ConsumerWidget {
 
 class _RoutineBlock extends ConsumerStatefulWidget {
   const _RoutineBlock({
+    super.key,
     required this.type,
     this.routine,
     this.habitsState,
@@ -4871,6 +5013,9 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
               ),
               // ── Stats strip ──────────────────────────────────────────────
               Padding(
+                key: ref
+                    .read(tourControllerProvider.notifier)
+                    .keyFor('hd_stats'),
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
                 child: isAvoid
                     ? Row(
@@ -5207,6 +5352,9 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
               // Completion-based analytics don't apply to avoid habits.
               if (!isAvoid)
                 _HabitAnalyticsSection(
+                  key: ref
+                      .read(tourControllerProvider.notifier)
+                      .keyFor('hd_heatmap'),
                   habit: widget.habit,
                   logDates: logDates,
                   logValues: logValues,
@@ -5216,6 +5364,9 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                 ),
               // ── Journal header ───────────────────────────────────────────
               Padding(
+                key: ref
+                    .read(tourControllerProvider.notifier)
+                    .keyFor('hd_journal'),
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
                 child: Text(
                   t.habitTracker.avoidCard.journal,
@@ -5597,6 +5748,7 @@ class _HabitAnalyticsSection extends StatefulWidget {
   final HabitMetrics metrics;
 
   const _HabitAnalyticsSection({
+    super.key,
     required this.habit,
     required this.logDates,
     required this.logValues,
@@ -6344,7 +6496,7 @@ class _StackChainRow extends StatelessWidget {
 
 class _CreateStackButton extends ConsumerWidget {
   final VoidCallback onCreate;
-  const _CreateStackButton({required this.onCreate});
+  const _CreateStackButton({super.key, required this.onCreate});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

@@ -54,6 +54,17 @@ class KnowledgeBaseScreen extends ConsumerWidget {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 10),
+                    _TutorialTile(
+                      icon: Icons.grid_view_outlined,
+                      label: t.courseHabits.replayItem,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              const HabitTrackerScreen(startCourse: true),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 28),
                     _NeonSectionLabel(label: t.knowledgeBase.sections.systemModules),
                     const SizedBox(height: 14),
