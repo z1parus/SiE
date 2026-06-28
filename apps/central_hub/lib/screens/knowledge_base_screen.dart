@@ -65,6 +65,17 @@ class KnowledgeBaseScreen extends ConsumerWidget {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 10),
+                    _TutorialTile(
+                      icon: Icons.timer_outlined,
+                      label: t.courseFocus.replayItem,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              const FocusProtocolScreen(startCourse: true),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 28),
                     _NeonSectionLabel(label: t.knowledgeBase.sections.systemModules),
                     const SizedBox(height: 14),

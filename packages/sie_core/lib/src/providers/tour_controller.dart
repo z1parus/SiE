@@ -108,6 +108,7 @@ class TourController extends Notifier<TourState> {
         TourType.app => t.tour.complete.title,
         TourType.planning => t.coursePlanning.complete.title,
         TourType.habits => t.courseHabits.complete.title,
+        TourType.focus => t.courseFocus.complete.title,
         _ => t.tour.complete.title,
       };
 
@@ -115,6 +116,7 @@ class TourController extends Notifier<TourState> {
         TourType.app => t.tour.complete.body,
         TourType.planning => t.coursePlanning.complete.body,
         TourType.habits => t.courseHabits.complete.body,
+        TourType.focus => t.courseFocus.complete.body,
         _ => t.tour.complete.body,
       };
 
@@ -163,12 +165,61 @@ class TourController extends Notifier<TourState> {
         return _planningSteps;
       case TourType.habits:
         return _habitsSteps;
-      // Remaining module courses are registered in their respective stages.
       case TourType.focus:
+        return _focusSteps;
+      // Remaining module courses are registered in their respective stages.
       case TourType.breathing:
         return const [];
     }
   }
+
+  // Focus course — 6 steps, all on FocusProtocolScreen (single screen, no
+  // navigation). Step 4 targets the task banner, which only exists when a task
+  // is bound; with none bound its key resolves to nothing and the overlay shows
+  // a centred concept card.
+  List<TourStep> get _focusSteps => [
+        TourStep(
+          id: 'focus_ring',
+          targetKey: 'focus_ring',
+          title: t.courseFocus.step1.title,
+          body: t.courseFocus.step1.body,
+        ),
+        TourStep(
+          id: 'focus_phase',
+          targetKey: 'focus_phase',
+          title: t.courseFocus.step2.title,
+          body: t.courseFocus.step2.body,
+          position: TargetPosition.above,
+        ),
+        TourStep(
+          id: 'focus_xp',
+          targetKey: 'focus_xp',
+          title: t.courseFocus.step3.title,
+          body: t.courseFocus.step3.body,
+          position: TargetPosition.above,
+        ),
+        TourStep(
+          id: 'focus_task_banner',
+          targetKey: 'focus_task_banner',
+          title: t.courseFocus.step4.title,
+          body: t.courseFocus.step4.body,
+          position: TargetPosition.below,
+        ),
+        TourStep(
+          id: 'focus_settings',
+          targetKey: 'focus_settings',
+          title: t.courseFocus.step5.title,
+          body: t.courseFocus.step5.body,
+          position: TargetPosition.above,
+        ),
+        TourStep(
+          id: 'focus_start',
+          targetKey: 'focus_start',
+          title: t.courseFocus.step6.title,
+          body: t.courseFocus.step6.body,
+          position: TargetPosition.above,
+        ),
+      ];
 
   // Habits course — 9 steps across HabitTracker (primary) → HabitDetail →
   // HabitsOverview. `screen` drives the app-side course coordinator, which
