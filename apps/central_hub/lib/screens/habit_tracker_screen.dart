@@ -169,9 +169,6 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _RoutineBlock(
-                    key: ref
-                        .read(tourControllerProvider.notifier)
-                        .keyFor('habits_morning_routine'),
                     type: 'morning',
                     routine: routines.morning,
                     habitsState: habitsAsync.valueOrNull,
@@ -433,6 +430,9 @@ class _HabitTrackerScreenState extends ConsumerState<HabitTrackerScreen> {
                 centerKey: ref
                     .read(tourControllerProvider.notifier)
                     .keyFor('habits_fab'),
+                morningKey: ref
+                    .read(tourControllerProvider.notifier)
+                    .keyFor('habits_routine_buttons'),
                 onAdd: _showAddChooser,
                 isEmpty: isListEmpty,
                 onMorning: () => Navigator.of(context).push(
@@ -776,6 +776,7 @@ class _BottomActionBar extends ConsumerWidget {
   final bool isEmpty;
 
   final Key? centerKey;
+  final Key? morningKey;
 
   const _BottomActionBar({
     required this.onAdd,
@@ -783,17 +784,19 @@ class _BottomActionBar extends ConsumerWidget {
     required this.onEvening,
     this.isEmpty = false,
     this.centerKey,
+    this.morningKey,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sc = ref.watch(sieColorsProvider);
 
-    Widget sideBtn(IconData icon, VoidCallback onTap) {
+    Widget sideBtn(IconData icon, VoidCallback onTap, {Key? key}) {
       final child = Center(
         child: Icon(icon, color: sc.textSecondary, size: 20),
       );
       return GestureDetector(
+        key: key,
         onTap: onTap,
         child: Container(
           width: 48,
@@ -834,7 +837,7 @@ class _BottomActionBar extends ConsumerWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        sideBtn(Icons.wb_sunny_outlined, onMorning),
+        sideBtn(Icons.wb_sunny_outlined, onMorning, key: morningKey),
         const SizedBox(width: 20),
         centerBtn(),
         const SizedBox(width: 20),
@@ -4129,7 +4132,6 @@ class _NoConnectionMessage extends ConsumerWidget {
 
 class _RoutineBlock extends ConsumerStatefulWidget {
   const _RoutineBlock({
-    super.key,
     required this.type,
     this.routine,
     this.habitsState,

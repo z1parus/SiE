@@ -200,12 +200,15 @@ class TourController extends Notifier<TourState> {
           position: TargetPosition.below,
         ),
         TourStep(
-          id: 'habits_morning_routine',
+          id: 'habits_routine_buttons',
           screen: TourScreen.primary,
-          targetKey: 'habits_morning_routine',
+          // The top routine blocks are time-gated and only render when a
+          // routine exists, so spotlight the always-present routine button in
+          // the bottom bar instead — which is what the copy points to.
+          targetKey: 'habits_routine_buttons',
           title: t.courseHabits.step4.title,
           body: t.courseHabits.step4.body,
-          position: TargetPosition.below,
+          position: TargetPosition.above,
         ),
         TourStep(
           id: 'habits_create_stack',

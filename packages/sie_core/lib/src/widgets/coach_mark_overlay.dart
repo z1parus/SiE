@@ -49,15 +49,19 @@ class _CoachMarkOverlayState extends ConsumerState<CoachMarkOverlay> {
       }
     }
 
-    if (rect == null && keyId != null && attempt < 8) {
-      // Target not laid out yet (e.g. just after a tab switch) — retry briefly.
+    final changed = rect != _targetRect;
+    if (changed) {
+      setState(() => _targetRect = rect);
+    }
+
+    // Keep sampling briefly while the target is missing or still moving. This
+    // catches targets that lay out late (e.g. just after a tab switch) and —
+    // crucially — lets the cutout converge on the final position after a route
+    // push/pop, where the spotlighted widget keeps sliding for a few frames.
+    if (keyId != null && attempt < 12 && (rect == null || changed)) {
       Future.delayed(const Duration(milliseconds: 50), () {
         if (mounted) _measure(attempt: attempt + 1);
       });
-      return;
-    }
-    if (rect != _targetRect) {
-      setState(() => _targetRect = rect);
     }
   }
 
