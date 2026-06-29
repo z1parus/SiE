@@ -847,11 +847,9 @@ class _BreathingExerciseScreenState
           child: Scaffold(
             backgroundColor: Colors.transparent,
             body: SafeArea(
-              child: Stack(
+              child: Column(
                 children: [
-                  Positioned(
-                    top: 0, left: 0, right: 0,
-                    child: _TopBar(
+                  _TopBar(
                       phase: _phase,
                       round: _round,
                       totalRounds: _totalRounds,
@@ -863,8 +861,11 @@ class _BreathingExerciseScreenState
                       onJournal: _openJournal,
                       onStats: _openStats,
                     ),
-                  ),
-                  Center(
+                  Expanded(
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Center(
                     child: GestureDetector(
                       key: ref
                           .read(tourControllerProvider.notifier)
@@ -916,8 +917,11 @@ class _BreathingExerciseScreenState
                         ),
                       ),
                     ),
-                  Positioned(
-                    bottom: 40, left: 32, right: 32,
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(32, 0, 32, 40),
                     child: _buildBottomArea(c),
                   ),
                 ],

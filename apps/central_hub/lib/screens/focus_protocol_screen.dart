@@ -310,9 +310,7 @@ class _FocusRing extends ConsumerWidget {
               textColor: c.textPrimary,
               subLabelColor: c.textSecondary,
               isLight: c.isLightMode,
-              // Canvas-painted text ignores textScaler — scale it explicitly so
-              // the timer shrinks in step with the rest of the UI.
-              centerFontSize: 58.s,
+              centerFontSize: 58,
               glow: !c.isLightMode,
             ),
           ),
