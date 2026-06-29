@@ -1,0 +1,39 @@
+{
+  "step1": {
+    "title": "The Sphere",
+    "body": "The sphere expands on the inhale and contracts on the exhale. Breathe to its rhythm. Tap it to start a session."
+  },
+  "step2": {
+    "title": "Protocol",
+    "body": "Rounds (3 by default), each with inhale-exhale cycles, then a breath retention (hold)."
+  },
+  "step3": {
+    "title": "Breathing phases",
+    "body": "INHALE — breathe in, EXHALE — breathe out, HOLD — retention. The RELEASE button ends the hold early."
+  },
+  "step4": {
+    "title": "Settings",
+    "body": "Rounds, cycles, inhale/exhale/hold durations. Sound: ambient, breath, heartbeat, ticks — volume per channel."
+  },
+  "step5": {
+    "title": "Presets",
+    "body": "Save your configurations as presets and load them with one tap — inside the protocol settings."
+  },
+  "step6": {
+    "title": "Sequences",
+    "body": "\"My sequences\" — your own protocols with different parameters for each round."
+  },
+  "step7": {
+    "title": "Journal & stats",
+    "body": "The journal is your session history. Stats shows charts and insights for your breathing practice."
+  },
+  "step8": {
+    "title": "Start",
+    "body": "INITIATE PROTOCOL to begin. A 5-second countdown → breathing cycles → retention → completion and reflection."
+  },
+  "complete": {
+    "title": "COURSE COMPLETE",
+    "body": "The breathing protocol is mastered. Calm is your strength, operative."
+  },
+  "replayItem": "Course: Breathing"
+}

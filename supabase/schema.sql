@@ -156,6 +156,7 @@ create table public.profiles (
   has_seen_course_planning      boolean not null default false,
   has_seen_course_habits        boolean not null default false,
   has_seen_course_focus         boolean not null default false,
+  has_seen_course_breathing     boolean not null default false,
 
   -- Активная косметика (FK на каталоги)
   equipped_frame_id       uuid references public.avatar_frames(id)       on delete set null,

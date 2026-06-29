@@ -109,7 +109,7 @@ class TourController extends Notifier<TourState> {
         TourType.planning => t.coursePlanning.complete.title,
         TourType.habits => t.courseHabits.complete.title,
         TourType.focus => t.courseFocus.complete.title,
-        _ => t.tour.complete.title,
+        TourType.breathing => t.courseBreathing.complete.title,
       };
 
   String get completeBody => switch (state.type) {
@@ -117,7 +117,7 @@ class TourController extends Notifier<TourState> {
         TourType.planning => t.coursePlanning.complete.body,
         TourType.habits => t.courseHabits.complete.body,
         TourType.focus => t.courseFocus.complete.body,
-        _ => t.tour.complete.body,
+        TourType.breathing => t.courseBreathing.complete.body,
       };
 
   // ── Completion extra action ────────────────────────────────────────────────
@@ -167,11 +167,70 @@ class TourController extends Notifier<TourState> {
         return _habitsSteps;
       case TourType.focus:
         return _focusSteps;
-      // Remaining module courses are registered in their respective stages.
       case TourType.breathing:
-        return const [];
+        return _breathingSteps;
     }
   }
+
+  // Breathing course — 8 steps, all on BreathingExerciseScreen (single screen,
+  // no navigation). Steps 3 (phases) and 5 (presets) describe things not
+  // visible in the idle state, so they have no target and show a centred
+  // concept card.
+  List<TourStep> get _breathingSteps => [
+        TourStep(
+          id: 'breathing_sphere',
+          targetKey: 'breathing_sphere',
+          title: t.courseBreathing.step1.title,
+          body: t.courseBreathing.step1.body,
+        ),
+        TourStep(
+          id: 'breathing_hud',
+          targetKey: 'breathing_hud',
+          title: t.courseBreathing.step2.title,
+          body: t.courseBreathing.step2.body,
+          position: TargetPosition.above,
+        ),
+        TourStep(
+          id: 'breathing_phases',
+          targetKey: null, // phase elements only exist mid-session
+          title: t.courseBreathing.step3.title,
+          body: t.courseBreathing.step3.body,
+        ),
+        TourStep(
+          id: 'breathing_settings',
+          targetKey: 'breathing_settings',
+          title: t.courseBreathing.step4.title,
+          body: t.courseBreathing.step4.body,
+          position: TargetPosition.above,
+        ),
+        TourStep(
+          id: 'breathing_presets',
+          targetKey: null, // lives inside the settings sheet
+          title: t.courseBreathing.step5.title,
+          body: t.courseBreathing.step5.body,
+        ),
+        TourStep(
+          id: 'breathing_sequences',
+          targetKey: 'breathing_sequences',
+          title: t.courseBreathing.step6.title,
+          body: t.courseBreathing.step6.body,
+          position: TargetPosition.above,
+        ),
+        TourStep(
+          id: 'breathing_journal',
+          targetKey: 'breathing_journal',
+          title: t.courseBreathing.step7.title,
+          body: t.courseBreathing.step7.body,
+          position: TargetPosition.below,
+        ),
+        TourStep(
+          id: 'breathing_initiate',
+          targetKey: 'breathing_initiate',
+          title: t.courseBreathing.step8.title,
+          body: t.courseBreathing.step8.body,
+          position: TargetPosition.above,
+        ),
+      ];
 
   // Focus course — 6 steps, all on FocusProtocolScreen (single screen, no
   // navigation). Step 4 targets the task banner, which only exists when a task

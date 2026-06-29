@@ -76,6 +76,17 @@ class KnowledgeBaseScreen extends ConsumerWidget {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 10),
+                    _TutorialTile(
+                      icon: Icons.air,
+                      label: t.courseBreathing.replayItem,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              const BreathingExerciseScreen(startCourse: true),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 28),
                     _NeonSectionLabel(label: t.knowledgeBase.sections.systemModules),
                     const SizedBox(height: 14),

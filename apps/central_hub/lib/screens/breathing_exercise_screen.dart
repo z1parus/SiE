@@ -164,11 +164,16 @@ class BreathingExerciseScreen extends ConsumerStatefulWidget {
     super.key,
     this.openSettings = false,
     this.sequence,
+    this.startCourse = false,
   });
 
   /// When true, the protocol settings sheet auto-opens on entry — used by the
   /// Knowledge Base deep-link.
   final bool openSettings;
+
+  /// When true, force-launch the interactive Breathing course on entry (used
+  /// by the "replay course" tile in the knowledge base).
+  final bool startCourse;
 
   /// When non-null, the session runs this user-built sequence (each round has
   /// its own params) instead of the uniform [BreathingSettings] rounds. Audio
@@ -229,8 +234,8 @@ class _BreathingExerciseScreenState
     return List.generate(_settings.rounds, (_) => _roundFromSettings());
   }
 
-  bool _onboardingDismissed = false;
   bool _showOnboardingManual = false;
+  bool _courseChecked = false;
 
   int _round = 1;
   int _cycle = 0;
@@ -758,6 +763,23 @@ class _BreathingExerciseScreenState
     );
   }
 
+  /// Auto-launch the interactive Breathing course on first entry (or when
+  /// forced via the knowledge-base replay tile). Replaces the legacy
+  /// full-screen onboarding overlay, which now only shows on demand.
+  void _maybeStartCourse(Profile? profile) {
+    if (_courseChecked) return;
+    if (profile == null && !widget.startCourse) return;
+    _courseChecked = true;
+    final shouldStart =
+        widget.startCourse || !(profile?.hasSeenCourseBreathing ?? true);
+    if (!shouldStart) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(tourControllerProvider.notifier).start(TourType.breathing);
+      }
+    });
+  }
+
   // ── Sequences / Journal / Stats ───────────────────────────
 
   void _openSequences() {
@@ -805,10 +827,13 @@ class _BreathingExerciseScreenState
     final c = ref.watch(sieColorsProvider);
 
     final profile = ref.watch(userProfileProvider).valueOrNull;
-    final showOnboarding = _showOnboardingManual ||
-        (!_onboardingDismissed &&
-            profile != null &&
-            !profile.hasSeenOnboardingBreathing);
+
+    // Auto-launch the interactive course on first entry.
+    _maybeStartCourse(profile);
+
+    // The interactive course replaces the auto onboarding overlay; the overlay
+    // now only appears on demand via the info button.
+    final showOnboarding = _showOnboardingManual;
 
     return PopScope(
       canPop: !_sessionActive,
@@ -830,6 +855,9 @@ class _BreathingExerciseScreenState
                       phase: _phase,
                       round: _round,
                       totalRounds: _totalRounds,
+                      journalKey: ref
+                          .read(tourControllerProvider.notifier)
+                          .keyFor('breathing_journal'),
                       onBack: _handleBackRequest,
                       onInfo: () => setState(() => _showOnboardingManual = true),
                       onJournal: _openJournal,
@@ -838,6 +866,9 @@ class _BreathingExerciseScreenState
                   ),
                   Center(
                     child: GestureDetector(
+                      key: ref
+                          .read(tourControllerProvider.notifier)
+                          .keyFor('breathing_sphere'),
                       onTap: _onSphereTap,
                       onTapDown: (_) {
                         if (_phase == _Phase.idle) {
@@ -903,12 +934,8 @@ class _BreathingExerciseScreenState
             benefit: t.breathingExercise.onboarding.benefit,
             xpReward: 50,
             onAccept: () {
-              if (_showOnboardingManual) {
-                setState(() => _showOnboardingManual = false);
-              } else {
-                setState(() => _onboardingDismissed = true);
-                markOnboardingSeen('breathing');
-              }
+              setState(() => _showOnboardingManual = false);
+              markOnboardingSeen('breathing');
             },
           ),
         ),
@@ -1049,6 +1076,9 @@ class _BreathingExerciseScreenState
               c,
               blur: 3.5,
               glow: 0.90,
+              key: ref
+                  .read(tourControllerProvider.notifier)
+                  .keyFor('breathing_hud'),
               child: Column(
                 children: [
                   Text(
@@ -1093,13 +1123,29 @@ class _BreathingExerciseScreenState
               ),
             ),
             const SizedBox(height: 16),
-            _SettingsButton(onTap: _showSettings),
+            _SettingsButton(
+              key: ref
+                  .read(tourControllerProvider.notifier)
+                  .keyFor('breathing_settings'),
+              onTap: _showSettings,
+            ),
             if (!_isSequenceMode) ...[
               const SizedBox(height: 12),
-              _SequencesButton(onTap: _openSequences),
+              _SequencesButton(
+                key: ref
+                    .read(tourControllerProvider.notifier)
+                    .keyFor('breathing_sequences'),
+                onTap: _openSequences,
+              ),
             ],
             const SizedBox(height: 16),
-            _SieButton(label: t.breathingExercise.idle.initiateProtocol, onPressed: _startSession),
+            _SieButton(
+              key: ref
+                  .read(tourControllerProvider.notifier)
+                  .keyFor('breathing_initiate'),
+              label: t.breathingExercise.idle.initiateProtocol,
+              onPressed: _startSession,
+            ),
           ],
         );
 
@@ -1554,8 +1600,10 @@ class _BreathingExerciseScreenState
     }
   }
 
-  Widget _hudCard(SieColors c, {double blur = 3.0, double glow = 0.88, required Widget child}) {
+  Widget _hudCard(SieColors c,
+      {double blur = 3.0, double glow = 0.88, Key? key, required Widget child}) {
     return Container(
+      key: key,
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: c.flatCard(radius: 20),
@@ -1574,6 +1622,7 @@ class _TopBar extends ConsumerWidget {
   final VoidCallback onInfo;
   final VoidCallback onJournal;
   final VoidCallback onStats;
+  final Key? journalKey;
 
   const _TopBar({
     required this.phase,
@@ -1583,6 +1632,7 @@ class _TopBar extends ConsumerWidget {
     required this.onInfo,
     required this.onJournal,
     required this.onStats,
+    this.journalKey,
   });
 
   @override
@@ -1593,8 +1643,10 @@ class _TopBar extends ConsumerWidget {
         phase != _Phase.complete;
     final isIdle = phase == _Phase.idle;
 
-    Widget circleBtn(IconData icon, VoidCallback onTap, {double alpha = 1.0}) {
+    Widget circleBtn(IconData icon, VoidCallback onTap,
+        {double alpha = 1.0, Key? key}) {
       return GestureDetector(
+        key: key,
         onTap: onTap,
         child: Container(
           width: 36,
@@ -1625,7 +1677,8 @@ class _TopBar extends ConsumerWidget {
           const Spacer(),
           // Journal & Stats live in the header on the start screen only.
           if (isIdle) ...[
-            circleBtn(Icons.menu_book_outlined, onJournal, alpha: 0.7),
+            circleBtn(Icons.menu_book_outlined, onJournal,
+                alpha: 0.7, key: journalKey),
             const SizedBox(width: 8),
             circleBtn(Icons.insights_outlined, onStats, alpha: 0.7),
             const SizedBox(width: 8),
@@ -1641,7 +1694,7 @@ class _TopBar extends ConsumerWidget {
 
 class _SettingsButton extends ConsumerWidget {
   final VoidCallback onTap;
-  const _SettingsButton({required this.onTap});
+  const _SettingsButton({super.key, required this.onTap});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1677,7 +1730,7 @@ class _SettingsButton extends ConsumerWidget {
 
 class _SequencesButton extends ConsumerWidget {
   final VoidCallback onTap;
-  const _SequencesButton({required this.onTap});
+  const _SequencesButton({super.key, required this.onTap});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -2376,7 +2429,7 @@ class _SieButton extends ConsumerWidget {
   final String label;
   final VoidCallback onPressed;
 
-  const _SieButton({required this.label, required this.onPressed});
+  const _SieButton({super.key, required this.label, required this.onPressed});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
