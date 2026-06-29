@@ -920,9 +920,17 @@ class _BreathingExerciseScreenState
                       ],
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(32, 0, 32, 40),
-                    child: _buildBottomArea(c),
+                  // Animate the bottom area's height change between phases so
+                  // the Expanded sphere region grows/shrinks smoothly and the
+                  // sphere glides to centre on session start (no hard jump).
+                  AnimatedSize(
+                    duration: SieMotion.slow,
+                    curve: Curves.easeInOut,
+                    alignment: Alignment.topCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(32, 0, 32, 40),
+                      child: _buildBottomArea(c),
+                    ),
                   ),
                 ],
               ),

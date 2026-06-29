@@ -191,7 +191,6 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
                                     .keyFor('focus_ring'),
                                 formattedTime: timerState.formattedTime,
                                 phaseColor: phaseColor,
-                                phase: timerState.phase,
                                 glowOpacity: _pulseAnim.value * 0.40,
                               ),
                             ),
@@ -278,13 +277,11 @@ class _FocusRing extends ConsumerWidget {
     super.key,
     required this.formattedTime,
     required this.phaseColor,
-    required this.phase,
     required this.glowOpacity,
   });
 
   final String     formattedTime;
   final Color      phaseColor;
-  final FocusPhase phase;
   final double     glowOpacity;
 
   @override
@@ -312,41 +309,6 @@ class _FocusRing extends ConsumerWidget {
               isLight: c.isLightMode,
               centerFontSize: 58,
               glow: !c.isLightMode,
-            ),
-          ),
-
-          // Phase label, floating just below the countdown.
-          Align(
-            alignment: const Alignment(0, 0.42),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: phaseColor.withValues(alpha: 0.35),
-                  width: 0.8,
-                ),
-                borderRadius: BorderRadius.circular(4),
-                color: phaseColor.withValues(alpha: 0.06),
-              ),
-              child: Text(
-                phase == FocusPhase.breakTime
-                    ? t.focusProtocol.ring.breakLabel
-                    : t.focusProtocol.ring.focus,
-                style: TextStyle(
-                  color: phaseColor,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 4.5,
-                  shadows: c.isLightMode
-                      ? null
-                      : [
-                          Shadow(
-                            color: phaseColor.withValues(alpha: 0.65),
-                            blurRadius: 8,
-                          ),
-                        ],
-                ),
-              ),
             ),
           ),
         ],
