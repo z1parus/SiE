@@ -240,17 +240,26 @@ class _SieAppState extends ConsumerState<SieApp> {
 
   // Mounts the interactive-tour overlay + course coordinator above the whole
   // navigator, so coach marks also render over pushed routes (mission detail,
-  // tactical map, etc.).
+  // tactical map, etc.). Also clamps the system text scale so an enlarged
+  // device font / display-zoom setting (common on Samsung One UI) can't blow
+  // up the tightly-spaced, uppercase + letter-spaced layouts.
   static Widget _globalBuilder(BuildContext context, Widget? child) {
     Widget content = child ?? const SizedBox.shrink();
     if (kIsWeb) content = _webConstraint(context, content);
-    return Stack(
+    content = Stack(
       textDirection: TextDirection.ltr,
       children: [
         content,
         const CourseTourCoordinator(),
         const CoachMarkOverlay(),
       ],
+    );
+    final mq = MediaQuery.of(context);
+    return MediaQuery(
+      data: mq.copyWith(
+        textScaler: mq.textScaler.clamp(maxScaleFactor: 1.15),
+      ),
+      child: content,
     );
   }
 }

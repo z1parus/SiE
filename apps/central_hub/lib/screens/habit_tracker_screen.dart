@@ -681,6 +681,8 @@ class _CyberTopBar extends ConsumerWidget {
                 const SizedBox(height: 4),
                 Text(
                   t.habitTracker.header.subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: sc.textSecondary,
                     fontSize: 10,
