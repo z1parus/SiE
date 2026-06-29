@@ -660,7 +660,7 @@ class _CyberTopBar extends ConsumerWidget {
                         text: t.habitTracker.header.habit,
                         style: TextStyle(
                           color: sc.accent,
-                          fontSize: 22.s,
+                          fontSize: 22,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 1.5,
                           shadows: null,
@@ -670,7 +670,7 @@ class _CyberTopBar extends ConsumerWidget {
                         text: t.habitTracker.header.matrix,
                         style:
                             Theme.of(context).textTheme.headlineLarge?.copyWith(
-                                  fontSize: 22.s,
+                                  fontSize: 22,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: 3.0,
                                 ),
@@ -685,7 +685,7 @@ class _CyberTopBar extends ConsumerWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: sc.textSecondary,
-                    fontSize: 10.s,
+                    fontSize: 10,
                     letterSpacing: 1.8,
                   ),
                 ),

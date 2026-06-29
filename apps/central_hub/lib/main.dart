@@ -272,9 +272,14 @@ class _SieAppState extends ConsumerState<SieApp> with WidgetsBindingObserver {
     // Recompute the proportional UI scale from the current width, so sizes
     // tagged with `.s` shrink on narrow / display-zoomed screens.
     SieScale.update(mq.size.width);
+    // Text is scaled globally: clamp the system font scale, then multiply by the
+    // width-proportional factor. This shrinks *all* text (theme + explicit
+    // fontSize) on narrow / display-zoomed screens without migrating every
+    // literal — fonts aren't tagged with `.s` (only non-text sizes are).
+    final systemFactor = (mq.textScaler.scale(14.0) / 14.0).clamp(0.0, 1.15);
     return MediaQuery(
       data: mq.copyWith(
-        textScaler: mq.textScaler.clamp(maxScaleFactor: 1.15),
+        textScaler: TextScaler.linear(systemFactor * SieScale.factor),
       ),
       child: content,
     );
