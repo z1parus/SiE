@@ -952,7 +952,9 @@ class _BreathingExerciseScreenState
         final t           = _circleCtrl.value;
         final pulse       = (_phase == _Phase.retention) ? _pulseAnim.value : 1.0;
         final colorT      = _breathColorCtrl.value;
-        final size        = (130.0 + t * 130.0) * pulse;
+        // Scale the sphere proportionally so it doesn't overlap the HUD card on
+        // narrow / display-zoomed screens.
+        final size        = (130.0 + t * 130.0).s * pulse;
         final bool isRetention = _phase == _Phase.retention;
 
         final double glow = isRetention
@@ -976,8 +978,8 @@ class _BreathingExerciseScreenState
           children: [
             // Layer 1 — Outer golden corona
             Container(
-              width: size + 60,
-              height: size + 60,
+              width: size + 60.s,
+              height: size + 60.s,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 boxShadow: [
@@ -1037,7 +1039,7 @@ class _BreathingExerciseScreenState
                     child: Icon(
                       Icons.fingerprint,
                       color: c.accent.withValues(alpha: 0.35),
-                      size: 36,
+                      size: 36.s,
                     ),
                   ),
                 _Phase.retention => Center(

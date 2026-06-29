@@ -784,9 +784,15 @@ class _BranchCarouselCard extends ConsumerWidget {
           children: [
             Expanded(
               flex: 5,
-              child: Container(
+              child: SizedBox(
                 width: double.infinity,
-                child: _preview(),
+                // scaleDown keeps the preview at its design size when it fits
+                // (zero regression) and shrinks it to fit on short / zoomed
+                // cards instead of overflowing — preserving internal geometry.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: _preview(),
+                ),
               ),
             ),
             Container(

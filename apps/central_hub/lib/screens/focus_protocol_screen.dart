@@ -292,15 +292,16 @@ class _FocusRing extends ConsumerWidget {
     final c = ref.watch(sieColorsProvider);
     final glass = c.glass;
 
+    final ringSize = 284.s;
     return SizedBox(
-      width: 284,
-      height: 284,
+      width: ringSize,
+      height: ringSize,
       child: Stack(
         alignment: Alignment.center,
         children: [
           RepaintBoundary(
             child: FocusOrbitTimer(
-              size: 284,
+              size: ringSize,
               timeText: formattedTime,
               motion: SieMotion.enabled(context),
               gold: phaseColor,
@@ -309,7 +310,9 @@ class _FocusRing extends ConsumerWidget {
               textColor: c.textPrimary,
               subLabelColor: c.textSecondary,
               isLight: c.isLightMode,
-              centerFontSize: 58,
+              // Canvas-painted text ignores textScaler — scale it explicitly so
+              // the timer shrinks in step with the rest of the UI.
+              centerFontSize: 58.s,
               glow: !c.isLightMode,
             ),
           ),
