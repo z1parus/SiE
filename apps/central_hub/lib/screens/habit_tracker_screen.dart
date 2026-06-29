@@ -639,7 +639,7 @@ class _CyberTopBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final sc = ref.watch(sieColorsProvider);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 12, 4),
+      padding: EdgeInsets.fromLTRB(20.s, 20.s, 12.s, 4.s),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -648,7 +648,7 @@ class _CyberTopBar extends ConsumerWidget {
             onTap: () => Navigator.of(context).pop(),
             size: 15,
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: 16.s),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -660,7 +660,7 @@ class _CyberTopBar extends ConsumerWidget {
                         text: t.habitTracker.header.habit,
                         style: TextStyle(
                           color: sc.accent,
-                          fontSize: 22,
+                          fontSize: 22.s,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 1.5,
                           shadows: null,
@@ -670,7 +670,7 @@ class _CyberTopBar extends ConsumerWidget {
                         text: t.habitTracker.header.matrix,
                         style:
                             Theme.of(context).textTheme.headlineLarge?.copyWith(
-                                  fontSize: 22,
+                                  fontSize: 22.s,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: 3.0,
                                 ),
@@ -678,14 +678,14 @@ class _CyberTopBar extends ConsumerWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4.s),
                 Text(
                   t.habitTracker.header.subtitle,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: sc.textSecondary,
-                    fontSize: 10,
+                    fontSize: 10.s,
                     letterSpacing: 1.8,
                   ),
                 ),
@@ -698,7 +698,7 @@ class _CyberTopBar extends ConsumerWidget {
             size: 18,
             semanticLabel: t.habitTracker.header.help,
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8.s),
           _GlassIconBtn(
             icon: Icons.bar_chart_outlined,
             onTap: () => Navigator.of(context).push(
@@ -709,14 +709,14 @@ class _CyberTopBar extends ConsumerWidget {
             size: 18,
             semanticLabel: t.habitTracker.header.habitsOverview,
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8.s),
           _GlassIconBtn(
             icon: groupByArea ? Icons.view_list_outlined : Icons.view_module_outlined,
             onTap: onGroupToggle,
             size: 18,
             semanticLabel: t.habitTracker.header.groupByArea,
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8.s),
           _GlassIconBtn(
             icon: Icons.inventory_2_outlined,
             onTap: onArchive,
@@ -746,14 +746,14 @@ class _GlassIconBtn extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final sc    = ref.watch(sieColorsProvider);
     final child = Center(
-      child: Icon(icon, color: sc.textSecondary, size: size),
+      child: Icon(icon, color: sc.textSecondary, size: size.s),
     );
 
     final button = GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 36,
-        height: 36,
+        width: 36.s,
+        height: 36.s,
         decoration: sc.flatCard(radius: 18),
         child: child,
       ),

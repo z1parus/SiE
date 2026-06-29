@@ -140,18 +140,24 @@ class SieApp extends ConsumerStatefulWidget {
   ConsumerState<SieApp> createState() => _SieAppState();
 }
 
-class _SieAppState extends ConsumerState<SieApp> {
+class _SieAppState extends ConsumerState<SieApp> with WidgetsBindingObserver {
   bool _launchComplete = false;
   StreamSubscription<Uri?>? _widgetClickSub;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Warm the startup reachability probe now so it resolves during the splash
     // animation instead of adding its latency after the splash dismisses.
     ref.read(appModeProvider);
     if (!kIsWeb) _initWidgetDeepLinks();
   }
+
+  // Display-zoom / rotation changes the logical width — rebuild so the theme
+  // and the SieScale factor are recomputed.
+  @override
+  void didChangeMetrics() => setState(() {});
 
   Future<void> _initWidgetDeepLinks() async {
     try {
@@ -177,12 +183,20 @@ class _SieAppState extends ConsumerState<SieApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _widgetClickSub?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Set the proportional UI scale from the real logical width *before* the
+    // theme is built, so theme text sizes (and anything tagged `.s`) use the
+    // right factor from the first frame. `_globalBuilder` refreshes it again
+    // for descendants on every MediaQuery change.
+    final view = View.of(context);
+    SieScale.update(view.physicalSize.width / view.devicePixelRatio);
+
     final sieMode = ref.watch(sieThemeModeProvider).valueOrNull
         ?? SieThemeMode.classicDark;
     // Drive locale from the provider so switching language rebuilds the whole
@@ -255,6 +269,9 @@ class _SieAppState extends ConsumerState<SieApp> {
       ],
     );
     final mq = MediaQuery.of(context);
+    // Recompute the proportional UI scale from the current width, so sizes
+    // tagged with `.s` shrink on narrow / display-zoomed screens.
+    SieScale.update(mq.size.width);
     return MediaQuery(
       data: mq.copyWith(
         textScaler: mq.textScaler.clamp(maxScaleFactor: 1.15),

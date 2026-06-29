@@ -13,6 +13,7 @@ export 'src/theme/sie_theme.dart';
 export 'src/theme/sie_colors.dart';
 export 'src/theme/sie_motion.dart';
 export 'src/theme/sie_haptics.dart';
+export 'src/theme/sie_scale.dart';
 export 'src/widgets/sie_background.dart';
 export 'src/widgets/sie_skeleton.dart';
 export 'src/widgets/sie_empty_state.dart';

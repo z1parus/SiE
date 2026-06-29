@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import 'sie_scale.dart';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SieThemeMode
 //
@@ -101,39 +103,39 @@ class SieTheme {
           thumbVisibility: const WidgetStatePropertyAll(false),
           trackVisibility: const WidgetStatePropertyAll(false),
         ),
-        textTheme: const TextTheme(
-          headlineLarge: TextStyle(
+        textTheme: TextTheme(
+          headlineLarge: const TextStyle(
             color: cdTextPrimary,
             fontWeight: FontWeight.w800,
           ),
           headlineMedium: TextStyle(
             color: cdTextPrimary,
-            fontSize: 22,
+            fontSize: 22.s,
             fontWeight: FontWeight.w700,
             letterSpacing: 2.5,
           ),
-          titleLarge: TextStyle(
+          titleLarge: const TextStyle(
             color: cdTextPrimary,
             fontWeight: FontWeight.w700,
           ),
           titleMedium: TextStyle(
             color: cdTextPrimary,
-            fontSize: 13,
+            fontSize: 13.s,
             fontWeight: FontWeight.w600,
             letterSpacing: 1.8,
           ),
-          bodyLarge: TextStyle(
+          bodyLarge: const TextStyle(
             color: cdTextPrimary,
             fontWeight: FontWeight.w400,
           ),
           bodyMedium: TextStyle(
             color: cdTextSecondary,
-            fontSize: 13,
+            fontSize: 13.s,
             height: 1.5,
           ),
           labelSmall: TextStyle(
             color: cdAccent,
-            fontSize: 10,
+            fontSize: 10.s,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.5,
           ),
@@ -183,39 +185,39 @@ class SieTheme {
           thumbVisibility: const WidgetStatePropertyAll(false),
           trackVisibility: const WidgetStatePropertyAll(false),
         ),
-        textTheme: const TextTheme(
-          headlineLarge: TextStyle(
+        textTheme: TextTheme(
+          headlineLarge: const TextStyle(
             color: clTextPrimary,
             fontWeight: FontWeight.w800,
           ),
           headlineMedium: TextStyle(
             color: clTextPrimary,
-            fontSize: 22,
+            fontSize: 22.s,
             fontWeight: FontWeight.w700,
             letterSpacing: 2.5,
           ),
-          titleLarge: TextStyle(
+          titleLarge: const TextStyle(
             color: clTextPrimary,
             fontWeight: FontWeight.w700,
           ),
           titleMedium: TextStyle(
             color: clTextPrimary,
-            fontSize: 13,
+            fontSize: 13.s,
             fontWeight: FontWeight.w600,
             letterSpacing: 1.8,
           ),
-          bodyLarge: TextStyle(
+          bodyLarge: const TextStyle(
             color: clTextPrimary,
             fontWeight: FontWeight.w400,
           ),
           bodyMedium: TextStyle(
             color: clTextSecondary,
-            fontSize: 13,
+            fontSize: 13.s,
             height: 1.5,
           ),
           labelSmall: TextStyle(
             color: clAccent,
-            fontSize: 10,
+            fontSize: 10.s,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.5,
           ),
