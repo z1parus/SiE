@@ -1796,6 +1796,36 @@ class AppDatabase extends _$AppDatabase {
             ]))
           .get();
 
+  /// Most recent focus session overall (single-user device), or null if none.
+  Future<LocalFocusSession?> latestFocusSession() =>
+      (select(localFocusSessions)
+            ..orderBy([
+              (t) => OrderingTerm(
+                  expression: t.completedAtMs, mode: OrderingMode.desc)
+            ])
+            ..limit(1))
+          .getSingleOrNull();
+
+  /// Most recent breathing session overall (single-user device), or null.
+  Future<LocalBreathingSession?> latestBreathingSession() =>
+      (select(localBreathingSessions)
+            ..orderBy([
+              (t) => OrderingTerm(
+                  expression: t.completedAtMs, mode: OrderingMode.desc)
+            ])
+            ..limit(1))
+          .getSingleOrNull();
+
+  /// Most recent meditation session overall (single-user device), or null.
+  Future<LocalMeditationSession?> latestMeditationSession() =>
+      (select(localMeditationSessions)
+            ..orderBy([
+              (t) => OrderingTerm(
+                  expression: t.completedAtMs, mode: OrderingMode.desc)
+            ])
+            ..limit(1))
+          .getSingleOrNull();
+
   /// Active (non-deleted) goals for the Planning home widget. Single-user
   /// device assumption (mirrors [habitsForWidget]); pinned first, then by
   /// priority, then by creation order.

@@ -1014,15 +1014,34 @@ class _BriefLine extends ConsumerWidget {
   }
 }
 
-/// Focus / Breathing / Meditation — a static call-to-action for now (session
-/// history lands in the next stage).
-class _GenericBriefBlock extends StatelessWidget {
+/// A muted line describing the most recent session of a practice module, or a
+/// "no sessions yet" prompt.
+String _sessionSummary(PracticeBriefEntry e) {
+  if (!e.hasSessions) return t.operationalBrief.session.none;
+  final now = DateTime.now();
+  final last = e.lastAt!;
+  final days = DateTime(now.year, now.month, now.day)
+      .difference(DateTime(last.year, last.month, last.day))
+      .inDays;
+  final when = days <= 0
+      ? t.operationalBrief.session.today
+      : days == 1
+          ? t.operationalBrief.session.yesterday
+          : t.operationalBrief.session.daysAgo(n: days);
+  final mins = (e.lastDurationSeconds / 60).round();
+  final duration =
+      t.operationalBrief.session.minutesShort(n: mins < 1 ? 1 : mins);
+  return t.operationalBrief.session.last(when: when, duration: duration);
+}
+
+/// Focus / Breathing / Meditation — call-to-action plus the last-session recap.
+class _GenericBriefBlock extends ConsumerWidget {
   final String slug;
   final VoidCallback onOpen;
   const _GenericBriefBlock({required this.slug, required this.onOpen});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final (String line, List<String> lead) = switch (slug) {
       'focus_protocol' => (
           t.operationalBrief.blocks.focus,
@@ -1038,9 +1057,32 @@ class _GenericBriefBlock extends StatelessWidget {
         ),
       _ => ('', const <String>[]),
     };
+
+    final data = ref.watch(practiceBriefProvider).valueOrNull;
+    final PracticeBriefEntry? entry = data == null
+        ? null
+        : switch (slug) {
+            'focus_protocol' => data.focus,
+            'breathing_practices' => data.breathing,
+            'meditation' => data.meditation,
+            _ => null,
+          };
+
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _BriefLine(line),
+        if (entry != null) ...[
+          const SizedBox(height: 4),
+          _BriefLine(_sessionSummary(entry)),
+        ],
+      ],
+    );
+
     return _BriefEntry(
       lead: _pickLead(lead),
-      card: _BriefBlockShell(slug: slug, onOpen: onOpen, body: _BriefLine(line)),
+      card: _BriefBlockShell(slug: slug, onOpen: onOpen, body: body),
     );
   }
 }

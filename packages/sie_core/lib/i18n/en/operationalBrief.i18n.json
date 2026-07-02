@@ -60,6 +60,14 @@
       ]
     }
   },
+  "session": {
+    "none": "No sessions logged yet.",
+    "last": "Last: {when} · {duration}",
+    "today": "today",
+    "yesterday": "yesterday",
+    "daysAgo": "{n}d ago",
+    "minutesShort": "{n} min"
+  },
   "generic": {
     "focus": [
       "Ready for deep work? The system has your back.",
