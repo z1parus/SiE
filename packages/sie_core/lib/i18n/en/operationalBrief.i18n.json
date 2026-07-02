@@ -11,10 +11,21 @@
   "subtitle": "Your operational brief for today",
   "open": "Open",
   "blocks": {
-    "planning": "Deploy your operations and clear today's tasks.",
-    "habits": "Discipline protocols await execution.",
     "focus": "Ready for a deep-work session?",
     "breathing": "Restore your breath and refocus.",
     "meditation": "Time to defragment the mind."
+  },
+  "planning": {
+    "onGoal": "On operation \"{goal}\" today:",
+    "more": "More tasks queued: {n}",
+    "allClear": "Nothing due today — operations under control.",
+    "empty": "Deploy your first operation — set a goal."
+  },
+  "habits": {
+    "remaining": "Protocols left today: {n}",
+    "next": "Next up: {habit}",
+    "allDone": "All protocols cleared today. Discipline is flawless.",
+    "avoidStreak": "\"{habit}\" — days clean: {n}. Keep it up.",
+    "empty": "Set up your first discipline protocol."
   }
 }

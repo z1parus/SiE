@@ -615,6 +615,15 @@ class OperationalBriefView extends ConsumerWidget {
     'meditation',
   ];
 
+  Widget _briefBlockFor(String slug) {
+    void open() => onOpenModule(slug);
+    return switch (slug) {
+      'planning' => _PlanningBriefBlock(onOpen: open),
+      'habit_archive' => _HabitsBriefBlock(onOpen: open),
+      _ => _GenericBriefBlock(slug: slug, onOpen: open),
+    };
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
@@ -632,7 +641,7 @@ class OperationalBriefView extends ConsumerWidget {
           const _BriefGreeting(),
           const SizedBox(height: 20),
           for (final slug in _slugs) ...[
-            _BriefModuleBlock(slug: slug, onOpen: () => onOpenModule(slug)),
+            _briefBlockFor(slug),
             const SizedBox(height: 14),
           ],
         ],
@@ -687,38 +696,36 @@ class _BriefGreeting extends ConsumerWidget {
   }
 }
 
-class _BriefModuleBlock extends ConsumerWidget {
+Widget _previewForSlug(String slug) => switch (slug) {
+      'breathing_practices' => const _BreathSpherePreview(),
+      'habit_archive' => const _HabitMatrixPreview(),
+      'focus_protocol' => const _FocusRingPreview(),
+      'planning' => const _PlanningPreview(),
+      'meditation' => const _DefragPreview(),
+      _ => const SizedBox.shrink(),
+    };
+
+String _moduleNameForSlug(String slug) => switch (slug) {
+      'breathing_practices' => t.operations.modules.breathing,
+      'habit_archive' => t.operations.modules.habits,
+      'focus_protocol' => t.operations.modules.focus,
+      'planning' => t.operations.modules.planning,
+      'meditation' => t.operations.modules.meditation,
+      _ => slug,
+    };
+
+/// Presentational shell shared by every brief block: preview avatar + module
+/// name + a caller-supplied [body] + tap-to-open chevron.
+class _BriefBlockShell extends ConsumerWidget {
   final String slug;
+  final Widget body;
   final VoidCallback onOpen;
 
-  const _BriefModuleBlock({required this.slug, required this.onOpen});
-
-  Widget _preview() => switch (slug) {
-        'breathing_practices' => const _BreathSpherePreview(),
-        'habit_archive' => const _HabitMatrixPreview(),
-        'focus_protocol' => const _FocusRingPreview(),
-        'planning' => const _PlanningPreview(),
-        'meditation' => const _DefragPreview(),
-        _ => const SizedBox.shrink(),
-      };
-
-  String _name() => switch (slug) {
-        'breathing_practices' => t.operations.modules.breathing,
-        'habit_archive' => t.operations.modules.habits,
-        'focus_protocol' => t.operations.modules.focus,
-        'planning' => t.operations.modules.planning,
-        'meditation' => t.operations.modules.meditation,
-        _ => slug,
-      };
-
-  String _line() => switch (slug) {
-        'planning' => t.operationalBrief.blocks.planning,
-        'habit_archive' => t.operationalBrief.blocks.habits,
-        'focus_protocol' => t.operationalBrief.blocks.focus,
-        'breathing_practices' => t.operationalBrief.blocks.breathing,
-        'meditation' => t.operationalBrief.blocks.meditation,
-        _ => '',
-      };
+  const _BriefBlockShell({
+    required this.slug,
+    required this.body,
+    required this.onOpen,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -736,11 +743,11 @@ class _BriefModuleBlock extends ConsumerWidget {
         padding: const EdgeInsets.all(14),
         child: Row(
           children: [
-            // Module preview graphic, scaled down into a compact avatar.
             SizedBox(
               width: 72,
               height: 72,
-              child: FittedBox(fit: BoxFit.scaleDown, child: _preview()),
+              child:
+                  FittedBox(fit: BoxFit.scaleDown, child: _previewForSlug(slug)),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -749,21 +756,14 @@ class _BriefModuleBlock extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    _name(),
+                    _moduleNameForSlug(slug),
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontSize: 13,
                       letterSpacing: 1.5,
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    _line(),
-                    style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 12,
-                      height: 1.35,
-                    ),
-                  ),
+                  body,
                 ],
               ),
             ),
@@ -773,6 +773,151 @@ class _BriefModuleBlock extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+/// One muted (or emphasised) line of a block body.
+class _BriefLine extends ConsumerWidget {
+  final String text;
+  final bool strong;
+  const _BriefLine(this.text, {this.strong = false});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Text(
+      text,
+      style: TextStyle(
+        color: strong ? c.textPrimary : c.textSecondary,
+        fontSize: 12,
+        height: 1.35,
+        fontWeight: strong ? FontWeight.w600 : FontWeight.w400,
+      ),
+    );
+  }
+}
+
+/// Focus / Breathing / Meditation — a static call-to-action for now (session
+/// history lands in the next stage).
+class _GenericBriefBlock extends StatelessWidget {
+  final String slug;
+  final VoidCallback onOpen;
+  const _GenericBriefBlock({required this.slug, required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final line = switch (slug) {
+      'focus_protocol' => t.operationalBrief.blocks.focus,
+      'breathing_practices' => t.operationalBrief.blocks.breathing,
+      'meditation' => t.operationalBrief.blocks.meditation,
+      _ => '',
+    };
+    return _BriefBlockShell(slug: slug, onOpen: onOpen, body: _BriefLine(line));
+  }
+}
+
+/// Planning — active goal + the most urgent task due today + how many more.
+class _PlanningBriefBlock extends ConsumerWidget {
+  final VoidCallback onOpen;
+  const _PlanningBriefBlock({required this.onOpen});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final agenda = ref.watch(agendaProvider);
+    final hasGoals =
+        ref.watch(planningProvider).valueOrNull?.activeGoals.isNotEmpty ??
+            false;
+    final urgent = [...agenda.overdue, ...agenda.today];
+
+    final Widget body;
+    if (urgent.isNotEmpty) {
+      final first = urgent.first;
+      final more = urgent.length - 1;
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _BriefLine(t.operationalBrief.planning.onGoal(goal: first.goal.name)),
+          const SizedBox(height: 2),
+          _BriefLine(first.task.name, strong: true),
+          if (more > 0) ...[
+            const SizedBox(height: 2),
+            _BriefLine(t.operationalBrief.planning.more(n: more)),
+          ],
+        ],
+      );
+    } else if (hasGoals) {
+      body = _BriefLine(t.operationalBrief.planning.allClear);
+    } else {
+      body = _BriefLine(t.operationalBrief.planning.empty);
+    }
+
+    return _BriefBlockShell(slug: 'planning', onOpen: onOpen, body: body);
+  }
+}
+
+/// Habits — protocols still due today, or a congratulation + avoid-streak
+/// motivation once the day is cleared.
+class _HabitsBriefBlock extends ConsumerWidget {
+  final VoidCallback onOpen;
+  const _HabitsBriefBlock({required this.onOpen});
+
+  static String _fmt(DateTime dt) =>
+      '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hs = ref.watch(habitsProvider).valueOrNull;
+
+    Widget body;
+    if (hs == null) {
+      body = const SizedBox(height: 4); // brief loading flash
+    } else if (hs.habits.isEmpty) {
+      body = _BriefLine(t.operationalBrief.habits.empty);
+    } else {
+      final now = DateTime.now();
+      final today = _fmt(now);
+      final due = hs.habits.where((h) => !h.isAvoid).where((h) {
+        final logs = hs.logDates[h.id] ?? const <String>{};
+        final firstLog = firstLogDate(logs);
+        return isScheduledOn(h, now, firstLog: firstLog) &&
+            !logs.contains(today);
+      }).toList();
+
+      if (due.isNotEmpty) {
+        body = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _BriefLine(t.operationalBrief.habits.remaining(n: due.length),
+                strong: true),
+            const SizedBox(height: 2),
+            _BriefLine(t.operationalBrief.habits.next(habit: due.first.title)),
+          ],
+        );
+      } else {
+        final avoids = hs.habits.where((h) => h.isAvoid).toList()
+          ..sort((a, b) =>
+              (hs.streaks[b.id] ?? 0).compareTo(hs.streaks[a.id] ?? 0));
+        final children = <Widget>[
+          _BriefLine(t.operationalBrief.habits.allDone, strong: true),
+        ];
+        if (avoids.isNotEmpty) {
+          final best = avoids.first;
+          children
+            ..add(const SizedBox(height: 2))
+            ..add(_BriefLine(t.operationalBrief.habits.avoidStreak(
+                habit: best.title, n: hs.streaks[best.id] ?? 0)));
+        }
+        body = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: children,
+        );
+      }
+    }
+
+    return _BriefBlockShell(slug: 'habit_archive', onOpen: onOpen, body: body);
   }
 }
 
