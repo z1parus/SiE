@@ -636,16 +636,20 @@ class OperationalBriefView extends ConsumerWidget {
     return switch (slug) {
       'planning' => _PlanningBriefBlock(onOpen: open),
       'habit_archive' => _HabitsBriefBlock(onOpen: open),
+      'daily_tip' => const _TipBriefBlock(),
+      'leaderboard' => const _LeaderboardBriefBlock(),
       _ => _GenericBriefBlock(slug: slug, onOpen: open),
     };
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Two modules per magnetic slide; the greeting rides above as a fixed header.
+    // Two modules per magnetic slide; the greeting rides above as a fixed
+    // header. A final "day summary" slide gathers the daily tip + leaderboard.
     final pages = <List<String>>[
       for (var i = 0; i < _slugs.length; i += 2)
         _slugs.sublist(i, math.min(i + 2, _slugs.length)),
+      ['daily_tip', 'leaderboard'],
     ];
 
     return Column(
@@ -931,9 +935,73 @@ class _BriefEntry extends ConsumerWidget {
   }
 }
 
-/// Presentational shell shared by every brief block: preview avatar + module
-/// name + a caller-supplied [body] + tap-to-open chevron.
-class _BriefBlockShell extends ConsumerWidget {
+/// Presentational shell shared by every brief block: a leading avatar +
+/// title + a caller-supplied [body], optionally tappable with a chevron.
+class _BriefCardShell extends ConsumerWidget {
+  final Widget leading;
+  final String title;
+  final Widget body;
+  final VoidCallback? onOpen;
+
+  const _BriefCardShell({
+    required this.leading,
+    required this.title,
+    required this.body,
+    this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final theme = Theme.of(context);
+
+    final content = Container(
+      decoration: c.briefCard(radius: 20),
+      padding: const EdgeInsets.all(18),
+      child: Row(
+        children: [
+          SizedBox(width: 94, height: 94, child: Center(child: leading)),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontSize: 13,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                body,
+              ],
+            ),
+          ),
+          if (onOpen != null) ...[
+            const SizedBox(width: 8),
+            Icon(Icons.chevron_right, color: c.accent, size: 22),
+          ],
+        ],
+      ),
+    );
+
+    if (onOpen == null) return content;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        SieHaptics.selection();
+        onOpen!();
+      },
+      child: content,
+    );
+  }
+}
+
+/// Module brief block: reuses [_BriefCardShell] with the module's live preview
+/// as the leading avatar and its localized name as the title.
+class _BriefBlockShell extends StatelessWidget {
   final String slug;
   final Widget body;
   final VoidCallback onOpen;
@@ -945,50 +1013,12 @@ class _BriefBlockShell extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c = ref.watch(sieColorsProvider);
-    final theme = Theme.of(context);
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        SieHaptics.selection();
-        onOpen();
-      },
-      child: Container(
-        decoration: c.briefCard(radius: 20),
-        padding: const EdgeInsets.all(18),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 94,
-              height: 94,
-              child:
-                  FittedBox(fit: BoxFit.scaleDown, child: _previewForSlug(slug)),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _moduleNameForSlug(slug),
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontSize: 13,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  body,
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Icon(Icons.chevron_right, color: c.accent, size: 22),
-          ],
-        ),
-      ),
+  Widget build(BuildContext context) {
+    return _BriefCardShell(
+      leading: FittedBox(fit: BoxFit.scaleDown, child: _previewForSlug(slug)),
+      title: _moduleNameForSlug(slug),
+      body: body,
+      onOpen: onOpen,
     );
   }
 }
@@ -997,13 +1027,16 @@ class _BriefBlockShell extends ConsumerWidget {
 class _BriefLine extends ConsumerWidget {
   final String text;
   final bool strong;
-  const _BriefLine(this.text, {this.strong = false});
+  final int? maxLines;
+  const _BriefLine(this.text, {this.strong = false, this.maxLines});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(sieColorsProvider);
     return Text(
       text,
+      maxLines: maxLines,
+      overflow: maxLines == null ? null : TextOverflow.ellipsis,
       style: TextStyle(
         color: strong ? c.textPrimary : c.textSecondary,
         fontSize: 12,
@@ -1202,6 +1235,66 @@ class _HabitsBriefBlock extends ConsumerWidget {
     return _BriefEntry(
       lead: _pickLead(leadSet),
       card: _BriefBlockShell(slug: 'habit_archive', onOpen: onOpen, body: body),
+    );
+  }
+}
+
+/// Daily tip — the "Сводка дня" slide. A stable-through-the-day tip shown as a
+/// non-tappable info block.
+class _TipBriefBlock extends ConsumerWidget {
+  const _TipBriefBlock();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final tips = ref.watch(tipsProvider).valueOrNull ?? const <Tip>[];
+    final lang = ref.watch(localeProvider).languageCode;
+
+    final Widget body;
+    if (tips.isEmpty) {
+      body = _BriefLine(t.operationalBrief.tip.empty);
+    } else {
+      final now = DateTime.now();
+      final dayIndex = now.difference(DateTime(now.year)).inDays;
+      final tip = tips[dayIndex % tips.length];
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _BriefLine(tip.localizedTitle(lang), strong: true, maxLines: 1),
+          const SizedBox(height: 2),
+          _BriefLine(tip.localizedDescription(lang), maxLines: 3),
+        ],
+      );
+    }
+
+    return _BriefEntry(
+      lead: _pickLead(t.operationalBrief.tip.lead),
+      card: _BriefCardShell(
+        leading: Icon(Icons.lightbulb_outline, color: c.accent, size: 44),
+        title: t.operationalBrief.tip.title,
+        body: body,
+      ),
+    );
+  }
+}
+
+/// Leaderboard — the "Сводка дня" slide CTA into the standings.
+class _LeaderboardBriefBlock extends ConsumerWidget {
+  const _LeaderboardBriefBlock();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return _BriefEntry(
+      lead: _pickLead(t.operationalBrief.leaderboard.lead),
+      card: _BriefCardShell(
+        leading: const Text('🏆', style: TextStyle(fontSize: 40)),
+        title: t.operations.leaderboard.title,
+        body: _BriefLine(t.operations.leaderboard.subtitle),
+        onOpen: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+        ),
+      ),
     );
   }
 }

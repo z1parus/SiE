@@ -60,6 +60,22 @@
       ]
     }
   },
+  "tip": {
+    "title": "TIP OF THE DAY",
+    "empty": "Loading a tip…",
+    "lead": [
+      "Something to note, operative:",
+      "One tip before you deploy:",
+      "Keep this in mind:"
+    ]
+  },
+  "leaderboard": {
+    "lead": [
+      "Let's see how you hold up in the ranks.",
+      "The daily vanguard awaits — check your standing.",
+      "How's the ranking front looking?"
+    ]
+  },
   "session": {
     "none": "No sessions logged yet.",
     "last": "Last: {when} · {duration}",
