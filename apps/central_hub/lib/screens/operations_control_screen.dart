@@ -642,7 +642,7 @@ class OperationalBriefView extends ConsumerWidget {
           const SizedBox(height: 20),
           for (final slug in _slugs) ...[
             _briefBlockFor(slug),
-            const SizedBox(height: 14),
+            const SizedBox(height: 24),
           ],
         ],
       ),
@@ -713,6 +713,47 @@ String _moduleNameForSlug(String slug) => switch (slug) {
       'meditation' => t.operations.modules.meditation,
       _ => slug,
     };
+
+/// Pick a system lead-in line from a scenario's set — stable through the day,
+/// rotating daily so the brief keeps feeling alive.
+String _pickLead(List<String> set) {
+  if (set.isEmpty) return '';
+  final now = DateTime.now();
+  final dayIndex = now.difference(DateTime(now.year)).inDays;
+  return set[dayIndex % set.length];
+}
+
+/// A conversational system message above a summary card (Now-Brief style).
+class _BriefEntry extends ConsumerWidget {
+  final String lead;
+  final Widget card;
+  const _BriefEntry({required this.lead, required this.card});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (lead.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+            child: Text(
+              lead,
+              style: TextStyle(
+                color: c.textPrimary.withValues(alpha: 0.90),
+                fontSize: 14,
+                height: 1.4,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ),
+        card,
+      ],
+    );
+  }
+}
 
 /// Presentational shell shared by every brief block: preview avatar + module
 /// name + a caller-supplied [body] + tap-to-open chevron.
@@ -806,13 +847,25 @@ class _GenericBriefBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final line = switch (slug) {
-      'focus_protocol' => t.operationalBrief.blocks.focus,
-      'breathing_practices' => t.operationalBrief.blocks.breathing,
-      'meditation' => t.operationalBrief.blocks.meditation,
-      _ => '',
+    final (String line, List<String> lead) = switch (slug) {
+      'focus_protocol' => (
+          t.operationalBrief.blocks.focus,
+          t.operationalBrief.generic.focus
+        ),
+      'breathing_practices' => (
+          t.operationalBrief.blocks.breathing,
+          t.operationalBrief.generic.breathing
+        ),
+      'meditation' => (
+          t.operationalBrief.blocks.meditation,
+          t.operationalBrief.generic.meditation
+        ),
+      _ => ('', const <String>[]),
     };
-    return _BriefBlockShell(slug: slug, onOpen: onOpen, body: _BriefLine(line));
+    return _BriefEntry(
+      lead: _pickLead(lead),
+      card: _BriefBlockShell(slug: slug, onOpen: onOpen, body: _BriefLine(line)),
+    );
   }
 }
 
@@ -830,9 +883,11 @@ class _PlanningBriefBlock extends ConsumerWidget {
     final urgent = [...agenda.overdue, ...agenda.today];
 
     final Widget body;
+    final List<String> leadSet;
     if (urgent.isNotEmpty) {
       final first = urgent.first;
       final more = urgent.length - 1;
+      leadSet = t.operationalBrief.planning.lead.hasTasks;
       body = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -847,12 +902,17 @@ class _PlanningBriefBlock extends ConsumerWidget {
         ],
       );
     } else if (hasGoals) {
+      leadSet = t.operationalBrief.planning.lead.allClear;
       body = _BriefLine(t.operationalBrief.planning.allClear);
     } else {
+      leadSet = t.operationalBrief.planning.lead.empty;
       body = _BriefLine(t.operationalBrief.planning.empty);
     }
 
-    return _BriefBlockShell(slug: 'planning', onOpen: onOpen, body: body);
+    return _BriefEntry(
+      lead: _pickLead(leadSet),
+      card: _BriefBlockShell(slug: 'planning', onOpen: onOpen, body: body),
+    );
   }
 }
 
@@ -870,9 +930,11 @@ class _HabitsBriefBlock extends ConsumerWidget {
     final hs = ref.watch(habitsProvider).valueOrNull;
 
     Widget body;
+    List<String> leadSet = const [];
     if (hs == null) {
       body = const SizedBox(height: 4); // brief loading flash
     } else if (hs.habits.isEmpty) {
+      leadSet = t.operationalBrief.habits.lead.empty;
       body = _BriefLine(t.operationalBrief.habits.empty);
     } else {
       final now = DateTime.now();
@@ -885,6 +947,7 @@ class _HabitsBriefBlock extends ConsumerWidget {
       }).toList();
 
       if (due.isNotEmpty) {
+        leadSet = t.operationalBrief.habits.lead.remaining;
         body = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -896,6 +959,7 @@ class _HabitsBriefBlock extends ConsumerWidget {
           ],
         );
       } else {
+        leadSet = t.operationalBrief.habits.lead.allDone;
         final avoids = hs.habits.where((h) => h.isAvoid).toList()
           ..sort((a, b) =>
               (hs.streaks[b.id] ?? 0).compareTo(hs.streaks[a.id] ?? 0));
@@ -917,7 +981,10 @@ class _HabitsBriefBlock extends ConsumerWidget {
       }
     }
 
-    return _BriefBlockShell(slug: 'habit_archive', onOpen: onOpen, body: body);
+    return _BriefEntry(
+      lead: _pickLead(leadSet),
+      card: _BriefBlockShell(slug: 'habit_archive', onOpen: onOpen, body: body),
+    );
   }
 }
 

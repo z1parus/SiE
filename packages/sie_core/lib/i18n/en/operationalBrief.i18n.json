@@ -19,13 +19,59 @@
     "onGoal": "On operation \"{goal}\" today:",
     "more": "More tasks queued: {n}",
     "allClear": "Nothing due today — operations under control.",
-    "empty": "Deploy your first operation — set a goal."
+    "empty": "Deploy your first operation — set a goal.",
+    "lead": {
+      "hasTasks": [
+        "Operative, the day isn't over — here's your priority:",
+        "Some operations are still open for today:",
+        "There's work to do. Keep your focus on what matters:"
+      ],
+      "allClear": [
+        "Great work — every task for today is cleared.",
+        "Operations under control. Keep it up, operative.",
+        "The task front is clear. Take a breath."
+      ],
+      "empty": [
+        "Time to deploy your first operation.",
+        "It all starts with a goal — set your direction."
+      ]
+    }
   },
   "habits": {
     "remaining": "Protocols left today: {n}",
     "next": "Next up: {habit}",
     "allDone": "All protocols cleared today. Discipline is flawless.",
     "avoidStreak": "\"{habit}\" — days clean: {n}. Keep it up.",
-    "empty": "Set up your first discipline protocol."
+    "empty": "Set up your first discipline protocol.",
+    "lead": {
+      "remaining": [
+        "Discipline needs your attention — here's what's left:",
+        "Not every protocol is cleared for today yet:",
+        "Just a little left to a perfect day:"
+      ],
+      "allDone": [
+        "You did great today. Discipline is flawless.",
+        "All protocols cleared — keep it up.",
+        "The day of discipline is closed. Impressive, operative."
+      ],
+      "empty": [
+        "Set up your first discipline protocol.",
+        "Discipline starts with a single habit."
+      ]
+    }
+  },
+  "generic": {
+    "focus": [
+      "Ready for deep work? The system has your back.",
+      "A little focus wouldn't hurt."
+    ],
+    "breathing": [
+      "Take a pause and restore your breath.",
+      "A few minutes of breathing and you're centered again."
+    ],
+    "meditation": [
+      "Time to clear the mind.",
+      "A mind defragment awaits."
+    ]
   }
 }
