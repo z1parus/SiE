@@ -22,6 +22,11 @@ import '../widgets/focus_orbit_timer.dart';
 
 const _kOrange = Color(0xFFFF8C42);
 const _kBranchOrderKey = 'branch_order';
+const _kHomeModeKey = 'ops_home_mode';
+
+/// Two ways to render the Operations home: the new personalised **brief** feed
+/// (default) and the legacy reorderable module **carousel**.
+enum OpsHomeMode { brief, carousel }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OperationsControlScreen
@@ -49,17 +54,35 @@ class _OperationsControlScreenState
     extends ConsumerState<OperationsControlScreen> {
   bool _welcomeShown = false;
   List<String>? _orderedSlugs;
+  OpsHomeMode _homeMode = OpsHomeMode.brief;
 
   @override
   void initState() {
     super.initState();
     _loadOrder();
+    _loadHomeMode();
   }
 
   Future<void> _loadOrder() async {
     final prefs = await SharedPreferences.getInstance();
     final slugs = prefs.getStringList(_kBranchOrderKey);
     if (mounted && slugs != null) setState(() => _orderedSlugs = slugs);
+  }
+
+  Future<void> _loadHomeMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = prefs.getString(_kHomeModeKey);
+    if (!mounted || v == null) return;
+    final mode = v == 'carousel' ? OpsHomeMode.carousel : OpsHomeMode.brief;
+    if (mode != _homeMode) setState(() => _homeMode = mode);
+  }
+
+  void _setHomeMode(OpsHomeMode mode) {
+    if (mode == _homeMode) return;
+    SieHaptics.selection();
+    setState(() => _homeMode = mode);
+    SharedPreferences.getInstance()
+        .then((p) => p.setString(_kHomeModeKey, mode.name));
   }
 
   Future<void> _saveOrder(List<String> slugs) async {
@@ -113,7 +136,116 @@ class _OperationsControlScreenState
       }
     });
 
-    final innerBody = SafeArea(
+    // Offline shell has no network surfaces the brief relies on — pin it to the
+    // carousel and hide the toggle.
+    final effectiveMode =
+        widget.offline ? OpsHomeMode.carousel : _homeMode;
+
+    // Legacy reorderable module carousel. The pull-to-refresh wrapper keeps
+    // working even though its content is a fixed-height page.
+    Widget carouselMode() => LayoutBuilder(
+          builder: (_, constraints) => RefreshIndicator(
+            color: c.accent,
+            backgroundColor:
+                c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+            onRefresh: _onRefresh,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: SizedBox(
+                height: constraints.maxHeight,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SectionHeader(title: t.operations.departments),
+                          const SizedBox(height: 12),
+                          if (!widget.offline) ...[
+                            _DailyTipBanner(),
+                            const SizedBox(height: 8),
+                            _LeaderboardTile(
+                                key: ref
+                                    .read(tourControllerProvider.notifier)
+                                    .keyFor('leaderboard_tile')),
+                            const SizedBox(height: 16),
+                          ],
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: branchesAsync.when(
+                        data: (branches) {
+                          final filtered = branches
+                              .where((b) => b.slug != 'progress_hub')
+                              .toList();
+                          final ordered = _applyOrder(filtered);
+                          return ordered.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    t.operations.noDepartments,
+                                    style: TextStyle(
+                                      color: c.textSecondary,
+                                      letterSpacing: 1.5,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                )
+                              : _BranchCarousel(
+                                  key: ref
+                                      .read(tourControllerProvider.notifier)
+                                      .keyFor('branch_carousel'),
+                                  branches: ordered,
+                                  onBranchTap: (b) => _onBranchTap(context, b),
+                                  onReorder: (oldIndex, newIndex) {
+                                    final prevSlugs =
+                                        ordered.map((b) => b.slug).toList();
+                                    final reordered =
+                                        List<Branch>.from(ordered);
+                                    if (newIndex > oldIndex) newIndex--;
+                                    final item = reordered.removeAt(oldIndex);
+                                    reordered.insert(newIndex, item);
+                                    final slugs =
+                                        reordered.map((b) => b.slug).toList();
+                                    setState(() => _orderedSlugs = slugs);
+                                    _saveOrder(slugs);
+                                    showUndoSnackbar(
+                                      context,
+                                      ref,
+                                      message: t.operations.reorderDone,
+                                      onUndo: () {
+                                        setState(
+                                            () => _orderedSlugs = prevSlugs);
+                                        _saveOrder(prevSlugs);
+                                      },
+                                    );
+                                  },
+                                );
+                        },
+                        loading: () => const _BranchCarouselSkeleton(),
+                        error: (e, _) => const Center(
+                          child: _NoConnectionMessage(),
+                        ),
+                      ),
+                    ),
+                    Builder(
+                      builder: (context) {
+                        final bottomInset =
+                            MediaQuery.of(context).padding.bottom;
+                        return SizedBox(
+                            height: 68 + math.max(bottomInset, 16) + 16);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+
+    final body = SafeArea(
       bottom: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -123,98 +255,36 @@ class _OperationsControlScreenState
             child: _ScreenHeader(
                 profileAsync: profileAsync, offline: widget.offline),
           ),
-          const SizedBox(height: 24),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SectionHeader(title: t.operations.departments),
-                const SizedBox(height: 12),
-                if (!widget.offline) ...[
-                  _DailyTipBanner(),
-                  const SizedBox(height: 8),
-                  _LeaderboardTile(
-                      key: ref
-                          .read(tourControllerProvider.notifier)
-                          .keyFor('leaderboard_tile')),
-                  const SizedBox(height: 16),
-                ],
-              ],
-            ),
-          ),
-          Expanded(
-            child: branchesAsync.when(
-              data: (branches) {
-                final filtered = branches
-                    .where((b) => b.slug != 'progress_hub')
-                    .toList();
-                final ordered = _applyOrder(filtered);
-                return ordered.isEmpty
-                    ? Center(
-                        child: Text(
-                          t.operations.noDepartments,
-                          style: TextStyle(
-                            color: c.textSecondary,
-                            letterSpacing: 1.5,
-                            fontSize: 12,
-                          ),
-                        ),
-                      )
-                    : _BranchCarousel(
-                        key: ref
-                            .read(tourControllerProvider.notifier)
-                            .keyFor('branch_carousel'),
-                        branches: ordered,
-                        onBranchTap: (b) => _onBranchTap(context, b),
-                        onReorder: (oldIndex, newIndex) {
-                          final prevSlugs =
-                              ordered.map((b) => b.slug).toList();
-                          final reordered = List<Branch>.from(ordered);
-                          if (newIndex > oldIndex) newIndex--;
-                          final item = reordered.removeAt(oldIndex);
-                          reordered.insert(newIndex, item);
-                          final slugs =
-                              reordered.map((b) => b.slug).toList();
-                          setState(() => _orderedSlugs = slugs);
-                          _saveOrder(slugs);
-                          showUndoSnackbar(
-                            context,
-                            ref,
-                            message: t.operations.reorderDone,
-                            onUndo: () {
-                              setState(() => _orderedSlugs = prevSlugs);
-                              _saveOrder(prevSlugs);
-                            },
-                          );
-                        },
-                      );
-              },
-              loading: () => const _BranchCarouselSkeleton(),
-              error: (e, _) => const Center(
-                child: _NoConnectionMessage(),
+          const SizedBox(height: 16),
+          if (!widget.offline) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _HomeModeToggle(
+                mode: _homeMode,
+                onChanged: _setHomeMode,
               ),
             ),
-          ),
-          Builder(
-            builder: (context) {
-              final bottomInset = MediaQuery.of(context).padding.bottom;
-              return SizedBox(height: 68 + math.max(bottomInset, 16) + 16);
-            },
+            const SizedBox(height: 16),
+          ],
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: SieMotion.base,
+              switchInCurve: Curves.easeOut,
+              switchOutCurve: Curves.easeIn,
+              child: effectiveMode == OpsHomeMode.brief
+                  ? OperationalBriefView(
+                      key: const ValueKey('ops-brief'),
+                      onRefresh: _onRefresh,
+                      onOpenModule: (slug) =>
+                          _openModuleBySlug(context, slug),
+                    )
+                  : KeyedSubtree(
+                      key: const ValueKey('ops-carousel'),
+                      child: carouselMode(),
+                    ),
+            ),
           ),
         ],
-      ),
-    );
-
-    final body = LayoutBuilder(
-      builder: (_, constraints) => RefreshIndicator(
-        color: c.accent,
-        backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
-        onRefresh: _onRefresh,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: SizedBox(height: constraints.maxHeight, child: innerBody),
-        ),
       ),
     );
 
@@ -423,24 +493,24 @@ String _moduleName(Branch branch) => switch (branch.slug) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Branch navigation
 // ─────────────────────────────────────────────────────────────────────────────
-void _onBranchTap(BuildContext context, Branch branch) {
-  Widget? screen;
+void _onBranchTap(BuildContext context, Branch branch) =>
+    _openModuleBySlug(context, branch.slug);
 
-  if (branch.slug == 'breathing_practices') {
-    screen = const BreathingExerciseScreen();
-  } else if (branch.slug == 'habit_archive') {
-    screen = const HabitTrackerScreen();
-  } else if (branch.slug == 'focus_protocol') {
-    screen = const FocusProtocolScreen();
-  } else if (branch.slug == 'planning') {
-    screen = const PlanningScreen();
-  } else if (branch.slug == 'meditation') {
-    screen = const MeditationHubScreen();
-  }
+/// Navigate into a module by its branch slug (shared by the carousel and the
+/// operational-brief blocks).
+void _openModuleBySlug(BuildContext context, String slug) {
+  final screen = switch (slug) {
+    'breathing_practices' => const BreathingExerciseScreen(),
+    'habit_archive' => const HabitTrackerScreen(),
+    'focus_protocol' => const FocusProtocolScreen(),
+    'planning' => const PlanningScreen(),
+    'meditation' => const MeditationHubScreen(),
+    _ => null,
+  };
 
   if (screen != null) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => screen!),
+      MaterialPageRoute(builder: (_) => screen),
     );
     return;
   }
@@ -452,6 +522,258 @@ void _onBranchTap(BuildContext context, Branch branch) {
       duration: const Duration(seconds: 2),
     ),
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Home mode toggle — Brief / Modules segment
+// ─────────────────────────────────────────────────────────────────────────────
+class _HomeModeToggle extends ConsumerWidget {
+  final OpsHomeMode mode;
+  final ValueChanged<OpsHomeMode> onChanged;
+
+  const _HomeModeToggle({required this.mode, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+
+    Widget seg(String label, IconData icon, OpsHomeMode m) {
+      final active = mode == m;
+      return Expanded(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => onChanged(m),
+          child: AnimatedContainer(
+            duration: SieMotion.fast,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              color: active
+                  ? c.accent.withValues(alpha: 0.16)
+                  : Colors.transparent,
+              border: Border.all(
+                color: active
+                    ? c.accent.withValues(alpha: 0.55)
+                    : c.border.withValues(alpha: 0.40),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon,
+                    size: 14, color: active ? c.accent : c.textSecondary),
+                const SizedBox(width: 8),
+                Text(
+                  label.toUpperCase(),
+                  style: TextStyle(
+                    color: active ? c.accent : c.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        seg(t.operationalBrief.tabBrief, Icons.view_agenda_outlined,
+            OpsHomeMode.brief),
+        const SizedBox(width: 8),
+        seg(t.operationalBrief.tabModules, Icons.grid_view_outlined,
+            OpsHomeMode.carousel),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Operational Brief — personalised feed of per-module blocks
+// ─────────────────────────────────────────────────────────────────────────────
+class OperationalBriefView extends ConsumerWidget {
+  final Future<void> Function() onRefresh;
+  final void Function(String slug) onOpenModule;
+
+  const OperationalBriefView({
+    super.key,
+    required this.onRefresh,
+    required this.onOpenModule,
+  });
+
+  // Fixed order for now — smart "actionable first" sorting comes in a later
+  // stage once the per-module data hooks are in.
+  static const _slugs = [
+    'planning',
+    'habit_archive',
+    'focus_protocol',
+    'breathing_practices',
+    'meditation',
+  ];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+
+    return RefreshIndicator(
+      color: c.accent,
+      backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+      onRefresh: onRefresh,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(
+            20, 0, 20, 68 + math.max(bottomInset, 16) + 16),
+        children: [
+          const _BriefGreeting(),
+          const SizedBox(height: 20),
+          for (final slug in _slugs) ...[
+            _BriefModuleBlock(slug: slug, onOpen: () => onOpenModule(slug)),
+            const SizedBox(height: 14),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BriefGreeting extends ConsumerWidget {
+  const _BriefGreeting();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final theme = Theme.of(context);
+    final name = ref.watch(userProfileProvider).valueOrNull?.username
+            ?.toUpperCase() ??
+        t.operations.unidentified;
+
+    final h = DateTime.now().hour;
+    final greeting = h < 5
+        ? t.operationalBrief.greeting.night
+        : h < 11
+            ? t.operationalBrief.greeting.morning
+            : h < 17
+                ? t.operationalBrief.greeting.day
+                : h < 23
+                    ? t.operationalBrief.greeting.evening
+                    : t.operationalBrief.greeting.night;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          t.operationalBrief.greetingLine(greeting: greeting, name: name),
+          style: theme.textTheme.headlineMedium?.copyWith(
+            fontSize: 20,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          t.operationalBrief.subtitle,
+          style: TextStyle(
+            color: c.textSecondary,
+            fontSize: 12,
+            letterSpacing: 1.2,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BriefModuleBlock extends ConsumerWidget {
+  final String slug;
+  final VoidCallback onOpen;
+
+  const _BriefModuleBlock({required this.slug, required this.onOpen});
+
+  Widget _preview() => switch (slug) {
+        'breathing_practices' => const _BreathSpherePreview(),
+        'habit_archive' => const _HabitMatrixPreview(),
+        'focus_protocol' => const _FocusRingPreview(),
+        'planning' => const _PlanningPreview(),
+        'meditation' => const _DefragPreview(),
+        _ => const SizedBox.shrink(),
+      };
+
+  String _name() => switch (slug) {
+        'breathing_practices' => t.operations.modules.breathing,
+        'habit_archive' => t.operations.modules.habits,
+        'focus_protocol' => t.operations.modules.focus,
+        'planning' => t.operations.modules.planning,
+        'meditation' => t.operations.modules.meditation,
+        _ => slug,
+      };
+
+  String _line() => switch (slug) {
+        'planning' => t.operationalBrief.blocks.planning,
+        'habit_archive' => t.operationalBrief.blocks.habits,
+        'focus_protocol' => t.operationalBrief.blocks.focus,
+        'breathing_practices' => t.operationalBrief.blocks.breathing,
+        'meditation' => t.operationalBrief.blocks.meditation,
+        _ => '',
+      };
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final theme = Theme.of(context);
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        SieHaptics.selection();
+        onOpen();
+      },
+      child: Container(
+        decoration: c.flatCard(radius: 16),
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            // Module preview graphic, scaled down into a compact avatar.
+            SizedBox(
+              width: 72,
+              height: 72,
+              child: FittedBox(fit: BoxFit.scaleDown, child: _preview()),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _name(),
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontSize: 13,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _line(),
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 12,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.chevron_right, color: c.accent, size: 22),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

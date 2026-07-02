@@ -1,0 +1,20 @@
+{
+  "tabBrief": "Brief",
+  "tabModules": "Modules",
+  "greeting": {
+    "morning": "Good morning",
+    "day": "Good afternoon",
+    "evening": "Good evening",
+    "night": "Good night"
+  },
+  "greetingLine": "{greeting}, {name}",
+  "subtitle": "Your operational brief for today",
+  "open": "Open",
+  "blocks": {
+    "planning": "Deploy your operations and clear today's tasks.",
+    "habits": "Discipline protocols await execution.",
+    "focus": "Ready for a deep-work session?",
+    "breathing": "Restore your breath and refocus.",
+    "meditation": "Time to defragment the mind."
+  }
+}
