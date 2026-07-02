@@ -253,7 +253,10 @@ class _OperationsControlScreenState
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
             child: _ScreenHeader(
-                profileAsync: profileAsync, offline: widget.offline),
+              profileAsync: profileAsync,
+              offline: widget.offline,
+              compact: effectiveMode == OpsHomeMode.brief,
+            ),
           ),
           const SizedBox(height: 16),
           if (!widget.offline) ...[
@@ -781,12 +784,12 @@ class _BriefBlockShell extends ConsumerWidget {
       },
       child: Container(
         decoration: c.flatCard(radius: 16),
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         child: Row(
           children: [
             SizedBox(
-              width: 72,
-              height: 72,
+              width: 94,
+              height: 94,
               child:
                   FittedBox(fit: BoxFit.scaleDown, child: _previewForSlug(slug)),
             ),
@@ -2363,7 +2366,15 @@ class _ScreenHeader extends ConsumerWidget {
   final AsyncValue<Profile?> profileAsync;
   final bool offline;
 
-  const _ScreenHeader({required this.profileAsync, this.offline = false});
+  /// Brief mode hides the operative line and the XP bar (they'd duplicate the
+  /// greeting and add noise) — animated in/out on mode switch.
+  final bool compact;
+
+  const _ScreenHeader({
+    required this.profileAsync,
+    this.offline = false,
+    this.compact = false,
+  });
 
   static String _badge(int level) {
     if (level <= 5)  return 'Recruit';
@@ -2419,38 +2430,45 @@ class _ScreenHeader extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  if (offline)
-                    Text(
-                      t.operations.operative(name: operative),
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontSize: 13,
-                        letterSpacing: 1.5,
-                      ),
-                    )
-                  else
-                    GestureDetector(
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            t.operations.operative(name: operative),
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontSize: 13,
-                              letterSpacing: 1.5,
+                  _AnimatedCollapse(
+                    visible: !compact,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: offline
+                          ? Text(
+                              t.operations.operative(name: operative),
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontSize: 13,
+                                letterSpacing: 1.5,
+                              ),
+                            )
+                          : GestureDetector(
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                    builder: (_) => const ProfileScreen()),
+                              ),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    t.operations.operative(name: operative),
+                                    style:
+                                        theme.textTheme.titleLarge?.copyWith(
+                                      fontSize: 13,
+                                      letterSpacing: 1.5,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    color: gradientColors.first
+                                        .withValues(alpha: 0.7),
+                                    size: 14,
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 6),
-                          Icon(
-                            Icons.chevron_right,
-                            color: gradientColors.first.withValues(alpha: 0.7),
-                            size: 14,
-                          ),
-                        ],
-                      ),
                     ),
+                  ),
                 ],
               ),
             ),
@@ -2486,14 +2504,45 @@ class _ScreenHeader extends ConsumerWidget {
             ],
           ],
         ),
-        const SizedBox(height: 20),
-        _XpBar(
-            key: ref.read(tourControllerProvider.notifier).keyFor('xp_bar'),
-            xp: xp,
-            gradientColors: gradientColors,
-            badge: _badge(xp ~/ 1000 + 1),
-            c: c),
+        _AnimatedCollapse(
+          visible: !compact,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 20),
+            child: _XpBar(
+                key:
+                    ref.read(tourControllerProvider.notifier).keyFor('xp_bar'),
+                xp: xp,
+                gradientColors: gradientColors,
+                badge: _badge(xp ~/ 1000 + 1),
+                c: c),
+          ),
+        ),
       ],
+    );
+  }
+}
+
+/// Smoothly collapses/expands (height + fade) a child on [visible] toggling —
+/// used to hide the operative line and XP bar in brief mode.
+class _AnimatedCollapse extends StatelessWidget {
+  final bool visible;
+  final Widget child;
+  const _AnimatedCollapse({required this.visible, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: SieMotion.base,
+      curve: Curves.easeInOut,
+      alignment: Alignment.topCenter,
+      child: AnimatedSwitcher(
+        duration: SieMotion.base,
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        child: visible
+            ? child
+            : const SizedBox(width: double.infinity, key: ValueKey('collapsed')),
+      ),
     );
   }
 }
