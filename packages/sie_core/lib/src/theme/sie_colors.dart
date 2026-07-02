@@ -123,6 +123,30 @@ class SieColors {
     );
   }
 
+  /// Card used in the Operational Brief. Borderless, with a soft gold-tinted
+  /// gradient fill and a gentle drop shadow so it reads as a distinct,
+  /// contrasting surface floating over the blurred brief backdrop.
+  BoxDecoration briefCard({double radius = 20}) {
+    final tint = Color.lerp(surface, accent, isLightMode ? 0.05 : 0.08)!;
+    return BoxDecoration(
+      borderRadius: BorderRadius.circular(radius),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: isLightMode ? [surface, tint] : [tint, surface],
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: isLightMode
+              ? accent.withValues(alpha: 0.10)
+              : Colors.black.withValues(alpha: 0.38),
+          blurRadius: 24,
+          offset: const Offset(0, 12),
+        ),
+      ],
+    );
+  }
+
   static SieColors forMode(SieThemeMode mode) => switch (mode) {
     SieThemeMode.classicDark  => _dark,
     SieThemeMode.classicLight => _light,

@@ -245,7 +245,21 @@ class _OperationsControlScreenState
           ),
         );
 
-    final body = SafeArea(
+    final body = Stack(
+      children: [
+        // Brief mode swaps the base surface for a soft, blurred gold-tinted
+        // gradient. It cross-fades in/out as the mode changes.
+        Positioned.fill(
+          child: IgnorePointer(
+            child: AnimatedOpacity(
+              opacity: effectiveMode == OpsHomeMode.brief ? 1 : 0,
+              duration: SieMotion.slow,
+              curve: Curves.easeInOut,
+              child: const _BriefBackdrop(),
+            ),
+          ),
+        ),
+        SafeArea(
       bottom: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -277,7 +291,6 @@ class _OperationsControlScreenState
               child: effectiveMode == OpsHomeMode.brief
                   ? OperationalBriefView(
                       key: const ValueKey('ops-brief'),
-                      onRefresh: _onRefresh,
                       onOpenModule: (slug) =>
                           _openModuleBySlug(context, slug),
                     )
@@ -289,6 +302,8 @@ class _OperationsControlScreenState
           ),
         ],
       ),
+        ),
+      ],
     );
 
     if (widget.asTab) {
@@ -599,12 +614,10 @@ class _HomeModeToggle extends ConsumerWidget {
 // Operational Brief — personalised feed of per-module blocks
 // ─────────────────────────────────────────────────────────────────────────────
 class OperationalBriefView extends ConsumerWidget {
-  final Future<void> Function() onRefresh;
   final void Function(String slug) onOpenModule;
 
   const OperationalBriefView({
     super.key,
-    required this.onRefresh,
     required this.onOpenModule,
   });
 
@@ -618,8 +631,8 @@ class OperationalBriefView extends ConsumerWidget {
     'meditation',
   ];
 
-  Widget _briefBlockFor(String slug) {
-    void open() => onOpenModule(slug);
+  static Widget briefBlockFor(String slug, void Function(String) onOpen) {
+    void open() => onOpen(slug);
     return switch (slug) {
       'planning' => _PlanningBriefBlock(onOpen: open),
       'habit_archive' => _HabitsBriefBlock(onOpen: open),
@@ -629,25 +642,185 @@ class OperationalBriefView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c = ref.watch(sieColorsProvider);
-    final bottomInset = MediaQuery.of(context).padding.bottom;
+    // Two modules per magnetic slide; the greeting rides above as a fixed header.
+    final pages = <List<String>>[
+      for (var i = 0; i < _slugs.length; i += 2)
+        _slugs.sublist(i, math.min(i + 2, _slugs.length)),
+    ];
 
-    return RefreshIndicator(
-      color: c.accent,
-      backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
-      onRefresh: onRefresh,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(
-            20, 0, 20, 68 + math.max(bottomInset, 16) + 16),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(20, 0, 20, 14),
+          child: _BriefGreeting(),
+        ),
+        Expanded(
+          child: _BriefPager(pages: pages, onOpenModule: onOpenModule),
+        ),
+      ],
+    );
+  }
+}
+
+/// Vertical, page-snapping pager for the brief. Each page shows two module
+/// entries balanced across the available height; swiping up/down snaps
+/// magnetically between pages with a soft scale/fade depth transition.
+class _BriefPager extends StatefulWidget {
+  final List<List<String>> pages;
+  final void Function(String slug) onOpenModule;
+
+  const _BriefPager({required this.pages, required this.onOpenModule});
+
+  @override
+  State<_BriefPager> createState() => _BriefPagerState();
+}
+
+class _BriefPagerState extends State<_BriefPager> {
+  late final PageController _controller;
+  double _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = PageController()..addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    final p = _controller.hasClients ? (_controller.page ?? 0) : 0.0;
+    if (p != _page) setState(() => _page = p);
+  }
+
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_onScroll)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final bottomReserve = 68.0 + math.max(bottomInset, 16.0) + 16;
+    final reduceMotion = !SieMotion.enabled(context);
+
+    return PageView.builder(
+      controller: _controller,
+      scrollDirection: Axis.vertical,
+      itemCount: widget.pages.length,
+      itemBuilder: (context, index) {
+        final slide = _BriefSlide(
+          slugs: widget.pages[index],
+          bottomReserve: bottomReserve,
+          onOpenModule: widget.onOpenModule,
+        );
+        if (reduceMotion) return slide;
+
+        // Depth transition: the focused page sits fully forward, neighbours
+        // recede slightly and fade — a calm, "magnetic" feel.
+        final t = (1 - (index - _page).abs()).clamp(0.0, 1.0);
+        final eased = Curves.easeOut.transform(t);
+        return Opacity(
+          opacity: 0.30 + 0.70 * eased,
+          child: Transform.scale(
+            scale: 0.93 + 0.07 * eased,
+            child: slide,
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// A single magnetic slide: two module entries distributed evenly across the
+/// screen height, kept clear of the floating nav bar at the bottom.
+class _BriefSlide extends StatelessWidget {
+  final List<String> slugs;
+  final double bottomReserve;
+  final void Function(String slug) onOpenModule;
+
+  const _BriefSlide({
+    required this.slugs,
+    required this.bottomReserve,
+    required this.onOpenModule,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 4, 20, bottomReserve),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const _BriefGreeting(),
-          const SizedBox(height: 20),
-          for (final slug in _slugs) ...[
-            _briefBlockFor(slug),
-            const SizedBox(height: 24),
-          ],
+          for (final slug in slugs)
+            OperationalBriefView.briefBlockFor(slug, onOpenModule),
         ],
+      ),
+    );
+  }
+}
+
+/// Soft, blurred gold-tinted gradient shown behind the brief. Dark anthracite
+/// with warm gold glows on the dark theme; a light wash with gold glows on the
+/// light theme. Purely decorative — sits behind all brief content.
+class _BriefBackdrop extends ConsumerWidget {
+  const _BriefBackdrop();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final light = c.isLightMode;
+    final top = Color.lerp(c.background, c.accent, light ? 0.06 : 0.10)!;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [top, c.background],
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -90,
+            right: -70,
+            child: _Glow(
+              color: c.accent.withValues(alpha: light ? 0.14 : 0.18),
+              size: 340,
+            ),
+          ),
+          Positioned(
+            bottom: -120,
+            left: -90,
+            child: _Glow(
+              color: c.accentSecondary.withValues(alpha: light ? 0.10 : 0.14),
+              size: 400,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A single soft radial glow blob (colour → transparent), used by the backdrop.
+class _Glow extends StatelessWidget {
+  final Color color;
+  final double size;
+  const _Glow({required this.color, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [color, color.withValues(alpha: 0)],
+        ),
       ),
     );
   }
@@ -783,8 +956,8 @@ class _BriefBlockShell extends ConsumerWidget {
         onOpen();
       },
       child: Container(
-        decoration: c.flatCard(radius: 16),
-        padding: const EdgeInsets.all(16),
+        decoration: c.briefCard(radius: 20),
+        padding: const EdgeInsets.all(18),
         child: Row(
           children: [
             SizedBox(
