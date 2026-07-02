@@ -621,8 +621,8 @@ class OperationalBriefView extends ConsumerWidget {
     required this.onOpenModule,
   });
 
-  // Fixed order for now — smart "actionable first" sorting comes in a later
-  // stage once the per-module data hooks are in.
+  // Baseline module order. The brief re-sorts this "actionable first" each
+  // build (see [_sortedSlugs]); the daily-tip/leaderboard slide stays last.
   static const _slugs = [
     'planning',
     'habit_archive',
@@ -642,13 +642,48 @@ class OperationalBriefView extends ConsumerWidget {
     };
   }
 
+  /// Modules with pending items for today (overdue/today tasks, due habits)
+  /// float to the front; everything else keeps its baseline order (stable).
+  List<String> _sortedSlugs(WidgetRef ref) {
+    final agenda = ref.watch(agendaProvider);
+    final habits = ref.watch(habitsProvider).valueOrNull;
+
+    int scoreFor(String slug) {
+      switch (slug) {
+        case 'planning':
+          // Overdue is more pressing than merely due-today.
+          return agenda.overdue.length * 2 + agenda.today.length;
+        case 'habit_archive':
+          if (habits == null) return 0;
+          final now = DateTime.now();
+          final today = _ymd(now);
+          return habits.habits.where((h) => !h.isAvoid).where((h) {
+            final logs = habits.logDates[h.id] ?? const <String>{};
+            return isScheduledOn(h, now, firstLog: firstLogDate(logs)) &&
+                !logs.contains(today);
+          }).length;
+        default:
+          return 0;
+      }
+    }
+
+    final ordered = [..._slugs];
+    ordered.sort((a, b) {
+      final byScore = scoreFor(b).compareTo(scoreFor(a));
+      if (byScore != 0) return byScore;
+      return _slugs.indexOf(a).compareTo(_slugs.indexOf(b));
+    });
+    return ordered;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Two modules per magnetic slide; the greeting rides above as a fixed
     // header. A final "day summary" slide gathers the daily tip + leaderboard.
+    final slugs = _sortedSlugs(ref);
     final pages = <List<String>>[
-      for (var i = 0; i < _slugs.length; i += 2)
-        _slugs.sublist(i, math.min(i + 2, _slugs.length)),
+      for (var i = 0; i < slugs.length; i += 2)
+        slugs.sublist(i, math.min(i + 2, slugs.length)),
       ['daily_tip', 'leaderboard'],
     ];
 
@@ -893,6 +928,10 @@ String _moduleNameForSlug(String slug) => switch (slug) {
       'meditation' => t.operations.modules.meditation,
       _ => slug,
     };
+
+/// `YYYY-MM-DD` key for a local date — matches how habit logs are stored.
+String _ymd(DateTime dt) =>
+    '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
 
 /// Pick a system lead-in line from a scenario's set — stable through the day,
 /// rotating daily so the brief keeps feeling alive.
@@ -1173,9 +1212,6 @@ class _HabitsBriefBlock extends ConsumerWidget {
   final VoidCallback onOpen;
   const _HabitsBriefBlock({required this.onOpen});
 
-  static String _fmt(DateTime dt) =>
-      '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final hs = ref.watch(habitsProvider).valueOrNull;
@@ -1189,7 +1225,7 @@ class _HabitsBriefBlock extends ConsumerWidget {
       body = _BriefLine(t.operationalBrief.habits.empty);
     } else {
       final now = DateTime.now();
-      final today = _fmt(now);
+      final today = _ymd(now);
       final due = hs.habits.where((h) => !h.isAvoid).where((h) {
         final logs = hs.logDates[h.id] ?? const <String>{};
         final firstLog = firstLogDate(logs);
