@@ -50,6 +50,11 @@
     "nextRound": "СЛЕДУЮЩЕМУ РАУНДУ",
     "seconds": "{secs}с"
   },
+  "recoveryScreen": {
+    "title": "Сессия завершена",
+    "subtitle": "Дайте своему дыханию прийти в норму.",
+    "continueButton": "Нажмите, чтобы продолжить"
+  },
   "topBar": {
     "round": "РАУНД {round} / {total}"
   },
@@ -63,6 +68,8 @@
     "sectionProtocol": "ПРОТОКОЛ",
     "protocolLockedHint": "Протокол задан пользовательской последовательностью и недоступен для изменения.",
     "sectionSoundToggles": "ЗВУКОВЫЕ ПЕРЕКЛЮЧАТЕЛИ",
+    "sectionSession": "СЕССИЯ",
+    "recoveryScreen": "ЭКРАН ВОССТАНОВЛЕНИЯ",
     "sectionVolume": "ГРОМКОСТЬ",
     "sectionPresets": "ПРЕСЕТЫ",
     "rounds": "РАУНДЫ",

@@ -120,6 +120,144 @@ dart run slang                # переводы (i18n/translations*.g.dart)
 
 ---
 
+## Подготовка облачного окружения Claude
+
+Когда пользователь говорит **"Настрой окружение"** или открывается новая облачная сессия — выполнить все шаги ниже строго по порядку. Окружение: Ubuntu 24.04 x86_64, все команды от root.
+
+### Шаг 1 — Системные зависимости
+
+```bash
+apt-get update -qq
+apt-get install -y -qq git curl unzip xz-utils zip libglu1-mesa clang cmake ninja-build pkg-config libgtk-3-dev
+```
+
+### Шаг 2 — Flutter SDK 3.32.3
+
+```bash
+git config --global --add safe.directory /opt/flutter
+cd /tmp
+curl -fsSL -x "$HTTPS_PROXY" --cacert /root/.ccr/ca-bundle.crt \
+  "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.32.3-stable.tar.xz" \
+  -o flutter.tar.xz
+tar -xf flutter.tar.xz -C /opt/
+```
+
+### Шаг 3 — Android SDK
+
+```bash
+mkdir -p /opt/android/cmdline-tools
+cd /tmp
+curl -fsSL -x "$HTTPS_PROXY" --cacert /root/.ccr/ca-bundle.crt \
+  "https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip" \
+  -o cmdline-tools.zip
+unzip -q cmdline-tools.zip -d /tmp/cmdline-tools-tmp
+mv /tmp/cmdline-tools-tmp/cmdline-tools /opt/android/cmdline-tools/latest
+
+export ANDROID_HOME=/opt/android
+export PATH="/opt/flutter/bin:/opt/android/cmdline-tools/latest/bin:/opt/android/platform-tools:$PATH"
+
+yes | sdkmanager --licenses
+sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+flutter config --android-sdk /opt/android
+```
+
+### Шаг 4 — Переменные окружения (постоянно)
+
+```bash
+cat >> /root/.bashrc << 'EOF'
+
+export PATH="/opt/flutter/bin:/opt/android/cmdline-tools/latest/bin:/opt/android/platform-tools:$PATH"
+export ANDROID_HOME=/opt/android
+EOF
+```
+
+### Шаг 5 — GitHub CLI
+
+```bash
+curl -fsSL -x "$HTTPS_PROXY" --cacert /root/.ccr/ca-bundle.crt \
+  https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+  | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+  | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+apt-get update -qq && apt-get install -y -qq gh
+```
+
+Авторизация через config-файл (токен от пользователя):
+
+```bash
+mkdir -p ~/.config/gh
+cat > ~/.config/gh/hosts.yml << EOF
+github.com:
+    oauth_token: <GITHUB_TOKEN>
+    user: z1parus
+    git_protocol: https
+EOF
+```
+
+> `gh api /user` должен вернуть `"login":"z1parus"`. GraphQL заблокирован прокси — это нормально, REST работает.
+
+### Шаг 6 — Supabase CLI
+
+```bash
+SUPABASE_VERSION=$(curl -fsSL -x "$HTTPS_PROXY" --cacert /root/.ccr/ca-bundle.crt \
+  https://api.github.com/repos/supabase/cli/releases/latest \
+  | grep '"tag_name"' | cut -d'"' -f4)
+curl -fsSL -x "$HTTPS_PROXY" --cacert /root/.ccr/ca-bundle.crt \
+  "https://github.com/supabase/cli/releases/download/${SUPABASE_VERSION}/supabase_linux_amd64.tar.gz" \
+  -o /tmp/supabase.tar.gz
+tar -xzf /tmp/supabase.tar.gz -C /usr/local/bin/ supabase
+
+supabase login --token <SUPABASE_TOKEN>
+```
+
+> **Важно:** Supabase CLI — Go-бинарник с собственным диалером, игнорирует `HTTPS_PROXY`. Команды `supabase db push` и `supabase functions deploy` **не работают** в облачном окружении. Вместо них используются скрипты `supabase/scripts/db-push.sh` и `supabase/scripts/functions-deploy.sh`.
+
+### Шаг 7 — Зависимости Flutter-проектов
+
+```bash
+export PATH="/opt/flutter/bin:$PATH"
+cd /home/user/SiE/apps/central_hub && flutter pub get
+cd /home/user/SiE/packages/sie_core && flutter pub get
+```
+
+### Шаг 8 — Переменные для Supabase-скриптов
+
+Создать файл `.env.local` в корне репозитория (в `.gitignore`, не коммитить):
+
+```
+SUPABASE_ACCESS_TOKEN=<SUPABASE_TOKEN>
+SUPABASE_PROJECT_REF=bvqlqvzcqfgojzxztvrm
+SSL_CERT_FILE=/root/.ccr/ca-bundle.crt
+```
+
+Использование скриптов:
+
+```bash
+source .env.local
+bash supabase/scripts/db-push.sh            # применить новые миграции
+bash supabase/scripts/functions-deploy.sh   # задеплоить все Edge Functions
+bash supabase/scripts/functions-deploy.sh telegram-auth  # одну функцию
+```
+
+### Проверка готовности
+
+```bash
+export PATH="/opt/flutter/bin:/opt/android/cmdline-tools/latest/bin:/opt/android/platform-tools:$PATH"
+export ANDROID_HOME=/opt/android
+flutter doctor          # должны быть ✓ Flutter и ✓ Android toolchain
+gh api /user            # должен вернуть "login":"z1parus"
+supabase --version      # должна показать версию
+```
+
+### Токены (спросить у пользователя если не заданы)
+
+| Переменная | Где взять |
+|---|---|
+| `GITHUB_TOKEN` | github.com → Settings → Developer settings → Personal access tokens |
+| `SUPABASE_TOKEN` | supabase.com/dashboard/account/tokens |
+
+---
+
 ## Дизайн-система (обязательно к исполнению)
 
 У проекта **уже есть** полноценная дизайн-система в `packages/sie_core/lib/src/theme/` и `.../widgets/`. Главное правило качества UI — **использовать её, а не писать цвета и компоненты с нуля**. Несогласованность и «некрасивый» вид возникают именно из-за хардкод-цветов `Color(0x...)` и самописных карточек поверх готовых.

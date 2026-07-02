@@ -179,6 +179,17 @@ Deno.serve(async (req: Request) => {
   const path = url.pathname.replace(/\/$/, '')
 
   try {
+    // Telegram-OIDC shim: a discovery doc + filtered JWKS that let Supabase use
+    // Telegram's native OIDC. Telegram's own JWKS includes an ES256K
+    // (secp256k1) key that GoTrue's JOSE library can't parse, which breaks
+    // id_token verification for the whole set. We re-publish Telegram's
+    // discovery with `jwks_uri` pointed at our proxy, which drops the
+    // unparseable key.
+    if (path.endsWith('/telegram-oidc-config'))
+      return await telegramOidcConfig(url)
+    if (path.endsWith('/telegram-jwks')) return await telegramJwks()
+    if (path.endsWith('/.well-known/openid-configuration'))
+      return discovery(url)
     if (path.endsWith('/authorize')) return authorize(url)
     if (path.endsWith('/telegram-callback'))
       return await telegramCallback(url)
@@ -191,6 +202,90 @@ Deno.serve(async (req: Request) => {
   }
 })
 
+// ─── Telegram-OIDC shim ─────────────────────────────────────────────────────────
+const TELEGRAM_ISSUER = 'https://oauth.telegram.org'
+
+// Discovery override: Telegram's own OIDC metadata, but with `jwks_uri` pointed
+// at our filtered proxy below. `issuer` stays `https://oauth.telegram.org` so it
+// still matches the id_token's `iss` and the configured Issuer URL. Configure
+// this URL as the provider's "Discovery URL" in the Supabase dashboard.
+async function telegramOidcConfig(url: URL): Promise<Response> {
+  const fnName = url.pathname.split('/').filter(Boolean)[0] ?? 'telegram-auth'
+  const jwksUri = `https://${url.host}/functions/v1/${fnName}/telegram-jwks`
+
+  let meta: Record<string, unknown>
+  try {
+    const resp = await fetch(`${TELEGRAM_ISSUER}/.well-known/openid-configuration`)
+    meta = await resp.json()
+  } catch (_) {
+    // Fallback to the known-good shape if Telegram is briefly unreachable.
+    meta = {
+      issuer: TELEGRAM_ISSUER,
+      authorization_endpoint: `${TELEGRAM_ISSUER}/auth`,
+      token_endpoint: `${TELEGRAM_ISSUER}/token`,
+      response_types_supported: ['code'],
+      subject_types_supported: ['public'],
+      id_token_signing_alg_values_supported: ['RS256', 'ES256'],
+      scopes_supported: ['openid', 'profile'],
+    }
+  }
+  meta.jwks_uri = jwksUri
+  // Advertise only the algorithms our proxied JWKS keeps, so GoTrue won't expect
+  // an ES256K / EdDSA key it can't handle.
+  meta.id_token_signing_alg_values_supported = ['RS256', 'ES256']
+  return json(meta)
+}
+
+// JWKS proxy: fetch Telegram's keys and keep only the ones GoTrue's JOSE
+// library can parse — RSA (RS256) and EC P-256 (ES256). The dropped key is the
+// EC secp256k1 (ES256K) one, whose curve is unsupported and fails the whole
+// set's decode.
+async function telegramJwks(): Promise<Response> {
+  const resp = await fetch(`${TELEGRAM_ISSUER}/.well-known/jwks.json`)
+  const set = await resp.json() as { keys?: Array<Record<string, unknown>> }
+  const keys = (set.keys ?? []).filter((k) => {
+    if (k.kty === 'RSA') return true
+    if (k.kty === 'EC' && k.crv === 'P-256') return true
+    return false
+  })
+  return json({ keys })
+}
+
+// ─── /.well-known/openid-configuration ──────────────────────────────────────────
+// Supabase's Custom OAuth provider is OIDC-discovery based: given the configured
+// "Issuer URL" it fetches `${issuer}/.well-known/openid-configuration` to learn
+// the authorize / token / userinfo endpoints. We advertise this bridge's own
+// endpoints. `issuer` MUST exactly equal the configured Issuer URL (this
+// function's public base). No `jwks_uri` / `id_token` is advertised — the flow
+// is access-token + userinfo, so no asymmetric key validation is needed.
+function discovery(url: URL): Response {
+  const fnName = url.pathname.split('/').filter(Boolean)[0] ?? 'telegram-auth'
+  const base = `https://${url.host}/functions/v1/${fnName}`
+  return json({
+    issuer: base,
+    authorization_endpoint: `${base}/authorize`,
+    token_endpoint: `${base}/token`,
+    userinfo_endpoint: `${base}/userinfo`,
+    response_types_supported: ['code'],
+    grant_types_supported: ['authorization_code'],
+    subject_types_supported: ['public'],
+    id_token_signing_alg_values_supported: ['HS256'],
+    scopes_supported: ['openid', 'profile'],
+    token_endpoint_auth_methods_supported: [
+      'client_secret_post',
+      'client_secret_basic',
+    ],
+    claims_supported: [
+      'sub',
+      'name',
+      'preferred_username',
+      'picture',
+      'email',
+      'email_verified',
+    ],
+  })
+}
+
 // ─── /authorize ────────────────────────────────────────────────────────────────
 function authorize(url: URL): Response {
   const state = url.searchParams.get('state') ?? ''
@@ -202,7 +297,15 @@ function authorize(url: URL): Response {
     Deno.env.get('TELEGRAM_BOT_USERNAME') ??
     ''
   if (!botUsername) return html(errorPage('Missing bot_username'))
-  const cbUrl = `https://${url.hostname}/functions/telegram-auth/telegram-callback`
+  // Build the public callback URL for the widget to POST to. The edge runtime
+  // strips the `/functions/v1` prefix before the handler sees it (internal
+  // pathname is `/telegram-auth/authorize`), so we re-add that prefix here.
+  // The previous hardcoded `/functions/telegram-auth/...` dropped the `/v1/`
+  // segment, so the widget POSTed to the API gateway (401 "No API key found")
+  // and the callback — and therefore the one-time code storage — never ran.
+  const fnName = url.pathname.split('/').filter(Boolean)[0] ?? 'telegram-auth'
+  const cbUrl =
+    `https://${url.host}/functions/v1/${fnName}/telegram-callback`
   return html(widgetPage(botUsername, cbUrl, state, redirectUri))
 }
 

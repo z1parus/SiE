@@ -226,7 +226,7 @@ class AudioService {
 
   // ── Cues ───────────────────────────────────────────────────
 
-  Future<void> playInhale({required int targetSecs, double volumeFactor = 0.75}) async {
+  Future<void> playInhale({required num targetSecs, double volumeFactor = 0.75}) async {
     _cueFadeTimer?.cancel();
     if (_inhaleId < 0) return;
     try {
@@ -247,7 +247,7 @@ class AudioService {
     }
   }
 
-  Future<void> playExhale({required int targetSecs, double volumeFactor = 0.75}) async {
+  Future<void> playExhale({required num targetSecs, double volumeFactor = 0.75}) async {
     _cueFadeTimer?.cancel();
     if (_exhaleId < 0) return;
     try {
@@ -280,12 +280,13 @@ class AudioService {
 
   // Soft-stop via callbacks so the same fade logic works for every cue.
   void _scheduleCueFadeOut(
-    int targetSecs,
+    num targetSecs,
     double startVolume,
     void Function(double volume) setVol,
     void Function() stop,
   ) {
-    final delayMs = (targetSecs * 1000 - _cueFadeMs).clamp(0, targetSecs * 1000);
+    final totalMs = (targetSecs * 1000).round();
+    final delayMs = (totalMs - _cueFadeMs).clamp(0, totalMs);
     _cueFadeTimer = Timer(Duration(milliseconds: delayMs), () {
       var step = 0;
       _cueFadeTimer = Timer.periodic(

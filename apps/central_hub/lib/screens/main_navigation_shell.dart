@@ -73,6 +73,14 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
 
   @override
   Widget build(BuildContext context) {
+    // The interactive tour drives the active tab as it walks through the steps.
+    ref.listen<TourState>(tourControllerProvider, (prev, next) {
+      final tab = ref.read(tourControllerProvider.notifier).desiredTab;
+      if (tab != null && tab != _currentIndex) {
+        setState(() => _currentIndex = tab);
+      }
+    });
+
     return SieBackground(
       child: PopScope(
         canPop: !Platform.isAndroid,
@@ -107,6 +115,7 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
                   left: 0,
                   right: 0,
                   child: _ShellNavBar(
+                    key: ref.read(tourControllerProvider.notifier).keyFor('nav_bar'),
                     activeIndex: _currentIndex,
                     onTabChanged: (i) {
                       if (i == _currentIndex) return;
@@ -132,6 +141,7 @@ class _ShellNavBar extends ConsumerWidget {
   final ValueChanged<int> onTabChanged;
 
   const _ShellNavBar({
+    super.key,
     required this.activeIndex,
     required this.onTabChanged,
   });

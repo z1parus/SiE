@@ -1,0 +1,31 @@
+{
+  "step1": {
+    "title": "Chrono-Ring",
+    "body": "The timer ring counts down the current phase. FOCUS is deep work, BREAK is rest."
+  },
+  "step2": {
+    "title": "Phases",
+    "body": "FOCUS — concentration (25 min by default). BREAK — a rest (5 min). Cycles repeat automatically."
+  },
+  "step3": {
+    "title": "XP stake",
+    "body": "Each focus session earns XP (100 by default). Interrupting after 30 seconds gives partial XP."
+  },
+  "step4": {
+    "title": "Bind a task",
+    "body": "Optional: bind the session to a task from Planning. Focus time is credited to that task's analytics."
+  },
+  "step5": {
+    "title": "Settings",
+    "body": "Focus duration (5–60 min) and break duration (1–15 min), plus background music for each phase."
+  },
+  "step6": {
+    "title": "Start",
+    "body": "START begins the session, PAUSE/RESUME pauses it, RESET clears it. When it ends, a reward screen appears."
+  },
+  "complete": {
+    "title": "COURSE COMPLETE",
+    "body": "The Chrono-Ring is ready. Deep work is your edge, operative."
+  },
+  "replayItem": "Course: Focus"
+}

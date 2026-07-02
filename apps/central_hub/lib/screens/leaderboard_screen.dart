@@ -117,6 +117,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
     });
 
     final body = SafeArea(
+      key: ref.read(tourControllerProvider.notifier).keyFor('leaderboard_body'),
       bottom: false,
       child: Column(
         children: [

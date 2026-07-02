@@ -1,0 +1,43 @@
+{
+  "step1": {
+    "title": "Experience (XP)",
+    "body": "XP is your growth currency. 1000 XP = a new level. Complete protocols, habits and missions to earn XP."
+  },
+  "step2": {
+    "title": "Departments",
+    "body": "Departments are your tools: Planning, Habits, Focus, Breathing, Meditation. Tap a card to enter a module."
+  },
+  "step3": {
+    "title": "Daily Vanguard",
+    "body": "A daily activity ranking. The day's top operatives earn bonus rewards."
+  },
+  "step4": {
+    "title": "Navigation",
+    "body": "The bottom bar is your HQ navigation: Hub (file), Operations (dashboard), Garage (shop), Hall of Fame (ranking)."
+  },
+  "step5": {
+    "title": "Personnel File",
+    "body": "The Hub is your personal file: level, awards, medals vault, settings. You can replay this tour from here too."
+  },
+  "step6": {
+    "title": "Garage",
+    "body": "The customization shop. Spend Design Points (DP) on avatar frames, profile backgrounds and stat styles."
+  },
+  "step7": {
+    "title": "Hall of Fame",
+    "body": "The global ranking of all operatives. Seasonal rewards for the top performers."
+  },
+  "complete": {
+    "title": "TOUR COMPLETE",
+    "body": "You're ready for operations, operative. Good luck on your journey."
+  },
+  "actions": {
+    "next": "NEXT",
+    "back": "BACK",
+    "skip": "Skip",
+    "finish": "START OPERATIONS",
+    "step": "Step {n} of {total}",
+    "done": "DONE"
+  },
+  "replayItem": "App tour"
+}

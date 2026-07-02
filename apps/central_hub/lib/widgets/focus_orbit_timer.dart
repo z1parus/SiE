@@ -128,7 +128,14 @@ class _FocusOrbitTimerState extends State<FocusOrbitTimer>
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
+              // Constrain the readout to the orbit's clear inner zone and
+              // scale it down to fit — keeps "25:00" off the ribbon strands
+              // regardless of font scale or string length.
+              SizedBox(
+                width: widget.size * 0.42,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
                 widget.timeText,
                 style: TextStyle(
                   color: widget.textColor,
@@ -152,6 +159,8 @@ class _FocusOrbitTimerState extends State<FocusOrbitTimer>
                         blurRadius: 24,
                       ),
                   ],
+                ),
+                  ),
                 ),
               ),
               if (widget.subLabel != null) ...[

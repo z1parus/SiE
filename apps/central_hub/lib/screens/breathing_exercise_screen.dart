@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sie_core/sie_core.dart';
 import 'session_orb_painters.dart';
 import 'breathing_sequences_screen.dart';
+import 'breathing_recovery_screen.dart';
 import 'breathing_reflection_screen.dart';
 import 'breathing_journal_screen.dart';
 import 'breathing_stats_screen.dart';
@@ -33,6 +34,10 @@ class BreathingSettings {
   final bool breathingSoundsEnabled;
   final bool heartbeatEnabled;
   final bool tickEnabled;
+  /// When true, a recovery screen is shown after the session (music keeps
+  /// playing until the user taps "continue") before the reflection screen.
+  /// When false, the session goes straight to reflection and the music fades.
+  final bool recoveryScreenEnabled;
   final double ambientVolume;
   final double breathingVolume;
   final double heartbeatVolume;
@@ -51,6 +56,7 @@ class BreathingSettings {
     this.breathingSoundsEnabled = true,
     this.heartbeatEnabled = true,
     this.tickEnabled = true,
+    this.recoveryScreenEnabled = true,
     this.ambientVolume = 0.75,
     this.breathingVolume = 0.75,
     this.heartbeatVolume = 0.75,
@@ -69,6 +75,7 @@ class BreathingSettings {
     bool? breathingSoundsEnabled,
     bool? heartbeatEnabled,
     bool? tickEnabled,
+    bool? recoveryScreenEnabled,
     double? ambientVolume,
     double? breathingVolume,
     double? heartbeatVolume,
@@ -87,6 +94,8 @@ class BreathingSettings {
             breathingSoundsEnabled ?? this.breathingSoundsEnabled,
         heartbeatEnabled: heartbeatEnabled ?? this.heartbeatEnabled,
         tickEnabled: tickEnabled ?? this.tickEnabled,
+        recoveryScreenEnabled:
+            recoveryScreenEnabled ?? this.recoveryScreenEnabled,
         ambientVolume: ambientVolume ?? this.ambientVolume,
         breathingVolume: breathingVolume ?? this.breathingVolume,
         heartbeatVolume: heartbeatVolume ?? this.heartbeatVolume,
@@ -105,6 +114,7 @@ class BreathingSettings {
         'breathingSoundsEnabled': breathingSoundsEnabled,
         'heartbeatEnabled': heartbeatEnabled,
         'tickEnabled': tickEnabled,
+        'recoveryScreenEnabled': recoveryScreenEnabled,
         'ambientVolume': ambientVolume,
         'breathingVolume': breathingVolume,
         'heartbeatVolume': heartbeatVolume,
@@ -124,6 +134,7 @@ class BreathingSettings {
         breathingSoundsEnabled: json['breathingSoundsEnabled'] as bool? ?? true,
         heartbeatEnabled: json['heartbeatEnabled'] as bool? ?? true,
         tickEnabled: json['tickEnabled'] as bool? ?? true,
+        recoveryScreenEnabled: json['recoveryScreenEnabled'] as bool? ?? true,
         ambientVolume: ((json['ambientVolume'] as num?)?.toDouble() ?? 0.75).clamp(0.0, 1.0),
         breathingVolume: ((json['breathingVolume'] as num?)?.toDouble() ?? 0.75).clamp(0.0, 1.0),
         heartbeatVolume: ((json['heartbeatVolume'] as num?)?.toDouble() ?? 0.75).clamp(0.0, 1.0),
@@ -153,11 +164,16 @@ class BreathingExerciseScreen extends ConsumerStatefulWidget {
     super.key,
     this.openSettings = false,
     this.sequence,
+    this.startCourse = false,
   });
 
   /// When true, the protocol settings sheet auto-opens on entry — used by the
   /// Knowledge Base deep-link.
   final bool openSettings;
+
+  /// When true, force-launch the interactive Breathing course on entry (used
+  /// by the "replay course" tile in the knowledge base).
+  final bool startCourse;
 
   /// When non-null, the session runs this user-built sequence (each round has
   /// its own params) instead of the uniform [BreathingSettings] rounds. Audio
@@ -178,6 +194,10 @@ class _BreathingExerciseScreenState
   late final AnimationController _shaderCtrl;
   late final Animation<double> _pulseAnim;
   late final AudioService _audio;
+
+  /// Set when the completed session hands the still-playing ambient music to
+  /// the recovery screen, so dispose() leaves the music running.
+  bool _handOffAudioToRecovery = false;
 
   FragmentShader? _sphereShader;
 
@@ -214,8 +234,8 @@ class _BreathingExerciseScreenState
     return List.generate(_settings.rounds, (_) => _roundFromSettings());
   }
 
-  bool _onboardingDismissed = false;
   bool _showOnboardingManual = false;
+  bool _courseChecked = false;
 
   int _round = 1;
   int _cycle = 0;
@@ -237,6 +257,7 @@ class _BreathingExerciseScreenState
   Timer? _retentionTimer;
   Timer? _transitionTimer;
   Timer? _pauseTimer;
+  Timer? _exhalePauseHalfTimer;
   Timer? _heartbeatTimer;
   DateTime? _sessionStart;
   DateTime? _heartbeatStart;
@@ -281,7 +302,9 @@ class _BreathingExerciseScreenState
   @override
   void dispose() {
     _cancelTimers();
-    _audio.stopAll();
+    // When handing the still-playing ambient music over to the recovery
+    // screen, the recovery screen owns the fade-out — don't kill it here.
+    if (!_handOffAudioToRecovery) _audio.stopAll();
     _circleCtrl.dispose();
     _breathColorCtrl.dispose();
     _pulseCtrl.dispose();
@@ -294,6 +317,7 @@ class _BreathingExerciseScreenState
     _retentionTimer?.cancel();
     _transitionTimer?.cancel();
     _pauseTimer?.cancel();
+    _exhalePauseHalfTimer?.cancel();
     _heartbeatTimer?.cancel();
   }
 
@@ -459,8 +483,13 @@ class _BreathingExerciseScreenState
 
   // ── Phase: Exhale Pause (active → exhale hold) ────────────
 
-  /// 5-second breathe-out bridge after active breathing: lets the user fully
-  /// exhale before the retention, while the ambient music fades out smoothly.
+  /// 5-second bridge after active breathing, before the retention hold.
+  ///
+  /// Active breathing always ends on an exhale, so opening this bridge with
+  /// another exhale produced two exhales back-to-back. Instead it is split into
+  /// a calm inhale (first 2.5s) and an exhale (last 2.5s), so the user arrives
+  /// at the breath-hold having just exhaled — without the doubled exhale. The
+  /// ambient music still fades out smoothly across the full pause.
   void _startExhalePause() {
     if (!mounted) return;
     _breathTimer?.cancel();
@@ -470,15 +499,37 @@ class _BreathingExerciseScreenState
     setState(() {
       _phase = _Phase.exhalePause;
       _pauseElapsed = 0;
+      _isInhaling = true;
     });
-    _breathColorCtrl.animateTo(1.0,
+
+    const halfMs = _kBreathPauseSecs * 1000 ~/ 2; // 2500ms
+    const half = _kBreathPauseSecs / 2.0; // 2.5s
+
+    // First half — inhale: expand the orb, switch to the inhale colour, cue.
+    _breathColorCtrl.animateTo(0.0,
         duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+    _circleCtrl.animateTo(1.0,
+        duration: const Duration(milliseconds: halfMs), curve: Curves.easeInOut);
     if (_settings.breathingSoundsEnabled) {
-      _audio.playExhale(
-          targetSecs: _kBreathPauseSecs, volumeFactor: _settings.breathingVolume);
+      _audio.playInhale(
+          targetSecs: half, volumeFactor: _settings.breathingVolume);
     }
-    _circleCtrl.animateTo(0.3,
-        duration: const Duration(seconds: 3), curve: Curves.easeOut);
+
+    // Second half — exhale: contract the orb, exhale colour + cue.
+    _exhalePauseHalfTimer?.cancel();
+    _exhalePauseHalfTimer = Timer(const Duration(milliseconds: halfMs), () {
+      if (!mounted || _phase != _Phase.exhalePause) return;
+      setState(() => _isInhaling = false);
+      _breathColorCtrl.animateTo(1.0,
+          duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+      _circleCtrl.animateTo(0.3,
+          duration: const Duration(milliseconds: halfMs), curve: Curves.easeOut);
+      if (_settings.breathingSoundsEnabled) {
+        _audio.playExhale(
+            targetSecs: half, volumeFactor: _settings.breathingVolume);
+      }
+    });
+
     // Fade the music out gently across the whole pause.
     if (_settings.ambientEnabled) {
       _audio.fadeAmbientTo(0.0, durationMs: _kBreathPauseSecs * 1000);
@@ -669,8 +720,32 @@ class _BreathingExerciseScreenState
         ? 60
         : DateTime.now().difference(_sessionStart!).inSeconds;
 
-    await _audio.stopAll();
+    if (!mounted) return;
 
+    if (_settings.recoveryScreenEnabled) {
+      // Hand the recovery screen the still-playing ambient music: it keeps it
+      // alive until the user taps "continue", then fades it out and reveals
+      // the reflection screen. Stop only the breath cues / hold hum here, and
+      // mark the audio as handed off so dispose() doesn't kill the music.
+      _audio.stopHum();
+      _handOffAudioToRecovery = true;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => BreathingRecoveryScreen(
+            durationSeconds: elapsed,
+            breaths: _totalBreaths,
+            rounds: _roundsCompleted,
+            longestHoldSeconds: _longestHold,
+            totalHoldSeconds: _totalHold,
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Recovery screen disabled — fade the music out smoothly and go straight
+    // to reflection.
+    await _audio.stopAll();
     if (!mounted) return;
     // Reflection first: capture the user's post-practice state, then the
     // reflection screen logs the session (with the metrics below) and reveals
@@ -686,6 +761,23 @@ class _BreathingExerciseScreenState
         ),
       ),
     );
+  }
+
+  /// Auto-launch the interactive Breathing course on first entry (or when
+  /// forced via the knowledge-base replay tile). Replaces the legacy
+  /// full-screen onboarding overlay, which now only shows on demand.
+  void _maybeStartCourse(Profile? profile) {
+    if (_courseChecked) return;
+    if (profile == null && !widget.startCourse) return;
+    _courseChecked = true;
+    final shouldStart =
+        widget.startCourse || !(profile?.hasSeenCourseBreathing ?? true);
+    if (!shouldStart) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(tourControllerProvider.notifier).start(TourType.breathing);
+      }
+    });
   }
 
   // ── Sequences / Journal / Stats ───────────────────────────
@@ -735,10 +827,13 @@ class _BreathingExerciseScreenState
     final c = ref.watch(sieColorsProvider);
 
     final profile = ref.watch(userProfileProvider).valueOrNull;
-    final showOnboarding = _showOnboardingManual ||
-        (!_onboardingDismissed &&
-            profile != null &&
-            !profile.hasSeenOnboardingBreathing);
+
+    // Auto-launch the interactive course on first entry.
+    _maybeStartCourse(profile);
+
+    // The interactive course replaces the auto onboarding overlay; the overlay
+    // now only appears on demand via the info button.
+    final showOnboarding = _showOnboardingManual;
 
     return PopScope(
       canPop: !_sessionActive,
@@ -752,22 +847,29 @@ class _BreathingExerciseScreenState
           child: Scaffold(
             backgroundColor: Colors.transparent,
             body: SafeArea(
-              child: Stack(
+              child: Column(
                 children: [
-                  Positioned(
-                    top: 0, left: 0, right: 0,
-                    child: _TopBar(
+                  _TopBar(
                       phase: _phase,
                       round: _round,
                       totalRounds: _totalRounds,
+                      journalKey: ref
+                          .read(tourControllerProvider.notifier)
+                          .keyFor('breathing_journal'),
                       onBack: _handleBackRequest,
                       onInfo: () => setState(() => _showOnboardingManual = true),
                       onJournal: _openJournal,
                       onStats: _openStats,
                     ),
-                  ),
-                  Center(
+                  Expanded(
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Center(
                     child: GestureDetector(
+                      key: ref
+                          .read(tourControllerProvider.notifier)
+                          .keyFor('breathing_sphere'),
                       onTap: _onSphereTap,
                       onTapDown: (_) {
                         if (_phase == _Phase.idle) {
@@ -815,9 +917,20 @@ class _BreathingExerciseScreenState
                         ),
                       ),
                     ),
-                  Positioned(
-                    bottom: 40, left: 32, right: 32,
-                    child: _buildBottomArea(c),
+                      ],
+                    ),
+                  ),
+                  // Animate the bottom area's height change between phases so
+                  // the Expanded sphere region grows/shrinks smoothly and the
+                  // sphere glides to centre on session start (no hard jump).
+                  AnimatedSize(
+                    duration: SieMotion.slow,
+                    curve: Curves.easeInOut,
+                    alignment: Alignment.topCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(32, 0, 32, 40),
+                      child: _buildBottomArea(c),
+                    ),
                   ),
                 ],
               ),
@@ -833,12 +946,8 @@ class _BreathingExerciseScreenState
             benefit: t.breathingExercise.onboarding.benefit,
             xpReward: 50,
             onAccept: () {
-              if (_showOnboardingManual) {
-                setState(() => _showOnboardingManual = false);
-              } else {
-                setState(() => _onboardingDismissed = true);
-                markOnboardingSeen('breathing');
-              }
+              setState(() => _showOnboardingManual = false);
+              markOnboardingSeen('breathing');
             },
           ),
         ),
@@ -855,7 +964,9 @@ class _BreathingExerciseScreenState
         final t           = _circleCtrl.value;
         final pulse       = (_phase == _Phase.retention) ? _pulseAnim.value : 1.0;
         final colorT      = _breathColorCtrl.value;
-        final size        = (130.0 + t * 130.0) * pulse;
+        // Scale the sphere proportionally so it doesn't overlap the HUD card on
+        // narrow / display-zoomed screens.
+        final size        = (130.0 + t * 130.0).s * pulse;
         final bool isRetention = _phase == _Phase.retention;
 
         final double glow = isRetention
@@ -879,8 +990,8 @@ class _BreathingExerciseScreenState
           children: [
             // Layer 1 — Outer golden corona
             Container(
-              width: size + 60,
-              height: size + 60,
+              width: size + 60.s,
+              height: size + 60.s,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 boxShadow: [
@@ -940,7 +1051,7 @@ class _BreathingExerciseScreenState
                     child: Icon(
                       Icons.fingerprint,
                       color: c.accent.withValues(alpha: 0.35),
-                      size: 36,
+                      size: 36.s,
                     ),
                   ),
                 _Phase.retention => Center(
@@ -979,6 +1090,9 @@ class _BreathingExerciseScreenState
               c,
               blur: 3.5,
               glow: 0.90,
+              key: ref
+                  .read(tourControllerProvider.notifier)
+                  .keyFor('breathing_hud'),
               child: Column(
                 children: [
                   Text(
@@ -1023,13 +1137,29 @@ class _BreathingExerciseScreenState
               ),
             ),
             const SizedBox(height: 16),
-            _SettingsButton(onTap: _showSettings),
+            _SettingsButton(
+              key: ref
+                  .read(tourControllerProvider.notifier)
+                  .keyFor('breathing_settings'),
+              onTap: _showSettings,
+            ),
             if (!_isSequenceMode) ...[
               const SizedBox(height: 12),
-              _SequencesButton(onTap: _openSequences),
+              _SequencesButton(
+                key: ref
+                    .read(tourControllerProvider.notifier)
+                    .keyFor('breathing_sequences'),
+                onTap: _openSequences,
+              ),
             ],
             const SizedBox(height: 16),
-            _SieButton(label: t.breathingExercise.idle.initiateProtocol, onPressed: _startSession),
+            _SieButton(
+              key: ref
+                  .read(tourControllerProvider.notifier)
+                  .keyFor('breathing_initiate'),
+              label: t.breathingExercise.idle.initiateProtocol,
+              onPressed: _startSession,
+            ),
           ],
         );
 
@@ -1137,7 +1267,9 @@ class _BreathingExerciseScreenState
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    t.breathingExercise.exhalePause.title,
+                    _isInhaling
+                        ? t.breathingExercise.active.inhale
+                        : t.breathingExercise.exhalePause.title,
                     style: TextStyle(
                       color: c.accentSecondary,
                       fontSize: 22,
@@ -1482,8 +1614,10 @@ class _BreathingExerciseScreenState
     }
   }
 
-  Widget _hudCard(SieColors c, {double blur = 3.0, double glow = 0.88, required Widget child}) {
+  Widget _hudCard(SieColors c,
+      {double blur = 3.0, double glow = 0.88, Key? key, required Widget child}) {
     return Container(
+      key: key,
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: c.flatCard(radius: 20),
@@ -1502,6 +1636,7 @@ class _TopBar extends ConsumerWidget {
   final VoidCallback onInfo;
   final VoidCallback onJournal;
   final VoidCallback onStats;
+  final Key? journalKey;
 
   const _TopBar({
     required this.phase,
@@ -1511,6 +1646,7 @@ class _TopBar extends ConsumerWidget {
     required this.onInfo,
     required this.onJournal,
     required this.onStats,
+    this.journalKey,
   });
 
   @override
@@ -1521,8 +1657,10 @@ class _TopBar extends ConsumerWidget {
         phase != _Phase.complete;
     final isIdle = phase == _Phase.idle;
 
-    Widget circleBtn(IconData icon, VoidCallback onTap, {double alpha = 1.0}) {
+    Widget circleBtn(IconData icon, VoidCallback onTap,
+        {double alpha = 1.0, Key? key}) {
       return GestureDetector(
+        key: key,
         onTap: onTap,
         child: Container(
           width: 36,
@@ -1553,7 +1691,8 @@ class _TopBar extends ConsumerWidget {
           const Spacer(),
           // Journal & Stats live in the header on the start screen only.
           if (isIdle) ...[
-            circleBtn(Icons.menu_book_outlined, onJournal, alpha: 0.7),
+            circleBtn(Icons.menu_book_outlined, onJournal,
+                alpha: 0.7, key: journalKey),
             const SizedBox(width: 8),
             circleBtn(Icons.insights_outlined, onStats, alpha: 0.7),
             const SizedBox(width: 8),
@@ -1569,7 +1708,7 @@ class _TopBar extends ConsumerWidget {
 
 class _SettingsButton extends ConsumerWidget {
   final VoidCallback onTap;
-  const _SettingsButton({required this.onTap});
+  const _SettingsButton({super.key, required this.onTap});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1605,7 +1744,7 @@ class _SettingsButton extends ConsumerWidget {
 
 class _SequencesButton extends ConsumerWidget {
   final VoidCallback onTap;
-  const _SequencesButton({required this.onTap});
+  const _SequencesButton({super.key, required this.onTap});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1877,6 +2016,14 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 label: t.breathingExercise.settings.clockTicks,
                 value: _s.tickEnabled,
                 onChanged: (v) => _update(_s.copyWith(tickEnabled: v)),
+              ),
+              const SizedBox(height: 12),
+              _sectionLabel(context, c, t.breathingExercise.settings.sectionSession),
+              _ToggleRow(
+                label: t.breathingExercise.settings.recoveryScreen,
+                value: _s.recoveryScreenEnabled,
+                onChanged: (v) =>
+                    _update(_s.copyWith(recoveryScreenEnabled: v)),
               ),
               const SizedBox(height: 12),
               _sectionLabel(context, c, t.breathingExercise.settings.sectionVolume),
@@ -2296,7 +2443,7 @@ class _SieButton extends ConsumerWidget {
   final String label;
   final VoidCallback onPressed;
 
-  const _SieButton({required this.label, required this.onPressed});
+  const _SieButton({super.key, required this.label, required this.onPressed});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

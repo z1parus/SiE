@@ -5,7 +5,8 @@
   "sections": {
     "systemModules": "МОДУЛИ СИСТЕМЫ",
     "progressTable": "ТАБЛИЦА ПРОГРЕССА",
-    "corporateEthics": "КОРПОРАТИВНАЯ ЭТИКА"
+    "corporateEthics": "КОРПОРАТИВНАЯ ЭТИКА",
+    "tutorials": "ОБУЧЕНИЕ"
   },
   "header": {
     "matrixVersion": "SiE KNOWLEDGE MATRIX v1.0",

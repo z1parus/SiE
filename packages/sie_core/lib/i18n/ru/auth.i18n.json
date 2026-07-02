@@ -50,5 +50,11 @@
     "unlinkConfirmBody": "Аккаунт Telegram будет отключён от вашего профиля.",
     "error": "НЕ УДАЛОСЬ ВЫПОЛНИТЬ ВХОД ЧЕРЕЗ TELEGRAM",
     "unlinkError": "НЕ УДАЛОСЬ ОТВЯЗАТЬ TELEGRAM"
+  },
+  "social": {
+    "signInGoogle": "ВОЙТИ ЧЕРЕЗ GOOGLE",
+    "signInApple": "ВОЙТИ ЧЕРЕЗ APPLE",
+    "googleError": "НЕ УДАЛОСЬ ВОЙТИ ЧЕРЕЗ GOOGLE",
+    "appleError": "НЕ УДАЛОСЬ ВОЙТИ ЧЕРЕЗ APPLE"
   }
 }

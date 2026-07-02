@@ -8,6 +8,7 @@ import 'package:home_widget/home_widget.dart';
 import 'package:sie_core/sie_core.dart';
 import 'screens/auth_screen.dart';
 import 'screens/breathing_exercise_screen.dart';
+import 'screens/course_tour_coordinator.dart';
 import 'screens/focus_protocol_screen.dart';
 import 'screens/habit_tracker_screen.dart';
 import 'screens/main_navigation_shell.dart';
@@ -139,18 +140,24 @@ class SieApp extends ConsumerStatefulWidget {
   ConsumerState<SieApp> createState() => _SieAppState();
 }
 
-class _SieAppState extends ConsumerState<SieApp> {
+class _SieAppState extends ConsumerState<SieApp> with WidgetsBindingObserver {
   bool _launchComplete = false;
   StreamSubscription<Uri?>? _widgetClickSub;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Warm the startup reachability probe now so it resolves during the splash
     // animation instead of adding its latency after the splash dismisses.
     ref.read(appModeProvider);
     if (!kIsWeb) _initWidgetDeepLinks();
   }
+
+  // Display-zoom / rotation changes the logical width — rebuild so the theme
+  // and the SieScale factor are recomputed.
+  @override
+  void didChangeMetrics() => setState(() {});
 
   Future<void> _initWidgetDeepLinks() async {
     try {
@@ -176,12 +183,20 @@ class _SieAppState extends ConsumerState<SieApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _widgetClickSub?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Set the proportional UI scale from the real logical width *before* the
+    // theme is built, so theme text sizes (and anything tagged `.s`) use the
+    // right factor from the first frame. `_globalBuilder` refreshes it again
+    // for descendants on every MediaQuery change.
+    final view = View.of(context);
+    SieScale.update(view.physicalSize.width / view.devicePixelRatio);
+
     final sieMode = ref.watch(sieThemeModeProvider).valueOrNull
         ?? SieThemeMode.classicDark;
     // Drive locale from the provider so switching language rebuilds the whole
@@ -197,7 +212,7 @@ class _SieAppState extends ConsumerState<SieApp> {
       locale: locale.flutterLocale,
       supportedLocales: AppLocale.values.map((l) => l.flutterLocale).toList(),
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      builder: kIsWeb ? _webConstraint : null,
+      builder: _globalBuilder,
       home: !_launchComplete
           ? SieSplashScreen(
               onComplete: () => setState(() => _launchComplete = true),
@@ -236,6 +251,39 @@ class _SieAppState extends ConsumerState<SieApp> {
           child: child!,
         ),
       );
+
+  // Mounts the interactive-tour overlay + course coordinator above the whole
+  // navigator, so coach marks also render over pushed routes (mission detail,
+  // tactical map, etc.). Also clamps the system text scale so an enlarged
+  // device font / display-zoom setting (common on Samsung One UI) can't blow
+  // up the tightly-spaced, uppercase + letter-spaced layouts.
+  static Widget _globalBuilder(BuildContext context, Widget? child) {
+    Widget content = child ?? const SizedBox.shrink();
+    if (kIsWeb) content = _webConstraint(context, content);
+    content = Stack(
+      textDirection: TextDirection.ltr,
+      children: [
+        content,
+        const CourseTourCoordinator(),
+        const CoachMarkOverlay(),
+      ],
+    );
+    final mq = MediaQuery.of(context);
+    // Recompute the proportional UI scale from the current width, so sizes
+    // tagged with `.s` shrink on narrow / display-zoomed screens.
+    SieScale.update(mq.size.width);
+    // Text is scaled globally: clamp the system font scale, then multiply by the
+    // width-proportional factor. This shrinks *all* text (theme + explicit
+    // fontSize) on narrow / display-zoomed screens without migrating every
+    // literal — fonts aren't tagged with `.s` (only non-text sizes are).
+    final systemFactor = (mq.textScaler.scale(14.0) / 14.0).clamp(0.0, 1.15);
+    return MediaQuery(
+      data: mq.copyWith(
+        textScaler: TextScaler.linear(systemFactor * SieScale.factor),
+      ),
+      child: content,
+    );
+  }
 }
 
 class _LoadingScreen extends ConsumerWidget {

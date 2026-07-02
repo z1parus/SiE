@@ -114,6 +114,18 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
             c.status == 'accepted' &&
             c.role == 'editor');
 
+    // The Planning course drives the List/Map mode as it walks steps 4-10.
+    final tourSt = ref.watch(tourControllerProvider);
+    final courseScreen =
+        ref.read(tourControllerProvider.notifier).currentScreen;
+    final courseDrivesMap = tourSt.type == TourType.planning &&
+        tourSt.isActive &&
+        !tourSt.isCompleting &&
+        (courseScreen == TourScreen.missionDetail ||
+            courseScreen == TourScreen.tacticalMap);
+    final mapMode =
+        courseDrivesMap ? courseScreen == TourScreen.tacticalMap : _mapMode;
+
     return SieBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -122,8 +134,14 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
           child: Column(
             children: [
               _MissionHeader(
+                viewToggleKey: ref
+                    .read(tourControllerProvider.notifier)
+                    .keyFor('md_view_toggle'),
+                aiKey: ref
+                    .read(tourControllerProvider.notifier)
+                    .keyFor('md_ai_button'),
                 goal: goal,
-                mapMode: _mapMode,
+                mapMode: mapMode,
                 onToggle: () => setState(() => _mapMode = !_mapMode),
                 sc: sc,
                 onBack: () => Navigator.pop(context),
@@ -150,7 +168,7 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
                 onExport: () => _showExportSheet(context, goal, sc),
               ),
               Expanded(
-                child: _mapMode
+                child: mapMode
                     ? RepaintBoundary(
                         key: _mapRepaintKey,
                         child: TacticalMapView(goal: goal, canEdit: canEdit),
@@ -168,6 +186,9 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
               ),
               if (canEdit)
                 _QuickEntryBar(
+                  key: ref
+                      .read(tourControllerProvider.notifier)
+                      .keyFor('md_quick_entry'),
                   goal: goal,
                   sc: sc,
                   selectedSubGoalId: _selectedSubGoalId,
@@ -189,6 +210,7 @@ class _MissionDetailScreenState extends ConsumerState<MissionDetailScreen> {
 
 class _MissionHeader extends StatelessWidget {
   const _MissionHeader({
+    super.key,
     required this.goal,
     required this.mapMode,
     required this.onToggle,
@@ -200,6 +222,8 @@ class _MissionHeader extends StatelessWidget {
     this.onAiDecompose,
     this.isShared = false,
     this.onExport,
+    this.aiKey,
+    this.viewToggleKey,
   });
 
   final Goal goal;
@@ -213,6 +237,10 @@ class _MissionHeader extends StatelessWidget {
   final VoidCallback? onAiDecompose;
   final bool isShared;
   final VoidCallback? onExport;
+
+  // Tour spotlights for the Planning course.
+  final Key? aiKey;
+  final Key? viewToggleKey;
 
   @override
   Widget build(BuildContext context) {
@@ -253,6 +281,7 @@ class _MissionHeader extends StatelessWidget {
               if (onAiDecompose != null) ...[
                 const SizedBox(width: 4),
                 IconButton(
+                  key: aiKey,
                   icon: Icon(Icons.auto_awesome_outlined,
                       color: sc.accent, size: 20),
                   onPressed: onAiDecompose,
@@ -272,7 +301,11 @@ class _MissionHeader extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               _ViewToggle(
-                  mapMode: mapMode, onToggle: onToggle, goalColor: goalColor, sc: sc),
+                  key: viewToggleKey,
+                  mapMode: mapMode,
+                  onToggle: onToggle,
+                  goalColor: goalColor,
+                  sc: sc),
               const SizedBox(width: 2),
               _HeaderOverflowMenu(
                 sc: sc,
@@ -577,6 +610,7 @@ class _HeaderProgressBar extends StatelessWidget {
 
 class _ViewToggle extends StatelessWidget {
   const _ViewToggle({
+    super.key,
     required this.mapMode,
     required this.onToggle,
     required this.goalColor,
@@ -692,8 +726,14 @@ class _DetailListView extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SubGoalsSection(goal: goal, sc: sc,
-                isQuickEntryActive: isQuickEntryActive, canEdit: canEdit),
+            _SubGoalsSection(
+                key: ref
+                    .read(tourControllerProvider.notifier)
+                    .keyFor('md_subgoals_header'),
+                goal: goal,
+                sc: sc,
+                isQuickEntryActive: isQuickEntryActive,
+                canEdit: canEdit),
             const SizedBox(height: 16),
             _MilestonesSection(goal: goal, sc: sc, canEdit: canEdit),
             const SizedBox(height: 16),
@@ -724,6 +764,7 @@ int _completedTasks(SubGoal sg) {
 
 class _SubGoalsSection extends ConsumerStatefulWidget {
   const _SubGoalsSection({
+    super.key,
     required this.goal,
     required this.sc,
     this.isQuickEntryActive = false,
@@ -2196,6 +2237,7 @@ enum _QuickEntryMode { subGoal, task, milestone }
 
 class _QuickEntryBar extends ConsumerStatefulWidget {
   const _QuickEntryBar({
+    super.key,
     required this.goal,
     required this.sc,
     required this.selectedSubGoalId,

@@ -260,9 +260,14 @@ class HabitsDashboard {
   );
 
   static HabitsDashboard compute(
-    List<Habit> habits,
+    List<Habit> allHabits,
     Map<String, Set<String>> logDates,
   ) {
+    // "Avoid" habits (break a bad habit) succeed by abstinence, not by a daily
+    // completion — they have no completion logs, so a completion-rate dashboard
+    // would always score them 0% and dump them into "lagging". They belong to a
+    // different success model, so exclude them from this view entirely.
+    final habits = allHabits.where((h) => !h.isAvoid).toList();
     if (habits.isEmpty) return HabitsDashboard.empty;
 
     final now = DateTime.now();

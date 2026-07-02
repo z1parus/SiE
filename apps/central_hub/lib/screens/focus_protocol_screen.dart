@@ -18,6 +18,7 @@ class FocusProtocolScreen extends ConsumerStatefulWidget {
     super.key,
     this.openSettings = false,
     this.initialTaskRef,
+    this.startCourse = false,
   });
 
   /// When true, the settings sheet auto-opens on entry — used by the
@@ -27,6 +28,10 @@ class FocusProtocolScreen extends ConsumerStatefulWidget {
   /// Optional planning task to focus on (Stage 7). Bound to the session when
   /// the user starts a fresh protocol.
   final FocusTaskRef? initialTaskRef;
+
+  /// When true, force-launch the interactive Focus course on entry (used by
+  /// the "replay course" tile in the knowledge base).
+  final bool startCourse;
 
   @override
   ConsumerState<FocusProtocolScreen> createState() =>
@@ -38,8 +43,8 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
   late final AnimationController _pulseCtrl;
   late final Animation<double>   _pulseAnim;
 
-  bool _onboardingDismissed  = false;
   bool _showOnboardingManual = false;
+  bool _courseChecked = false;
 
   @override
   void initState() {
@@ -72,6 +77,23 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
       ref.read(focusTimerProvider.notifier).handleForeground();
     }
     super.didChangeAppLifecycleState(state);
+  }
+
+  /// Auto-launch the interactive Focus course on first entry (or when forced
+  /// via the knowledge-base replay tile). Replaces the legacy full-screen
+  /// onboarding overlay, which now only shows on demand (info button).
+  void _maybeStartCourse(Profile? profile) {
+    if (_courseChecked) return;
+    if (profile == null && !widget.startCourse) return;
+    _courseChecked = true;
+    final shouldStart =
+        widget.startCourse || !(profile?.hasSeenCourseFocus ?? true);
+    if (!shouldStart) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(tourControllerProvider.notifier).start(TourType.focus);
+      }
+    });
   }
 
   void _onBack() {
@@ -123,10 +145,13 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
     final boundTask = timerState.taskRef ?? widget.initialTaskRef;
 
     final onboardingProfile = ref.watch(userProfileProvider).valueOrNull;
-    final showOnboarding = _showOnboardingManual ||
-        (!_onboardingDismissed &&
-            onboardingProfile != null &&
-            !onboardingProfile.hasSeenOnboardingFocus);
+
+    // Auto-launch the interactive course on first entry.
+    _maybeStartCourse(onboardingProfile);
+
+    // The interactive course replaces the auto onboarding overlay; the overlay
+    // now only appears on demand via the info button.
+    final showOnboarding = _showOnboardingManual;
 
     return Stack(
       children: [
@@ -148,7 +173,11 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
                       ),
                       if (boundTask != null)
                         _FocusTaskBanner(
-                            title: boundTask.taskTitle, color: phaseColor),
+                            key: ref
+                                .read(tourControllerProvider.notifier)
+                                .keyFor('focus_task_banner'),
+                            title: boundTask.taskTitle,
+                            color: phaseColor),
                       // Ring fills vertical space between the two chrome bars
                       Expanded(
                         child: Center(
@@ -157,9 +186,11 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
                             builder: (_, _) => Transform.scale(
                               scale: 1.0 + 0.025 * _pulseAnim.value,
                               child: _FocusRing(
+                                key: ref
+                                    .read(tourControllerProvider.notifier)
+                                    .keyFor('focus_ring'),
                                 formattedTime: timerState.formattedTime,
                                 phaseColor: phaseColor,
-                                phase: timerState.phase,
                                 glowOpacity: _pulseAnim.value * 0.40,
                               ),
                             ),
@@ -179,6 +210,18 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
                         child: _BottomHUD(
                           timerState: timerState,
                           phaseColor: phaseColor,
+                          phaseKey: ref
+                              .read(tourControllerProvider.notifier)
+                              .keyFor('focus_phase'),
+                          xpKey: ref
+                              .read(tourControllerProvider.notifier)
+                              .keyFor('focus_xp'),
+                          settingsKey: ref
+                              .read(tourControllerProvider.notifier)
+                              .keyFor('focus_settings'),
+                          startKey: ref
+                              .read(tourControllerProvider.notifier)
+                              .keyFor('focus_start'),
                           onStart: () => ref
                               .read(focusTimerProvider.notifier)
                               .start(taskRef: widget.initialTaskRef),
@@ -216,12 +259,8 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
             benefit: t.focusProtocol.onboarding.benefit,
             xpReward: 100,
             onAccept: () {
-              if (_showOnboardingManual) {
-                setState(() => _showOnboardingManual = false);
-              } else {
-                setState(() => _onboardingDismissed = true);
-                markOnboardingSeen('focus');
-              }
+              setState(() => _showOnboardingManual = false);
+              markOnboardingSeen('focus');
             },
           ),
         ),
@@ -235,15 +274,14 @@ class _FocusProtocolScreenState extends ConsumerState<FocusProtocolScreen>
 // ─────────────────────────────────────────────────────────────────────────────
 class _FocusRing extends ConsumerWidget {
   const _FocusRing({
+    super.key,
     required this.formattedTime,
     required this.phaseColor,
-    required this.phase,
     required this.glowOpacity,
   });
 
   final String     formattedTime;
   final Color      phaseColor;
-  final FocusPhase phase;
   final double     glowOpacity;
 
   @override
@@ -251,15 +289,16 @@ class _FocusRing extends ConsumerWidget {
     final c = ref.watch(sieColorsProvider);
     final glass = c.glass;
 
+    final ringSize = 284.s;
     return SizedBox(
-      width: 284,
-      height: 284,
+      width: ringSize,
+      height: ringSize,
       child: Stack(
         alignment: Alignment.center,
         children: [
           RepaintBoundary(
             child: FocusOrbitTimer(
-              size: 284,
+              size: ringSize,
               timeText: formattedTime,
               motion: SieMotion.enabled(context),
               gold: phaseColor,
@@ -270,41 +309,6 @@ class _FocusRing extends ConsumerWidget {
               isLight: c.isLightMode,
               centerFontSize: 58,
               glow: !c.isLightMode,
-            ),
-          ),
-
-          // Phase label, floating just below the countdown.
-          Align(
-            alignment: const Alignment(0, 0.42),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: phaseColor.withValues(alpha: 0.35),
-                  width: 0.8,
-                ),
-                borderRadius: BorderRadius.circular(4),
-                color: phaseColor.withValues(alpha: 0.06),
-              ),
-              child: Text(
-                phase == FocusPhase.breakTime
-                    ? t.focusProtocol.ring.breakLabel
-                    : t.focusProtocol.ring.focus,
-                style: TextStyle(
-                  color: phaseColor,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 4.5,
-                  shadows: c.isLightMode
-                      ? null
-                      : [
-                          Shadow(
-                            color: phaseColor.withValues(alpha: 0.65),
-                            blurRadius: 8,
-                          ),
-                        ],
-                ),
-              ),
             ),
           ),
         ],
@@ -380,7 +384,7 @@ class _TopBar extends StatelessWidget {
 
 // Focus Task Banner — shows the planning task this session is bound to.
 class _FocusTaskBanner extends ConsumerWidget {
-  const _FocusTaskBanner({required this.title, required this.color});
+  const _FocusTaskBanner({super.key, required this.title, required this.color});
 
   final String title;
   final Color color;
@@ -456,6 +460,10 @@ class _BottomHUD extends ConsumerWidget {
     required this.onPause,
     required this.onReset,
     required this.onSettings,
+    this.phaseKey,
+    this.xpKey,
+    this.settingsKey,
+    this.startKey,
   });
 
   final FocusTimerState timerState;
@@ -464,6 +472,11 @@ class _BottomHUD extends ConsumerWidget {
   final VoidCallback    onPause;
   final VoidCallback    onReset;
   final VoidCallback    onSettings;
+  // Tour targets (Focus course).
+  final Key? phaseKey;
+  final Key? xpKey;
+  final Key? settingsKey;
+  final Key? startKey;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -492,6 +505,7 @@ class _BottomHUD extends ConsumerWidget {
             children: [
               Expanded(
                 child: Column(
+                  key: phaseKey,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
@@ -530,6 +544,7 @@ class _BottomHUD extends ConsumerWidget {
                 color: c.border,
               ),
               Column(
+                key: xpKey,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
@@ -577,7 +592,7 @@ class _BottomHUD extends ConsumerWidget {
           ),
 
         // ── Settings button ─────────────────────────────────────
-        _SettingsButton(onTap: onSettings),
+        _SettingsButton(key: settingsKey, onTap: onSettings),
 
         const SizedBox(height: 10),
 
@@ -586,6 +601,7 @@ class _BottomHUD extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             SieGlassCard(
+              key: startKey,
               padding: const EdgeInsets.symmetric(
                 horizontal: 36,
                 vertical: 14,
@@ -649,7 +665,7 @@ class _BottomHUD extends ConsumerWidget {
 // Settings Button
 // ─────────────────────────────────────────────────────────────────────────────
 class _SettingsButton extends ConsumerWidget {
-  const _SettingsButton({required this.onTap});
+  const _SettingsButton({super.key, required this.onTap});
   final VoidCallback onTap;
 
   @override

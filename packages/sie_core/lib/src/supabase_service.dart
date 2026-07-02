@@ -57,6 +57,26 @@ class SupabaseService {
     await client.auth.signInWithOAuth(
       OAuthProvider('custom:telegram'),
       redirectTo: 'sie://auth/callback',
+      authScreenLaunchMode: LaunchMode.externalApplication,
+    );
+  }
+
+  /// Launches the Google OAuth flow. Uses the same `sie://auth/callback`
+  /// deep-link redirect as Telegram; `authStateProvider` picks up the session.
+  static Future<void> signInWithGoogle() async {
+    await client.auth.signInWithOAuth(
+      OAuthProvider.google,
+      redirectTo: 'sie://auth/callback',
+      authScreenLaunchMode: LaunchMode.externalApplication,
+    );
+  }
+
+  /// Launches the Apple OAuth flow (web flow — works on Android too).
+  static Future<void> signInWithApple() async {
+    await client.auth.signInWithOAuth(
+      OAuthProvider.apple,
+      redirectTo: 'sie://auth/callback',
+      authScreenLaunchMode: LaunchMode.externalApplication,
     );
   }
 

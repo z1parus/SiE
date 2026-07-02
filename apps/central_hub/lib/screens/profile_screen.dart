@@ -24,6 +24,7 @@ class ProfileScreen extends ConsumerWidget {
     final profileAsync = ref.watch(userProfileProvider);
 
     final body = SafeArea(
+      key: ref.read(tourControllerProvider.notifier).keyFor('profile_body'),
       bottom: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

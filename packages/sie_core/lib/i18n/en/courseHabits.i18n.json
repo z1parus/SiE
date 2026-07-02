@@ -1,0 +1,45 @@
+{
+  "step1": {
+    "title": "Create a habit",
+    "body": "A habit is a behavior protocol. Tap + to create one: manually or from the template library. You can build a good habit or quit a bad one (avoid)."
+  },
+  "step2": {
+    "title": "View modes",
+    "body": "\"Today\" — the daily matrix. \"Week\" — a 7-day strip. \"All time\" — a progress heatmap."
+  },
+  "step3": {
+    "title": "Habit card",
+    "body": "Tap the card to mark it done. Swipe right to pin, left to delete. The streak is shown on the right."
+  },
+  "step4": {
+    "title": "Routines",
+    "body": "Morning and evening routines group habits into sequences. Create them with the buttons below."
+  },
+  "step5": {
+    "title": "Habit stacks",
+    "body": "Beyond morning/evening there are \"stacks\" — named routines tied to a trigger (anchor cue). Create a new stack with this button."
+  },
+  "step6": {
+    "title": "Statistics",
+    "body": "Streak, today's completion, freezes and total done. Freezes (rest days) don't break your streak — rest without losing it."
+  },
+  "step7": {
+    "title": "Analytics",
+    "body": "A heatmap over 16 weeks or a year. Insights: 7/30-day rate, record, best and worst weekday."
+  },
+  "step8": {
+    "title": "Journal",
+    "body": "Add a note and an emoji to any check-in. The journal below is the history of your reflections."
+  },
+  "step9": {
+    "title": "Overview",
+    "body": "The overview screen: weekly and monthly completion rate, an aggregate heatmap, leaders and lagging habits."
+  },
+  "complete": {
+    "title": "COURSE COMPLETE",
+    "body": "You've mastered the Habit Matrix. Discipline is your foundation, operative."
+  },
+  "deleteDemo": "Delete demo habit",
+  "replayItem": "Course: Habits",
+  "demoName": "Drink water"
+}

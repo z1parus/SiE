@@ -77,6 +77,9 @@ class HabitsOverviewScreen extends ConsumerWidget {
                     Row(
                       children: [
                         _RateCard(
+                          key: ref
+                              .read(tourControllerProvider.notifier)
+                              .keyFor('ho_week_rate'),
                           sc: sc,
                           accent: accent,
                           label: t.habitsOverview.rate.week,
@@ -202,6 +205,7 @@ class _RateCard extends StatelessWidget {
   final int total;
 
   const _RateCard({
+    super.key,
     required this.sc,
     required this.accent,
     required this.label,

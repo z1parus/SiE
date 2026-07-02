@@ -103,6 +103,13 @@ class _OperationsControlScreenState
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _showWelcomeModal(profile);
         });
+      } else if (!profile.hasSeenTour && !widget.offline) {
+        // Welcome already seen but the interactive tour hasn't run yet.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ref.read(tourControllerProvider.notifier).start(TourType.app);
+          }
+        });
       }
     });
 
@@ -127,7 +134,10 @@ class _OperationsControlScreenState
                 if (!widget.offline) ...[
                   _DailyTipBanner(),
                   const SizedBox(height: 8),
-                  _LeaderboardTile(),
+                  _LeaderboardTile(
+                      key: ref
+                          .read(tourControllerProvider.notifier)
+                          .keyFor('leaderboard_tile')),
                   const SizedBox(height: 16),
                 ],
               ],
@@ -152,6 +162,9 @@ class _OperationsControlScreenState
                         ),
                       )
                     : _BranchCarousel(
+                        key: ref
+                            .read(tourControllerProvider.notifier)
+                            .keyFor('branch_carousel'),
                         branches: ordered,
                         onBranchTap: (b) => _onBranchTap(context, b),
                         onReorder: (oldIndex, newIndex) {
@@ -235,7 +248,13 @@ class _OperationsControlScreenState
       barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.75),
       builder: (_) => _WelcomeDialog(profile: profile),
-    ).then((_) => markWelcomeSeen(profile.id));
+    ).then((_) {
+      markWelcomeSeen(profile.id);
+      // Kick off the interactive tour right after the welcome modal closes.
+      if (mounted && !profile.hasSeenTour && !widget.offline) {
+        ref.read(tourControllerProvider.notifier).start(TourType.app);
+      }
+    });
   }
 }
 
@@ -574,6 +593,8 @@ class _NavItem extends StatelessWidget {
 // Leaderboard Tile
 // ─────────────────────────────────────────────────────────────────────────────
 class _LeaderboardTile extends StatelessWidget {
+  const _LeaderboardTile({super.key});
+
   @override
   Widget build(BuildContext context) {
     return SieGlassCard(
@@ -622,6 +643,7 @@ class _BranchCarousel extends StatelessWidget {
   final void Function(int oldIndex, int newIndex) onReorder;
 
   const _BranchCarousel({
+    super.key,
     required this.branches,
     required this.onBranchTap,
     required this.onReorder,
@@ -762,9 +784,15 @@ class _BranchCarouselCard extends ConsumerWidget {
           children: [
             Expanded(
               flex: 5,
-              child: Container(
+              child: SizedBox(
                 width: double.infinity,
-                child: _preview(),
+                // scaleDown keeps the preview at its design size when it fits
+                // (zero regression) and shrinks it to fit on short / zoomed
+                // cards instead of overflowing — preserving internal geometry.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: _preview(),
+                ),
               ),
             ),
             Container(
@@ -1926,6 +1954,7 @@ class _ScreenHeader extends ConsumerWidget {
         ),
         const SizedBox(height: 20),
         _XpBar(
+            key: ref.read(tourControllerProvider.notifier).keyFor('xp_bar'),
             xp: xp,
             gradientColors: gradientColors,
             badge: _badge(xp ~/ 1000 + 1),
@@ -1945,6 +1974,7 @@ class _XpBar extends StatelessWidget {
   final SieColors c;
 
   const _XpBar({
+    super.key,
     required this.xp,
     required this.gradientColors,
     required this.badge,
@@ -2472,6 +2502,7 @@ class _DailyTipBannerState extends ConsumerState<_DailyTipBanner>
   Widget build(BuildContext context) {
     final c = ref.watch(sieColorsProvider);
     final tipsAsync = ref.watch(tipsProvider);
+    final lang = ref.watch(localeProvider).languageCode;
 
     tipsAsync.whenData(_pickTip);
 
@@ -2500,7 +2531,7 @@ class _DailyTipBannerState extends ConsumerState<_DailyTipBanner>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _tip!.title,
+                      _tip!.localizedTitle(lang),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -2512,7 +2543,7 @@ class _DailyTipBannerState extends ConsumerState<_DailyTipBanner>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _tip!.description,
+                      _tip!.localizedDescription(lang),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -2530,7 +2561,7 @@ class _DailyTipBannerState extends ConsumerState<_DailyTipBanner>
                 behavior: HitTestBehavior.opaque,
                 child: Semantics(
                   button: true,
-                  label: 'Закрыть подсказку',
+                  label: t.operations.tip.close,
                   child: Padding(
                     padding: const EdgeInsets.all(2),
                     child: Icon(Icons.close,

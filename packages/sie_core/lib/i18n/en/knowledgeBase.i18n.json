@@ -5,7 +5,8 @@
   "sections": {
     "systemModules": "SYSTEM MODULES",
     "progressTable": "PROGRESS TABLE",
-    "corporateEthics": "CORPORATE ETHICS"
+    "corporateEthics": "CORPORATE ETHICS",
+    "tutorials": "TUTORIALS"
   },
   "header": {
     "matrixVersion": "SiE KNOWLEDGE MATRIX v1.0",
