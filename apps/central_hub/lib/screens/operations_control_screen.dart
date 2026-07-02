@@ -1287,12 +1287,13 @@ class _TipBriefBlock extends ConsumerWidget {
     final lang = ref.watch(localeProvider).languageCode;
 
     final Widget body;
+    Tip? tip;
     if (tips.isEmpty) {
       body = _BriefLine(t.operationalBrief.tip.empty);
     } else {
       final now = DateTime.now();
       final dayIndex = now.difference(DateTime(now.year)).inDays;
-      final tip = tips[dayIndex % tips.length];
+      tip = tips[dayIndex % tips.length];
       body = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -1304,12 +1305,94 @@ class _TipBriefBlock extends ConsumerWidget {
       );
     }
 
+    final selected = tip;
     return _BriefEntry(
       lead: _pickLead(t.operationalBrief.tip.lead),
       card: _BriefCardShell(
         leading: Icon(Icons.lightbulb_outline, color: c.accent, size: 44),
         title: t.operationalBrief.tip.title,
         body: body,
+        // Tap opens the full tip — the block preview truncates the text.
+        onOpen: selected == null
+            ? null
+            : () => showDialog<void>(
+                  context: context,
+                  barrierColor: Colors.black.withValues(alpha: 0.6),
+                  builder: (_) => _TipDialog(tip: selected, lang: lang),
+                ),
+      ),
+    );
+  }
+}
+
+/// Centered, minimalist dialog showing a daily tip in full (the brief block
+/// only previews the first few lines).
+class _TipDialog extends ConsumerWidget {
+  final Tip tip;
+  final String lang;
+  const _TipDialog({required this.tip, required this.lang});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+      child: Container(
+        decoration: c.briefCard(radius: 24),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.lightbulb_outline, color: c.accent, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    t.operationalBrief.tip.title,
+                    style: TextStyle(
+                      color: c.accent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.6,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  behavior: HitTestBehavior.opaque,
+                  child: Icon(Icons.close, color: c.iconMuted, size: 18),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              tip.localizedTitle(lang),
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                height: 1.3,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Text(
+                  tip.localizedDescription(lang),
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 14,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
