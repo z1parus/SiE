@@ -1814,7 +1814,13 @@ Future<void> autoCompleteHabitsFromActivity(
   int minutes = 0,
   String? goalId,
 }) async {
+  // Keep the (auto-dispose) habits provider alive across the awaits below.
+  // Otherwise it can be torn down between building it and using its notifier —
+  // e.g. right after a meditation screen pops, when nothing else watches it —
+  // leaving the notifier in a loading state so auto-completion silently no-ops.
+  ProviderSubscription<AsyncValue<HabitsState>>? sub;
   try {
+    sub = ref.listen(habitsProvider, (_, __) {});
     await ref.read(habitsProvider.future);
     await ref.read(habitsProvider.notifier).autoCompleteFromActivity(
           source: source,
@@ -1823,6 +1829,8 @@ Future<void> autoCompleteHabitsFromActivity(
         );
   } catch (_) {
     // best-effort — auto-completion never blocks the activity flow
+  } finally {
+    sub?.close();
   }
 }
 
