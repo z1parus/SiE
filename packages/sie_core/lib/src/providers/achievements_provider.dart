@@ -8,6 +8,7 @@ import '../local/app_database.dart';
 import '../models/achievement.dart';
 import '../widgets_home/widget_render_service.dart';
 import 'auth_state_provider.dart';
+import 'habits_provider.dart';
 import 'connectivity_provider.dart';
 import 'user_profile_provider.dart';
 
@@ -132,6 +133,10 @@ class SessionCompletionNotifier extends Notifier<void> {
         .read(userProfileProvider.notifier)
         .applyLocalXpDelta(xp, _breathingDp);
 
+    // Ecosystem Pillar 1: auto-complete habits linked to breathing activity.
+    await autoCompleteHabitsFromActivity(ref,
+        source: 'breathing', minutes: durationSeconds ~/ 60);
+
     return (xpGained: xp, dpGained: _breathingDp, newAchievement: earned);
   }
 
@@ -201,6 +206,11 @@ class SessionCompletionNotifier extends Notifier<void> {
     } else {
       await db.enqueueSyncOp('insert_breathing_session', jsonEncode(sessionRow));
     }
+
+    // Ecosystem Pillar 1: the breathing part of a chain still counts for
+    // breathing-source habits (decision: both breathing and meditation count).
+    await autoCompleteHabitsFromActivity(ref,
+        source: 'breathing', minutes: durationSeconds ~/ 60);
   }
 }
 

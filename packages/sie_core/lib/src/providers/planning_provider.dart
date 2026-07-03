@@ -1784,6 +1784,12 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     // right after the local write (the online path below may early-return).
     _refreshHomeWidgets();
 
+    // Ecosystem Pillar 1: completing a task auto-completes 'task'-source habits
+    // linked to this task's goal.
+    if (nowCompleted) {
+      await autoCompleteHabitsFromActivity(ref, source: 'task', goalId: goalId);
+    }
+
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
     var syncedToServer = false;
     if (isOnline) {

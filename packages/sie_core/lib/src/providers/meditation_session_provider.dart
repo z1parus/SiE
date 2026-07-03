@@ -10,6 +10,7 @@ import '../models/meditation_preset.dart';
 import '../models/affirmation_pack.dart';
 import '../services/audio_service.dart';
 import 'connectivity_provider.dart';
+import 'habits_provider.dart';
 import 'user_profile_provider.dart';
 
 const _uuid = Uuid();
@@ -478,6 +479,11 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
     try {
       ref.read(userProfileProvider.notifier).applyLocalXpDelta(xp, dp);
     } catch (_) {}
+
+    // Ecosystem Pillar 1: auto-complete habits linked to meditation activity
+    // (the meditation part of a chain counts for meditation-source habits).
+    await autoCompleteHabitsFromActivity(ref,
+        source: 'meditation', minutes: totalDuration ~/ 60);
 
     state = state.copyWith(
       phase: MeditationPhase.complete,

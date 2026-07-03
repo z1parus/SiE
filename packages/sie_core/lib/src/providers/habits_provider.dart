@@ -1122,6 +1122,122 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     _refreshHomeWidgets();
   }
 
+  // ── Activity → Habit auto-completion (Ecosystem Pillar 1) ───────────────────
+
+  /// Links a habit to an activity [source] ('focus'|'breathing'|'meditation'|
+  /// 'task') so completing that activity auto-logs the habit. [minValue] is an
+  /// optional threshold (minutes for practices).
+  Future<void> addActivityLink(String habitId, String source,
+      {double? minValue}) async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) return;
+    final db = ref.read(appDatabaseProvider);
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final id = _uuid.v4();
+    final row = {
+      'id': id,
+      'habit_id': habitId,
+      'user_id': userId,
+      'source': source,
+      'min_value': minValue,
+    };
+    await db.upsertActivityHabitLink(LocalActivityHabitLinksCompanion(
+      id: Value(id),
+      habitId: Value(habitId),
+      userId: Value(userId),
+      source: Value(source),
+      minValue: Value(minValue),
+      createdAtMs: Value(DateTime.now().millisecondsSinceEpoch),
+      synced: Value(isOnline),
+    ));
+    if (isOnline) {
+      try {
+        await client.from('activity_habit_links').insert(row);
+      } catch (_) {
+        await db.enqueueSyncOp('insert_activity_habit_link', jsonEncode(row));
+      }
+    } else {
+      await db.enqueueSyncOp('insert_activity_habit_link', jsonEncode(row));
+    }
+  }
+
+  Future<void> removeActivityLink(String linkId) async {
+    final client = Supabase.instance.client;
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final db = ref.read(appDatabaseProvider);
+    await db.softDeleteActivityHabitLink(linkId);
+    if (isOnline) {
+      try {
+        await client.from('activity_habit_links').delete().eq('id', linkId);
+      } catch (_) {
+        await db.enqueueSyncOp(
+            'delete_activity_habit_link', jsonEncode({'id': linkId}));
+      }
+    } else {
+      await db.enqueueSyncOp(
+          'delete_activity_habit_link', jsonEncode({'id': linkId}));
+    }
+  }
+
+  /// Auto-completes habits linked to a just-finished activity. [minutes] is the
+  /// activity's duration (practices); [goalId] scopes the 'task' source to
+  /// habits linked to that goal. Best-effort — never throws to the caller.
+  Future<void> autoCompleteFromActivity({
+    required String source,
+    int minutes = 0,
+    String? goalId,
+  }) async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final db = ref.read(appDatabaseProvider);
+    final links = await db.activityLinksForSource(userId, source);
+    if (links.isEmpty) return;
+
+    final st = state.valueOrNull;
+    if (st == null) return;
+
+    // 'task' source only counts for habits linked to the completed task's goal.
+    Set<String>? goalHabitIds;
+    if (source == 'task' && goalId != null) {
+      final gl = await db.habitLinksForGoal(goalId);
+      goalHabitIds = gl.map((l) => l.habitId).toSet();
+    }
+
+    final today = DateTime.now();
+    final todayStr = _fmt(today);
+
+    for (final link in links) {
+      if (source == 'task' &&
+          goalHabitIds != null &&
+          !goalHabitIds.contains(link.habitId)) {
+        continue;
+      }
+      final habit = st.habits
+          .cast<Habit?>()
+          .firstWhere((h) => h?.id == link.habitId, orElse: () => null);
+      if (habit == null || habit.isAvoid) continue;
+
+      // Threshold (minutes) for practice sources.
+      if (link.minValue != null && minutes < link.minValue!) continue;
+
+      try {
+        if (habit.isMetric) {
+          final delta = habit.kind == 'duration' ? minutes.toDouble() : 1.0;
+          if (delta <= 0) continue;
+          await logHabitValue(habit.id, today, delta);
+        } else {
+          final done = st.logDates[habit.id]?.contains(todayStr) ?? false;
+          if (!done) await toggleHabit(habit.id, today);
+        }
+      } catch (_) {
+        // best-effort per habit
+      }
+    }
+  }
+
   Future<void> archiveHabit(String habitId) async {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
@@ -1669,6 +1785,34 @@ final habitsProvider =
     AsyncNotifierProvider.autoDispose<HabitsNotifier, HabitsState>(
   HabitsNotifier.new,
 );
+
+/// Active activity→habit links for one habit (for the habit editor UI).
+final activityHabitLinksProvider = FutureProvider.autoDispose
+    .family<List<LocalActivityHabitLink>, String>((ref, habitId) async {
+  final db = ref.read(appDatabaseProvider);
+  return db.activityLinksForHabit(habitId);
+});
+
+/// Best-effort entry point used by the practice/planning modules to auto-log
+/// habits linked to a just-finished activity (Ecosystem Pillar 1). Ensures the
+/// habits state is loaded first so toggle/value writes see current data.
+Future<void> autoCompleteHabitsFromActivity(
+  Ref ref, {
+  required String source,
+  int minutes = 0,
+  String? goalId,
+}) async {
+  try {
+    await ref.read(habitsProvider.future);
+    await ref.read(habitsProvider.notifier).autoCompleteFromActivity(
+          source: source,
+          minutes: minutes,
+          goalId: goalId,
+        );
+  } catch (_) {
+    // best-effort — auto-completion never blocks the activity flow
+  }
+}
 
 final archivedHabitsProvider =
     AutoDisposeFutureProvider<List<Habit>>((ref) async {

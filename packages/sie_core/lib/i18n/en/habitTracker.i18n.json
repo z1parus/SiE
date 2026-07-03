@@ -66,7 +66,10 @@
     "area": "AREA",
     "cancel": "CANCEL",
     "save": "SAVE",
-    "deploy": "DEPLOY"
+    "deploy": "DEPLOY",
+    "activitySources": "Auto-completed by activity",
+    "activitySourcesHint": "This habit is logged automatically when you finish the selected activity in other modules.",
+    "sourceTask": "Task"
   },
   "typeEditor": {
     "binary": "Yes / No",

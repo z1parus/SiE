@@ -66,7 +66,10 @@
     "area": "СФЕРА",
     "cancel": "CANCEL",
     "save": "SAVE",
-    "deploy": "DEPLOY"
+    "deploy": "DEPLOY",
+    "activitySources": "Засчитывается активностью",
+    "activitySourcesHint": "Привычка будет автоматически отмечаться при завершении выбранной активности в других модулях.",
+    "sourceTask": "Задача"
   },
   "typeEditor": {
     "binary": "Да / Нет",

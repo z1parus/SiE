@@ -113,6 +113,25 @@ class LocalBreathingSessions extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// Ecosystem Pillar 1: a habit can be auto-completed by activity from another
+/// module. Each row links a habit to a source ('focus'|'breathing'|
+/// 'meditation'|'task'); [minValue] is an optional threshold (minutes/count).
+@DataClassName('LocalActivityHabitLink')
+class LocalActivityHabitLinks extends Table {
+  TextColumn get id => text()();
+  TextColumn get habitId => text()();
+  TextColumn get userId => text()();
+  TextColumn get source => text()();
+  RealColumn get minValue => real().nullable()();
+  IntColumn get createdAtMs => integer()();
+  BoolColumn get deletedLocally =>
+      boolean().withDefault(const Constant(false))();
+  BoolColumn get synced => boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 // Stores the profile with pending offline deltas.
 // cachedJson holds the full Supabase JSON snapshot for offline display.
 @DataClassName('LocalProfileData')
@@ -510,6 +529,7 @@ class LocalBreathingSequences extends Table {
 @DriftDatabase(tables: [
   LocalHabits,
   LocalHabitLogs,
+  LocalActivityHabitLinks,
   LocalFocusSessions,
   LocalBreathingSessions,
   LocalProfiles,
@@ -541,7 +561,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 40;
+  int get schemaVersion => 41;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -805,6 +825,10 @@ class AppDatabase extends _$AppDatabase {
             localBreathingSessions.meditationSessionId);
         await m.addColumn(localMeditationSessions,
             localMeditationSessions.breathingSessionId);
+      }
+      if (from < 41) {
+        // Ecosystem Pillar 1: activity → habit auto-completion links.
+        await m.createTable(localActivityHabitLinks);
       }
       } catch (e) {
         // Migration failed (e.g. table/column already exists from a dev build
@@ -1797,6 +1821,39 @@ class AppDatabase extends _$AppDatabase {
   Future<List<LocalHabitLog>> habitLogsForDate(String dateKey) =>
       (select(localHabitLogs)
             ..where((t) => t.completedAt.equals(dateKey)))
+          .get();
+
+  // ── Activity → Habit links (Ecosystem Pillar 1) ─────────────────────────────
+
+  Future<void> upsertActivityHabitLink(
+          LocalActivityHabitLinksCompanion row) =>
+      into(localActivityHabitLinks).insertOnConflictUpdate(row);
+
+  Future<void> softDeleteActivityHabitLink(String id) =>
+      (update(localActivityHabitLinks)..where((t) => t.id.equals(id))).write(
+          const LocalActivityHabitLinksCompanion(
+              deletedLocally: Value(true), synced: Value(false)));
+
+  Future<List<LocalActivityHabitLink>> activityLinksForHabit(String habitId) =>
+      (select(localActivityHabitLinks)
+            ..where((t) =>
+                t.habitId.equals(habitId) & t.deletedLocally.not()))
+          .get();
+
+  /// All active links for a given activity [source] — drives auto-completion.
+  Future<List<LocalActivityHabitLink>> activityLinksForSource(
+          String userId, String source) =>
+      (select(localActivityHabitLinks)
+            ..where((t) =>
+                t.userId.equals(userId) &
+                t.source.equals(source) &
+                t.deletedLocally.not()))
+          .get();
+
+  Future<List<LocalActivityHabitLink>> unsyncedActivityHabitLinks(
+          String userId) =>
+      (select(localActivityHabitLinks)
+            ..where((t) => t.userId.equals(userId) & t.synced.equals(false)))
           .get();
 
   /// All breathing sessions for the Breathing home widget, newest first.

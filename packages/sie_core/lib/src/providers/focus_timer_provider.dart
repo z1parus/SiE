@@ -10,6 +10,7 @@ import '../models/achievement.dart';
 import '../services/audio_service.dart';
 import '../widgets_home/widget_render_service.dart';
 import 'connectivity_provider.dart';
+import 'habits_provider.dart';
 import 'user_profile_provider.dart';
 
 const _focusXp = 100;
@@ -527,6 +528,10 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
       await ref
           .read(userProfileProvider.notifier)
           .applyLocalXpDelta(_focusXp, _focusDp);
+
+      // Ecosystem Pillar 1: auto-complete habits linked to focus activity.
+      await autoCompleteHabitsFromActivity(ref,
+          source: 'focus', minutes: settings.workSecs ~/ 60);
 
       return (
         xpGained: _focusXp,
