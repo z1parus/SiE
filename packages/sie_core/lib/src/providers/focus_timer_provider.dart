@@ -531,7 +531,7 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
 
       // Ecosystem Pillar 1: auto-complete habits linked to focus activity.
       await autoCompleteHabitsFromActivity(ref,
-          source: 'focus', minutes: settings.workSecs ~/ 60);
+          source: 'focus', seconds: settings.workSecs);
 
       return (
         xpGained: _focusXp,

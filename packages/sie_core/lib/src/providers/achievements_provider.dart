@@ -135,7 +135,7 @@ class SessionCompletionNotifier extends Notifier<void> {
 
     // Ecosystem Pillar 1: auto-complete habits linked to breathing activity.
     await autoCompleteHabitsFromActivity(ref,
-        source: 'breathing', minutes: durationSeconds ~/ 60);
+        source: 'breathing', seconds: durationSeconds);
 
     return (xpGained: xp, dpGained: _breathingDp, newAchievement: earned);
   }
@@ -210,7 +210,7 @@ class SessionCompletionNotifier extends Notifier<void> {
     // Ecosystem Pillar 1: the breathing part of a chain still counts for
     // breathing-source habits (decision: both breathing and meditation count).
     await autoCompleteHabitsFromActivity(ref,
-        source: 'breathing', minutes: durationSeconds ~/ 60);
+        source: 'breathing', seconds: durationSeconds);
   }
 }
 

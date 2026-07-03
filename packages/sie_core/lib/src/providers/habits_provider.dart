@@ -1185,7 +1185,7 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
   /// habits linked to that goal. Best-effort — never throws to the caller.
   Future<void> autoCompleteFromActivity({
     required String source,
-    int minutes = 0,
+    int seconds = 0,
     String? goalId,
   }) async {
     final client = Supabase.instance.client;
@@ -1224,17 +1224,17 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           .firstWhere((h) => h?.id == link.habitId, orElse: () => null);
       if (habit == null || habit.isAvoid) continue;
 
-      // Threshold (minutes) for practice sources.
-      if (link.minValue != null && minutes < link.minValue!) continue;
+      // Threshold (in seconds) for practice sources.
+      if (link.minValue != null && seconds < link.minValue!) continue;
 
       try {
         if (habit.isMetric) {
-          // "Sum the fact": timed practices add their minutes to a duration
-          // habit; everything else (count habits, task events, zero-duration)
-          // adds one step (one occurrence).
+          // "Sum the fact": a timed practice adds its seconds to a duration
+          // habit (whose target/step are stored in seconds). Everything else
+          // (count habits, task events, zero-duration) adds one step.
           final double delta;
-          if (habit.kind == 'duration' && minutes > 0) {
-            delta = minutes.toDouble();
+          if (habit.kind == 'duration' && seconds > 0) {
+            delta = seconds.toDouble();
           } else {
             delta = (habit.step != null && habit.step! > 0) ? habit.step! : 1.0;
           }
@@ -1811,26 +1811,22 @@ final activityHabitLinksProvider = FutureProvider.autoDispose
 Future<void> autoCompleteHabitsFromActivity(
   Ref ref, {
   required String source,
-  int minutes = 0,
+  int seconds = 0,
   String? goalId,
 }) async {
-  // Keep the (auto-dispose) habits provider alive across the awaits below.
-  // Otherwise it can be torn down between building it and using its notifier —
-  // e.g. right after a meditation screen pops, when nothing else watches it —
-  // leaving the notifier in a loading state so auto-completion silently no-ops.
-  ProviderSubscription<AsyncValue<HabitsState>>? sub;
   try {
-    sub = ref.listen(habitsProvider, (_, __) {});
+    // Load the habits state first so toggle/value writes see current data.
+    // Callers must invoke this while their own (non-disposed) context is alive —
+    // e.g. awaited before navigating away — so the provider isn't torn down
+    // mid-operation.
     await ref.read(habitsProvider.future);
     await ref.read(habitsProvider.notifier).autoCompleteFromActivity(
           source: source,
-          minutes: minutes,
+          seconds: seconds,
           goalId: goalId,
         );
   } catch (_) {
     // best-effort — auto-completion never blocks the activity flow
-  } finally {
-    sub?.close();
   }
 }
 

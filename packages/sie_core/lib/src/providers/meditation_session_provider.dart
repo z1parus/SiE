@@ -255,11 +255,14 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
     state = const MeditationSessionState();
   }
 
-  void completeSession(int stateAfter) {
+  Future<void> completeSession(int stateAfter) async {
     _cancelTimers();
     _audio.stopAll();
     final elapsed = state.breathingElapsedSecs + state.meditationElapsedSecs;
-    _saveSession(elapsed, stateAfter);
+    // Awaited by the caller so the save + habit auto-completion finish while the
+    // session screen is still mounted (before it pops) — otherwise the
+    // auto-dispose habits provider can be torn down mid-write.
+    await _saveSession(elapsed, stateAfter);
   }
 
   void setMixerVisible(bool visible) {
@@ -483,7 +486,7 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
     // Ecosystem Pillar 1: auto-complete habits linked to meditation activity
     // (the meditation part of a chain counts for meditation-source habits).
     await autoCompleteHabitsFromActivity(ref,
-        source: 'meditation', minutes: totalDuration ~/ 60);
+        source: 'meditation', seconds: totalDuration);
 
     state = state.copyWith(
       phase: MeditationPhase.complete,

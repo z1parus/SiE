@@ -400,12 +400,14 @@ class _MeditationSessionScreenState
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) => _CompletionSheet(
-        onComplete: (stateAfter) {
+        onComplete: (stateAfter) async {
           Navigator.of(context).pop(); // close sheet
-          ref
+          // Await the save + habit auto-completion while the session screen is
+          // still mounted, then pop it.
+          await ref
               .read(meditationSessionProvider.notifier)
               .completeSession(stateAfter);
-          Navigator.of(context).pop(); // pop session screen
+          if (mounted) Navigator.of(context).pop(); // pop session screen
         },
       ),
     );
