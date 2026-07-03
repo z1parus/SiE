@@ -1209,12 +1209,16 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     final today = DateTime.now();
     final todayStr = _fmt(today);
 
+    // One auto-log per habit per activity, even if several links point at it.
+    final processed = <String>{};
     for (final link in links) {
       if (source == 'task' &&
           goalHabitIds != null &&
           !goalHabitIds.contains(link.habitId)) {
         continue;
       }
+      if (!processed.add(link.habitId)) continue;
+
       final habit = st.habits
           .cast<Habit?>()
           .firstWhere((h) => h?.id == link.habitId, orElse: () => null);
@@ -1225,7 +1229,15 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
 
       try {
         if (habit.isMetric) {
-          final delta = habit.kind == 'duration' ? minutes.toDouble() : 1.0;
+          // "Sum the fact": timed practices add their minutes to a duration
+          // habit; everything else (count habits, task events, zero-duration)
+          // adds one step (one occurrence).
+          final double delta;
+          if (habit.kind == 'duration' && minutes > 0) {
+            delta = minutes.toDouble();
+          } else {
+            delta = (habit.step != null && habit.step! > 0) ? habit.step! : 1.0;
+          }
           if (delta <= 0) continue;
           await logHabitValue(habit.id, today, delta);
         } else {

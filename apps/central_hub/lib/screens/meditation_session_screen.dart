@@ -179,9 +179,18 @@ class _MeditationSessionScreenState
     ref.listen<MeditationSessionState>(meditationSessionProvider,
         (prev, next) {
       _syncAnimations(next);
-      if (next.phase == MeditationPhase.complete &&
-          (prev?.phase != MeditationPhase.complete)) {
-        _showCompletionSheet();
+      // When the meditation ends it enters reflectionPause (a brief "preparing"
+      // beat). After it, present the reflection/completion sheet — where the
+      // user picks their after-state and the session is saved.
+      if (next.phase == MeditationPhase.reflectionPause &&
+          prev?.phase != MeditationPhase.reflectionPause) {
+        Future.delayed(const Duration(milliseconds: 1400), () {
+          if (mounted &&
+              ref.read(meditationSessionProvider).phase ==
+                  MeditationPhase.reflectionPause) {
+            _showCompletionSheet();
+          }
+        });
       }
     });
 
@@ -930,9 +939,14 @@ class _CompletionSheetState extends ConsumerState<_CompletionSheet> {
     final c = ref.watch(sieColorsProvider);
     final s = ref.watch(meditationSessionProvider);
     final breathingMins = s.chainedBreathingSeconds ~/ 60;
-    final durationMins =
-        (s.meditationElapsedSecs + s.chainedBreathingSeconds) ~/ 60;
+    final totalSecs = s.meditationElapsedSecs + s.chainedBreathingSeconds;
+    final durationMins = totalSecs ~/ 60;
+    // The sheet is shown before the session is saved, so derive the reward for
+    // display from the duration (mirrors the server/offline formula). Once
+    // saved, [completionResult] carries the authoritative figures.
     final result = s.completionResult;
+    final shownXp = result?.xpGained ?? (totalSecs ~/ 60) * 5;
+    final shownDp = result?.dpGained ?? totalSecs ~/ 120;
 
     return SafeArea(
       child: Padding(
@@ -959,14 +973,12 @@ class _CompletionSheetState extends ConsumerState<_CompletionSheet> {
                     c: c),
                 const SizedBox(width: 16),
                 _ResultChip(
-                    label: t.meditationSession.completion
-                        .xpGained(xp: result?.xpGained ?? 0),
+                    label: t.meditationSession.completion.xpGained(xp: shownXp),
                     icon: Icons.bolt_rounded,
                     c: c),
                 const SizedBox(width: 16),
                 _ResultChip(
-                    label: t.meditationSession.completion
-                        .dpGained(dp: result?.dpGained ?? 0),
+                    label: t.meditationSession.completion.dpGained(dp: shownDp),
                     icon: Icons.diamond_outlined,
                     c: c),
               ],
