@@ -18,6 +18,19 @@
     "hintLow": "Your tone is low — start with some breathing.",
     "hintHigh": "You're sharp — time for deep work."
   },
+  "areas": {
+    "title": "LIFE BALANCE",
+    "lead": "How your effort is spread across life areas.",
+    "neglectedLead": "The \"{area}\" area has been quiet — worth returning to.",
+    "empty": "Tag your goals and habits with areas to see your balance.",
+    "screenTitle": "LIFE BALANCE",
+    "screenSubtitle": "Activity by area over the last 7 days",
+    "statHabits": "habits: {n}",
+    "statGoals": "goals: {n}",
+    "statSessions": "sessions: {n}",
+    "suggestFocus": "Give this area some attention — set a goal or habit.",
+    "emp04": "Empty"
+  },
   "blocks": {
     "focus": "Ready for a deep-work session?",
     "breathing": "Restore your breath and refocus.",

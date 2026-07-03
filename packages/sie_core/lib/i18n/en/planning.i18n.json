@@ -83,6 +83,7 @@
     "missionColor": "MISSION COLOR",
     "deadlineSet": "Deadline: {date}",
     "deadlineEmpty": "Set deadline (optional)",
-    "submit": "CREATE MISSION"
+    "submit": "CREATE MISSION",
+    "area": "Life area"
   }
 }

@@ -11,6 +11,7 @@ import 'breathing_exercise_screen.dart';
 import 'focus_protocol_screen.dart';
 import 'habit_tracker_screen.dart';
 import 'leaderboard_screen.dart';
+import 'life_areas_screen.dart';
 import 'meditation_hub_screen.dart';
 import 'planning_screen.dart';
 import 'session_orb_painters.dart';
@@ -638,6 +639,7 @@ class OperationalBriefView extends ConsumerWidget {
       'habit_archive' => _HabitsBriefBlock(onOpen: open),
       'daily_tip' => const _TipBriefBlock(),
       'leaderboard' => const _LeaderboardBriefBlock(),
+      'life_areas' => const _LifeAreasBriefBlock(),
       _ => _GenericBriefBlock(slug: slug, onOpen: open),
     };
   }
@@ -681,10 +683,12 @@ class OperationalBriefView extends ConsumerWidget {
     // Two modules per magnetic slide; the greeting rides above as a fixed
     // header. A final "day summary" slide gathers the daily tip + leaderboard.
     final slugs = _sortedSlugs(ref);
+    const extras = ['life_areas', 'daily_tip', 'leaderboard'];
     final pages = <List<String>>[
       for (var i = 0; i < slugs.length; i += 2)
         slugs.sublist(i, math.min(i + 2, slugs.length)),
-      ['daily_tip', 'leaderboard'],
+      for (var i = 0; i < extras.length; i += 2)
+        extras.sublist(i, math.min(i + 2, extras.length)),
     ];
 
     return Column(
@@ -1493,6 +1497,81 @@ class _LeaderboardBriefBlock extends ConsumerWidget {
         body: _BriefLine(t.operations.leaderboard.subtitle),
         onOpen: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+        ),
+      ),
+    );
+  }
+}
+
+/// Life Balance — a cross-module rollup by life area (Ecosystem Pillar 3),
+/// with a gentle nudge toward a neglected area. Taps into the full screen.
+class _LifeAreasBriefBlock extends ConsumerWidget {
+  const _LifeAreasBriefBlock();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final data = ref.watch(lifeAreasProvider).valueOrNull;
+    final neglected = data?.neglected;
+    final maxScore = data?.maxScore ?? 0;
+
+    final lead = neglected != null
+        ? t.operationalBrief.areas.neglectedLead(area: neglected.label)
+        : t.operationalBrief.areas.lead;
+
+    // Compact 6-area strip: icon + a tiny bar scaled to the area's score.
+    final body = Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          for (final area in LifeArea.values)
+            Builder(builder: (_) {
+              final s = data?.statFor(area).score ?? 0;
+              final f = maxScore > 0 ? (s / maxScore).clamp(0.0, 1.0) : 0.0;
+              final isNeglected = area == neglected;
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Opacity(
+                    opacity: s > 0 ? 1.0 : 0.35,
+                    child: Text(area.icon, style: const TextStyle(fontSize: 15)),
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    width: 16,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: c.border.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: f == 0 ? 0.001 : f,
+                      child: Container(
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: isNeglected ? c.warning : c.accent,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }),
+        ],
+      ),
+    );
+
+    return _BriefEntry(
+      lead: lead,
+      card: _BriefCardShell(
+        leading: Icon(Icons.donut_small_outlined, color: c.accent, size: 40),
+        title: t.operationalBrief.areas.title,
+        body: body,
+        onOpen: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const LifeAreasScreen()),
         ),
       ),
     );

@@ -208,6 +208,8 @@ class LocalGoals extends Table {
   BoolColumn get isPinned          => boolean().withDefault(const Constant(false))();
   BoolColumn get isShared          => boolean().withDefault(const Constant(false))();
   TextColumn get myRole            => text().nullable()();
+  // Ecosystem Pillar 3 — life area (LifeArea.name) this goal belongs to.
+  TextColumn get area              => text().nullable()();
   @override Set<Column> get primaryKey => {id};
 }
 
@@ -561,7 +563,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 41;
+  int get schemaVersion => 42;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -829,6 +831,10 @@ class AppDatabase extends _$AppDatabase {
       if (from < 41) {
         // Ecosystem Pillar 1: activity → habit auto-completion links.
         await m.createTable(localActivityHabitLinks);
+      }
+      if (from < 42) {
+        // Ecosystem Pillar 3: life area on goals.
+        await m.addColumn(localGoals, localGoals.area);
       }
       } catch (e) {
         // Migration failed (e.g. table/column already exists from a dev build
@@ -1884,6 +1890,12 @@ class AppDatabase extends _$AppDatabase {
             ])
             ..limit(1))
           .getSingleOrNull();
+
+  /// Focus sessions completed at/after [sinceMs] — for the life-area rollup.
+  Future<List<LocalFocusSession>> focusSessionsSince(int sinceMs) =>
+      (select(localFocusSessions)
+            ..where((t) => t.completedAtMs.isBiggerOrEqualValue(sinceMs)))
+          .get();
 
   /// Most recent breathing session overall (single-user device), or null.
   Future<LocalBreathingSession?> latestBreathingSession() =>

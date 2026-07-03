@@ -151,6 +151,14 @@ class SyncService {
                 .eq('user_id', userId);
             await _db.patchGoal(payload['id'] as String,
                 LocalGoalsCompanion(synced: const Value(true)));
+          case 'update_goal_area':
+            await client
+                .from('goals')
+                .update({'area': payload['area'] as String?})
+                .eq('id', payload['id'] as String)
+                .eq('user_id', userId);
+            await _db.patchGoal(payload['id'] as String,
+                const LocalGoalsCompanion(synced: Value(true)));
           case 'insert_sub_goal':
             final sgId = payload['id'] as String;
             final localSg = await _db.getSubGoal(sgId);

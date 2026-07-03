@@ -491,6 +491,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
         status: Value(g.status),
         colorHex: Value(g.colorHex),
         progress: Value(g.progress),
+        area: Value(g.area),
         synced: const Value(true),
         createdAtMs: Value(g.createdAt.millisecondsSinceEpoch),
         isShared: Value(g.userId != currentUserId),
@@ -1236,6 +1237,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
             : GoalSettings.defaults,
         mapPositions: positionsByGoal[rg.id] ?? const {},
         isPinned: rg.isPinned,
+        area: rg.area,
         // Restore collaborators and ownerProfile from server data if available
         collaborators: serverMap[rg.id]?.collaborators ?? const [],
         ownerProfile: serverMap[rg.id]?.ownerProfile,
@@ -1255,6 +1257,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     DateTime? deadline,
     int priority = 2,
     String colorHex = '#5AADA0',
+    String? area,
   }) async {
     final client = Supabase.instance.client;
     final session = client.auth.currentSession;
@@ -1279,6 +1282,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       milestones: const [],
       habitLinks: const [],
       createdAt: now,
+      area: area,
     );
 
     // Optimistic update
@@ -1295,6 +1299,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
       status: const Value('active'),
       colorHex: Value(colorHex),
       progress: const Value(0),
+      area: Value(area),
       synced: const Value(false),
       createdAtMs: Value(now.millisecondsSinceEpoch),
     ));
@@ -1345,6 +1350,28 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
   }
 
   // ── Update Goal Status ────────────────────────────────────────────────────
+
+  /// Ecosystem Pillar 3 — set (or clear) a goal's life area.
+  Future<void> setGoalArea(String id, String? area) async {
+    final client = Supabase.instance.client;
+    final db = ref.read(appDatabaseProvider);
+    _updateGoalInState(id, (g) => g.copyWith(area: area));
+    await db.patchGoal(
+        id, LocalGoalsCompanion(area: Value(area), synced: const Value(false)));
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    if (isOnline) {
+      try {
+        await client.from('goals').update({'area': area}).eq('id', id);
+        await db.patchGoal(id, const LocalGoalsCompanion(synced: Value(true)));
+      } catch (_) {
+        await db.enqueueSyncOp(
+            'update_goal_area', jsonEncode({'id': id, 'area': area}));
+      }
+    } else {
+      await db.enqueueSyncOp(
+          'update_goal_area', jsonEncode({'id': id, 'area': area}));
+    }
+  }
 
   Future<MissionMedal?> updateGoalStatus(String id, String newStatus) async {
     final client = Supabase.instance.client;
