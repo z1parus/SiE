@@ -10,6 +10,14 @@
   "greetingLine": "{greeting}, {name}",
   "subtitle": "Your operational brief for today",
   "open": "Open",
+  "tonus": {
+    "label": "TONE",
+    "bandLow": "Running low",
+    "bandMid": "Steady",
+    "bandHigh": "Sharp",
+    "hintLow": "Your tone is low — start with some breathing.",
+    "hintHigh": "You're sharp — time for deep work."
+  },
   "blocks": {
     "focus": "Ready for a deep-work session?",
     "breathing": "Restore your breath and refocus.",

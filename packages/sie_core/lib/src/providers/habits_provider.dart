@@ -11,6 +11,7 @@ import '../models/life_area.dart';
 import '../services/notification_service.dart';
 import '../widgets_home/widget_render_service.dart';
 import 'auth_state_provider.dart';
+import 'operative_state_provider.dart';
 import 'connectivity_provider.dart';
 import 'user_profile_provider.dart';
 import 'planning_provider.dart';
@@ -947,6 +948,9 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     } catch (e) {
       debugPrint('SiE toggleHabit: synergy boost failed — $e');
     }
+
+    // Ecosystem Pillar 2: completing a habit keeps operative state up.
+    await bumpOperativeState(ref, kOpDeltaHabit);
   }
 
   /// Event-driven home-screen widget refresh. Fire-and-forget: never blocks or
@@ -1094,6 +1098,8 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
             await planning.applyHabitBoost(link.goalId, boost);
           }
         }
+        // Ecosystem Pillar 2: meeting a metric habit's goal keeps state up.
+        await bumpOperativeState(ref, kOpDeltaHabit);
       } else if (!newMet) {
         // Just sync the accumulated value without XP.
         if (isOnline) {

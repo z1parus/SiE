@@ -11,6 +11,7 @@ import '../models/affirmation_pack.dart';
 import '../services/audio_service.dart';
 import 'connectivity_provider.dart';
 import 'habits_provider.dart';
+import 'operative_state_provider.dart';
 import 'user_profile_provider.dart';
 
 const _uuid = Uuid();
@@ -487,6 +488,8 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
     // (the meditation part of a chain counts for meditation-source habits).
     await autoCompleteHabitsFromActivity(ref,
         source: 'meditation', seconds: totalDuration);
+    // Ecosystem Pillar 2: meditation restores operative state.
+    await bumpOperativeState(ref, kOpDeltaMeditation);
 
     state = state.copyWith(
       phase: MeditationPhase.complete,

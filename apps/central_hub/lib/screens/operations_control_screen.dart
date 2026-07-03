@@ -887,6 +887,15 @@ class _BriefGreeting extends ConsumerWidget {
                     ? t.operationalBrief.greeting.evening
                     : t.operationalBrief.greeting.night;
 
+    // Operative state (Тонус) drives a contextual sub-line + a soft bar.
+    final tonus = ref.watch(operativeStateProvider).valueOrNull ??
+        const OperativeState(kOperativeBaseline);
+    final subtitle = switch (tonus.band) {
+      OperativeBand.low => t.operationalBrief.tonus.hintLow,
+      OperativeBand.high => t.operationalBrief.tonus.hintHigh,
+      OperativeBand.mid => t.operationalBrief.subtitle,
+    };
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -899,11 +908,83 @@ class _BriefGreeting extends ConsumerWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          t.operationalBrief.subtitle,
+          subtitle,
           style: TextStyle(
             color: c.textSecondary,
             fontSize: 12,
             letterSpacing: 1.2,
+            height: 1.3,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _TonusBar(state: tonus),
+      ],
+    );
+  }
+}
+
+/// A gentle "operative tone" indicator: a label, a soft rounded bar, and a
+/// qualitative band — no raw number (decision: bands + soft bar).
+class _TonusBar extends ConsumerWidget {
+  final OperativeState state;
+  const _TonusBar({required this.state});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final (Color color, String band) = switch (state.band) {
+      OperativeBand.low => (c.warning, t.operationalBrief.tonus.bandLow),
+      OperativeBand.mid => (c.accent, t.operationalBrief.tonus.bandMid),
+      OperativeBand.high => (c.success, t.operationalBrief.tonus.bandHigh),
+    };
+
+    return Row(
+      children: [
+        Text(
+          t.operationalBrief.tonus.label,
+          style: TextStyle(
+            color: c.textSecondary,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.8,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: Stack(
+              children: [
+                Container(height: 6, color: c.border.withValues(alpha: 0.6)),
+                LayoutBuilder(
+                  builder: (_, constraints) => TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: state.fraction),
+                    duration: SieMotion.slow,
+                    curve: Curves.easeOutCubic,
+                    builder: (_, f, __) => Container(
+                      height: 6,
+                      width: constraints.maxWidth * f,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [color.withValues(alpha: 0.7), color],
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          band,
+          style: TextStyle(
+            color: color,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
           ),
         ),
       ],

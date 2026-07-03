@@ -19,6 +19,7 @@ import '../models/ai_decomposition.dart';
 import '../services/notification_service.dart';
 import '../widgets_home/widget_render_service.dart';
 import 'auth_state_provider.dart';
+import 'operative_state_provider.dart';
 import 'connectivity_provider.dart';
 import 'habits_provider.dart';
 import 'mission_templates_provider.dart';
@@ -1788,6 +1789,7 @@ class PlanningNotifier extends AutoDisposeAsyncNotifier<PlanningState> {
     // linked to this task's goal.
     if (nowCompleted) {
       await autoCompleteHabitsFromActivity(ref, source: 'task', goalId: goalId);
+      await bumpOperativeState(ref, kOpDeltaTask);
     }
 
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;

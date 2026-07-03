@@ -9,6 +9,7 @@ import '../models/achievement.dart';
 import '../widgets_home/widget_render_service.dart';
 import 'auth_state_provider.dart';
 import 'habits_provider.dart';
+import 'operative_state_provider.dart';
 import 'connectivity_provider.dart';
 import 'user_profile_provider.dart';
 
@@ -136,6 +137,8 @@ class SessionCompletionNotifier extends Notifier<void> {
     // Ecosystem Pillar 1: auto-complete habits linked to breathing activity.
     await autoCompleteHabitsFromActivity(ref,
         source: 'breathing', seconds: durationSeconds);
+    // Ecosystem Pillar 2: breathing restores operative state.
+    await bumpOperativeState(ref, kOpDeltaBreathing);
 
     return (xpGained: xp, dpGained: _breathingDp, newAchievement: earned);
   }
@@ -211,6 +214,8 @@ class SessionCompletionNotifier extends Notifier<void> {
     // breathing-source habits (decision: both breathing and meditation count).
     await autoCompleteHabitsFromActivity(ref,
         source: 'breathing', seconds: durationSeconds);
+    // Ecosystem Pillar 2: breathing restores operative state.
+    await bumpOperativeState(ref, kOpDeltaBreathing);
   }
 }
 
