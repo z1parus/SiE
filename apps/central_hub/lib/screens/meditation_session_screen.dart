@@ -929,8 +929,9 @@ class _CompletionSheetState extends ConsumerState<_CompletionSheet> {
   Widget build(BuildContext context) {
     final c = ref.watch(sieColorsProvider);
     final s = ref.watch(meditationSessionProvider);
+    final breathingMins = s.chainedBreathingSeconds ~/ 60;
     final durationMins =
-        (s.meditationElapsedSecs + s.breathingElapsedSecs) ~/ 60;
+        (s.meditationElapsedSecs + s.chainedBreathingSeconds) ~/ 60;
     final result = s.completionResult;
 
     return SafeArea(
@@ -970,6 +971,14 @@ class _CompletionSheetState extends ConsumerState<_CompletionSheet> {
                     c: c),
               ],
             ),
+            if (breathingMins > 0) ...[
+              const SizedBox(height: 10),
+              Text(
+                t.meditationSession.completion
+                    .includingBreathing(n: breathingMins),
+                style: TextStyle(color: c.textSecondary, fontSize: 12),
+              ),
+            ],
             const SizedBox(height: 24),
             Text(
               t.meditationSession.completion.howDoYouFeel,

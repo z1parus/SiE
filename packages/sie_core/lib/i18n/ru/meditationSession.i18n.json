@@ -36,6 +36,7 @@
   "completion": {
     "title": "СЕССИЯ ЗАВЕРШЕНА",
     "durationMinutes": "{n} мин",
+    "includingBreathing": "включая {n} мин дыхания",
     "xpGained": "+{xp} XP",
     "dpGained": "+{dp} DP",
     "howDoYouFeel": "Как вы себя чувствуете?",

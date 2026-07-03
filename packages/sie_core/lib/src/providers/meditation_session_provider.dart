@@ -71,6 +71,10 @@ class MeditationSessionState {
   final bool isDarkScreenMode;
   final String? currentAffirmation;
   final int? stateBefore;
+  /// Duration of the chained preliminary breathing practice, folded into this
+  /// session's total (0 when the session had no breathing). Shown on the
+  /// completion sheet as "including N min of breathing".
+  final int chainedBreathingSeconds;
   final MeditationSessionResult? completionResult;
 
   const MeditationSessionState({
@@ -90,6 +94,7 @@ class MeditationSessionState {
     this.isDarkScreenMode = false,
     this.currentAffirmation,
     this.stateBefore,
+    this.chainedBreathingSeconds = 0,
     this.completionResult,
   });
 
@@ -124,6 +129,7 @@ class MeditationSessionState {
     bool? isDarkScreenMode,
     Object? currentAffirmation = _sentinel,
     Object? stateBefore = _sentinel,
+    int? chainedBreathingSeconds,
     Object? completionResult = _sentinel,
   }) =>
       MeditationSessionState(
@@ -151,6 +157,8 @@ class MeditationSessionState {
         stateBefore: identical(stateBefore, _sentinel)
             ? this.stateBefore
             : stateBefore as int?,
+        chainedBreathingSeconds:
+            chainedBreathingSeconds ?? this.chainedBreathingSeconds,
         completionResult: identical(completionResult, _sentinel)
             ? this.completionResult
             : completionResult as MeditationSessionResult?,
@@ -206,6 +214,7 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
       ambientVolume: preset.ambientVolume,
       voiceVolume: preset.voiceVolume,
       stateBefore: stateBefore,
+      chainedBreathingSeconds: extraBreathingSeconds,
     );
 
     // Start audio
