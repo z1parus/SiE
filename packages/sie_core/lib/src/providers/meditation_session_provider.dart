@@ -164,32 +164,43 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
   Timer? _transitionTimer;
   Timer? _mixerHideTimer;
 
+  // Ecosystem Stage 1: when this meditation follows a chained breathing practice,
+  // these carry the pre-generated session id, the breathing link, and the
+  // breathing duration to fold into the total (for a single unified reward).
+  String? _forcedSessionId;
+  String? _breathingSessionId;
+  int _extraBreathingSeconds = 0;
+
   AudioService get _audio => ref.read(audioServiceProvider);
   AppDatabase get _db => ref.read(appDatabaseProvider);
 
   @override
   MeditationSessionState build() => const MeditationSessionState();
 
+  /// Starts a meditation session. Preliminary breathing (when the preset has it)
+  /// is no longer run here — it's handled by the real Breathing module in a
+  /// chain (Ecosystem Stage 1) and folded in via [forcedSessionId] /
+  /// [breathingSessionId] / [extraBreathingSeconds]. The session always begins
+  /// at the meditation phase.
   void startSession(MeditationPreset preset,
-      {AffirmationPack? affirmationPack, int? stateBefore}) {
+      {AffirmationPack? affirmationPack,
+      int? stateBefore,
+      String? forcedSessionId,
+      String? breathingSessionId,
+      int extraBreathingSeconds = 0}) {
     _cancelTimers();
 
-    final breathingTargetSecs = preset.hasBreathing
-        ? preset.breathingDurationMin * 60
-        : 0;
-    final meditationTargetSecs = preset.meditationDurationMin * 60;
-    final totalSecs = breathingTargetSecs + meditationTargetSecs;
+    _forcedSessionId = forcedSessionId;
+    _breathingSessionId = breathingSessionId;
+    _extraBreathingSeconds = extraBreathingSeconds;
 
-    final initialPhase =
-        preset.hasBreathing ? MeditationPhase.breathing : MeditationPhase.meditating;
+    final meditationTargetSecs = preset.meditationDurationMin * 60;
 
     state = MeditationSessionState(
       preset: preset,
       affirmationPack: affirmationPack,
-      phase: initialPhase,
-      breathingSubPhase: BreathingSubPhase.inhale,
-      breathingSubPhaseRemaining: _firstSubPhaseDuration(preset),
-      totalTargetSecs: totalSecs,
+      phase: MeditationPhase.meditating,
+      totalTargetSecs: meditationTargetSecs,
       isRunning: true,
       musicVolume: preset.baseVolume,
       ambientVolume: preset.ambientVolume,
@@ -201,12 +212,6 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
     _audio.startAmbient(volumeFactor: preset.baseVolume);
     if (preset.ambientFxId != null) {
       _audio.startHum(volumeFactor: preset.ambientVolume);
-    }
-
-    // Play first breathing cue
-    if (initialPhase == MeditationPhase.breathing) {
-      _playBreathingCue(BreathingSubPhase.inhale,
-          _firstSubPhaseDuration(preset), preset);
     }
 
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
@@ -399,14 +404,19 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
 
-    final id = _uuid.v4();
+    // Use the pre-generated id when this meditation follows a chained breathing
+    // practice (so the breathing row's link matches).
+    final id = _forcedSessionId ?? _uuid.v4();
+    // Fold the chained breathing duration into the total for a single unified
+    // reward (decision: one XP for the whole breathing+meditation chain).
+    final totalDuration = durationSeconds + _extraBreathingSeconds;
     final now = DateTime.now();
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
 
     // XP/DP mirror the server RPC's formula (5 XP/min, ~0.5 DP/min) so the
     // offline award matches what the server would have granted.
-    int xp = (durationSeconds ~/ 60) * 5;
-    int dp = durationSeconds ~/ 120;
+    int xp = (totalDuration ~/ 60) * 5;
+    int dp = totalDuration ~/ 120;
 
     // Save locally first (offline-first source of truth) — with the real
     // award, not zeros, so the journal/stats and the queued row are accurate.
@@ -414,12 +424,13 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
       id: Value(id),
       userId: Value(userId),
       presetId: Value(preset?.id),
-      durationSeconds: Value(durationSeconds),
+      durationSeconds: Value(totalDuration),
       completedAtMs: Value(now.millisecondsSinceEpoch),
       xpAwarded: Value(xp),
       dpAwarded: Value(dp),
       stateBefore: Value(state.stateBefore),
       stateAfter: Value(stateAfter),
+      breathingSessionId: Value(_breathingSessionId),
       synced: const Value(false),
     ));
 
@@ -429,9 +440,10 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
           'log_meditation_session',
           params: {
             'p_preset_id': preset?.id,
-            'p_duration_seconds': durationSeconds,
+            'p_duration_seconds': totalDuration,
             'p_state_before': state.stateBefore,
             'p_state_after': stateAfter,
+            'p_breathing_session_id': _breathingSessionId,
           },
         );
         if (result is List && result.isNotEmpty) {
@@ -443,13 +455,13 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
         debugPrint('MeditationSession: sync error, queuing — $e');
         // Online attempt failed — fall back to the queue so the session still
         // reaches the server on the next sync instead of being lost.
-        await _enqueueSession(id, userId, preset?.id, durationSeconds,
+        await _enqueueSession(id, userId, preset?.id, totalDuration,
             stateAfter, xp, dp, now);
       }
     } else {
       // Offline — queue the session row. XP/DP are credited locally below and
       // flushed to the server via the pending-XP path (same as breathing).
-      await _enqueueSession(id, userId, preset?.id, durationSeconds, stateAfter,
+      await _enqueueSession(id, userId, preset?.id, totalDuration, stateAfter,
           xp, dp, now);
     }
 
@@ -491,12 +503,9 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
-
-  int _firstSubPhaseDuration(MeditationPreset preset) {
-    final pattern = _breathingPatterns[preset.breathingPatternId ?? 'box'];
-    if (pattern == null || pattern.isEmpty) return 4;
-    return pattern[0].$1;
-  }
+  // NOTE (Ecosystem Stage 1): the paced in-session breathing below is legacy and
+  // no longer reachable — preliminary breathing now runs the real Breathing
+  // module in a chain. Kept dormant; slated for removal in a cleanup pass.
 
   _SubPhaseSpec _nextSubPhase(
       BreathingSubPhase current, MeditationPreset preset) {

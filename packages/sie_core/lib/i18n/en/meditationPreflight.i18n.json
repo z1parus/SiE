@@ -19,6 +19,23 @@
     "meditationOnly": "Meditation only",
     "breathingAndMeditation": "Breathing + Meditation"
   },
+  "breathingConfig": {
+    "quick": "Quick params",
+    "sequence": "Sequence",
+    "rounds": "Rounds",
+    "cycles": "Cycles per round",
+    "roundsValue": "{n}",
+    "cyclesValue": "{n}",
+    "noSequences": "No saved sequences yet — set quick params or build one in the Breathing module."
+  },
+  "stateBefore": {
+    "title": "How do you feel right now?",
+    "start": "BEGIN"
+  },
+  "chainTransition": {
+    "title": "Breathing complete",
+    "subtitle": "Moving to meditation…"
+  },
   "duration": {
     "label": "Duration",
     "value": "{value} min"

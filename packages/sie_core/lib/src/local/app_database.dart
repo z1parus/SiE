@@ -104,6 +104,9 @@ class LocalBreathingSessions extends Table {
   TextColumn get moodEmoji => text().nullable()();
   IntColumn get calmness => integer().nullable()();
   IntColumn get confidence => integer().nullable()();
+  // Ecosystem Stage 1: set when this breathing ran as the preliminary practice
+  // of a meditation session (links to that meditation session's id).
+  TextColumn get meditationSessionId => text().nullable()();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
 
   @override
@@ -353,6 +356,9 @@ class LocalMeditationSessions extends Table {
   IntColumn  get dpAwarded       => integer()();
   IntColumn  get stateBefore     => integer().nullable()();
   IntColumn  get stateAfter      => integer().nullable()();
+  // Ecosystem Stage 1: link to the breathing session that ran before this
+  // meditation (when the preset included preliminary breathing).
+  TextColumn get breathingSessionId => text().nullable()();
   BoolColumn get synced          => boolean().withDefault(const Constant(false))();
 
   @override
@@ -367,6 +373,11 @@ class LocalMeditationPresets extends Table {
   TextColumn get description             => text().nullable()();
   BoolColumn get isSystem                => boolean().withDefault(const Constant(false))();
   BoolColumn get hasBreathing            => boolean().withDefault(const Constant(false))();
+  // Ecosystem Stage 1: preliminary breathing now runs the real Breathing module.
+  // Either a saved-sequence reference or embedded quick params (JSON).
+  TextColumn get breathingSequenceId     => text().nullable()();
+  TextColumn get breathingConfigJson     => text().nullable()();
+  // Legacy paced-pattern fields (deprecated; kept for schema compatibility).
   TextColumn get breathingPatternId      => text().nullable()();
   IntColumn  get breathingDurationMin    => integer().withDefault(const Constant(5))();
   TextColumn get meditationType          => text().withDefault(const Constant('unguided'))();
@@ -530,7 +541,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 39;
+  int get schemaVersion => 40;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -783,6 +794,17 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 39) {
         await m.addColumn(localHabits, localHabits.avoidStartMs);
+      }
+      if (from < 40) {
+        // Ecosystem Stage 1: meditation ↔ breathing integration.
+        await m.addColumn(localMeditationPresets,
+            localMeditationPresets.breathingSequenceId);
+        await m.addColumn(localMeditationPresets,
+            localMeditationPresets.breathingConfigJson);
+        await m.addColumn(localBreathingSessions,
+            localBreathingSessions.meditationSessionId);
+        await m.addColumn(localMeditationSessions,
+            localMeditationSessions.breathingSessionId);
       }
       } catch (e) {
         // Migration failed (e.g. table/column already exists from a dev build

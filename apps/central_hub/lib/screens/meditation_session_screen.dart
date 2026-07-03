@@ -7,7 +7,24 @@ import 'session_orb_painters.dart';
 
 class MeditationSessionScreen extends ConsumerStatefulWidget {
   final MeditationPreset preset;
-  const MeditationSessionScreen({super.key, required this.preset});
+
+  /// State captured before the whole flow started (once, up front — decision:
+  /// one survey before / after the chain).
+  final int? stateBefore;
+
+  // Ecosystem Stage 1 — chain hand-off from the preliminary breathing practice.
+  final String? forcedSessionId;
+  final String? breathingSessionId;
+  final int extraBreathingSeconds;
+
+  const MeditationSessionScreen({
+    super.key,
+    required this.preset,
+    this.stateBefore,
+    this.forcedSessionId,
+    this.breathingSessionId,
+    this.extraBreathingSeconds = 0,
+  });
 
   @override
   ConsumerState<MeditationSessionScreen> createState() =>
@@ -63,9 +80,13 @@ class _MeditationSessionScreenState
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref
-          .read(meditationSessionProvider.notifier)
-          .startSession(widget.preset);
+      ref.read(meditationSessionProvider.notifier).startSession(
+            widget.preset,
+            stateBefore: widget.stateBefore,
+            forcedSessionId: widget.forcedSessionId,
+            breathingSessionId: widget.breathingSessionId,
+            extraBreathingSeconds: widget.extraBreathingSeconds,
+          );
     });
   }
 

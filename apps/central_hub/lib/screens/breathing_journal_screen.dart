@@ -293,6 +293,33 @@ class _SessionCard extends StatelessWidget {
                 fmtClock(session.completedAt),
                 style: TextStyle(color: c.textSecondary, fontSize: 13),
               ),
+              if (session.isPartOfMeditation) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: c.accent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.self_improvement_rounded,
+                          size: 11, color: c.accent),
+                      const SizedBox(width: 4),
+                      Text(
+                        t.breathingJournal.meditationBadge,
+                        style: TextStyle(
+                          color: c.accent,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const Spacer(),
               Text(
                 (session.moodEmoji != null && session.moodEmoji!.isNotEmpty)
