@@ -1,0 +1,126 @@
+{
+  "tabBrief": "Brief",
+  "tabModules": "Modules",
+  "greeting": {
+    "morning": "Good morning",
+    "day": "Good afternoon",
+    "evening": "Good evening",
+    "night": "Good night"
+  },
+  "greetingLine": "{greeting}, {name}",
+  "subtitle": "Your operational brief for today",
+  "open": "Open",
+  "tonus": {
+    "label": "TONE",
+    "bandLow": "Running low",
+    "bandMid": "Steady",
+    "bandHigh": "Sharp",
+    "hintLow": "Your tone is low — start with some breathing.",
+    "hintHigh": "You're sharp — time for deep work."
+  },
+  "areas": {
+    "title": "LIFE BALANCE",
+    "lead": "How your effort is spread across life areas.",
+    "neglectedLead": "The \"{area}\" area has been quiet — worth returning to.",
+    "empty": "Tag your goals and habits with areas to see your balance.",
+    "screenTitle": "LIFE BALANCE",
+    "screenSubtitle": "Activity by area over the last 7 days",
+    "statHabits": "habits: {n}",
+    "statGoals": "goals: {n}",
+    "statSessions": "sessions: {n}",
+    "suggestFocus": "Give this area some attention — set a goal or habit.",
+    "emp04": "Empty"
+  },
+  "blocks": {
+    "focus": "Ready for a deep-work session?",
+    "breathing": "Restore your breath and refocus.",
+    "meditation": "Time to defragment the mind."
+  },
+  "planning": {
+    "onGoal": "On operation \"{goal}\" today:",
+    "more": "More tasks queued: {n}",
+    "allClear": "Nothing due today — operations under control.",
+    "empty": "Deploy your first operation — set a goal.",
+    "lead": {
+      "hasTasks": [
+        "Operative, the day isn't over — here's your priority:",
+        "Some operations are still open for today:",
+        "There's work to do. Keep your focus on what matters:"
+      ],
+      "allClear": [
+        "Great work — every task for today is cleared.",
+        "Operations under control. Keep it up, operative.",
+        "The task front is clear. Take a breath."
+      ],
+      "empty": [
+        "Time to deploy your first operation.",
+        "It all starts with a goal — set your direction."
+      ]
+    }
+  },
+  "habits": {
+    "remaining": "Protocols left today: {n}",
+    "next": "Next up: {habit}",
+    "allDone": "All protocols cleared today. Discipline is flawless.",
+    "avoidStreak": "\"{habit}\" — days clean: {n}. Keep it up.",
+    "empty": "Set up your first discipline protocol.",
+    "lead": {
+      "remaining": [
+        "Discipline needs your attention — here's what's left:",
+        "Not every protocol is cleared for today yet:",
+        "Just a little left to a perfect day:"
+      ],
+      "allDone": [
+        "You did great today. Discipline is flawless.",
+        "All protocols cleared — keep it up.",
+        "The day of discipline is closed. Impressive, operative."
+      ],
+      "empty": [
+        "Set up your first discipline protocol.",
+        "Discipline starts with a single habit."
+      ]
+    }
+  },
+  "tip": {
+    "title": "TIP OF THE DAY",
+    "empty": "Loading a tip…",
+    "lead": [
+      "Something to note, operative:",
+      "One tip before you deploy:",
+      "Keep this in mind:"
+    ]
+  },
+  "leaderboard": {
+    "lead": [
+      "Let's see how you hold up in the ranks.",
+      "The daily vanguard awaits — check your standing.",
+      "How's the ranking front looking?"
+    ]
+  },
+  "session": {
+    "none": "No sessions logged yet.",
+    "last": "Last: {when} · {duration}",
+    "today": "today",
+    "yesterday": "yesterday",
+    "daysAgo": "{n}d ago",
+    "minutesShort": "{n} min"
+  },
+  "generic": {
+    "focus": [
+      "Ready for deep work? The system has your back.",
+      "A little focus wouldn't hurt."
+    ],
+    "breathing": [
+      "Take a pause and restore your breath.",
+      "A few minutes of breathing and you're centered again."
+    ],
+    "meditation": [
+      "Time to clear the mind.",
+      "A mind defragment awaits."
+    ]
+  },
+  "autoLog": {
+    "closed": "\"{habit}\" logged by activity",
+    "undo": "Undo"
+  }
+}

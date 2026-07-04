@@ -49,7 +49,8 @@
   "habits": {
     "sectionTitle": "HABIT SYNERGY",
     "linkTitle": "LINK HABIT",
-    "noHabits": "No habits available"
+    "noHabits": "No habits available",
+    "areaSuggest": "In this area — link:"
   },
   "quickEntry": {
     "stage": "STAGE",

@@ -159,12 +159,31 @@ enum _Phase {
 
 // ── Screen ───────────────────────────────────────────────────
 
+/// Metrics handed back to the meditation flow when breathing runs as the
+/// preliminary practice of a meditation session (chained mode).
+class BreathingChainResult {
+  final int durationSeconds;
+  final int breaths;
+  final int rounds;
+  final int longestHoldSeconds;
+  final int totalHoldSeconds;
+  const BreathingChainResult({
+    required this.durationSeconds,
+    required this.breaths,
+    required this.rounds,
+    required this.longestHoldSeconds,
+    required this.totalHoldSeconds,
+  });
+}
+
 class BreathingExerciseScreen extends ConsumerStatefulWidget {
   const BreathingExerciseScreen({
     super.key,
     this.openSettings = false,
     this.sequence,
     this.startCourse = false,
+    this.initialSettings,
+    this.onChainComplete,
   });
 
   /// When true, the protocol settings sheet auto-opens on entry — used by the
@@ -179,6 +198,17 @@ class BreathingExerciseScreen extends ConsumerStatefulWidget {
   /// its own params) instead of the uniform [BreathingSettings] rounds. Audio
   /// still comes from the device-level settings.
   final BreathingSequence? sequence;
+
+  /// Overrides the default in-memory [BreathingSettings] (used by the meditation
+  /// chain's "quick params" mode). Ignored when [sequence] is provided.
+  final BreathingSettings? initialSettings;
+
+  /// When set, the screen runs in **chained** mode: it's the preliminary
+  /// breathing of a meditation session. Nav (journal/stats/sequences/course) is
+  /// hidden, no standalone breathing session is recorded, no reflection/recovery
+  /// screen is shown — on completion these metrics are handed back so the
+  /// meditation flow can continue seamlessly.
+  final void Function(BreathingChainResult result)? onChainComplete;
 
   @override
   ConsumerState<BreathingExerciseScreen> createState() =>
@@ -219,6 +249,9 @@ class _BreathingExerciseScreenState
   int get _totalRounds => _rounds.isEmpty ? _settings.rounds : _rounds.length;
 
   bool get _isSequenceMode => widget.sequence != null;
+
+  /// Preliminary-breathing-of-a-meditation mode.
+  bool get _chained => widget.onChainComplete != null;
 
   BreathingRound _roundFromSettings() => BreathingRound(
         cyclesPerRound: _settings.cyclesPerRound,
@@ -279,6 +312,9 @@ class _BreathingExerciseScreenState
       vsync: this,
       duration: const Duration(seconds: 60),
     )..repeat();
+    // Chained "quick params" mode overrides the default settings before the
+    // per-round plan is built.
+    if (widget.initialSettings != null) _settings = widget.initialSettings!;
     _rounds = _buildRounds();
     _loadSphereShader();
     if (widget.openSettings) {
@@ -354,6 +390,9 @@ class _BreathingExerciseScreenState
   }
 
   Future<void> _awardPartialXpIfEligible() async {
+    // In a meditation chain, breathing grants no standalone XP — the meditation
+    // awards a single unified reward. Aborting just drops the breathing.
+    if (_chained) return;
     if (_sessionStart == null) return;
     if (_phase == _Phase.idle ||
         _phase == _Phase.countdown ||
@@ -722,6 +761,21 @@ class _BreathingExerciseScreenState
 
     if (!mounted) return;
 
+    // Chained mode: hand metrics back to the meditation flow instead of showing
+    // the recovery/reflection screens or recording a standalone session.
+    if (_chained) {
+      await _audio.stopAll();
+      if (!mounted) return;
+      widget.onChainComplete!(BreathingChainResult(
+        durationSeconds: elapsed,
+        breaths: _totalBreaths,
+        rounds: _roundsCompleted,
+        longestHoldSeconds: _longestHold,
+        totalHoldSeconds: _totalHold,
+      ));
+      return;
+    }
+
     if (_settings.recoveryScreenEnabled) {
       // Hand the recovery screen the still-playing ambient music: it keeps it
       // alive until the user taps "continue", then fades it out and reveals
@@ -767,6 +821,7 @@ class _BreathingExerciseScreenState
   /// forced via the knowledge-base replay tile). Replaces the legacy
   /// full-screen onboarding overlay, which now only shows on demand.
   void _maybeStartCourse(Profile? profile) {
+    if (_chained) return; // no onboarding course inside a meditation chain
     if (_courseChecked) return;
     if (profile == null && !widget.startCourse) return;
     _courseChecked = true;
@@ -853,6 +908,7 @@ class _BreathingExerciseScreenState
                       phase: _phase,
                       round: _round,
                       totalRounds: _totalRounds,
+                      chained: _chained,
                       journalKey: ref
                           .read(tourControllerProvider.notifier)
                           .keyFor('breathing_journal'),
@@ -1137,22 +1193,26 @@ class _BreathingExerciseScreenState
               ),
             ),
             const SizedBox(height: 16),
-            _SettingsButton(
-              key: ref
-                  .read(tourControllerProvider.notifier)
-                  .keyFor('breathing_settings'),
-              onTap: _showSettings,
-            ),
-            if (!_isSequenceMode) ...[
-              const SizedBox(height: 12),
-              _SequencesButton(
+            // In a meditation chain the config is fixed by the preset — hide the
+            // settings/sequences entry points.
+            if (!_chained) ...[
+              _SettingsButton(
                 key: ref
                     .read(tourControllerProvider.notifier)
-                    .keyFor('breathing_sequences'),
-                onTap: _openSequences,
+                    .keyFor('breathing_settings'),
+                onTap: _showSettings,
               ),
+              if (!_isSequenceMode) ...[
+                const SizedBox(height: 12),
+                _SequencesButton(
+                  key: ref
+                      .read(tourControllerProvider.notifier)
+                      .keyFor('breathing_sequences'),
+                  onTap: _openSequences,
+                ),
+              ],
+              const SizedBox(height: 16),
             ],
-            const SizedBox(height: 16),
             _SieButton(
               key: ref
                   .read(tourControllerProvider.notifier)
@@ -1637,6 +1697,7 @@ class _TopBar extends ConsumerWidget {
   final VoidCallback onJournal;
   final VoidCallback onStats;
   final Key? journalKey;
+  final bool chained;
 
   const _TopBar({
     required this.phase,
@@ -1647,6 +1708,7 @@ class _TopBar extends ConsumerWidget {
     required this.onJournal,
     required this.onStats,
     this.journalKey,
+    this.chained = false,
   });
 
   @override
@@ -1689,15 +1751,16 @@ class _TopBar extends ConsumerWidget {
               ),
             ),
           const Spacer(),
-          // Journal & Stats live in the header on the start screen only.
-          if (isIdle) ...[
+          // Journal & Stats live in the header on the start screen only, and
+          // never inside a meditation chain (config/nav is fixed there).
+          if (isIdle && !chained) ...[
             circleBtn(Icons.menu_book_outlined, onJournal,
                 alpha: 0.7, key: journalKey),
             const SizedBox(width: 8),
             circleBtn(Icons.insights_outlined, onStats, alpha: 0.7),
             const SizedBox(width: 8),
           ],
-          circleBtn(Icons.help_outline, onInfo, alpha: 0.7),
+          if (!chained) circleBtn(Icons.help_outline, onInfo, alpha: 0.7),
         ],
       ),
     );

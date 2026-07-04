@@ -151,6 +151,14 @@ class SyncService {
                 .eq('user_id', userId);
             await _db.patchGoal(payload['id'] as String,
                 LocalGoalsCompanion(synced: const Value(true)));
+          case 'update_goal_area':
+            await client
+                .from('goals')
+                .update({'area': payload['area'] as String?})
+                .eq('id', payload['id'] as String)
+                .eq('user_id', userId);
+            await _db.patchGoal(payload['id'] as String,
+                const LocalGoalsCompanion(synced: Value(true)));
           case 'insert_sub_goal':
             final sgId = payload['id'] as String;
             final localSg = await _db.getSubGoal(sgId);
@@ -472,6 +480,15 @@ class SyncService {
                 .from('breathing_sessions')
                 .upsert(payload, onConflict: 'id');
             await _db.markBreathingSessionSynced(payload['id'] as String);
+          case 'insert_activity_habit_link':
+            await client
+                .from('activity_habit_links')
+                .upsert(payload, onConflict: 'id');
+          case 'delete_activity_habit_link':
+            await client
+                .from('activity_habit_links')
+                .delete()
+                .eq('id', payload['id'] as String);
           case 'insert_meditation_session':
             // Plain row insert (not the XP-awarding RPC): XP/DP reach the
             // server via the pending-XP flush, so awarding here would double.

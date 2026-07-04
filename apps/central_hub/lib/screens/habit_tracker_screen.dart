@@ -2590,6 +2590,28 @@ class _HabitEditorScreenState extends ConsumerState<HabitEditorScreen> {
                 ),
             ],
           ),
+          // Ecosystem Pillar 1 — auto-completion by activity from other modules.
+          // Only for saved, build-type habits (links reference the habit id).
+          if (isEdit && _polarity == 'build') ...[
+            const SizedBox(height: 20),
+            Text(
+              t.habitTracker.editor.activitySources,
+              style: TextStyle(
+                color: sc.textSecondary,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 2.5,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              t.habitTracker.editor.activitySourcesHint,
+              style: TextStyle(
+                  color: sc.textSecondary, fontSize: 11, height: 1.3),
+            ),
+            const SizedBox(height: 10),
+            _ActivitySourcesEditor(habitId: widget.existing!.id, sc: sc),
+          ],
                     ],
                   ),
                 ),
@@ -5953,6 +5975,109 @@ class _AreaChip extends StatelessWidget {
             fontSize: 11,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Ecosystem Pillar 1: activity → habit source picker ────────
+
+class _ActivitySourcesEditor extends ConsumerWidget {
+  final String habitId;
+  final SieColors sc;
+  const _ActivitySourcesEditor({required this.habitId, required this.sc});
+
+  static const _sources = ['focus', 'breathing', 'meditation', 'task'];
+
+  String _label(String s) => switch (s) {
+        'focus' => t.operations.modules.focus,
+        'breathing' => t.operations.modules.breathing,
+        'meditation' => t.operations.modules.meditation,
+        'task' => t.habitTracker.editor.sourceTask,
+        _ => s,
+      };
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final links =
+        ref.watch(activityHabitLinksProvider(habitId)).valueOrNull ??
+            const <LocalActivityHabitLink>[];
+    final bySource = {for (final l in links) l.source: l.id};
+
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final s in _sources)
+          _SourceChip(
+            label: _label(s),
+            selected: bySource.containsKey(s),
+            sc: sc,
+            onTap: () async {
+              SieHaptics.selection();
+              final notifier = ref.read(habitsProvider.notifier);
+              final existingId = bySource[s];
+              if (existingId != null) {
+                await notifier.removeActivityLink(existingId);
+              } else {
+                await notifier.addActivityLink(habitId, s);
+              }
+              ref.invalidate(activityHabitLinksProvider(habitId));
+            },
+          ),
+      ],
+    );
+  }
+}
+
+class _SourceChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final SieColors sc;
+  final VoidCallback onTap;
+  const _SourceChip({
+    required this.label,
+    required this.selected,
+    required this.sc,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: selected ? sc.accent : sc.border,
+            width: selected ? 1.5 : 1.0,
+          ),
+          color:
+              selected ? sc.accent.withValues(alpha: 0.12) : Colors.transparent,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(selected ? Icons.check_rounded : Icons.add_rounded,
+                size: 13,
+                color:
+                    selected ? sc.accent : sc.textSecondary.withValues(alpha: 0.7)),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected
+                    ? sc.accent
+                    : sc.textSecondary.withValues(alpha: 0.7),
+                fontSize: 11,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ],
         ),
       ),
     );

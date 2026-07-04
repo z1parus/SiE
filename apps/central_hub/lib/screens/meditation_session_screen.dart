@@ -7,7 +7,24 @@ import 'session_orb_painters.dart';
 
 class MeditationSessionScreen extends ConsumerStatefulWidget {
   final MeditationPreset preset;
-  const MeditationSessionScreen({super.key, required this.preset});
+
+  /// State captured before the whole flow started (once, up front — decision:
+  /// one survey before / after the chain).
+  final int? stateBefore;
+
+  // Ecosystem Stage 1 — chain hand-off from the preliminary breathing practice.
+  final String? forcedSessionId;
+  final String? breathingSessionId;
+  final int extraBreathingSeconds;
+
+  const MeditationSessionScreen({
+    super.key,
+    required this.preset,
+    this.stateBefore,
+    this.forcedSessionId,
+    this.breathingSessionId,
+    this.extraBreathingSeconds = 0,
+  });
 
   @override
   ConsumerState<MeditationSessionScreen> createState() =>
@@ -63,9 +80,13 @@ class _MeditationSessionScreenState
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref
-          .read(meditationSessionProvider.notifier)
-          .startSession(widget.preset);
+      ref.read(meditationSessionProvider.notifier).startSession(
+            widget.preset,
+            stateBefore: widget.stateBefore,
+            forcedSessionId: widget.forcedSessionId,
+            breathingSessionId: widget.breathingSessionId,
+            extraBreathingSeconds: widget.extraBreathingSeconds,
+          );
     });
   }
 
@@ -158,9 +179,18 @@ class _MeditationSessionScreenState
     ref.listen<MeditationSessionState>(meditationSessionProvider,
         (prev, next) {
       _syncAnimations(next);
-      if (next.phase == MeditationPhase.complete &&
-          (prev?.phase != MeditationPhase.complete)) {
-        _showCompletionSheet();
+      // When the meditation ends it enters reflectionPause (a brief "preparing"
+      // beat). After it, present the reflection/completion sheet — where the
+      // user picks their after-state and the session is saved.
+      if (next.phase == MeditationPhase.reflectionPause &&
+          prev?.phase != MeditationPhase.reflectionPause) {
+        Future.delayed(const Duration(milliseconds: 1400), () {
+          if (mounted &&
+              ref.read(meditationSessionProvider).phase ==
+                  MeditationPhase.reflectionPause) {
+            _showCompletionSheet();
+          }
+        });
       }
     });
 
@@ -370,12 +400,14 @@ class _MeditationSessionScreenState
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) => _CompletionSheet(
-        onComplete: (stateAfter) {
+        onComplete: (stateAfter) async {
           Navigator.of(context).pop(); // close sheet
-          ref
+          // Await the save + habit auto-completion while the session screen is
+          // still mounted, then pop it.
+          await ref
               .read(meditationSessionProvider.notifier)
               .completeSession(stateAfter);
-          Navigator.of(context).pop(); // pop session screen
+          if (mounted) Navigator.of(context).pop(); // pop session screen
         },
       ),
     );
@@ -908,9 +940,15 @@ class _CompletionSheetState extends ConsumerState<_CompletionSheet> {
   Widget build(BuildContext context) {
     final c = ref.watch(sieColorsProvider);
     final s = ref.watch(meditationSessionProvider);
-    final durationMins =
-        (s.meditationElapsedSecs + s.breathingElapsedSecs) ~/ 60;
+    final breathingMins = s.chainedBreathingSeconds ~/ 60;
+    final totalSecs = s.meditationElapsedSecs + s.chainedBreathingSeconds;
+    final durationMins = totalSecs ~/ 60;
+    // The sheet is shown before the session is saved, so derive the reward for
+    // display from the duration (mirrors the server/offline formula). Once
+    // saved, [completionResult] carries the authoritative figures.
     final result = s.completionResult;
+    final shownXp = result?.xpGained ?? (totalSecs ~/ 60) * 5;
+    final shownDp = result?.dpGained ?? totalSecs ~/ 120;
 
     return SafeArea(
       child: Padding(
@@ -937,18 +975,24 @@ class _CompletionSheetState extends ConsumerState<_CompletionSheet> {
                     c: c),
                 const SizedBox(width: 16),
                 _ResultChip(
-                    label: t.meditationSession.completion
-                        .xpGained(xp: result?.xpGained ?? 0),
+                    label: t.meditationSession.completion.xpGained(xp: shownXp),
                     icon: Icons.bolt_rounded,
                     c: c),
                 const SizedBox(width: 16),
                 _ResultChip(
-                    label: t.meditationSession.completion
-                        .dpGained(dp: result?.dpGained ?? 0),
+                    label: t.meditationSession.completion.dpGained(dp: shownDp),
                     icon: Icons.diamond_outlined,
                     c: c),
               ],
             ),
+            if (breathingMins > 0) ...[
+              const SizedBox(height: 10),
+              Text(
+                t.meditationSession.completion
+                    .includingBreathing(n: breathingMins),
+                style: TextStyle(color: c.textSecondary, fontSize: 12),
+              ),
+            ],
             const SizedBox(height: 24),
             Text(
               t.meditationSession.completion.howDoYouFeel,

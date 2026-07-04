@@ -70,6 +70,7 @@ class BreathingJournalNotifier
         moodEmoji: Value(s.moodEmoji),
         calmness: Value(s.calmness),
         confidence: Value(s.confidence),
+        meditationSessionId: Value(s.meditationSessionId),
         synced: Value(synced),
       );
 
@@ -86,6 +87,7 @@ class BreathingJournalNotifier
         confidence: r.confidence,
         xpAwarded: r.xpAwarded,
         dpAwarded: r.dpAwarded,
+        meditationSessionId: r.meditationSessionId,
         completedAt: DateTime.fromMillisecondsSinceEpoch(r.completedAtMs),
       );
 }

@@ -2,7 +2,11 @@ import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sie_core/sie_core.dart';
+import 'package:uuid/uuid.dart';
+import 'breathing_exercise_screen.dart';
 import 'meditation_session_screen.dart';
+
+const _uuid = Uuid();
 
 class MeditationPreflightScreen extends ConsumerStatefulWidget {
   final MeditationPreset preset;
@@ -132,20 +136,12 @@ class _MeditationPreflightScreenState
               if (_current.hasBreathing) ...[
                 _SectionLabel(t.meditationPreflight.sections.breathing, c),
                 const SizedBox(height: 10),
-                _DurationPicker(
-                  label: t.meditationPreflight.duration.label,
-                  value: _current.breathingDurationMin,
-                  min: 1,
-                  max: 30,
-                  onChanged: (v) => setState(() =>
-                      _current = _current.copyWith(breathingDurationMin: v)),
-                  c: c,
-                ),
-                const SizedBox(height: 10),
-                _PatternChips(
-                  selected: _current.breathingPatternId ?? 'box',
-                  onSelected: (id) => setState(() =>
-                      _current = _current.copyWith(breathingPatternId: id)),
+                _BreathingConfigSection(
+                  preset: _current,
+                  sequences:
+                      ref.watch(breathingSequencesProvider).valueOrNull ??
+                          const [],
+                  onChanged: (p) => setState(() => _current = p),
                   c: c,
                 ),
                 const SizedBox(height: 16),
@@ -217,11 +213,85 @@ class _MeditationPreflightScreenState
     );
   }
 
-  void _launch() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-          builder: (_) => MeditationSessionScreen(preset: _current)),
-    );
+  Future<void> _launch() async {
+    final preset = _current;
+    final nav = Navigator.of(context);
+
+    // One state survey, up front, for the whole flow (decision: single survey).
+    final stateBefore = await _askStateBefore(context, ref);
+    if (!mounted || stateBefore == null) return;
+
+    // No breathing — straight into meditation.
+    if (!preset.hasBreathing) {
+      nav.push(MaterialPageRoute(
+        builder: (_) =>
+            MeditationSessionScreen(preset: preset, stateBefore: stateBefore),
+      ));
+      return;
+    }
+
+    // Chained: pre-generate ids so the breathing and meditation rows cross-link.
+    final meditationId = _uuid.v4();
+    final breathingId = _uuid.v4();
+
+    // Resolve the breathing config: a saved sequence, or quick params.
+    BreathingSequence? sequence;
+    BreathingSettings? settings;
+    if (preset.usesBreathingSequence) {
+      final seqs =
+          ref.read(breathingSequencesProvider).valueOrNull ?? const [];
+      sequence = seqs.where((s) => s.id == preset.breathingSequenceId).isNotEmpty
+          ? seqs.firstWhere((s) => s.id == preset.breathingSequenceId)
+          : null;
+    }
+    if (sequence == null) {
+      final cfg = preset.breathingQuickConfig;
+      settings = BreathingSettings(
+        rounds: cfg.rounds,
+        cyclesPerRound: cfg.cyclesPerRound,
+        inhaleSecs: cfg.inhaleSecs,
+        exhaleSecs: cfg.exhaleSecs,
+        exhaustRetentionSecs: cfg.exhaustRetentionSecs,
+        recoveryHoldSecs: cfg.recoveryHoldSecs,
+      );
+    }
+
+    nav.push(MaterialPageRoute(
+      builder: (_) => BreathingExerciseScreen(
+        sequence: sequence,
+        initialSettings: settings,
+        onChainComplete: (result) async {
+          // Record the breathing session (metrics only, linked, no XP).
+          try {
+            await ref.read(sessionCompletionProvider.notifier).recordChainedBreathing(
+                  breathingSessionId: breathingId,
+                  meditationSessionId: meditationId,
+                  durationSeconds: result.durationSeconds,
+                  breaths: result.breaths,
+                  rounds: result.rounds,
+                  longestHoldSeconds: result.longestHoldSeconds,
+                  totalHoldSeconds: result.totalHoldSeconds,
+                );
+          } catch (_) {
+            // Best-effort — proceed to meditation regardless.
+          }
+          // Short auto-transition, then into the meditation (no extra taps).
+          nav.pushReplacement(MaterialPageRoute(
+            builder: (_) => _MeditationChainTransition(
+              onDone: () => nav.pushReplacement(MaterialPageRoute(
+                builder: (_) => MeditationSessionScreen(
+                  preset: preset,
+                  stateBefore: stateBefore,
+                  forcedSessionId: meditationId,
+                  breathingSessionId: breathingId,
+                  extraBreathingSeconds: result.durationSeconds,
+                ),
+              )),
+            ),
+          ));
+        },
+      ),
+    ));
   }
 }
 
@@ -380,83 +450,348 @@ class _DurationPicker extends StatelessWidget {
   }
 }
 
-// ── Breathing pattern chips ────────────────────────────────────
-class _PatternChips extends StatelessWidget {
-  final String selected;
-  final ValueChanged<String> onSelected;
+// ── Breathing config (quick params / saved sequence) ───────────
+class _BreathingConfigSection extends StatelessWidget {
+  final MeditationPreset preset;
+  final List<BreathingSequence> sequences;
+  final ValueChanged<MeditationPreset> onChanged;
   final SieColors c;
-  const _PatternChips({
-    required this.selected,
-    required this.onSelected,
+  const _BreathingConfigSection({
+    required this.preset,
+    required this.sequences,
+    required this.onChanged,
+    required this.c,
+  });
+
+  void _setQuick(MeditationBreathingConfig cfg) => onChanged(preset.copyWith(
+        breathingConfigJson: cfg.toJsonString(),
+        breathingSequenceId: null,
+      ));
+
+  @override
+  Widget build(BuildContext context) {
+    final useSequence = preset.usesBreathingSequence;
+    final cfg = preset.breathingQuickConfig;
+
+    Widget modeTab(String label, bool selected, VoidCallback onTap) => Expanded(
+          child: GestureDetector(
+            onTap: onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              margin: const EdgeInsets.only(right: 6),
+              padding: const EdgeInsets.symmetric(vertical: 9),
+              decoration: BoxDecoration(
+                color: selected
+                    ? c.accent.withValues(alpha: 0.18)
+                    : c.surface.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: selected ? c.accent : c.border),
+              ),
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: selected ? c.accent : c.textSecondary,
+                  fontSize: 11,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                ),
+              ),
+            ),
+          ),
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            modeTab(t.meditationPreflight.breathingConfig.quick, !useSequence,
+                () => _setQuick(cfg)),
+            modeTab(
+                t.meditationPreflight.breathingConfig.sequence,
+                useSequence,
+                () => onChanged(preset.copyWith(
+                    breathingSequenceId:
+                        sequences.isNotEmpty ? sequences.first.id : null))),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (!useSequence) ...[
+          _StepperRow(
+            label: t.meditationPreflight.breathingConfig.rounds,
+            value: cfg.rounds,
+            min: 1,
+            max: 6,
+            display: t.meditationPreflight.breathingConfig.roundsValue(n: cfg.rounds),
+            onChanged: (v) => _setQuick(cfg.copyWith(rounds: v)),
+            c: c,
+          ),
+          const SizedBox(height: 8),
+          _StepperRow(
+            label: t.meditationPreflight.breathingConfig.cycles,
+            value: cfg.cyclesPerRound,
+            min: 15,
+            max: 40,
+            display:
+                t.meditationPreflight.breathingConfig.cyclesValue(n: cfg.cyclesPerRound),
+            onChanged: (v) => _setQuick(cfg.copyWith(cyclesPerRound: v)),
+            c: c,
+          ),
+        ] else if (sequences.isEmpty) ...[
+          Text(
+            t.meditationPreflight.breathingConfig.noSequences,
+            style: TextStyle(color: c.textSecondary, fontSize: 11, height: 1.3),
+          ),
+        ] else ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: sequences.map((s) {
+              final sel = s.id == preset.breathingSequenceId;
+              return GestureDetector(
+                onTap: () =>
+                    onChanged(preset.copyWith(breathingSequenceId: s.id)),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: sel
+                        ? c.accent.withValues(alpha: 0.18)
+                        : c.surface.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: sel ? c.accent : c.border),
+                  ),
+                  child: Text(
+                    s.name,
+                    style: TextStyle(
+                      color: sel ? c.accent : c.textSecondary,
+                      fontSize: 12,
+                      fontWeight: sel ? FontWeight.w700 : FontWeight.w400,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Compact −/N/+ stepper (a generalised [_DurationPicker] with a custom label).
+class _StepperRow extends StatelessWidget {
+  final String label;
+  final int value;
+  final int min;
+  final int max;
+  final String display;
+  final ValueChanged<int> onChanged;
+  final SieColors c;
+  const _StepperRow({
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.display,
+    required this.onChanged,
     required this.c,
   });
 
   @override
   Widget build(BuildContext context) {
-    final patterns = [
-      ('box', t.meditationPreflight.patterns.box.name, '4-4-4-4',
-          t.meditationPreflight.patterns.box.description),
-      ('4-7-8', t.meditationPreflight.patterns.pattern478.name, '4-7-8',
-          t.meditationPreflight.patterns.pattern478.description),
-      ('coherence', t.meditationPreflight.patterns.coherence.name, '5-5',
-          t.meditationPreflight.patterns.coherence.description),
-    ];
-    final desc = patterns
-        .firstWhere((p) => p.$1 == selected, orElse: () => patterns[0])
-        .$4;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       children: [
-        Row(
-          children: patterns.map((rec) {
-            final (id, name, timing, _) = rec;
-            final isSelected = selected == id;
-            return Expanded(
-              child: GestureDetector(
-                onTap: () => onSelected(id),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  margin: const EdgeInsets.only(right: 6),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? c.accent.withValues(alpha: 0.18)
-                        : c.surface.withValues(alpha: 0.4),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                        color: isSelected ? c.accent : c.border),
+        Text(label, style: TextStyle(color: c.textSecondary, fontSize: 13)),
+        const Spacer(),
+        IconButton(
+          icon: Icon(Icons.remove_rounded, color: c.accent, size: 18),
+          onPressed: value > min ? () => onChanged(value - 1) : null,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+        ),
+        SizedBox(
+          width: 52,
+          child: Text(
+            display,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.w700),
+          ),
+        ),
+        IconButton(
+          icon: Icon(Icons.add_rounded, color: c.accent, size: 18),
+          onPressed: value < max ? () => onChanged(value + 1) : null,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+        ),
+      ],
+    );
+  }
+}
+
+// ── State-before survey (one survey up front for the whole flow) ──
+Future<int?> _askStateBefore(BuildContext context, WidgetRef ref) {
+  return showModalBottomSheet<int>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => const _StateBeforeSheet(),
+  );
+}
+
+class _StateBeforeSheet extends ConsumerStatefulWidget {
+  const _StateBeforeSheet();
+  @override
+  ConsumerState<_StateBeforeSheet> createState() => _StateBeforeSheetState();
+}
+
+class _StateBeforeSheetState extends ConsumerState<_StateBeforeSheet> {
+  int _state = 3;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
+    final moodLabels = [
+      t.meditationSession.completion.mood.veryBad,
+      t.meditationSession.completion.mood.bad,
+      t.meditationSession.completion.mood.neutral,
+      t.meditationSession.completion.mood.good,
+      t.meditationSession.completion.mood.great,
+    ];
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+        decoration: c.briefCard(radius: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              t.meditationPreflight.stateBefore.title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(5, (i) {
+                final v = i + 1;
+                final sel = v == _state;
+                return Semantics(
+                  button: true,
+                  selected: sel,
+                  label: moodLabels[i],
+                  child: GestureDetector(
+                    onTap: () {
+                      SieHaptics.selection();
+                      setState(() => _state = v);
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      margin: const EdgeInsets.symmetric(horizontal: 6),
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: sel
+                            ? c.accent.withValues(alpha: 0.25)
+                            : c.surface.withValues(alpha: 0.6),
+                        border: Border.all(
+                            color: sel ? c.accent : c.border, width: 1.5),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(['😣', '😕', '😐', '🙂', '😊'][i],
+                          style: const TextStyle(fontSize: 20)),
+                    ),
                   ),
-                  child: Column(
-                    children: [
-                      Text(name,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color:
-                                  isSelected ? c.accent : c.textSecondary,
-                              fontSize: 11,
-                              fontWeight: isSelected
-                                  ? FontWeight.w700
-                                  : FontWeight.w400)),
-                      Text(timing,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: c.textSecondary, fontSize: 9)),
-                    ],
+                );
+              }),
+            ),
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: () {
+                SieHaptics.light();
+                Navigator.of(context).pop(_state);
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: c.accent,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  t.meditationPreflight.stateBefore.start,
+                  style: TextStyle(
+                    color: c.background,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 2,
                   ),
                 ),
               ),
-            );
-          }).toList(),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        Text(
-          desc,
-          style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 11,
-              height: 1.3),
+      ),
+    );
+  }
+}
+
+// ── Chain transition (breathing → meditation, auto-advance) ──────
+class _MeditationChainTransition extends ConsumerStatefulWidget {
+  final VoidCallback onDone;
+  const _MeditationChainTransition({required this.onDone});
+  @override
+  ConsumerState<_MeditationChainTransition> createState() =>
+      _MeditationChainTransitionState();
+}
+
+class _MeditationChainTransitionState
+    extends ConsumerState<_MeditationChainTransition> {
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(milliseconds: 2600), () {
+      if (mounted) widget.onDone();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ref.watch(sieColorsProvider);
+    return SieBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.self_improvement_rounded, color: c.accent, size: 44),
+              const SizedBox(height: 20),
+              Text(
+                t.meditationPreflight.chainTransition.title,
+                style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w300,
+                    letterSpacing: 1.5),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                t.meditationPreflight.chainTransition.subtitle,
+                style: TextStyle(
+                    color: c.textSecondary, fontSize: 13, letterSpacing: 1),
+              ),
+            ],
+          ),
         ),
-      ],
+      ),
     );
   }
 }

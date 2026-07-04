@@ -36,6 +36,7 @@
   "completion": {
     "title": "SESSION COMPLETE",
     "durationMinutes": "{n} min",
+    "includingBreathing": "including {n} min of breathing",
     "xpGained": "+{xp} XP",
     "dpGained": "+{dp} DP",
     "howDoYouFeel": "How do you feel?",

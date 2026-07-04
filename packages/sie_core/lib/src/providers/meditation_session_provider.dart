@@ -10,6 +10,8 @@ import '../models/meditation_preset.dart';
 import '../models/affirmation_pack.dart';
 import '../services/audio_service.dart';
 import 'connectivity_provider.dart';
+import 'habits_provider.dart';
+import 'operative_state_provider.dart';
 import 'user_profile_provider.dart';
 
 const _uuid = Uuid();
@@ -20,28 +22,6 @@ const _sentinel = Object();
 enum MeditationPhase { idle, breathing, transition, meditating, reflectionPause, complete }
 
 enum BreathingSubPhase { inhale, holdIn, exhale, holdOut }
-
-// ── Breathing pattern definitions (durations in seconds) ─────────────────────
-
-typedef _SubPhaseSpec = (int seconds, BreathingSubPhase subPhase);
-
-const Map<String, List<_SubPhaseSpec>> _breathingPatterns = {
-  'box': [
-    (4, BreathingSubPhase.inhale),
-    (4, BreathingSubPhase.holdIn),
-    (4, BreathingSubPhase.exhale),
-    (4, BreathingSubPhase.holdOut),
-  ],
-  '4-7-8': [
-    (4, BreathingSubPhase.inhale),
-    (7, BreathingSubPhase.holdIn),
-    (8, BreathingSubPhase.exhale),
-  ],
-  'coherence': [
-    (5, BreathingSubPhase.inhale),
-    (5, BreathingSubPhase.exhale),
-  ],
-};
 
 // ── Result ────────────────────────────────────────────────────────────────────
 
@@ -71,6 +51,10 @@ class MeditationSessionState {
   final bool isDarkScreenMode;
   final String? currentAffirmation;
   final int? stateBefore;
+  /// Duration of the chained preliminary breathing practice, folded into this
+  /// session's total (0 when the session had no breathing). Shown on the
+  /// completion sheet as "including N min of breathing".
+  final int chainedBreathingSeconds;
   final MeditationSessionResult? completionResult;
 
   const MeditationSessionState({
@@ -90,6 +74,7 @@ class MeditationSessionState {
     this.isDarkScreenMode = false,
     this.currentAffirmation,
     this.stateBefore,
+    this.chainedBreathingSeconds = 0,
     this.completionResult,
   });
 
@@ -124,6 +109,7 @@ class MeditationSessionState {
     bool? isDarkScreenMode,
     Object? currentAffirmation = _sentinel,
     Object? stateBefore = _sentinel,
+    int? chainedBreathingSeconds,
     Object? completionResult = _sentinel,
   }) =>
       MeditationSessionState(
@@ -151,6 +137,8 @@ class MeditationSessionState {
         stateBefore: identical(stateBefore, _sentinel)
             ? this.stateBefore
             : stateBefore as int?,
+        chainedBreathingSeconds:
+            chainedBreathingSeconds ?? this.chainedBreathingSeconds,
         completionResult: identical(completionResult, _sentinel)
             ? this.completionResult
             : completionResult as MeditationSessionResult?,
@@ -161,8 +149,14 @@ class MeditationSessionState {
 
 class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
   Timer? _ticker;
-  Timer? _transitionTimer;
   Timer? _mixerHideTimer;
+
+  // Ecosystem Stage 1: when this meditation follows a chained breathing practice,
+  // these carry the pre-generated session id, the breathing link, and the
+  // breathing duration to fold into the total (for a single unified reward).
+  String? _forcedSessionId;
+  String? _breathingSessionId;
+  int _extraBreathingSeconds = 0;
 
   AudioService get _audio => ref.read(audioServiceProvider);
   AppDatabase get _db => ref.read(appDatabaseProvider);
@@ -170,43 +164,42 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
   @override
   MeditationSessionState build() => const MeditationSessionState();
 
+  /// Starts a meditation session. Preliminary breathing (when the preset has it)
+  /// is no longer run here — it's handled by the real Breathing module in a
+  /// chain (Ecosystem Stage 1) and folded in via [forcedSessionId] /
+  /// [breathingSessionId] / [extraBreathingSeconds]. The session always begins
+  /// at the meditation phase.
   void startSession(MeditationPreset preset,
-      {AffirmationPack? affirmationPack, int? stateBefore}) {
+      {AffirmationPack? affirmationPack,
+      int? stateBefore,
+      String? forcedSessionId,
+      String? breathingSessionId,
+      int extraBreathingSeconds = 0}) {
     _cancelTimers();
 
-    final breathingTargetSecs = preset.hasBreathing
-        ? preset.breathingDurationMin * 60
-        : 0;
-    final meditationTargetSecs = preset.meditationDurationMin * 60;
-    final totalSecs = breathingTargetSecs + meditationTargetSecs;
+    _forcedSessionId = forcedSessionId;
+    _breathingSessionId = breathingSessionId;
+    _extraBreathingSeconds = extraBreathingSeconds;
 
-    final initialPhase =
-        preset.hasBreathing ? MeditationPhase.breathing : MeditationPhase.meditating;
+    final meditationTargetSecs = preset.meditationDurationMin * 60;
 
     state = MeditationSessionState(
       preset: preset,
       affirmationPack: affirmationPack,
-      phase: initialPhase,
-      breathingSubPhase: BreathingSubPhase.inhale,
-      breathingSubPhaseRemaining: _firstSubPhaseDuration(preset),
-      totalTargetSecs: totalSecs,
+      phase: MeditationPhase.meditating,
+      totalTargetSecs: meditationTargetSecs,
       isRunning: true,
       musicVolume: preset.baseVolume,
       ambientVolume: preset.ambientVolume,
       voiceVolume: preset.voiceVolume,
       stateBefore: stateBefore,
+      chainedBreathingSeconds: extraBreathingSeconds,
     );
 
     // Start audio
     _audio.startAmbient(volumeFactor: preset.baseVolume);
     if (preset.ambientFxId != null) {
       _audio.startHum(volumeFactor: preset.ambientVolume);
-    }
-
-    // Play first breathing cue
-    if (initialPhase == MeditationPhase.breathing) {
-      _playBreathingCue(BreathingSubPhase.inhale,
-          _firstSubPhaseDuration(preset), preset);
     }
 
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
@@ -240,11 +233,14 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
     state = const MeditationSessionState();
   }
 
-  void completeSession(int stateAfter) {
+  Future<void> completeSession(int stateAfter) async {
     _cancelTimers();
     _audio.stopAll();
     final elapsed = state.breathingElapsedSecs + state.meditationElapsedSecs;
-    _saveSession(elapsed, stateAfter);
+    // Awaited by the caller so the save + habit auto-completion finish while the
+    // session screen is still mounted (before it pops) — otherwise the
+    // auto-dispose habits provider can be torn down mid-write.
+    await _saveSession(elapsed, stateAfter);
   }
 
   void setMixerVisible(bool visible) {
@@ -280,49 +276,7 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
 
   void _onTick() {
     if (!state.isRunning) return;
-    switch (state.phase) {
-      case MeditationPhase.breathing:
-        _breathingTick();
-      case MeditationPhase.meditating:
-        _meditationTick();
-      default:
-        break;
-    }
-  }
-
-  void _breathingTick() {
-    final preset = state.preset;
-    if (preset == null) return;
-
-    final newSubRemaining = state.breathingSubPhaseRemaining - 1;
-    final newElapsed = state.breathingElapsedSecs + 1;
-    final breathingTarget = preset.breathingDurationMin * 60;
-
-    if (newElapsed >= breathingTarget) {
-      // Breathing phase complete
-      state = state.copyWith(
-        breathingElapsedSecs: breathingTarget,
-        breathingSubPhaseRemaining: 0,
-      );
-      _startTransition();
-      return;
-    }
-
-    if (newSubRemaining <= 0) {
-      // Advance to next sub-phase
-      final nextSpec = _nextSubPhase(state.breathingSubPhase, preset);
-      state = state.copyWith(
-        breathingElapsedSecs: newElapsed,
-        breathingSubPhase: nextSpec.$2,
-        breathingSubPhaseRemaining: nextSpec.$1,
-      );
-      _playBreathingCue(nextSpec.$2, nextSpec.$1, preset);
-    } else {
-      state = state.copyWith(
-        breathingElapsedSecs: newElapsed,
-        breathingSubPhaseRemaining: newSubRemaining,
-      );
-    }
+    if (state.phase == MeditationPhase.meditating) _meditationTick();
   }
 
   void _meditationTick() {
@@ -361,27 +315,6 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
     }
   }
 
-  void _startTransition() {
-    state = state.copyWith(
-      phase: MeditationPhase.transition,
-    );
-
-    // Audio crossfade
-    _audio.playPhaseTransition();
-    _audio.fadeAmbientTo(state.ambientVolume, durationMs: 3000);
-
-    _transitionTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted) return;
-      state = state.copyWith(phase: MeditationPhase.meditating);
-      // Show first affirmation at session start
-      final pack = state.affirmationPack;
-      if (pack != null && pack.phrases.isNotEmpty &&
-          state.preset?.meditationType == 'affirmations') {
-        state = state.copyWith(currentAffirmation: pack.phrases[0]);
-      }
-    });
-  }
-
   bool get mounted {
     try {
       // ignore: unused_local_variable
@@ -399,14 +332,19 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
 
-    final id = _uuid.v4();
+    // Use the pre-generated id when this meditation follows a chained breathing
+    // practice (so the breathing row's link matches).
+    final id = _forcedSessionId ?? _uuid.v4();
+    // Fold the chained breathing duration into the total for a single unified
+    // reward (decision: one XP for the whole breathing+meditation chain).
+    final totalDuration = durationSeconds + _extraBreathingSeconds;
     final now = DateTime.now();
     final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
 
     // XP/DP mirror the server RPC's formula (5 XP/min, ~0.5 DP/min) so the
     // offline award matches what the server would have granted.
-    int xp = (durationSeconds ~/ 60) * 5;
-    int dp = durationSeconds ~/ 120;
+    int xp = (totalDuration ~/ 60) * 5;
+    int dp = totalDuration ~/ 120;
 
     // Save locally first (offline-first source of truth) — with the real
     // award, not zeros, so the journal/stats and the queued row are accurate.
@@ -414,12 +352,13 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
       id: Value(id),
       userId: Value(userId),
       presetId: Value(preset?.id),
-      durationSeconds: Value(durationSeconds),
+      durationSeconds: Value(totalDuration),
       completedAtMs: Value(now.millisecondsSinceEpoch),
       xpAwarded: Value(xp),
       dpAwarded: Value(dp),
       stateBefore: Value(state.stateBefore),
       stateAfter: Value(stateAfter),
+      breathingSessionId: Value(_breathingSessionId),
       synced: const Value(false),
     ));
 
@@ -429,9 +368,10 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
           'log_meditation_session',
           params: {
             'p_preset_id': preset?.id,
-            'p_duration_seconds': durationSeconds,
+            'p_duration_seconds': totalDuration,
             'p_state_before': state.stateBefore,
             'p_state_after': stateAfter,
+            'p_breathing_session_id': _breathingSessionId,
           },
         );
         if (result is List && result.isNotEmpty) {
@@ -443,13 +383,13 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
         debugPrint('MeditationSession: sync error, queuing — $e');
         // Online attempt failed — fall back to the queue so the session still
         // reaches the server on the next sync instead of being lost.
-        await _enqueueSession(id, userId, preset?.id, durationSeconds,
+        await _enqueueSession(id, userId, preset?.id, totalDuration,
             stateAfter, xp, dp, now);
       }
     } else {
       // Offline — queue the session row. XP/DP are credited locally below and
       // flushed to the server via the pending-XP path (same as breathing).
-      await _enqueueSession(id, userId, preset?.id, durationSeconds, stateAfter,
+      await _enqueueSession(id, userId, preset?.id, totalDuration, stateAfter,
           xp, dp, now);
     }
 
@@ -457,6 +397,13 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
     try {
       ref.read(userProfileProvider.notifier).applyLocalXpDelta(xp, dp);
     } catch (_) {}
+
+    // Ecosystem Pillar 1: auto-complete habits linked to meditation activity
+    // (the meditation part of a chain counts for meditation-source habits).
+    await autoCompleteHabitsFromActivity(ref,
+        source: 'meditation', seconds: totalDuration);
+    // Ecosystem Pillar 2: meditation restores operative state.
+    await bumpOperativeState(ref, kOpDeltaMeditation);
 
     state = state.copyWith(
       phase: MeditationPhase.complete,
@@ -490,44 +437,9 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
     }));
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
-  int _firstSubPhaseDuration(MeditationPreset preset) {
-    final pattern = _breathingPatterns[preset.breathingPatternId ?? 'box'];
-    if (pattern == null || pattern.isEmpty) return 4;
-    return pattern[0].$1;
-  }
-
-  _SubPhaseSpec _nextSubPhase(
-      BreathingSubPhase current, MeditationPreset preset) {
-    final pattern =
-        _breathingPatterns[preset.breathingPatternId ?? 'box'] ?? _breathingPatterns['box']!;
-
-    final currentIdx = pattern.indexWhere((s) => s.$2 == current);
-    final nextIdx = (currentIdx + 1) % pattern.length;
-    return pattern[nextIdx];
-  }
-
-  void _playBreathingCue(
-      BreathingSubPhase sub, int durationSecs, MeditationPreset preset) {
-    if (durationSecs <= 0) return;
-    switch (sub) {
-      case BreathingSubPhase.inhale:
-        _audio.playInhale(
-            targetSecs: durationSecs, volumeFactor: preset.baseVolume);
-      case BreathingSubPhase.exhale:
-        _audio.playExhale(
-            targetSecs: durationSecs, volumeFactor: preset.baseVolume);
-      default:
-        break; // holdIn / holdOut: no audio cue
-    }
-  }
-
   void _cancelTimers() {
     _ticker?.cancel();
     _ticker = null;
-    _transitionTimer?.cancel();
-    _transitionTimer = null;
     _mixerHideTimer?.cancel();
     _mixerHideTimer = null;
   }

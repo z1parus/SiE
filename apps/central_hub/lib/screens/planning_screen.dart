@@ -234,6 +234,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
           DateTime? deadline,
           required int priority,
           required String colorHex,
+          String? area,
         }) async {
           final goalId = await ref.read(planningProvider.notifier).addGoal(
                 name: name,
@@ -241,6 +242,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                 deadline: deadline,
                 priority: priority,
                 colorHex: colorHex,
+                area: area,
               );
           if (!aiAfter || goalId == null || !context.mounted) return;
           // Jump straight into the new goal and open AI decomposition.
@@ -1322,6 +1324,7 @@ class _AddGoalSheet extends ConsumerStatefulWidget {
     DateTime? deadline,
     required int priority,
     required String colorHex,
+    String? area,
   }) onAdd;
 
   @override
@@ -1333,6 +1336,7 @@ class _AddGoalSheetState extends ConsumerState<_AddGoalSheet> {
   int _priority = 2;
   String _colorHex = '#5AADA0';
   DateTime? _deadline;
+  LifeArea? _area;
 
   static const _palette = [
     '#5AADA0',
@@ -1471,6 +1475,52 @@ class _AddGoalSheetState extends ConsumerState<_AddGoalSheet> {
                 .toList(),
           ),
           const SizedBox(height: 20),
+          // Life area (Ecosystem Pillar 3)
+          Text(t.planning.addGoal.area,
+              style: TextStyle(
+                  color: sc.textSecondary,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final a in LifeArea.values)
+                GestureDetector(
+                  onTap: () =>
+                      setState(() => _area = _area == a ? null : a),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: _area == a ? sc.accent : sc.border,
+                        width: _area == a ? 1.5 : 1.0,
+                      ),
+                      color: _area == a
+                          ? sc.accent.withValues(alpha: 0.12)
+                          : Colors.transparent,
+                    ),
+                    child: Text(
+                      '${a.icon} ${a.label}',
+                      style: TextStyle(
+                        color: _area == a
+                            ? sc.accent
+                            : sc.textSecondary.withValues(alpha: 0.8),
+                        fontSize: 11,
+                        fontWeight:
+                            _area == a ? FontWeight.w600 : FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 20),
           // Deadline
           GestureDetector(
             onTap: () async {
@@ -1530,6 +1580,7 @@ class _AddGoalSheetState extends ConsumerState<_AddGoalSheet> {
                   deadline: _deadline,
                   priority: _priority,
                   colorHex: _colorHex,
+                  area: _area?.name,
                 );
                 Navigator.pop(context);
               },

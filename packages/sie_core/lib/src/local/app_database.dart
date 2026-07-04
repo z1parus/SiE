@@ -104,6 +104,28 @@ class LocalBreathingSessions extends Table {
   TextColumn get moodEmoji => text().nullable()();
   IntColumn get calmness => integer().nullable()();
   IntColumn get confidence => integer().nullable()();
+  // Ecosystem Stage 1: set when this breathing ran as the preliminary practice
+  // of a meditation session (links to that meditation session's id).
+  TextColumn get meditationSessionId => text().nullable()();
+  BoolColumn get synced => boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Ecosystem Pillar 1: a habit can be auto-completed by activity from another
+/// module. Each row links a habit to a source ('focus'|'breathing'|
+/// 'meditation'|'task'); [minValue] is an optional threshold (minutes/count).
+@DataClassName('LocalActivityHabitLink')
+class LocalActivityHabitLinks extends Table {
+  TextColumn get id => text()();
+  TextColumn get habitId => text()();
+  TextColumn get userId => text()();
+  TextColumn get source => text()();
+  RealColumn get minValue => real().nullable()();
+  IntColumn get createdAtMs => integer()();
+  BoolColumn get deletedLocally =>
+      boolean().withDefault(const Constant(false))();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
 
   @override
@@ -186,6 +208,8 @@ class LocalGoals extends Table {
   BoolColumn get isPinned          => boolean().withDefault(const Constant(false))();
   BoolColumn get isShared          => boolean().withDefault(const Constant(false))();
   TextColumn get myRole            => text().nullable()();
+  // Ecosystem Pillar 3 — life area (LifeArea.name) this goal belongs to.
+  TextColumn get area              => text().nullable()();
   @override Set<Column> get primaryKey => {id};
 }
 
@@ -353,6 +377,9 @@ class LocalMeditationSessions extends Table {
   IntColumn  get dpAwarded       => integer()();
   IntColumn  get stateBefore     => integer().nullable()();
   IntColumn  get stateAfter      => integer().nullable()();
+  // Ecosystem Stage 1: link to the breathing session that ran before this
+  // meditation (when the preset included preliminary breathing).
+  TextColumn get breathingSessionId => text().nullable()();
   BoolColumn get synced          => boolean().withDefault(const Constant(false))();
 
   @override
@@ -367,6 +394,11 @@ class LocalMeditationPresets extends Table {
   TextColumn get description             => text().nullable()();
   BoolColumn get isSystem                => boolean().withDefault(const Constant(false))();
   BoolColumn get hasBreathing            => boolean().withDefault(const Constant(false))();
+  // Ecosystem Stage 1: preliminary breathing now runs the real Breathing module.
+  // Either a saved-sequence reference or embedded quick params (JSON).
+  TextColumn get breathingSequenceId     => text().nullable()();
+  TextColumn get breathingConfigJson     => text().nullable()();
+  // Legacy paced-pattern fields (deprecated; kept for schema compatibility).
   TextColumn get breathingPatternId      => text().nullable()();
   IntColumn  get breathingDurationMin    => integer().withDefault(const Constant(5))();
   TextColumn get meditationType          => text().withDefault(const Constant('unguided'))();
@@ -499,6 +531,7 @@ class LocalBreathingSequences extends Table {
 @DriftDatabase(tables: [
   LocalHabits,
   LocalHabitLogs,
+  LocalActivityHabitLinks,
   LocalFocusSessions,
   LocalBreathingSessions,
   LocalProfiles,
@@ -530,7 +563,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 39;
+  int get schemaVersion => 42;
 
   // Indexes for frequently-filtered foreign-key / user columns. Idempotent
   // (IF NOT EXISTS) so it can run on both fresh installs and upgrades.
@@ -783,6 +816,25 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 39) {
         await m.addColumn(localHabits, localHabits.avoidStartMs);
+      }
+      if (from < 40) {
+        // Ecosystem Stage 1: meditation ↔ breathing integration.
+        await m.addColumn(localMeditationPresets,
+            localMeditationPresets.breathingSequenceId);
+        await m.addColumn(localMeditationPresets,
+            localMeditationPresets.breathingConfigJson);
+        await m.addColumn(localBreathingSessions,
+            localBreathingSessions.meditationSessionId);
+        await m.addColumn(localMeditationSessions,
+            localMeditationSessions.breathingSessionId);
+      }
+      if (from < 41) {
+        // Ecosystem Pillar 1: activity → habit auto-completion links.
+        await m.createTable(localActivityHabitLinks);
+      }
+      if (from < 42) {
+        // Ecosystem Pillar 3: life area on goals.
+        await m.addColumn(localGoals, localGoals.area);
       }
       } catch (e) {
         // Migration failed (e.g. table/column already exists from a dev build
@@ -1777,6 +1829,39 @@ class AppDatabase extends _$AppDatabase {
             ..where((t) => t.completedAt.equals(dateKey)))
           .get();
 
+  // ── Activity → Habit links (Ecosystem Pillar 1) ─────────────────────────────
+
+  Future<void> upsertActivityHabitLink(
+          LocalActivityHabitLinksCompanion row) =>
+      into(localActivityHabitLinks).insertOnConflictUpdate(row);
+
+  Future<void> softDeleteActivityHabitLink(String id) =>
+      (update(localActivityHabitLinks)..where((t) => t.id.equals(id))).write(
+          const LocalActivityHabitLinksCompanion(
+              deletedLocally: Value(true), synced: Value(false)));
+
+  Future<List<LocalActivityHabitLink>> activityLinksForHabit(String habitId) =>
+      (select(localActivityHabitLinks)
+            ..where((t) =>
+                t.habitId.equals(habitId) & t.deletedLocally.not()))
+          .get();
+
+  /// All active links for a given activity [source] — drives auto-completion.
+  Future<List<LocalActivityHabitLink>> activityLinksForSource(
+          String userId, String source) =>
+      (select(localActivityHabitLinks)
+            ..where((t) =>
+                t.userId.equals(userId) &
+                t.source.equals(source) &
+                t.deletedLocally.not()))
+          .get();
+
+  Future<List<LocalActivityHabitLink>> unsyncedActivityHabitLinks(
+          String userId) =>
+      (select(localActivityHabitLinks)
+            ..where((t) => t.userId.equals(userId) & t.synced.equals(false)))
+          .get();
+
   /// All breathing sessions for the Breathing home widget, newest first.
   /// Single-user device assumption (mirrors [habitsForWidget]).
   Future<List<LocalBreathingSession>> breathingSessionsForWidget() =>
@@ -1795,6 +1880,42 @@ class AppDatabase extends _$AppDatabase {
                   expression: t.completedAtMs, mode: OrderingMode.desc)
             ]))
           .get();
+
+  /// Most recent focus session overall (single-user device), or null if none.
+  Future<LocalFocusSession?> latestFocusSession() =>
+      (select(localFocusSessions)
+            ..orderBy([
+              (t) => OrderingTerm(
+                  expression: t.completedAtMs, mode: OrderingMode.desc)
+            ])
+            ..limit(1))
+          .getSingleOrNull();
+
+  /// Focus sessions completed at/after [sinceMs] — for the life-area rollup.
+  Future<List<LocalFocusSession>> focusSessionsSince(int sinceMs) =>
+      (select(localFocusSessions)
+            ..where((t) => t.completedAtMs.isBiggerOrEqualValue(sinceMs)))
+          .get();
+
+  /// Most recent breathing session overall (single-user device), or null.
+  Future<LocalBreathingSession?> latestBreathingSession() =>
+      (select(localBreathingSessions)
+            ..orderBy([
+              (t) => OrderingTerm(
+                  expression: t.completedAtMs, mode: OrderingMode.desc)
+            ])
+            ..limit(1))
+          .getSingleOrNull();
+
+  /// Most recent meditation session overall (single-user device), or null.
+  Future<LocalMeditationSession?> latestMeditationSession() =>
+      (select(localMeditationSessions)
+            ..orderBy([
+              (t) => OrderingTerm(
+                  expression: t.completedAtMs, mode: OrderingMode.desc)
+            ])
+            ..limit(1))
+          .getSingleOrNull();
 
   /// Active (non-deleted) goals for the Planning home widget. Single-user
   /// device assumption (mirrors [habitsForWidget]); pinned first, then by

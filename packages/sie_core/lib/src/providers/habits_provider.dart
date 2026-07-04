@@ -11,6 +11,8 @@ import '../models/life_area.dart';
 import '../services/notification_service.dart';
 import '../widgets_home/widget_render_service.dart';
 import 'auth_state_provider.dart';
+import 'operative_state_provider.dart';
+import 'auto_log_feed_provider.dart';
 import 'connectivity_provider.dart';
 import 'user_profile_provider.dart';
 import 'planning_provider.dart';
@@ -947,6 +949,9 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     } catch (e) {
       debugPrint('SiE toggleHabit: synergy boost failed — $e');
     }
+
+    // Ecosystem Pillar 2: completing a habit keeps operative state up.
+    await bumpOperativeState(ref, kOpDeltaHabit);
   }
 
   /// Event-driven home-screen widget refresh. Fire-and-forget: never blocks or
@@ -1094,6 +1099,8 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
             await planning.applyHabitBoost(link.goalId, boost);
           }
         }
+        // Ecosystem Pillar 2: meeting a metric habit's goal keeps state up.
+        await bumpOperativeState(ref, kOpDeltaHabit);
       } else if (!newMet) {
         // Just sync the accumulated value without XP.
         if (isOnline) {
@@ -1120,6 +1127,168 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
     }
     _inProgress.remove(toggleKey);
     _refreshHomeWidgets();
+  }
+
+  // ── Activity → Habit auto-completion (Ecosystem Pillar 1) ───────────────────
+
+  /// Links a habit to an activity [source] ('focus'|'breathing'|'meditation'|
+  /// 'task') so completing that activity auto-logs the habit. [minValue] is an
+  /// optional threshold (minutes for practices).
+  Future<void> addActivityLink(String habitId, String source,
+      {double? minValue}) async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) return;
+    final db = ref.read(appDatabaseProvider);
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final id = _uuid.v4();
+    final row = {
+      'id': id,
+      'habit_id': habitId,
+      'user_id': userId,
+      'source': source,
+      'min_value': minValue,
+    };
+    await db.upsertActivityHabitLink(LocalActivityHabitLinksCompanion(
+      id: Value(id),
+      habitId: Value(habitId),
+      userId: Value(userId),
+      source: Value(source),
+      minValue: Value(minValue),
+      createdAtMs: Value(DateTime.now().millisecondsSinceEpoch),
+      synced: Value(isOnline),
+    ));
+    if (isOnline) {
+      try {
+        await client.from('activity_habit_links').insert(row);
+      } catch (_) {
+        await db.enqueueSyncOp('insert_activity_habit_link', jsonEncode(row));
+      }
+    } else {
+      await db.enqueueSyncOp('insert_activity_habit_link', jsonEncode(row));
+    }
+  }
+
+  Future<void> removeActivityLink(String linkId) async {
+    final client = Supabase.instance.client;
+    final isOnline = ref.read(connectivityProvider).valueOrNull ?? false;
+    final db = ref.read(appDatabaseProvider);
+    await db.softDeleteActivityHabitLink(linkId);
+    if (isOnline) {
+      try {
+        await client.from('activity_habit_links').delete().eq('id', linkId);
+      } catch (_) {
+        await db.enqueueSyncOp(
+            'delete_activity_habit_link', jsonEncode({'id': linkId}));
+      }
+    } else {
+      await db.enqueueSyncOp(
+          'delete_activity_habit_link', jsonEncode({'id': linkId}));
+    }
+  }
+
+  /// Auto-completes habits linked to a just-finished activity. [minutes] is the
+  /// activity's duration (practices); [goalId] scopes the 'task' source to
+  /// habits linked to that goal. Best-effort — never throws to the caller.
+  Future<void> autoCompleteFromActivity({
+    required String source,
+    int seconds = 0,
+    String? goalId,
+  }) async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final db = ref.read(appDatabaseProvider);
+    final links = await db.activityLinksForSource(userId, source);
+    if (links.isEmpty) return;
+
+    final st = state.valueOrNull;
+    if (st == null) return;
+
+    // 'task' source only counts for habits linked to the completed task's goal.
+    Set<String>? goalHabitIds;
+    if (source == 'task' && goalId != null) {
+      final gl = await db.habitLinksForGoal(goalId);
+      goalHabitIds = gl.map((l) => l.habitId).toSet();
+    }
+
+    final today = DateTime.now();
+    final todayStr = _fmt(today);
+
+    // One auto-log per habit per activity, even if several links point at it.
+    final processed = <String>{};
+    for (final link in links) {
+      if (source == 'task' &&
+          goalHabitIds != null &&
+          !goalHabitIds.contains(link.habitId)) {
+        continue;
+      }
+      if (!processed.add(link.habitId)) continue;
+
+      final habit = st.habits
+          .cast<Habit?>()
+          .firstWhere((h) => h?.id == link.habitId, orElse: () => null);
+      if (habit == null || habit.isAvoid) continue;
+
+      // Threshold (in seconds) for practice sources.
+      if (link.minValue != null && seconds < link.minValue!) continue;
+
+      try {
+        if (habit.isMetric) {
+          // "Sum the fact": a timed practice adds its seconds to a duration
+          // habit (whose target/step are stored in seconds). Everything else
+          // (count habits, task events, zero-duration) adds one step.
+          final double delta;
+          if (habit.kind == 'duration' && seconds > 0) {
+            delta = seconds.toDouble();
+          } else {
+            delta = (habit.step != null && habit.step! > 0) ? habit.step! : 1.0;
+          }
+          if (delta <= 0) continue;
+          await logHabitValue(habit.id, today, delta);
+          _recordAutoLog(habit, isMetric: true, delta: delta);
+        } else {
+          final done = st.logDates[habit.id]?.contains(todayStr) ?? false;
+          if (!done) {
+            await toggleHabit(habit.id, today);
+            _recordAutoLog(habit, isMetric: false, delta: 0);
+          }
+        }
+      } catch (_) {
+        // best-effort per habit
+      }
+    }
+  }
+
+  void _recordAutoLog(Habit habit, {required bool isMetric, required double delta}) {
+    try {
+      ref.read(autoLogFeedProvider.notifier).add(AutoLogEntry(
+            habitId: habit.id,
+            title: habit.title,
+            isMetric: isMetric,
+            delta: delta,
+            at: DateTime.now(),
+          ));
+    } catch (_) {}
+  }
+
+  /// Reverts a habit auto-completion surfaced in the brief feed.
+  Future<void> undoAutoLog(AutoLogEntry entry) async {
+    try {
+      final today = DateTime.now();
+      if (entry.isMetric) {
+        await logHabitValue(entry.habitId, today, -entry.delta);
+      } else {
+        final done =
+            state.valueOrNull?.logDates[entry.habitId]?.contains(_fmt(today)) ??
+                false;
+        if (done) await toggleHabit(entry.habitId, today);
+      }
+    } catch (_) {
+    } finally {
+      ref.read(autoLogFeedProvider.notifier).remove(entry.habitId);
+    }
   }
 
   Future<void> archiveHabit(String habitId) async {
@@ -1669,6 +1838,38 @@ final habitsProvider =
     AsyncNotifierProvider.autoDispose<HabitsNotifier, HabitsState>(
   HabitsNotifier.new,
 );
+
+/// Active activity→habit links for one habit (for the habit editor UI).
+final activityHabitLinksProvider = FutureProvider.autoDispose
+    .family<List<LocalActivityHabitLink>, String>((ref, habitId) async {
+  final db = ref.read(appDatabaseProvider);
+  return db.activityLinksForHabit(habitId);
+});
+
+/// Best-effort entry point used by the practice/planning modules to auto-log
+/// habits linked to a just-finished activity (Ecosystem Pillar 1). Ensures the
+/// habits state is loaded first so toggle/value writes see current data.
+Future<void> autoCompleteHabitsFromActivity(
+  Ref ref, {
+  required String source,
+  int seconds = 0,
+  String? goalId,
+}) async {
+  try {
+    // Load the habits state first so toggle/value writes see current data.
+    // Callers must invoke this while their own (non-disposed) context is alive —
+    // e.g. awaited before navigating away — so the provider isn't torn down
+    // mid-operation.
+    await ref.read(habitsProvider.future);
+    await ref.read(habitsProvider.notifier).autoCompleteFromActivity(
+          source: source,
+          seconds: seconds,
+          goalId: goalId,
+        );
+  } catch (_) {
+    // best-effort — auto-completion never blocks the activity flow
+  }
+}
 
 final archivedHabitsProvider =
     AutoDisposeFutureProvider<List<Habit>>((ref) async {

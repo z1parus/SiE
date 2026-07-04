@@ -13,6 +13,9 @@ class BreathingSession {
   final int? confidence; // 1..10
   final int xpAwarded;
   final int dpAwarded;
+  /// Set when this breathing ran as the preliminary practice of a meditation
+  /// session (Ecosystem Stage 1) — links to that meditation session's id.
+  final String? meditationSessionId;
   final DateTime completedAt;
 
   const BreathingSession({
@@ -28,8 +31,13 @@ class BreathingSession {
     this.confidence,
     this.xpAwarded = 0,
     this.dpAwarded = 0,
+    this.meditationSessionId,
     required this.completedAt,
   });
+
+  /// True when this session was part of a meditation chain.
+  bool get isPartOfMeditation =>
+      meditationSessionId != null && meditationSessionId!.isNotEmpty;
 
   bool get hasReflection =>
       (moodEmoji != null && moodEmoji!.isNotEmpty) ||
@@ -49,6 +57,7 @@ class BreathingSession {
         confidence: (m['confidence'] as num?)?.toInt(),
         xpAwarded: (m['xp_awarded'] as num?)?.toInt() ?? 0,
         dpAwarded: (m['dp_awarded'] as num?)?.toInt() ?? 0,
+        meditationSessionId: m['meditation_session_id'] as String?,
         completedAt:
             DateTime.tryParse('${m['completed_at']}')?.toLocal() ??
                 DateTime.now(),

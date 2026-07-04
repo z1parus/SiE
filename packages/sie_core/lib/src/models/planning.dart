@@ -432,6 +432,7 @@ class Goal {
     this.ownerProfile,
     this.mapElements = const [],
     this.attachments = const {},
+    this.area,
   });
 
   final String id;
@@ -440,6 +441,8 @@ class Goal {
   final String? description;
   final DateTime? deadline;
   final int priority; // 1–4
+  /// Ecosystem Pillar 3 — life area (LifeArea.name) this goal belongs to.
+  final String? area;
   final String status; // active/completed/failed/frozen
   final String colorHex;
   final double progress; // 0–100, used when subGoals is empty
@@ -495,11 +498,13 @@ class Goal {
     PublicProfile? ownerProfile,
     List<MapElement>? mapElements,
     Map<String, List<NodeAttachment>>? attachments,
+    Object? area = _goalSentinel,
   }) =>
       Goal(
         id: id,
         userId: userId,
         name: name ?? this.name,
+        area: area == _goalSentinel ? this.area : area as String?,
         description: description ?? this.description,
         deadline: deadline ?? this.deadline,
         priority: priority ?? this.priority,
@@ -582,6 +587,7 @@ class Goal {
       isPinned: j['is_pinned'] as bool? ?? false,
       collaborators: collaborators,
       mapElements: mapElements,
+      area: j['area'] as String?,
     );
   }
 
@@ -595,10 +601,13 @@ class Goal {
         'status': status,
         'color_hex': colorHex,
         'progress': progress,
+        if (area != null) 'area': area,
         'settings': settings.toJson(),
         if (mapPositions.isNotEmpty) 'map_positions': positionsToJson(mapPositions),
       };
 }
+
+const _goalSentinel = Object();
 
 // ─── PlanningState ────────────────────────────────────────────────────────────
 

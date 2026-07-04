@@ -11,6 +11,7 @@ import 'breathing_exercise_screen.dart';
 import 'focus_protocol_screen.dart';
 import 'habit_tracker_screen.dart';
 import 'leaderboard_screen.dart';
+import 'life_areas_screen.dart';
 import 'meditation_hub_screen.dart';
 import 'planning_screen.dart';
 import 'session_orb_painters.dart';
@@ -22,6 +23,11 @@ import '../widgets/focus_orbit_timer.dart';
 
 const _kOrange = Color(0xFFFF8C42);
 const _kBranchOrderKey = 'branch_order';
+const _kHomeModeKey = 'ops_home_mode';
+
+/// Two ways to render the Operations home: the new personalised **brief** feed
+/// (default) and the legacy reorderable module **carousel**.
+enum OpsHomeMode { brief, carousel }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OperationsControlScreen
@@ -49,17 +55,35 @@ class _OperationsControlScreenState
     extends ConsumerState<OperationsControlScreen> {
   bool _welcomeShown = false;
   List<String>? _orderedSlugs;
+  OpsHomeMode _homeMode = OpsHomeMode.brief;
 
   @override
   void initState() {
     super.initState();
     _loadOrder();
+    _loadHomeMode();
   }
 
   Future<void> _loadOrder() async {
     final prefs = await SharedPreferences.getInstance();
     final slugs = prefs.getStringList(_kBranchOrderKey);
     if (mounted && slugs != null) setState(() => _orderedSlugs = slugs);
+  }
+
+  Future<void> _loadHomeMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = prefs.getString(_kHomeModeKey);
+    if (!mounted || v == null) return;
+    final mode = v == 'carousel' ? OpsHomeMode.carousel : OpsHomeMode.brief;
+    if (mode != _homeMode) setState(() => _homeMode = mode);
+  }
+
+  void _setHomeMode(OpsHomeMode mode) {
+    if (mode == _homeMode) return;
+    SieHaptics.selection();
+    setState(() => _homeMode = mode);
+    SharedPreferences.getInstance()
+        .then((p) => p.setString(_kHomeModeKey, mode.name));
   }
 
   Future<void> _saveOrder(List<String> slugs) async {
@@ -113,7 +137,130 @@ class _OperationsControlScreenState
       }
     });
 
-    final innerBody = SafeArea(
+    // Offline shell has no network surfaces the brief relies on — pin it to the
+    // carousel and hide the toggle.
+    final effectiveMode =
+        widget.offline ? OpsHomeMode.carousel : _homeMode;
+
+    // Legacy reorderable module carousel. The pull-to-refresh wrapper keeps
+    // working even though its content is a fixed-height page.
+    Widget carouselMode() => LayoutBuilder(
+          builder: (_, constraints) => RefreshIndicator(
+            color: c.accent,
+            backgroundColor:
+                c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
+            onRefresh: _onRefresh,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: SizedBox(
+                height: constraints.maxHeight,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SectionHeader(title: t.operations.departments),
+                          const SizedBox(height: 12),
+                          if (!widget.offline) ...[
+                            _DailyTipBanner(),
+                            const SizedBox(height: 8),
+                            _LeaderboardTile(
+                                key: ref
+                                    .read(tourControllerProvider.notifier)
+                                    .keyFor('leaderboard_tile')),
+                            const SizedBox(height: 16),
+                          ],
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: branchesAsync.when(
+                        data: (branches) {
+                          final filtered = branches
+                              .where((b) => b.slug != 'progress_hub')
+                              .toList();
+                          final ordered = _applyOrder(filtered);
+                          return ordered.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    t.operations.noDepartments,
+                                    style: TextStyle(
+                                      color: c.textSecondary,
+                                      letterSpacing: 1.5,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                )
+                              : _BranchCarousel(
+                                  key: ref
+                                      .read(tourControllerProvider.notifier)
+                                      .keyFor('branch_carousel'),
+                                  branches: ordered,
+                                  onBranchTap: (b) => _onBranchTap(context, b),
+                                  onReorder: (oldIndex, newIndex) {
+                                    final prevSlugs =
+                                        ordered.map((b) => b.slug).toList();
+                                    final reordered =
+                                        List<Branch>.from(ordered);
+                                    if (newIndex > oldIndex) newIndex--;
+                                    final item = reordered.removeAt(oldIndex);
+                                    reordered.insert(newIndex, item);
+                                    final slugs =
+                                        reordered.map((b) => b.slug).toList();
+                                    setState(() => _orderedSlugs = slugs);
+                                    _saveOrder(slugs);
+                                    showUndoSnackbar(
+                                      context,
+                                      ref,
+                                      message: t.operations.reorderDone,
+                                      onUndo: () {
+                                        setState(
+                                            () => _orderedSlugs = prevSlugs);
+                                        _saveOrder(prevSlugs);
+                                      },
+                                    );
+                                  },
+                                );
+                        },
+                        loading: () => const _BranchCarouselSkeleton(),
+                        error: (e, _) => const Center(
+                          child: _NoConnectionMessage(),
+                        ),
+                      ),
+                    ),
+                    Builder(
+                      builder: (context) {
+                        final bottomInset =
+                            MediaQuery.of(context).padding.bottom;
+                        return SizedBox(
+                            height: 68 + math.max(bottomInset, 16) + 16);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+
+    final body = Stack(
+      children: [
+        // Brief mode swaps the base surface for a soft, blurred gold-tinted
+        // gradient. It cross-fades in/out as the mode changes.
+        Positioned.fill(
+          child: IgnorePointer(
+            child: AnimatedOpacity(
+              opacity: effectiveMode == OpsHomeMode.brief ? 1 : 0,
+              duration: SieMotion.slow,
+              curve: Curves.easeInOut,
+              child: const _BriefBackdrop(),
+            ),
+          ),
+        ),
+        SafeArea(
       bottom: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -121,101 +268,43 @@ class _OperationsControlScreenState
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
             child: _ScreenHeader(
-                profileAsync: profileAsync, offline: widget.offline),
-          ),
-          const SizedBox(height: 24),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SectionHeader(title: t.operations.departments),
-                const SizedBox(height: 12),
-                if (!widget.offline) ...[
-                  _DailyTipBanner(),
-                  const SizedBox(height: 8),
-                  _LeaderboardTile(
-                      key: ref
-                          .read(tourControllerProvider.notifier)
-                          .keyFor('leaderboard_tile')),
-                  const SizedBox(height: 16),
-                ],
-              ],
+              profileAsync: profileAsync,
+              offline: widget.offline,
+              compact: effectiveMode == OpsHomeMode.brief,
             ),
           ),
-          Expanded(
-            child: branchesAsync.when(
-              data: (branches) {
-                final filtered = branches
-                    .where((b) => b.slug != 'progress_hub')
-                    .toList();
-                final ordered = _applyOrder(filtered);
-                return ordered.isEmpty
-                    ? Center(
-                        child: Text(
-                          t.operations.noDepartments,
-                          style: TextStyle(
-                            color: c.textSecondary,
-                            letterSpacing: 1.5,
-                            fontSize: 12,
-                          ),
-                        ),
-                      )
-                    : _BranchCarousel(
-                        key: ref
-                            .read(tourControllerProvider.notifier)
-                            .keyFor('branch_carousel'),
-                        branches: ordered,
-                        onBranchTap: (b) => _onBranchTap(context, b),
-                        onReorder: (oldIndex, newIndex) {
-                          final prevSlugs =
-                              ordered.map((b) => b.slug).toList();
-                          final reordered = List<Branch>.from(ordered);
-                          if (newIndex > oldIndex) newIndex--;
-                          final item = reordered.removeAt(oldIndex);
-                          reordered.insert(newIndex, item);
-                          final slugs =
-                              reordered.map((b) => b.slug).toList();
-                          setState(() => _orderedSlugs = slugs);
-                          _saveOrder(slugs);
-                          showUndoSnackbar(
-                            context,
-                            ref,
-                            message: t.operations.reorderDone,
-                            onUndo: () {
-                              setState(() => _orderedSlugs = prevSlugs);
-                              _saveOrder(prevSlugs);
-                            },
-                          );
-                        },
-                      );
-              },
-              loading: () => const _BranchCarouselSkeleton(),
-              error: (e, _) => const Center(
-                child: _NoConnectionMessage(),
+          const SizedBox(height: 16),
+          if (!widget.offline) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _HomeModeToggle(
+                mode: _homeMode,
+                onChanged: _setHomeMode,
               ),
             ),
-          ),
-          Builder(
-            builder: (context) {
-              final bottomInset = MediaQuery.of(context).padding.bottom;
-              return SizedBox(height: 68 + math.max(bottomInset, 16) + 16);
-            },
+            const SizedBox(height: 16),
+          ],
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: SieMotion.base,
+              switchInCurve: Curves.easeOut,
+              switchOutCurve: Curves.easeIn,
+              child: effectiveMode == OpsHomeMode.brief
+                  ? OperationalBriefView(
+                      key: const ValueKey('ops-brief'),
+                      onOpenModule: (slug) =>
+                          _openModuleBySlug(context, slug),
+                    )
+                  : KeyedSubtree(
+                      key: const ValueKey('ops-carousel'),
+                      child: carouselMode(),
+                    ),
+            ),
           ),
         ],
       ),
-    );
-
-    final body = LayoutBuilder(
-      builder: (_, constraints) => RefreshIndicator(
-        color: c.accent,
-        backgroundColor: c.isLightMode ? Colors.white : const Color(0xFF0D1B2A),
-        onRefresh: _onRefresh,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: SizedBox(height: constraints.maxHeight, child: innerBody),
         ),
-      ),
+      ],
     );
 
     if (widget.asTab) {
@@ -423,24 +512,24 @@ String _moduleName(Branch branch) => switch (branch.slug) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Branch navigation
 // ─────────────────────────────────────────────────────────────────────────────
-void _onBranchTap(BuildContext context, Branch branch) {
-  Widget? screen;
+void _onBranchTap(BuildContext context, Branch branch) =>
+    _openModuleBySlug(context, branch.slug);
 
-  if (branch.slug == 'breathing_practices') {
-    screen = const BreathingExerciseScreen();
-  } else if (branch.slug == 'habit_archive') {
-    screen = const HabitTrackerScreen();
-  } else if (branch.slug == 'focus_protocol') {
-    screen = const FocusProtocolScreen();
-  } else if (branch.slug == 'planning') {
-    screen = const PlanningScreen();
-  } else if (branch.slug == 'meditation') {
-    screen = const MeditationHubScreen();
-  }
+/// Navigate into a module by its branch slug (shared by the carousel and the
+/// operational-brief blocks).
+void _openModuleBySlug(BuildContext context, String slug) {
+  final screen = switch (slug) {
+    'breathing_practices' => const BreathingExerciseScreen(),
+    'habit_archive' => const HabitTrackerScreen(),
+    'focus_protocol' => const FocusProtocolScreen(),
+    'planning' => const PlanningScreen(),
+    'meditation' => const MeditationHubScreen(),
+    _ => null,
+  };
 
   if (screen != null) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => screen!),
+      MaterialPageRoute(builder: (_) => screen),
     );
     return;
   }
@@ -452,6 +541,1103 @@ void _onBranchTap(BuildContext context, Branch branch) {
       duration: const Duration(seconds: 2),
     ),
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Home mode toggle — Brief / Modules segment
+// ─────────────────────────────────────────────────────────────────────────────
+class _HomeModeToggle extends ConsumerWidget {
+  final OpsHomeMode mode;
+  final ValueChanged<OpsHomeMode> onChanged;
+
+  const _HomeModeToggle({required this.mode, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+
+    Widget seg(String label, IconData icon, OpsHomeMode m) {
+      final active = mode == m;
+      return Expanded(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => onChanged(m),
+          child: AnimatedContainer(
+            duration: SieMotion.fast,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              color: active
+                  ? c.accent.withValues(alpha: 0.16)
+                  : Colors.transparent,
+              border: Border.all(
+                color: active
+                    ? c.accent.withValues(alpha: 0.55)
+                    : c.border.withValues(alpha: 0.40),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon,
+                    size: 14, color: active ? c.accent : c.textSecondary),
+                const SizedBox(width: 8),
+                Text(
+                  label.toUpperCase(),
+                  style: TextStyle(
+                    color: active ? c.accent : c.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        seg(t.operationalBrief.tabBrief, Icons.view_agenda_outlined,
+            OpsHomeMode.brief),
+        const SizedBox(width: 8),
+        seg(t.operationalBrief.tabModules, Icons.grid_view_outlined,
+            OpsHomeMode.carousel),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Operational Brief — personalised feed of per-module blocks
+// ─────────────────────────────────────────────────────────────────────────────
+class OperationalBriefView extends ConsumerWidget {
+  final void Function(String slug) onOpenModule;
+
+  const OperationalBriefView({
+    super.key,
+    required this.onOpenModule,
+  });
+
+  // Baseline module order. The brief re-sorts this "actionable first" each
+  // build (see [_sortedSlugs]); the daily-tip/leaderboard slide stays last.
+  static const _slugs = [
+    'planning',
+    'habit_archive',
+    'focus_protocol',
+    'breathing_practices',
+    'meditation',
+  ];
+
+  static Widget briefBlockFor(String slug, void Function(String) onOpen) {
+    void open() => onOpen(slug);
+    return switch (slug) {
+      'planning' => _PlanningBriefBlock(onOpen: open),
+      'habit_archive' => _HabitsBriefBlock(onOpen: open),
+      'daily_tip' => const _TipBriefBlock(),
+      'leaderboard' => const _LeaderboardBriefBlock(),
+      'life_areas' => const _LifeAreasBriefBlock(),
+      _ => _GenericBriefBlock(slug: slug, onOpen: open),
+    };
+  }
+
+  /// Modules with pending items for today (overdue/today tasks, due habits)
+  /// float to the front; everything else keeps its baseline order (stable).
+  List<String> _sortedSlugs(WidgetRef ref) {
+    final agenda = ref.watch(agendaProvider);
+    final habits = ref.watch(habitsProvider).valueOrNull;
+
+    int scoreFor(String slug) {
+      switch (slug) {
+        case 'planning':
+          // Overdue is more pressing than merely due-today.
+          return agenda.overdue.length * 2 + agenda.today.length;
+        case 'habit_archive':
+          if (habits == null) return 0;
+          final now = DateTime.now();
+          final today = _ymd(now);
+          return habits.habits.where((h) => !h.isAvoid).where((h) {
+            final logs = habits.logDates[h.id] ?? const <String>{};
+            return isScheduledOn(h, now, firstLog: firstLogDate(logs)) &&
+                !logs.contains(today);
+          }).length;
+        default:
+          return 0;
+      }
+    }
+
+    final ordered = [..._slugs];
+    ordered.sort((a, b) {
+      final byScore = scoreFor(b).compareTo(scoreFor(a));
+      if (byScore != 0) return byScore;
+      return _slugs.indexOf(a).compareTo(_slugs.indexOf(b));
+    });
+    return ordered;
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Two modules per magnetic slide; the greeting rides above as a fixed
+    // header. A final "day summary" slide gathers the daily tip + leaderboard.
+    final slugs = _sortedSlugs(ref);
+    const extras = ['life_areas', 'daily_tip', 'leaderboard'];
+    final pages = <List<String>>[
+      for (var i = 0; i < slugs.length; i += 2)
+        slugs.sublist(i, math.min(i + 2, slugs.length)),
+      for (var i = 0; i < extras.length; i += 2)
+        extras.sublist(i, math.min(i + 2, extras.length)),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(20, 0, 20, 14),
+          child: _BriefGreeting(),
+        ),
+        Expanded(
+          child: _BriefPager(pages: pages, onOpenModule: onOpenModule),
+        ),
+      ],
+    );
+  }
+}
+
+/// Vertical, page-snapping pager for the brief. Each page shows two module
+/// entries balanced across the available height; swiping up/down snaps
+/// magnetically between pages with a soft scale/fade depth transition.
+class _BriefPager extends StatefulWidget {
+  final List<List<String>> pages;
+  final void Function(String slug) onOpenModule;
+
+  const _BriefPager({required this.pages, required this.onOpenModule});
+
+  @override
+  State<_BriefPager> createState() => _BriefPagerState();
+}
+
+class _BriefPagerState extends State<_BriefPager> {
+  late final PageController _controller;
+  double _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = PageController()..addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    final p = _controller.hasClients ? (_controller.page ?? 0) : 0.0;
+    if (p != _page) setState(() => _page = p);
+  }
+
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_onScroll)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final bottomReserve = 68.0 + math.max(bottomInset, 16.0) + 16;
+    final reduceMotion = !SieMotion.enabled(context);
+
+    return PageView.builder(
+      controller: _controller,
+      scrollDirection: Axis.vertical,
+      itemCount: widget.pages.length,
+      itemBuilder: (context, index) {
+        final slide = _BriefSlide(
+          slugs: widget.pages[index],
+          bottomReserve: bottomReserve,
+          onOpenModule: widget.onOpenModule,
+        );
+        if (reduceMotion) return slide;
+
+        // Depth transition: the focused page sits fully forward, neighbours
+        // recede slightly and fade — a calm, "magnetic" feel.
+        final t = (1 - (index - _page).abs()).clamp(0.0, 1.0);
+        final eased = Curves.easeOut.transform(t);
+        return Opacity(
+          opacity: 0.30 + 0.70 * eased,
+          child: Transform.scale(
+            scale: 0.93 + 0.07 * eased,
+            child: slide,
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// A single magnetic slide: two module entries distributed evenly across the
+/// screen height, kept clear of the floating nav bar at the bottom.
+class _BriefSlide extends StatelessWidget {
+  final List<String> slugs;
+  final double bottomReserve;
+  final void Function(String slug) onOpenModule;
+
+  const _BriefSlide({
+    required this.slugs,
+    required this.bottomReserve,
+    required this.onOpenModule,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 4, 20, bottomReserve),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final slug in slugs)
+            OperationalBriefView.briefBlockFor(slug, onOpenModule),
+        ],
+      ),
+    );
+  }
+}
+
+/// Soft, blurred gold-tinted gradient shown behind the brief. Dark anthracite
+/// with warm gold glows on the dark theme; a light wash with gold glows on the
+/// light theme. Purely decorative — sits behind all brief content.
+class _BriefBackdrop extends ConsumerWidget {
+  const _BriefBackdrop();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final light = c.isLightMode;
+    final top = Color.lerp(c.background, c.accent, light ? 0.06 : 0.10)!;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [top, c.background],
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -90,
+            right: -70,
+            child: _Glow(
+              color: c.accent.withValues(alpha: light ? 0.14 : 0.18),
+              size: 340,
+            ),
+          ),
+          Positioned(
+            bottom: -120,
+            left: -90,
+            child: _Glow(
+              color: c.accentSecondary.withValues(alpha: light ? 0.10 : 0.14),
+              size: 400,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A single soft radial glow blob (colour → transparent), used by the backdrop.
+class _Glow extends StatelessWidget {
+  final Color color;
+  final double size;
+  const _Glow({required this.color, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [color, color.withValues(alpha: 0)],
+        ),
+      ),
+    );
+  }
+}
+
+class _BriefGreeting extends ConsumerWidget {
+  const _BriefGreeting();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final theme = Theme.of(context);
+    final name = ref.watch(userProfileProvider).valueOrNull?.username
+            ?.toUpperCase() ??
+        t.operations.unidentified;
+
+    final h = DateTime.now().hour;
+    final greeting = h < 5
+        ? t.operationalBrief.greeting.night
+        : h < 11
+            ? t.operationalBrief.greeting.morning
+            : h < 17
+                ? t.operationalBrief.greeting.day
+                : h < 23
+                    ? t.operationalBrief.greeting.evening
+                    : t.operationalBrief.greeting.night;
+
+    // Operative state (Тонус) drives a contextual sub-line + a soft bar.
+    final tonus = ref.watch(operativeStateProvider).valueOrNull ??
+        const OperativeState(kOperativeBaseline);
+    final subtitle = switch (tonus.band) {
+      OperativeBand.low => t.operationalBrief.tonus.hintLow,
+      OperativeBand.high => t.operationalBrief.tonus.hintHigh,
+      OperativeBand.mid => t.operationalBrief.subtitle,
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          t.operationalBrief.greetingLine(greeting: greeting, name: name),
+          style: theme.textTheme.headlineMedium?.copyWith(
+            fontSize: 20,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: TextStyle(
+            color: c.textSecondary,
+            fontSize: 12,
+            letterSpacing: 1.2,
+            height: 1.3,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _TonusBar(state: tonus),
+      ],
+    );
+  }
+}
+
+/// A gentle "operative tone" indicator: a label, a soft rounded bar, and a
+/// qualitative band — no raw number (decision: bands + soft bar).
+class _TonusBar extends ConsumerWidget {
+  final OperativeState state;
+  const _TonusBar({required this.state});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final (Color color, String band) = switch (state.band) {
+      OperativeBand.low => (c.warning, t.operationalBrief.tonus.bandLow),
+      OperativeBand.mid => (c.accent, t.operationalBrief.tonus.bandMid),
+      OperativeBand.high => (c.success, t.operationalBrief.tonus.bandHigh),
+    };
+
+    return Row(
+      children: [
+        Text(
+          t.operationalBrief.tonus.label,
+          style: TextStyle(
+            color: c.textSecondary,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.8,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: Stack(
+              children: [
+                Container(height: 6, color: c.border.withValues(alpha: 0.6)),
+                LayoutBuilder(
+                  builder: (_, constraints) => TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: state.fraction),
+                    duration: SieMotion.slow,
+                    curve: Curves.easeOutCubic,
+                    builder: (_, f, __) => Container(
+                      height: 6,
+                      width: constraints.maxWidth * f,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [color.withValues(alpha: 0.7), color],
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          band,
+          style: TextStyle(
+            color: color,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+Widget _previewForSlug(String slug) => switch (slug) {
+      'breathing_practices' => const _BreathSpherePreview(),
+      'habit_archive' => const _HabitMatrixPreview(),
+      'focus_protocol' => const _FocusRingPreview(),
+      'planning' => const _PlanningPreview(),
+      'meditation' => const _DefragPreview(),
+      _ => const SizedBox.shrink(),
+    };
+
+String _moduleNameForSlug(String slug) => switch (slug) {
+      'breathing_practices' => t.operations.modules.breathing,
+      'habit_archive' => t.operations.modules.habits,
+      'focus_protocol' => t.operations.modules.focus,
+      'planning' => t.operations.modules.planning,
+      'meditation' => t.operations.modules.meditation,
+      _ => slug,
+    };
+
+/// `YYYY-MM-DD` key for a local date — matches how habit logs are stored.
+String _ymd(DateTime dt) =>
+    '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+
+/// Pick a system lead-in line from a scenario's set — stable through the day,
+/// rotating daily so the brief keeps feeling alive.
+String _pickLead(List<String> set) {
+  if (set.isEmpty) return '';
+  final now = DateTime.now();
+  final dayIndex = now.difference(DateTime(now.year)).inDays;
+  return set[dayIndex % set.length];
+}
+
+/// A conversational system message above a summary card (Now-Brief style).
+class _BriefEntry extends ConsumerWidget {
+  final String lead;
+  final Widget card;
+  const _BriefEntry({required this.lead, required this.card});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (lead.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+            child: Text(
+              lead,
+              style: TextStyle(
+                color: c.textPrimary.withValues(alpha: 0.90),
+                fontSize: 14,
+                height: 1.4,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ),
+        card,
+      ],
+    );
+  }
+}
+
+/// Presentational shell shared by every brief block: a leading avatar +
+/// title + a caller-supplied [body], optionally tappable with a chevron.
+class _BriefCardShell extends ConsumerWidget {
+  final Widget leading;
+  final String title;
+  final Widget body;
+  final VoidCallback? onOpen;
+
+  const _BriefCardShell({
+    required this.leading,
+    required this.title,
+    required this.body,
+    this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final theme = Theme.of(context);
+
+    final content = Container(
+      decoration: c.briefCard(radius: 20),
+      padding: const EdgeInsets.all(18),
+      child: Row(
+        children: [
+          SizedBox(width: 94, height: 94, child: Center(child: leading)),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontSize: 13,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                body,
+              ],
+            ),
+          ),
+          if (onOpen != null) ...[
+            const SizedBox(width: 8),
+            Icon(Icons.chevron_right, color: c.accent, size: 22),
+          ],
+        ],
+      ),
+    );
+
+    if (onOpen == null) return content;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        SieHaptics.selection();
+        onOpen!();
+      },
+      child: content,
+    );
+  }
+}
+
+/// Module brief block: reuses [_BriefCardShell] with the module's live preview
+/// as the leading avatar and its localized name as the title.
+class _BriefBlockShell extends StatelessWidget {
+  final String slug;
+  final Widget body;
+  final VoidCallback onOpen;
+
+  const _BriefBlockShell({
+    required this.slug,
+    required this.body,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _BriefCardShell(
+      leading: FittedBox(fit: BoxFit.scaleDown, child: _previewForSlug(slug)),
+      title: _moduleNameForSlug(slug),
+      body: body,
+      onOpen: onOpen,
+    );
+  }
+}
+
+/// One muted (or emphasised) line of a block body.
+class _BriefLine extends ConsumerWidget {
+  final String text;
+  final bool strong;
+  final int? maxLines;
+  const _BriefLine(this.text, {this.strong = false, this.maxLines});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Text(
+      text,
+      maxLines: maxLines,
+      overflow: maxLines == null ? null : TextOverflow.ellipsis,
+      style: TextStyle(
+        color: strong ? c.textPrimary : c.textSecondary,
+        fontSize: 12,
+        height: 1.35,
+        fontWeight: strong ? FontWeight.w600 : FontWeight.w400,
+      ),
+    );
+  }
+}
+
+/// A muted line describing the most recent session of a practice module, or a
+/// "no sessions yet" prompt.
+String _sessionSummary(PracticeBriefEntry e) {
+  if (!e.hasSessions) return t.operationalBrief.session.none;
+  final now = DateTime.now();
+  final last = e.lastAt!;
+  final days = DateTime(now.year, now.month, now.day)
+      .difference(DateTime(last.year, last.month, last.day))
+      .inDays;
+  final when = days <= 0
+      ? t.operationalBrief.session.today
+      : days == 1
+          ? t.operationalBrief.session.yesterday
+          : t.operationalBrief.session.daysAgo(n: days);
+  final mins = (e.lastDurationSeconds / 60).round();
+  final duration =
+      t.operationalBrief.session.minutesShort(n: mins < 1 ? 1 : mins);
+  return t.operationalBrief.session.last(when: when, duration: duration);
+}
+
+/// Focus / Breathing / Meditation — call-to-action plus the last-session recap.
+class _GenericBriefBlock extends ConsumerWidget {
+  final String slug;
+  final VoidCallback onOpen;
+  const _GenericBriefBlock({required this.slug, required this.onOpen});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (String line, List<String> lead) = switch (slug) {
+      'focus_protocol' => (
+          t.operationalBrief.blocks.focus,
+          t.operationalBrief.generic.focus
+        ),
+      'breathing_practices' => (
+          t.operationalBrief.blocks.breathing,
+          t.operationalBrief.generic.breathing
+        ),
+      'meditation' => (
+          t.operationalBrief.blocks.meditation,
+          t.operationalBrief.generic.meditation
+        ),
+      _ => ('', const <String>[]),
+    };
+
+    final data = ref.watch(practiceBriefProvider).valueOrNull;
+    final PracticeBriefEntry? entry = data == null
+        ? null
+        : switch (slug) {
+            'focus_protocol' => data.focus,
+            'breathing_practices' => data.breathing,
+            'meditation' => data.meditation,
+            _ => null,
+          };
+
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _BriefLine(line),
+        if (entry != null) ...[
+          const SizedBox(height: 4),
+          _BriefLine(_sessionSummary(entry)),
+        ],
+      ],
+    );
+
+    return _BriefEntry(
+      lead: _pickLead(lead),
+      card: _BriefBlockShell(slug: slug, onOpen: onOpen, body: body),
+    );
+  }
+}
+
+/// Planning — active goal + the most urgent task due today + how many more.
+class _PlanningBriefBlock extends ConsumerWidget {
+  final VoidCallback onOpen;
+  const _PlanningBriefBlock({required this.onOpen});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final agenda = ref.watch(agendaProvider);
+    final hasGoals =
+        ref.watch(planningProvider).valueOrNull?.activeGoals.isNotEmpty ??
+            false;
+    final urgent = [...agenda.overdue, ...agenda.today];
+
+    final Widget body;
+    final List<String> leadSet;
+    if (urgent.isNotEmpty) {
+      final first = urgent.first;
+      final more = urgent.length - 1;
+      leadSet = t.operationalBrief.planning.lead.hasTasks;
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _BriefLine(t.operationalBrief.planning.onGoal(goal: first.goal.name)),
+          const SizedBox(height: 2),
+          _BriefLine(first.task.name, strong: true),
+          if (more > 0) ...[
+            const SizedBox(height: 2),
+            _BriefLine(t.operationalBrief.planning.more(n: more)),
+          ],
+        ],
+      );
+    } else if (hasGoals) {
+      leadSet = t.operationalBrief.planning.lead.allClear;
+      body = _BriefLine(t.operationalBrief.planning.allClear);
+    } else {
+      leadSet = t.operationalBrief.planning.lead.empty;
+      body = _BriefLine(t.operationalBrief.planning.empty);
+    }
+
+    return _BriefEntry(
+      lead: _pickLead(leadSet),
+      card: _BriefBlockShell(slug: 'planning', onOpen: onOpen, body: body),
+    );
+  }
+}
+
+/// Habits — protocols still due today, or a congratulation + avoid-streak
+/// motivation once the day is cleared.
+class _HabitsBriefBlock extends ConsumerWidget {
+  final VoidCallback onOpen;
+  const _HabitsBriefBlock({required this.onOpen});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hs = ref.watch(habitsProvider).valueOrNull;
+    final feed = ref.watch(autoLogFeedProvider);
+
+    Widget body;
+    List<String> leadSet = const [];
+    if (hs == null) {
+      body = const SizedBox(height: 4); // brief loading flash
+    } else if (hs.habits.isEmpty) {
+      leadSet = t.operationalBrief.habits.lead.empty;
+      body = _BriefLine(t.operationalBrief.habits.empty);
+    } else {
+      final now = DateTime.now();
+      final today = _ymd(now);
+      final due = hs.habits.where((h) => !h.isAvoid).where((h) {
+        final logs = hs.logDates[h.id] ?? const <String>{};
+        final firstLog = firstLogDate(logs);
+        return isScheduledOn(h, now, firstLog: firstLog) &&
+            !logs.contains(today);
+      }).toList();
+
+      if (due.isNotEmpty) {
+        leadSet = t.operationalBrief.habits.lead.remaining;
+        body = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _BriefLine(t.operationalBrief.habits.remaining(n: due.length),
+                strong: true),
+            const SizedBox(height: 2),
+            _BriefLine(t.operationalBrief.habits.next(habit: due.first.title)),
+          ],
+        );
+      } else {
+        leadSet = t.operationalBrief.habits.lead.allDone;
+        final avoids = hs.habits.where((h) => h.isAvoid).toList()
+          ..sort((a, b) =>
+              (hs.streaks[b.id] ?? 0).compareTo(hs.streaks[a.id] ?? 0));
+        final children = <Widget>[
+          _BriefLine(t.operationalBrief.habits.allDone, strong: true),
+        ];
+        if (avoids.isNotEmpty) {
+          final best = avoids.first;
+          children
+            ..add(const SizedBox(height: 2))
+            ..add(_BriefLine(t.operationalBrief.habits.avoidStreak(
+                habit: best.title, n: hs.streaks[best.id] ?? 0)));
+        }
+        body = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: children,
+        );
+      }
+    }
+
+    // Ecosystem Pillar 1 (surfacing): habits auto-closed by activity, with Undo.
+    if (feed.isNotEmpty) {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final e in feed) _AutoLogNote(entry: e),
+          const SizedBox(height: 4),
+          body,
+        ],
+      );
+    }
+
+    return _BriefEntry(
+      lead: _pickLead(leadSet),
+      card: _BriefBlockShell(slug: 'habit_archive', onOpen: onOpen, body: body),
+    );
+  }
+}
+
+/// A "closed by activity" line with an inline Undo, shown in the Habits block.
+class _AutoLogNote extends ConsumerWidget {
+  final AutoLogEntry entry;
+  const _AutoLogNote({required this.entry});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        children: [
+          Icon(Icons.auto_awesome, size: 12, color: c.success),
+          const SizedBox(width: 5),
+          Expanded(
+            child: Text(
+              t.operationalBrief.autoLog.closed(habit: entry.title),
+              style: TextStyle(
+                color: c.textPrimary.withValues(alpha: 0.9),
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 6),
+          GestureDetector(
+            onTap: () {
+              SieHaptics.selection();
+              ref.read(habitsProvider.notifier).undoAutoLog(entry);
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Text(
+              t.operationalBrief.autoLog.undo,
+              style: TextStyle(
+                color: c.accent,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Daily tip — the "Сводка дня" slide. A stable-through-the-day tip shown as a
+/// non-tappable info block.
+class _TipBriefBlock extends ConsumerWidget {
+  const _TipBriefBlock();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final tips = ref.watch(tipsProvider).valueOrNull ?? const <Tip>[];
+    final lang = ref.watch(localeProvider).languageCode;
+
+    final Widget body;
+    Tip? tip;
+    if (tips.isEmpty) {
+      body = _BriefLine(t.operationalBrief.tip.empty);
+    } else {
+      final now = DateTime.now();
+      final dayIndex = now.difference(DateTime(now.year)).inDays;
+      tip = tips[dayIndex % tips.length];
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _BriefLine(tip.localizedTitle(lang), strong: true, maxLines: 1),
+          const SizedBox(height: 2),
+          _BriefLine(tip.localizedDescription(lang), maxLines: 3),
+        ],
+      );
+    }
+
+    final selected = tip;
+    return _BriefEntry(
+      lead: _pickLead(t.operationalBrief.tip.lead),
+      card: _BriefCardShell(
+        leading: Icon(Icons.lightbulb_outline, color: c.accent, size: 44),
+        title: t.operationalBrief.tip.title,
+        body: body,
+        // Tap opens the full tip — the block preview truncates the text.
+        onOpen: selected == null
+            ? null
+            : () => showDialog<void>(
+                  context: context,
+                  barrierColor: Colors.black.withValues(alpha: 0.6),
+                  builder: (_) => _TipDialog(tip: selected, lang: lang),
+                ),
+      ),
+    );
+  }
+}
+
+/// Centered, minimalist dialog showing a daily tip in full (the brief block
+/// only previews the first few lines).
+class _TipDialog extends ConsumerWidget {
+  final Tip tip;
+  final String lang;
+  const _TipDialog({required this.tip, required this.lang});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+      child: Container(
+        decoration: c.briefCard(radius: 24),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.lightbulb_outline, color: c.accent, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    t.operationalBrief.tip.title,
+                    style: TextStyle(
+                      color: c.accent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.6,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  behavior: HitTestBehavior.opaque,
+                  child: Icon(Icons.close, color: c.iconMuted, size: 18),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              tip.localizedTitle(lang),
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                height: 1.3,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Text(
+                  tip.localizedDescription(lang),
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 14,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Leaderboard — the "Сводка дня" slide CTA into the standings.
+class _LeaderboardBriefBlock extends ConsumerWidget {
+  const _LeaderboardBriefBlock();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return _BriefEntry(
+      lead: _pickLead(t.operationalBrief.leaderboard.lead),
+      card: _BriefCardShell(
+        leading: const Text('🏆', style: TextStyle(fontSize: 40)),
+        title: t.operations.leaderboard.title,
+        body: _BriefLine(t.operations.leaderboard.subtitle),
+        onOpen: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+        ),
+      ),
+    );
+  }
+}
+
+/// Life Balance — a cross-module rollup by life area (Ecosystem Pillar 3),
+/// with a gentle nudge toward a neglected area. Taps into the full screen.
+class _LifeAreasBriefBlock extends ConsumerWidget {
+  const _LifeAreasBriefBlock();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    final data = ref.watch(lifeAreasProvider).valueOrNull;
+    final neglected = data?.neglected;
+    final maxScore = data?.maxScore ?? 0;
+
+    final lead = neglected != null
+        ? t.operationalBrief.areas.neglectedLead(area: neglected.label)
+        : t.operationalBrief.areas.lead;
+
+    // Compact 6-area strip: icon + a tiny bar scaled to the area's score.
+    final body = Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          for (final area in LifeArea.values)
+            Builder(builder: (_) {
+              final s = data?.statFor(area).score ?? 0;
+              final f = maxScore > 0 ? (s / maxScore).clamp(0.0, 1.0) : 0.0;
+              final isNeglected = area == neglected;
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Opacity(
+                    opacity: s > 0 ? 1.0 : 0.35,
+                    child: Text(area.icon, style: const TextStyle(fontSize: 15)),
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    width: 16,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: c.border.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: f == 0 ? 0.001 : f,
+                      child: Container(
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: isNeglected ? c.warning : c.accent,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }),
+        ],
+      ),
+    );
+
+    return _BriefEntry(
+      lead: lead,
+      card: _BriefCardShell(
+        leading: Icon(Icons.donut_small_outlined, color: c.accent, size: 40),
+        title: t.operationalBrief.areas.title,
+        body: body,
+        onOpen: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const LifeAreasScreen()),
+        ),
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1829,7 +3015,15 @@ class _ScreenHeader extends ConsumerWidget {
   final AsyncValue<Profile?> profileAsync;
   final bool offline;
 
-  const _ScreenHeader({required this.profileAsync, this.offline = false});
+  /// Brief mode hides the operative line and the XP bar (they'd duplicate the
+  /// greeting and add noise) — animated in/out on mode switch.
+  final bool compact;
+
+  const _ScreenHeader({
+    required this.profileAsync,
+    this.offline = false,
+    this.compact = false,
+  });
 
   static String _badge(int level) {
     if (level <= 5)  return 'Recruit';
@@ -1885,38 +3079,45 @@ class _ScreenHeader extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  if (offline)
-                    Text(
-                      t.operations.operative(name: operative),
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontSize: 13,
-                        letterSpacing: 1.5,
-                      ),
-                    )
-                  else
-                    GestureDetector(
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            t.operations.operative(name: operative),
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontSize: 13,
-                              letterSpacing: 1.5,
+                  _AnimatedCollapse(
+                    visible: !compact,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: offline
+                          ? Text(
+                              t.operations.operative(name: operative),
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontSize: 13,
+                                letterSpacing: 1.5,
+                              ),
+                            )
+                          : GestureDetector(
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                    builder: (_) => const ProfileScreen()),
+                              ),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    t.operations.operative(name: operative),
+                                    style:
+                                        theme.textTheme.titleLarge?.copyWith(
+                                      fontSize: 13,
+                                      letterSpacing: 1.5,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    color: gradientColors.first
+                                        .withValues(alpha: 0.7),
+                                    size: 14,
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 6),
-                          Icon(
-                            Icons.chevron_right,
-                            color: gradientColors.first.withValues(alpha: 0.7),
-                            size: 14,
-                          ),
-                        ],
-                      ),
                     ),
+                  ),
                 ],
               ),
             ),
@@ -1952,14 +3153,45 @@ class _ScreenHeader extends ConsumerWidget {
             ],
           ],
         ),
-        const SizedBox(height: 20),
-        _XpBar(
-            key: ref.read(tourControllerProvider.notifier).keyFor('xp_bar'),
-            xp: xp,
-            gradientColors: gradientColors,
-            badge: _badge(xp ~/ 1000 + 1),
-            c: c),
+        _AnimatedCollapse(
+          visible: !compact,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 20),
+            child: _XpBar(
+                key:
+                    ref.read(tourControllerProvider.notifier).keyFor('xp_bar'),
+                xp: xp,
+                gradientColors: gradientColors,
+                badge: _badge(xp ~/ 1000 + 1),
+                c: c),
+          ),
+        ),
       ],
+    );
+  }
+}
+
+/// Smoothly collapses/expands (height + fade) a child on [visible] toggling —
+/// used to hide the operative line and XP bar in brief mode.
+class _AnimatedCollapse extends StatelessWidget {
+  final bool visible;
+  final Widget child;
+  const _AnimatedCollapse({required this.visible, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: SieMotion.base,
+      curve: Curves.easeInOut,
+      alignment: Alignment.topCenter,
+      child: AnimatedSwitcher(
+        duration: SieMotion.base,
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        child: visible
+            ? child
+            : const SizedBox(width: double.infinity, key: ValueKey('collapsed')),
+      ),
     );
   }
 }

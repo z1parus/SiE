@@ -19,6 +19,23 @@
     "meditationOnly": "Только медитация",
     "breathingAndMeditation": "Дыхание + Медитация"
   },
+  "breathingConfig": {
+    "quick": "Быстрые параметры",
+    "sequence": "Последовательность",
+    "rounds": "Раунды",
+    "cycles": "Циклы в раунде",
+    "roundsValue": "{n}",
+    "cyclesValue": "{n}",
+    "noSequences": "Нет сохранённых последовательностей — задайте быстрые параметры или создайте последовательность в модуле дыхания."
+  },
+  "stateBefore": {
+    "title": "Как вы себя чувствуете сейчас?",
+    "start": "НАЧАТЬ"
+  },
+  "chainTransition": {
+    "title": "Дыхание завершено",
+    "subtitle": "Переходим к медитации…"
+  },
   "duration": {
     "label": "Длительность",
     "value": "{value} мин"
