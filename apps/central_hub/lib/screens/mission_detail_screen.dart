@@ -2196,11 +2196,13 @@ class _HabitSynergySection extends ConsumerWidget {
         // Ecosystem Pillar 3 — smart suggestion: unlinked habits sharing this
         // goal's life area. Tap to link (connects Planning ↔ Habits by area).
         Builder(builder: (_) {
-          if (goal.area == null) return const SizedBox.shrink();
+          // goal.area is a String (LifeArea.name); habit.area is a LifeArea.
+          final goalArea = LifeAreaX.fromString(goal.area);
+          if (goalArea == null) return const SizedBox.shrink();
           final linked = goal.habitLinks.map((l) => l.habitId).toSet();
           final sameArea = habits
               .where((h) =>
-                  h.area == goal.area &&
+                  h.area == goalArea &&
                   !h.isArchived &&
                   !linked.contains(h.id))
               .take(4)
