@@ -379,6 +379,8 @@ class _MissionHeader extends StatelessWidget {
               sc: sc,
             ),
           ],
+          const SizedBox(height: 8),
+          _GoalAreaEditor(goal: goal),
           if (advice.isNotEmpty) ...[
             const SizedBox(height: 8),
             _StrategicAdviceCard(advice: advice, sc: sc),
@@ -2191,6 +2193,73 @@ class _HabitSynergySection extends ConsumerWidget {
           return _HabitLinkTile(
               link: link, habit: habit, goal: goal, sc: sc);
         }),
+        // Ecosystem Pillar 3 — smart suggestion: unlinked habits sharing this
+        // goal's life area. Tap to link (connects Planning ↔ Habits by area).
+        Builder(builder: (_) {
+          if (goal.area == null) return const SizedBox.shrink();
+          final linked = goal.habitLinks.map((l) => l.habitId).toSet();
+          final sameArea = habits
+              .where((h) =>
+                  h.area == goal.area &&
+                  !h.isArchived &&
+                  !linked.contains(h.id))
+              .take(4)
+              .toList();
+          if (sameArea.isEmpty) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  t.missionDetail.habits.areaSuggest,
+                  style: TextStyle(
+                    color: sc.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final h in sameArea)
+                      GestureDetector(
+                        onTap: () {
+                          SieHaptics.selection();
+                          ref
+                              .read(planningProvider.notifier)
+                              .linkHabit(goal.id, h.id);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: sc.accent),
+                            color: sc.accent.withValues(alpha: 0.08),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.add, size: 13, color: sc.accent),
+                              const SizedBox(width: 4),
+                              Text(
+                                h.title,
+                                style: TextStyle(
+                                    color: sc.accent, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        }),
       ],
     );
   }
@@ -2581,6 +2650,141 @@ class _StatusChip extends StatelessWidget {
           fontSize: 9,
           fontWeight: FontWeight.w700,
           letterSpacing: 1,
+        ),
+      ),
+    );
+  }
+}
+
+/// Ecosystem Pillar 3 — inline editor for a goal's life area on its detail
+/// screen. Tap to pick one of the six areas (or clear it).
+class _GoalAreaEditor extends ConsumerWidget {
+  final Goal goal;
+  const _GoalAreaEditor({required this.goal});
+
+  Future<void> _pick(BuildContext context, WidgetRef ref) async {
+    final sc = ref.read(sieColorsProvider);
+    final current = LifeAreaX.fromString(goal.area);
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        margin: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+        decoration: BoxDecoration(
+          color: sc.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: sc.border),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              t.planning.addGoal.area,
+              style: TextStyle(
+                color: sc.textSecondary,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final a in LifeArea.values)
+                  _AreaPickChip(
+                    label: '${a.icon} ${a.label}',
+                    selected: current == a,
+                    sc: sc,
+                    onTap: () {
+                      SieHaptics.selection();
+                      ref
+                          .read(planningProvider.notifier)
+                          .setGoalArea(goal.id, current == a ? null : a.name);
+                      Navigator.of(context).pop();
+                    },
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sc = ref.watch(sieColorsProvider);
+    final area = LifeAreaX.fromString(goal.area);
+    return GestureDetector(
+      onTap: () => _pick(context, ref),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: area != null ? sc.accent : sc.border),
+          color: area != null
+              ? sc.accent.withValues(alpha: 0.10)
+              : Colors.transparent,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (area != null)
+              Text('${area.icon} ${area.label}',
+                  style: TextStyle(
+                      color: sc.accent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600))
+            else ...[
+              Icon(Icons.add, size: 14, color: sc.textSecondary),
+              const SizedBox(width: 4),
+              Text(t.planning.addGoal.area,
+                  style: TextStyle(color: sc.textSecondary, fontSize: 12)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AreaPickChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final SieColors sc;
+  final VoidCallback onTap;
+  const _AreaPickChip({
+    required this.label,
+    required this.selected,
+    required this.sc,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? sc.accent : sc.border,
+            width: selected ? 1.5 : 1.0,
+          ),
+          color: selected ? sc.accent.withValues(alpha: 0.12) : Colors.transparent,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? sc.accent : sc.textSecondary.withValues(alpha: 0.85),
+            fontSize: 12,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          ),
         ),
       ),
     );

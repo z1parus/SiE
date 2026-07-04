@@ -36,6 +36,7 @@ export 'src/providers/focus_planning_provider.dart';
 export 'src/providers/practice_brief_provider.dart';
 export 'src/providers/operative_state_provider.dart';
 export 'src/providers/life_areas_provider.dart';
+export 'src/providers/auto_log_feed_provider.dart';
 export 'src/providers/analytics_provider.dart';
 export 'src/providers/user_search_provider.dart';
 export 'src/providers/customization_provider.dart';

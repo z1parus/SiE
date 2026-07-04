@@ -12,6 +12,7 @@ import '../services/notification_service.dart';
 import '../widgets_home/widget_render_service.dart';
 import 'auth_state_provider.dart';
 import 'operative_state_provider.dart';
+import 'auto_log_feed_provider.dart';
 import 'connectivity_provider.dart';
 import 'user_profile_provider.dart';
 import 'planning_provider.dart';
@@ -1246,13 +1247,47 @@ class HabitsNotifier extends AutoDisposeAsyncNotifier<HabitsState> {
           }
           if (delta <= 0) continue;
           await logHabitValue(habit.id, today, delta);
+          _recordAutoLog(habit, isMetric: true, delta: delta);
         } else {
           final done = st.logDates[habit.id]?.contains(todayStr) ?? false;
-          if (!done) await toggleHabit(habit.id, today);
+          if (!done) {
+            await toggleHabit(habit.id, today);
+            _recordAutoLog(habit, isMetric: false, delta: 0);
+          }
         }
       } catch (_) {
         // best-effort per habit
       }
+    }
+  }
+
+  void _recordAutoLog(Habit habit, {required bool isMetric, required double delta}) {
+    try {
+      ref.read(autoLogFeedProvider.notifier).add(AutoLogEntry(
+            habitId: habit.id,
+            title: habit.title,
+            isMetric: isMetric,
+            delta: delta,
+            at: DateTime.now(),
+          ));
+    } catch (_) {}
+  }
+
+  /// Reverts a habit auto-completion surfaced in the brief feed.
+  Future<void> undoAutoLog(AutoLogEntry entry) async {
+    try {
+      final today = DateTime.now();
+      if (entry.isMetric) {
+        await logHabitValue(entry.habitId, today, -entry.delta);
+      } else {
+        final done =
+            state.valueOrNull?.logDates[entry.habitId]?.contains(_fmt(today)) ??
+                false;
+        if (done) await toggleHabit(entry.habitId, today);
+      }
+    } catch (_) {
+    } finally {
+      ref.read(autoLogFeedProvider.notifier).remove(entry.habitId);
     }
   }
 

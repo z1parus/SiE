@@ -118,5 +118,9 @@
       "Time to clear the mind.",
       "A mind defragment awaits."
     ]
+  },
+  "autoLog": {
+    "closed": "\"{habit}\" logged by activity",
+    "undo": "Undo"
   }
 }

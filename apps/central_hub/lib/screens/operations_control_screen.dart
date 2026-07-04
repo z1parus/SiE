@@ -1300,6 +1300,7 @@ class _HabitsBriefBlock extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final hs = ref.watch(habitsProvider).valueOrNull;
+    final feed = ref.watch(autoLogFeedProvider);
 
     Widget body;
     List<String> leadSet = const [];
@@ -1353,9 +1354,70 @@ class _HabitsBriefBlock extends ConsumerWidget {
       }
     }
 
+    // Ecosystem Pillar 1 (surfacing): habits auto-closed by activity, with Undo.
+    if (feed.isNotEmpty) {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final e in feed) _AutoLogNote(entry: e),
+          const SizedBox(height: 4),
+          body,
+        ],
+      );
+    }
+
     return _BriefEntry(
       lead: _pickLead(leadSet),
       card: _BriefBlockShell(slug: 'habit_archive', onOpen: onOpen, body: body),
+    );
+  }
+}
+
+/// A "closed by activity" line with an inline Undo, shown in the Habits block.
+class _AutoLogNote extends ConsumerWidget {
+  final AutoLogEntry entry;
+  const _AutoLogNote({required this.entry});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(sieColorsProvider);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        children: [
+          Icon(Icons.auto_awesome, size: 12, color: c.success),
+          const SizedBox(width: 5),
+          Expanded(
+            child: Text(
+              t.operationalBrief.autoLog.closed(habit: entry.title),
+              style: TextStyle(
+                color: c.textPrimary.withValues(alpha: 0.9),
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 6),
+          GestureDetector(
+            onTap: () {
+              SieHaptics.selection();
+              ref.read(habitsProvider.notifier).undoAutoLog(entry);
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Text(
+              t.operationalBrief.autoLog.undo,
+              style: TextStyle(
+                color: c.accent,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

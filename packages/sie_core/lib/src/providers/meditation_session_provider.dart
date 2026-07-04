@@ -23,28 +23,6 @@ enum MeditationPhase { idle, breathing, transition, meditating, reflectionPause,
 
 enum BreathingSubPhase { inhale, holdIn, exhale, holdOut }
 
-// ── Breathing pattern definitions (durations in seconds) ─────────────────────
-
-typedef _SubPhaseSpec = (int seconds, BreathingSubPhase subPhase);
-
-const Map<String, List<_SubPhaseSpec>> _breathingPatterns = {
-  'box': [
-    (4, BreathingSubPhase.inhale),
-    (4, BreathingSubPhase.holdIn),
-    (4, BreathingSubPhase.exhale),
-    (4, BreathingSubPhase.holdOut),
-  ],
-  '4-7-8': [
-    (4, BreathingSubPhase.inhale),
-    (7, BreathingSubPhase.holdIn),
-    (8, BreathingSubPhase.exhale),
-  ],
-  'coherence': [
-    (5, BreathingSubPhase.inhale),
-    (5, BreathingSubPhase.exhale),
-  ],
-};
-
 // ── Result ────────────────────────────────────────────────────────────────────
 
 class MeditationSessionResult {
@@ -171,7 +149,6 @@ class MeditationSessionState {
 
 class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
   Timer? _ticker;
-  Timer? _transitionTimer;
   Timer? _mixerHideTimer;
 
   // Ecosystem Stage 1: when this meditation follows a chained breathing practice,
@@ -299,49 +276,7 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
 
   void _onTick() {
     if (!state.isRunning) return;
-    switch (state.phase) {
-      case MeditationPhase.breathing:
-        _breathingTick();
-      case MeditationPhase.meditating:
-        _meditationTick();
-      default:
-        break;
-    }
-  }
-
-  void _breathingTick() {
-    final preset = state.preset;
-    if (preset == null) return;
-
-    final newSubRemaining = state.breathingSubPhaseRemaining - 1;
-    final newElapsed = state.breathingElapsedSecs + 1;
-    final breathingTarget = preset.breathingDurationMin * 60;
-
-    if (newElapsed >= breathingTarget) {
-      // Breathing phase complete
-      state = state.copyWith(
-        breathingElapsedSecs: breathingTarget,
-        breathingSubPhaseRemaining: 0,
-      );
-      _startTransition();
-      return;
-    }
-
-    if (newSubRemaining <= 0) {
-      // Advance to next sub-phase
-      final nextSpec = _nextSubPhase(state.breathingSubPhase, preset);
-      state = state.copyWith(
-        breathingElapsedSecs: newElapsed,
-        breathingSubPhase: nextSpec.$2,
-        breathingSubPhaseRemaining: nextSpec.$1,
-      );
-      _playBreathingCue(nextSpec.$2, nextSpec.$1, preset);
-    } else {
-      state = state.copyWith(
-        breathingElapsedSecs: newElapsed,
-        breathingSubPhaseRemaining: newSubRemaining,
-      );
-    }
+    if (state.phase == MeditationPhase.meditating) _meditationTick();
   }
 
   void _meditationTick() {
@@ -378,27 +313,6 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
       final idx = (newElapsed ~/ interval) % pack.phrases.length;
       state = state.copyWith(currentAffirmation: pack.phrases[idx]);
     }
-  }
-
-  void _startTransition() {
-    state = state.copyWith(
-      phase: MeditationPhase.transition,
-    );
-
-    // Audio crossfade
-    _audio.playPhaseTransition();
-    _audio.fadeAmbientTo(state.ambientVolume, durationMs: 3000);
-
-    _transitionTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted) return;
-      state = state.copyWith(phase: MeditationPhase.meditating);
-      // Show first affirmation at session start
-      final pack = state.affirmationPack;
-      if (pack != null && pack.phrases.isNotEmpty &&
-          state.preset?.meditationType == 'affirmations') {
-        state = state.copyWith(currentAffirmation: pack.phrases[0]);
-      }
-    });
   }
 
   bool get mounted {
@@ -523,41 +437,9 @@ class MeditationSessionNotifier extends Notifier<MeditationSessionState> {
     }));
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-  // NOTE (Ecosystem Stage 1): the paced in-session breathing below is legacy and
-  // no longer reachable — preliminary breathing now runs the real Breathing
-  // module in a chain. Kept dormant; slated for removal in a cleanup pass.
-
-  _SubPhaseSpec _nextSubPhase(
-      BreathingSubPhase current, MeditationPreset preset) {
-    final pattern =
-        _breathingPatterns[preset.breathingPatternId ?? 'box'] ?? _breathingPatterns['box']!;
-
-    final currentIdx = pattern.indexWhere((s) => s.$2 == current);
-    final nextIdx = (currentIdx + 1) % pattern.length;
-    return pattern[nextIdx];
-  }
-
-  void _playBreathingCue(
-      BreathingSubPhase sub, int durationSecs, MeditationPreset preset) {
-    if (durationSecs <= 0) return;
-    switch (sub) {
-      case BreathingSubPhase.inhale:
-        _audio.playInhale(
-            targetSecs: durationSecs, volumeFactor: preset.baseVolume);
-      case BreathingSubPhase.exhale:
-        _audio.playExhale(
-            targetSecs: durationSecs, volumeFactor: preset.baseVolume);
-      default:
-        break; // holdIn / holdOut: no audio cue
-    }
-  }
-
   void _cancelTimers() {
     _ticker?.cancel();
     _ticker = null;
-    _transitionTimer?.cancel();
-    _transitionTimer = null;
     _mixerHideTimer?.cancel();
     _mixerHideTimer = null;
   }
